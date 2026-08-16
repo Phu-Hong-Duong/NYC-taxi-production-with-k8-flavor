@@ -9,6 +9,91 @@ months from now.
 
 ## M1
 
+### M1-S2 — Two witnesses, a pin that must not touch what it measures, and a review that found four things (2026-08-16, role:DE + DA hat)
+
+**What was built.** `data/raw` and `data/processed` went under DVC with a
+file-system remote *outside* the repo; `make data` became the whole path
+(ingest → DuckDB → pin, in that order); `data/analyst.duckdb` became nine
+**views** — no rows copied — that the DA queries by name; and `make
+rebuild-proof` turned the M1 gate's byte-identity leg into a command anyone can
+re-run. It ran: `data/processed/` deleted, rebuilt by one command from
+DVC-pinned raw, **8 of 8 outputs byte-identical**, 56,127,878 rows reconciling
+month by month against what S1's reports claimed. Then the Data Contract Review
+raised four challenges, two of which changed the shipped code. 79 unit tests
+(was 57), no cluster, no network.
+
+**Why this way.** Four choices, and the interesting ones are the refusals.
+
+*(1) The proof must not write to what it measures.* The obvious rebuild proof is
+"wipe, run the rebuild command, compare hashes". But the rebuild command ends in
+`dvc add`, which re-hashes the outputs and rewrites the pin — so the comparison
+would be against a pin computed from the very bytes under test. It would pass
+forever, including on the day the parquet writer stopped being deterministic.
+Hence `SKIP_DVC=1`, which exists for exactly one caller and says so in a comment
+at both ends. This is the whole genre of green-forever test: not wrong output,
+but a test whose reference moves with its subject.
+
+*(2) Two witnesses, computed differently.* The proof compares our own sha256
+table AND asks `dvc status data/processed.dvc` — different code, different
+metadata, same question. One witness agreeing with itself is not evidence; it is
+a tautology with a checkmark. The same instinct as M1-S1's two rejection counts.
+
+*(3) The remote is a directory outside the repo, and MinIO was refused.* The
+tempting choice was MinIO — it is already running, it speaks S3, it would demo
+beautifully. It lives on a PVC inside the kind cluster, and `make destroy` takes
+PVCs with it. A backup that dies with the thing it protects is worse than no
+backup, because you stop worrying. The honest cost is written down rather than
+hidden: the remote is on the same physical disk, so it survives `make destroy`
+and a wrong `rm -rf`, and it does not survive disk loss.
+
+*(4) `dvc init` turns analytics on, and a default is not an exemption.* The init
+banner says it plainly and then scrolls away. This program's rule is one
+sentence — nothing leaves this machine — so the fix was `core.analytics false`
+plus a unit test, because a future `dvc init` on a fresh clone would restore the
+default silently.
+
+**The concept underneath.** *A number that reconciles is worth more than a
+number that is merely produced.* Every piece of this story is the same shape
+twice: the analyst layer does not just publish `trips_clean`, it exits 1 if the
+view's row count disagrees with the ingest report that wrote the data — because
+a catalogue pointing at five months of eight answers every query happily and
+just returns smaller numbers, which is a failure with no symptom. The rebuild
+does not just re-run, it re-runs and is checked from two directions. The review
+does not just read the contract, it runs queries against it. The recurring enemy
+is the *silent* wrong answer, and the recurring weapon is a second, independent
+statement of the same fact.
+
+The review is where this paid off most. The DA read a contract that S1 had built
+carefully and, in four queries, found: 914,459 rejected rows that exist only as
+counts (so nobody can say whether the 159,300 trips over two hours were meter
+faults or a real long-haul population); a 261,781-row null batch that is
+**exactly** coincident across four columns, one of which encodes it as
+`payment_type = 0` — a value that reads on a dashboard as a payment category;
+a `$671,123.14` taxi fare against a 99.9th percentile of `$85.50`; and
+`VendorID 5`, which appears 219 times in 56 million rows and **only ever inside
+the broken batch**. Two of those became a change (`unknown_domain_values`, which
+reports without cleaning), one was answered with the number that settles it (12
+rows; the mean moves 0.26%), and one was carried as a finding with the DA's
+dissent recorded rather than argued away. A review that produces no change is
+not a review, and a review whose disagreement disappears into consensus is worse.
+
+**What to look at.** `scripts/rebuild_proof.sh` — read the header, then the
+`SKIP_DVC=1` line, then gotcha #33; they are one idea in three places ·
+`docs/rituals/2026-08-16_data-contract-review.md`, especially §4 Dissent ·
+`src/taxi_mlops/data/analyst.py`'s module docstring on why `split` and `month`
+are config literals and never parsed from filenames · `ledgers/findings.md`
+F-005, an item deliberately NOT converted into debt.
+
+**What to try yourself.** Break the proof on purpose, both ways, and watch which
+guard catches you: append twenty bytes to a file in `data/raw/` and run `make
+rebuild-proof` (it refuses at step 2 and deletes nothing — the input is not the
+pinned bytes); then `uv run dvc checkout data/raw.dvc --force` and instead drop
+one row from a file in `data/processed/` before running it (the rebuild restores
+the true bytes, so the table prints `NO` next to that one filename). Then try
+the version that *should* worry you: delete `SKIP_DVC=1` from the script and run
+the second experiment again. It passes. Sit with that for a moment — that is
+what a green test looks like when the reference moved with the subject.
+
 ### M1-S1 — A contract that can say no, and 914,459 rows that were counted out loud (2026-08-16, role:DE)
 
 **What was built.** `taxi_mlops.data` became real: `make ingest` downloads the

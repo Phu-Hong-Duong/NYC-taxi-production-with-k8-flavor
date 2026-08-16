@@ -210,3 +210,36 @@ the seed line are earned by THIS project.
     is stable"; diff the TYPES too, and diff case-insensitively before
     concluding a column is new. General form: schema drift has three shapes —
     added, renamed, retyped — and only the first one is loud.
+
+32. **DVC phones home the moment you `dvc init`.** The init banner says it
+    plainly — "DVC has enabled anonymous aggregate usage analytics" — and then
+    the line scrolls past with the rest of the welcome text and nobody reads it
+    again. This program's charter is one sentence long on the subject ($0
+    budget; nothing leaves this machine; no cloud credentials exist here), so an
+    opt-OUT default is a violation that installs itself. Tuition paid 2026-08-16
+    (M1-S2), cost nothing because the banner was read on the first run.
+    Fix: `dvc config core.analytics false` immediately after init, committed in
+    `.dvc/config`, and pinned by `tests/unit/test_data_pipeline_scripts.py::
+    test_dvc_analytics_are_off` so a future `dvc init` on a fresh clone cannot
+    quietly restore the default. General form: every new tool in a $0/offline
+    program gets one question before its second command — *what does this send,
+    and to whom* — because the answer is a default someone else chose, and
+    defaults are not exemptions. Siblings worth checking the same way as they
+    arrive: dbt (`send_anonymous_usage_stats`), Metabase (anonymous tracking),
+    and anything with a `--telemetry` flag.
+
+33. **A rebuild proof that refreshes the pin it is judged against.** The
+    byte-identical gate is "wipe `data/processed/`, rebuild, sha256 must match".
+    The obvious implementation is to wipe and then run the one rebuild command —
+    but `make data` ends in `dvc add`, which re-hashes the outputs and rewrites
+    `data/processed.dvc`. Do that and the proof compares the new bytes against a
+    pin computed *from those same new bytes*: it passes forever, including on
+    the day the parquet writer stops being deterministic. Caught in review at
+    M1-S2 before it ran; the fix is `SKIP_DVC=1 make data` inside
+    `scripts/rebuild_proof.sh`, and the reason the flag exists at all is written
+    at the top of `scripts/data_pipeline.sh`. Two more teeth: the proof asserts
+    its INPUT still matches `data/raw.dvc` first (a rebuild from different bytes
+    proves nothing — gotcha #6), and it closes with a SECOND witness, DVC's own
+    `dvc status data/processed.dvc`, computed by different code from different
+    metadata. General form: a verification step must never write to the artifact
+    it verifies against, and one witness agreeing with itself is not evidence.

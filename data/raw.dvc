@@ -1,0 +1,6 @@
+outs:
+- md5: 71b760018cfa95f919255a0019033bab.dir
+  size: 838211473
+  nfiles: 8
+  hash: md5
+  path: raw
