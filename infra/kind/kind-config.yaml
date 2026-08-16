@@ -1,15 +1,26 @@
 # kind cluster: 1 control-plane + 2 workers. Pins observed at M0 go to CLAUDE.md.
+#
+# The node image is pinned by digest ON PURPOSE (MLOps charter refuses unpinned
+# versions). It is identical to kind 0.32.0's built-in default — confirmed at
+# M0-S2 from a real create (`Ensuring node image (kindest/node:v1.36.1)` and
+# `docker inspect mlops-taxi-control-plane` → the same digest). Writing it down
+# means a future `kind` upgrade changes the Kubernetes version only when we say
+# so, in a diff, instead of silently on somebody's laptop.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: mlops-taxi
 nodes:
   - role: control-plane
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
     extraPortMappings:            # host access for ingress-routed services
       - containerPort: 80
         hostPort: 8081            # KServe ingress (port family in CLAUDE.md)
       - containerPort: 443
         hostPort: 8443
   - role: worker
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
   - role: worker
-# TODO(M0): local registry pattern (containerdConfigPatches) OR rely on `kind load`.
-# Decide at M0, record in ADR if registry pattern chosen.
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+# TODO(M4): local registry pattern (containerdConfigPatches) OR rely on `kind load`.
+# NOT decided at M0 — M0 runs no image of ours (gotcha #3 bites only when we build
+# one). Carried with a quoted landing in ledgers/debt.md (D-001 → M4).
