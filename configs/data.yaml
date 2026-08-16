@@ -1,0 +1,96 @@
+# Ingest + data contract knobs (M1-S1, role:DE). Nothing here is hardcoded in code.
+#
+# SPLITS ARE NOT HERE ON PURPOSE: train/val/test months live in configs/train.yaml
+# and are read from there. Two files naming the same months would be twins that
+# drift (the port-family lesson, CLAUDE.md). One source of truth.
+#
+# Every value below was set against LIVE observation on 2026-08-16 (schemas of
+# yellow_tripdata_2019-01..08 plus a 2025-01 probe; row profile of 2019-01).
+# Re-observe before changing; do not tune from memory.
+
+source:
+  # Verified 2026-08-12, re-verified 2026-08-16 (HTTP/2 200, content-length 110439634 for 2019-01).
+  url_pattern: "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{month}.parquet"
+  filename_pattern: "yellow_tripdata_{month}.parquet"
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  manifest_path: "data/raw_manifest.json"
+  download:
+    attempts: 3          # gotcha #8 shape: three tries, then the month parks loudly
+    backoff_seconds: 5   # multiplied by attempt number
+    timeout_seconds: 300
+
+contract:
+  # A new/renamed column is an EVENT, never a silent pass (DE charter).
+  # refuse = raise; warn = print loudly and continue. M7 owns the drift drill.
+  on_unknown_column: refuse
+
+  # Columns present in EVERY supported year. dtype = the ONE canonical cast,
+  # applied in taxi_mlops.data.contract.validate and nowhere else (gotcha #7).
+  # Raw dtypes differ by year -- observed 2026-08-16: 2019 has VendorID int64,
+  # passenger_count double, PULocationID int64; 2025 has them int32/int64/int32.
+  # The canonical cast is what makes years comparable downstream.
+  required_columns:
+    VendorID:               {dtype: "Int64",     nullable: true}
+    tpep_pickup_datetime:   {dtype: "datetime64[us]", nullable: false}
+    tpep_dropoff_datetime:  {dtype: "datetime64[us]", nullable: false}
+    passenger_count:        {dtype: "Int64",     nullable: true, min: 0, max: 9}
+    # nullable: false below == a POST-CLEAN guarantee. The raw column may be
+    # null; a named rejection rule removes those rows, and the output contract
+    # then re-checks the guarantee -- so a rule that stops working is caught.
+    trip_distance:          {dtype: "float64",   nullable: false}
+    RatecodeID:             {dtype: "Int64",     nullable: true}
+    store_and_fwd_flag:     {dtype: "string",    nullable: true, allowed: ["Y", "N"]}
+    PULocationID:           {dtype: "Int64",     nullable: false, min: 1, max: 265}
+    DOLocationID:           {dtype: "Int64",     nullable: false, min: 1, max: 265}
+    payment_type:           {dtype: "Int64",     nullable: true}
+    fare_amount:            {dtype: "float64",   nullable: true}
+    extra:                  {dtype: "float64",   nullable: true}
+    mta_tax:                {dtype: "float64",   nullable: true}
+    tip_amount:             {dtype: "float64",   nullable: true}
+    tolls_amount:           {dtype: "float64",   nullable: true}
+    improvement_surcharge:  {dtype: "float64",   nullable: true}
+    total_amount:           {dtype: "float64",   nullable: true}
+
+  # Year-aware by design (gotcha #6): TLC adds columns as the years pass.
+  # from_year = the first year the column is REQUIRED; before that it may be
+  # absent without complaint, and present-but-early is fine too (2019-01 already
+  # ships an all-null airport_fee). aliases catch the same field under a
+  # different spelling -- OBSERVED 2026-08-16: 2019 says `airport_fee`, 2025 says
+  # `Airport_fee`. An applied alias is announced, never silent.
+  year_columns:
+    congestion_surcharge:   {from_year: 2019, dtype: "float64", nullable: true}
+    airport_fee:            {from_year: 2021, dtype: "float64", nullable: true,
+                             aliases: ["Airport_fee", "AIRPORT_FEE"]}
+    cbd_congestion_fee:     {from_year: 2025, dtype: "float64", nullable: true}
+
+clean:
+  target: trip_duration_minutes   # derived here; configs/train.yaml names it as the label
+  # Rejection rules, applied in THIS order. A dropped row is attributed to the
+  # FIRST rule it violates, so the per-rule counts sum exactly to the total
+  # dropped; the independent per-rule hit count is reported alongside so an
+  # overlapping rule cannot hide behind an earlier one. No silent drops.
+  rules:
+    - name: missing_timestamp        # pickup or dropoff null -- no derivable target
+    - name: duration_non_positive    # dropoff <= pickup (observed min: -84280 min in 2019-01)
+    - name: duration_below_min
+      min_minutes: 1.0
+    - name: duration_above_max
+      max_minutes: 120.0
+    - name: pickup_outside_month     # observed 2019-01: pickups dated 2001 and 2088
+    - name: distance_non_positive
+    - name: distance_above_max
+      max_miles: 100.0
+    - name: fare_negative
+    - name: location_out_of_range    # PU/DO outside the taxi-zone id space
+    - name: passenger_count_out_of_range
+  # A month that loses more than this fraction is not a cleaning result, it is a
+  # broken input: refuse rather than quietly hand downstream a thinned month.
+  # Observed 2019 months reject ~2-3%; the ceiling is deliberately not snug.
+  max_rejected_fraction: 0.10
+
+write:
+  # Pinned so S2's byte-identical rebuild has a fixed writer contract to prove.
+  compression: snappy
+  row_group_size: 1000000
+  sort_by: ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID"]

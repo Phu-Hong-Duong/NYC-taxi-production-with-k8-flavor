@@ -24,9 +24,11 @@ verify-m0: ## M0 gate: platform healthy + org docs present (BLUEPRINT §9/M0)
 	@bash scripts/verify_m0.sh
 
 # ---- M1 data & analytics platform (role:DE, role:DA) ----
-.PHONY: data marts deploy-metabase verify-m1
-data: ## download->validate->clean->split->duckdb layer->dvc push (byte-identical rebuilds)
-	@echo "TODO(M1): python -m taxi_mlops.data ... ; dvc push"
+.PHONY: ingest data marts deploy-metabase verify-m1
+ingest: ## download->contract->clean->split, counted rejections, sha256 manifest (M1-S1)
+	uv run python -m taxi_mlops.data ingest
+data: ## ingest + duckdb layer + dvc push (byte-identical rebuilds)
+	@echo "TODO(M1-S2): $(MAKE) ingest ; duckdb layer ; dvc push"
 marts: ## dbt build (tests incl.) + publish gold marts to Postgres (Flyte task from M4)
 	@echo "TODO(M1-S6): cd analytics/dbt && dbt build ; publish to postgres"
 deploy-metabase: ## Metabase container, app-db in Postgres, port 3030

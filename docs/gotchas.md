@@ -188,3 +188,25 @@ the seed line are earned by THIS project.
     shim fires when it should. General form: a dry run must cover the most
     expensive deletion first, not last — and any footer claiming what a script
     did is a claim to verify, not a summary to trust.
+
+31. **A column that "still exists" under a different capital letter.** Gotcha #6
+    warned that TLC adds columns by year. What it did NOT say is that TLC also
+    *renames* and *retypes* the ones already there. Observed live 2026-08-16 by
+    diffing the arrow schemas of 2019-01..08 against a 2025-01 probe:
+    `airport_fee` (2019, all-null) becomes **`Airport_fee`** (2025) — same
+    field, capital A — and six columns change physical type across the same
+    boundary (`VendorID`/`PULocationID`/`DOLocationID` int64→int32,
+    `passenger_count`/`RatecodeID` double→int64, `store_and_fwd_flag`
+    string→large_string). Every one of those is silent: a case-sensitive
+    `df["airport_fee"]` on 2025 data raises KeyError at best and, if the code
+    politely reindexes, yields an all-null column that reads as missing data
+    rather than as a rename. The int32/int64 pair is worse — it does not fail at
+    all, it just makes two years' frames disagree somewhere far downstream.
+    Fix landed at M1-S1: the contract carries `aliases` per column and announces
+    every one it applies (`SCHEMA EVENT: alias applied: 'Airport_fee' ->
+    'airport_fee'`), and the single dtype cast normalizes every year onto one
+    canonical set — so two years become the same table by construction, not by
+    luck. Check: never trust `set(columns_a) == set(columns_b)` as "the schema
+    is stable"; diff the TYPES too, and diff case-insensitively before
+    concluding a column is new. General form: schema drift has three shapes —
+    added, renamed, retyped — and only the first one is loud.

@@ -74,7 +74,32 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | MLflow (app) | **3.15.1**, image `burakince/mlflow:3.15.1` | 2026-08-16 | `kubectl -n mlflow get deploy mlflow -o jsonpath=…`. BLUEPRINT §7 hypothesised 3.13.0 — the live chart is ahead; observation wins |
 | MLflow db-check init image | `busybox:1.38.0` | 2026-08-16 | chart default, rendered by `helm template` |
 | Postgres | **16.11** (Debian bookworm), image pinned by digest `postgres@sha256:a2420e9555e2224583fe84d0bb3f0b967e69354ae3a0be55a9c14e251388c4eb` | 2026-08-16 | `select version()` in the running pod; digest from `docker pull postgres:16.11-bookworm`. NOT helm — see `infra/manifests/postgres.yaml` header |
+| pandas | **3.0.5** | 2026-08-16 | `uv add pandas` resolution (M1-S1). A 3.x major — `astype("string")` reports as `str`; exact graph in `uv.lock` |
+| pyarrow | 25.0.1 | 2026-08-16 | `uv add pyarrow` (M1-S1). The parquet WRITER whose options `configs/data.yaml:write` pins — S2's byte-identity proof rests on this pair |
+| pandera | 0.32.1 (`import pandera.pandas as pa`) | 2026-08-16 | `uv add pandera` (M1-S1) |
+| numpy | 2.5.2 | 2026-08-16 | transitive via pandas (M1-S1) |
+| PyYAML | 6.0.3 | 2026-08-16 | `uv add pyyaml` (M1-S1) — configs/*.yaml are read by code from M1 on |
+| TLC yellow parquet (2019-01…08) | 8 files, sha256-pinned in `data/raw_manifest.json` | 2026-08-16 | `make ingest`; e.g. 2019-01 = `3ad95f39…26d`, 110,439,634 bytes. Manifest is timestamp-free by design: a diff = the bytes moved |
 | (FLAML/Optuna/DuckDB rows land at their milestones) | | | |
+
+## The data contract (M1-S1) — where the rules actually live
+Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT
+there — they live in `configs/train.yaml` and are read from it, so the two files
+can never disagree (the port-family twins lesson, applied before it bit).
+- **One cast, one place**: `taxi_mlops.data.contract.cast` — gotcha #7. Nothing
+  else in the codebase may `astype` a TLC column.
+- **Structure refuses, rows get counted**: a missing/renamed/unknown column
+  refuses the whole month (SchemaEventError); a bad ROW is counted against a
+  named rule and dropped (no silent drops). `max_rejected_fraction` (0.10) turns
+  a too-thin month back into a refusal.
+- **Year-aware by shape** (gotcha #6): `year_columns` carry `from_year`, so 2019
+  is not asked for `cbd_congestion_fee` and 2025 is. Proven by a unit test that
+  validates a 2025-shaped frame against the shipped contract.
+- **`nullable: false` in the config = a POST-clean guarantee**: the output
+  contract re-checks it, so a cleaning rule that stops working is caught rather
+  than shipped.
+- Observed 2019 rejection rate: **1.60% over 57.0M rows** (8 months, per-rule
+  table printed by `make ingest` and written beside every output).
 
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
@@ -101,6 +126,7 @@ test_platform_scripts.py` fails if they drift. Adding a port means
 | Cluster down | `make cluster-down` | VERIFIED 2026-08-16 (M0-S2): deletes, and no-ops when already absent (both exit 0) |
 | Platform | `make deploy-platform` | VERIFIED 2026-08-16 (M0-S3): MinIO + Postgres + MLflow up; re-run on the live stack = clean upgrade (helm rev 3, namespaces/service/configmap `unchanged`) and it REPAIRED a hand-inflicted `scale --replicas=0` |
 | Gate check M0 | `make verify-m0` | VERIFIED 2026-08-16 (M0-S3): 18 sub-checks GREEN, exit 0; RED-TEAMED by scaling MLflow to 0 → exit 1 naming 5 failures. Secrets come from `.env` (gitignored) via `scripts/platform_secrets.sh` — never printed, never committed |
+| Ingest (M1-S1) | `make ingest` (`python -m taxi_mlops.data ingest [--month YYYY-MM]`) | VERIFIED 2026-08-16 (M1-S1): 8 months, 57,042,337 → 56,127,878 rows (1.603% rejected, per-rule table printed); re-run = all 8 outputs byte-identical + manifest unchanged. RED-TEAMED twice: seeded corrupt parquet → `CorruptSourceError` naming the file, exit 1, `processed/` never created; truncated pinned raw → `ChecksumDriftError`, exit 1, output sha256 and manifest pin both untouched |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |
