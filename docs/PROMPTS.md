@@ -33,9 +33,11 @@ docs/org/ORG.md + ROLES.md · automation/README.md · docs/gotchas.md.
 
 This session's plan, in order:
 1. PREFLIGHT, verified by running: repo is inside the WSL2 filesystem; git
-   remote reachable with push rights; `claude` CLI present; permission flags
-   set (echo $CLAUDE_PERMISSION_FLAGS); Docker Desktop up; WSL RAM grant
-   ≥48GB (`free -h`); ports free (CLAUDE.md port family). Paste every check.
+   remote reachable with push rights; `gh auth status` succeeds (PR/merge
+   autonomy runs through the GitHub CLI — the one human prerequisite);
+   `claude` CLI present; permission flags set (echo $CLAUDE_PERMISSION_FLAGS);
+   Docker Desktop up; WSL RAM grant >=48GB (`free -h`); ports free (CLAUDE.md
+   port family). Paste every check.
 2. PROVE THE HARNESS before trusting it: (a) run
    `automation/next_session.sh executor 60` pointed at a throwaway hello
    prompt (temporarily; restore after) and observe a session actually start

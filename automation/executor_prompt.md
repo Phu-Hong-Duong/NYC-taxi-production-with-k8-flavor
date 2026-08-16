@@ -16,10 +16,15 @@ where the cut is.
 
 Standing rules (the protocol governs; these are the teeth):
 - Verify by running; every Done cites the command and observed output.
-- Git autonomy is GRANTED (PO 2026-08-16, recorded in ADR-010): branch per
-  story, conventional commits, push, PR, merge on green CI + verified
-  accept-when. HOLD only: unverified work, PO-flagged items, or anything
-  carrying an undecided fork.
+- Git autonomy is GRANTED (PO 2026-08-16, recorded in ADR-010) — end to end,
+  no waiting for the PO: branch per story (`story/mX-sY-slug`), conventional
+  commits, push, `gh pr create --fill --label role:XX`, wait for CI with
+  `gh pr checks --watch`, then `gh pr merge --merge --delete-branch` — a merge
+  COMMIT, never squash: the PR boundary IS the lineage (protocol §7). After
+  merging, prove reachability once: `git branch -r --contains <sha>` shows
+  origin/main (gotcha #20). HOLD — leave the PR open and say so in the
+  handoff — only for: unverified work, PO-flagged items, or anything carrying
+  an undecided fork.
 - FORK POLICY — direction decisions WAIT for the PO: if a new finding opens a
   genuine fork (direction, scope, taste, money, destruction, gate/threshold
   changes), write it to AWAITING_PO.md as options + honest trade-offs + your
