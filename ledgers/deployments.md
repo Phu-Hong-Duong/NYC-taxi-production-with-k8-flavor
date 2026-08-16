@@ -1,3 +1,4 @@
 # Deployments ledger — every serve, canary shift, and rollback, with exact commands.
 | Date | Event | Model version | Traffic | Commands used | Outcome / evidence |
 |---|---|---|---|---|---|
+| 2026-08-16 | M0 platform first deploy — MinIO 5.4.0 + Postgres 16.11 + MLflow chart 1.11.4 (app 3.15.1) onto kind `mlops-taxi` | n/a (no model until M2) | n/a | `make cluster-down && make cluster-up` (kind config gained the 5000/9000/9001 host-port mappings) · `make deploy-platform` · `make verify-m0` | GREEN: 18/18 verify-m0 sub-checks, exit 0. First attempt FAILED — `helm upgrade --wait` hit `context deadline exceeded` because MLflow was OOMKilled (exit 137) under its default 4 uvicorn workers; fixed with `extraArgs: {workers: "1"}` (gotcha #28). Re-run of `deploy-platform` on the live stack = clean upgrade AND repaired a deliberate `kubectl scale --replicas=0`. |

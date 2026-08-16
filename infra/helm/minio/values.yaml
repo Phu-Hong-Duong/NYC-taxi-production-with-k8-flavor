@@ -1,2 +1,69 @@
-# minio — helm values. Chart + version chosen at its milestone from live sources,
-# recorded in CLAUDE.md pin table. Keep every override commented with WHY.
+# MinIO — the S3 the whole program talks to (MLflow artifacts today; DVC remote,
+# KServe model storage and Feast registry later).
+#
+# Chart: minio/minio  (repo https://charts.min.io/) — version pinned in
+# scripts/deploy_platform.sh and recorded in the CLAUDE.md pin table. Every
+# override below says WHY; anything not listed is the chart default on purpose.
+#
+# NOTE ON SECRETS: nothing secret is in this file. Root credentials come from the
+# Secret `minio-root`, the mlflow user's secret key from `minio-mlflow-user` —
+# both created by scripts/platform_secrets.sh out of .env (gitignored).
+
+# One node, one drive. `distributed` (the chart default) wants 16 replicas ×
+# drives; erasure coding across a single laptop's disk buys nothing and costs
+# 16× the RAM.
+mode: standalone
+replicas: 1
+drivesPerNode: 1
+
+# The chart requests 16Gi by default — sized for a real MinIO fleet. On a 48 GB
+# WSL VM shared with Postgres, MLflow, Flyte (M4), KServe (M5) and the monitoring
+# stack (M6) that reservation is the whole budget for one service.
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 2Gi
+
+persistence:
+  enabled: true
+  # 500Gi (the chart default) is a claim this laptop cannot honour; local-path
+  # provisioning would accept it and then fail at the worst moment.
+  size: 20Gi
+
+# Root credentials live in a Secret, never in values. Keys `rootUser` /
+# `rootPassword` are the names the chart looks for.
+existingSecret: minio-root
+
+# NodePorts are fixed, not random, because infra/kind/kind-config.yaml maps
+# exactly these two node ports onto the CLAUDE.md host port family (9000/9001).
+# Change one and you must change the other — they are twins.
+service:
+  type: NodePort
+  port: "9000"
+  nodePort: 30900
+consoleService:
+  type: NodePort
+  port: "9001"
+  nodePort: 30901
+
+# Created by the chart's post-install mc Job. `purge: false` so a re-run never
+# deletes artifacts — deploy-platform must be safe to run on a live stack.
+buckets:
+  - name: mlflow-artifacts
+    policy: none
+    purge: false
+    versioning: false
+
+# The chart ships a default user `console` / `console123` (a published password
+# on an admin policy). Overriding the list removes it. MLflow gets its own
+# identity with readwrite on the data path — the root account is for admin only,
+# so a leaked MLflow credential cannot reconfigure the server.
+# `accessKey` is an identity (a username), not a secret; the secret key comes
+# from the Secret named here.
+users:
+  - accessKey: mlflow
+    existingSecret: minio-mlflow-user
+    existingSecretKey: secretKey
+    policy: readwrite

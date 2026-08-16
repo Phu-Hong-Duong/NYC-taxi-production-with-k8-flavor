@@ -1,0 +1,110 @@
+# The ONE Postgres (BLUEPRINT §3): MLflow's backend store today; dbt gold marts
+# (M1), Optuna studies (M3) and Metabase's app-db (M1-S7) land in the same server,
+# in their own databases.
+#
+# WHY A PLAIN MANIFEST INSTEAD OF A HELM CHART (M0-S3 craft choice, kickoff
+# "community chart vs plain manifests"): bitnami/postgresql 18.8.9 — today's
+# chart — defaults to `registry-1.docker.io/bitnami/postgresql:latest`. A rolling
+# `latest` tag is exactly what the MLOps charter refuses, and the pinned tags now
+# live in the frozen `bitnamilegacy` registry (the MLflow community chart itself
+# ships `repository: bitnamilegacy/postgresql` with the comment "temporary
+# workaround because of bitnami's deprecation"). Building on a deprecated
+# registry to get a pin is worse than fifty lines of YAML we own. Undo is one
+# `helm upgrade --install` away if upstream ever settles.
+#
+# Secrets are NEVER in this file — `scripts/platform_secrets.sh` creates them
+# from .env (gitignored) before this is applied.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: platform
+data:
+  # docker-entrypoint-initdb.d runs ONCE, on an empty data directory. A database
+  # added in a later milestone therefore does NOT arrive by editing this file on
+  # an existing volume — it needs a migration Job (ledgers/debt.md D-002).
+  10-mlflow.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-SQL
+      CREATE ROLE "${MLFLOW_DB_USER}" LOGIN PASSWORD '${MLFLOW_DB_PASSWORD}';
+      CREATE DATABASE "${MLFLOW_DB_NAME}" OWNER "${MLFLOW_DB_USER}";
+    SQL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: platform
+spec:
+  # ClusterIP on purpose: CLAUDE.md's port family annotates 5432 "in-cluster
+  # only". Nothing of ours publishes a database on the host.
+  type: ClusterIP
+  selector: {app: postgres}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: platform
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      containers:
+        - name: postgres
+          # Pinned by digest, not by tag: a tag is a pointer somebody else can
+          # move. Observed 2026-08-16 via `docker pull postgres:16.11-bookworm`.
+          image: postgres@sha256:a2420e9555e2224583fe84d0bb3f0b967e69354ae3a0be55a9c14e251388c4eb
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: postgres, containerPort: 5432}
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: postgres-superuser, key: password}}
+            # The PVC is mounted at /var/lib/postgresql/data, which arrives with a
+            # lost+found on some provisioners; initdb refuses a non-empty dir, so
+            # the cluster lives in a subdirectory.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: MLFLOW_DB_NAME
+              value: mlflow
+            - name: MLFLOW_DB_USER
+              valueFrom: {secretKeyRef: {name: postgres-mlflow, key: username}}
+            - name: MLFLOW_DB_PASSWORD
+              valueFrom: {secretKeyRef: {name: postgres-mlflow, key: password}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: initdb, mountPath: /docker-entrypoint-initdb.d}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "postgres", "-d", "postgres"]}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec: {command: ["pg_isready", "-U", "postgres", "-d", "postgres"]}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 1Gi}
+      volumes:
+        - name: initdb
+          configMap: {name: postgres-initdb, defaultMode: 0755}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        # kind's default StorageClass is rancher local-path; leaving
+        # storageClassName unset takes it without naming a cloud-specific class.
+        resources: {requests: {storage: 8Gi}}

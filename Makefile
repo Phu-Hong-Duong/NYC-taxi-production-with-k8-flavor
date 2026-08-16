@@ -18,10 +18,10 @@ cluster-down: ## delete kind cluster only (idempotent)
 	@bash scripts/cluster.sh down
 destroy: ## full teardown: cluster + regenerable state (NEVER data/raw originals or .env; DRY_RUN=1 to preview)
 	@bash scripts/cluster.sh destroy
-deploy-platform: ## MinIO + Postgres + MLflow via helm, values in infra/helm/*
-	@echo "TODO(M0): helm upgrade --install x3; create buckets; wait Ready"
+deploy-platform: ## MinIO + Postgres + MLflow (idempotent; values in infra/helm/*, manifests in infra/manifests/)
+	@bash scripts/deploy_platform.sh
 verify-m0: ## M0 gate: platform healthy + org docs present (BLUEPRINT §9/M0)
-	@echo "TODO(M0): kubectl waits + MLflow health + bucket listing + org files check; exit nonzero on miss"
+	@bash scripts/verify_m0.sh
 
 # ---- M1 data & analytics platform (role:DE, role:DA) ----
 .PHONY: data marts deploy-metabase verify-m1

@@ -142,3 +142,30 @@ the seed line are earned by THIS project.
     the target dir — a refusal now costs ten minutes, the same refusal at 3am
     costs a parked chain. Sibling of #26: same session, same theme (the
     permission *mode* survived the chain; the permission *list* was too short).
+
+28. **A pod whose logs say "Application startup complete" and then dies anyway.**
+    MLflow 3.x serves under uvicorn with `--workers 4` by default; four full
+    Python processes, each loading MLflow + SQLAlchemy + boto3, walked through a
+    2Gi limit and the kubelet killed the container. The logs show no error at
+    all — being OOMKilled is not something a process gets to log — so the only
+    honest evidence is in the pod object, not the log stream. Tuition paid
+    2026-08-16 (M0-S3; `helm upgrade --wait` failed with the uninformative
+    `Error: context deadline exceeded`). Check FIRST, before reading a single
+    log line: `kubectl get pod <p> -o jsonpath='{.status.containerStatuses[0].lastState}'`
+    — `"reason":"OOMKilled","exitCode":137` ends the investigation. Fix here:
+    `extraArgs: {workers: "1"}` in infra/helm/mlflow/values.yaml. General rule:
+    a server's default worker count is sized for a server, not for a laptop
+    sharing 48 GB with six other stacks.
+
+29. **A readiness check that passes on zero replicas.** `kubectl rollout status
+    deployment/x` exits 0 and prints "successfully rolled out" when the
+    Deployment is scaled to 0 — correctly, since zero replicas is a completed
+    rollout, but it means a verify script built on it reports **ok** for a
+    service that is entirely gone. Found 2026-08-16 by red-teaming verify-m0
+    against its own subject (`kubectl scale --replicas=0` on MLflow): every URL
+    check failed while the readiness line stayed green. Rule: ask readiness as a
+    number — `readyReplicas >= 1` AND `readyReplicas == spec.replicas` — and keep
+    the rollout check too, because the two fail differently (wedged rollout vs
+    scaled-away workload). General form: a check whose PASS branch you have never
+    seen be wrong is a check you have not tested; scale the thing to zero and
+    watch what your script says.

@@ -67,7 +67,14 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | Python (project, uv-managed) | 3.12.14 | 2026-08-16 | `.python-version` = 3.12, pinned at M0-S1 for parity with ci.yml's `uv python install 3.12` |
 | ruff | 0.16.3 | 2026-08-16 | `uv add --dev ruff` resolution (M0-S1); exact pin lives in `uv.lock` |
 | pytest | 9.1.1 | 2026-08-16 | `uv add --dev pytest` resolution (M0-S1); exact pin lives in `uv.lock` |
-| (FLAML/Optuna/DuckDB/MLflow/MinIO/Postgres rows land at their milestones) | | | |
+| MinIO chart | `minio/minio` **5.4.0** (repo https://charts.min.io/) | 2026-08-16 | `helm list -A` on the live cluster (M0-S3); pinned in `scripts/deploy_platform.sh` |
+| MinIO server image | `quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z` | 2026-08-16 | chart-pinned; read back from `kubectl -n platform get deploy minio -o jsonpath=…` |
+| MinIO client (`mc`) image | `quay.io/minio/mc:RELEASE.2024-11-21T17-21-54Z` | 2026-08-16 | chart default (bucket/user Jobs) |
+| MLflow chart | `community-charts/mlflow` **1.11.4** | 2026-08-16 | `helm list -A` (M0-S3); pinned in `scripts/deploy_platform.sh` |
+| MLflow (app) | **3.15.1**, image `burakince/mlflow:3.15.1` | 2026-08-16 | `kubectl -n mlflow get deploy mlflow -o jsonpath=…`. BLUEPRINT §7 hypothesised 3.13.0 — the live chart is ahead; observation wins |
+| MLflow db-check init image | `busybox:1.38.0` | 2026-08-16 | chart default, rendered by `helm template` |
+| Postgres | **16.11** (Debian bookworm), image pinned by digest `postgres@sha256:a2420e9555e2224583fe84d0bb3f0b967e69354ae3a0be55a9c14e251388c4eb` | 2026-08-16 | `select version()` in the running pod; digest from `docker pull postgres:16.11-bookworm`. NOT helm — see `infra/manifests/postgres.yaml` header |
+| (FLAML/Optuna/DuckDB rows land at their milestones) | | | |
 
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
@@ -77,14 +84,24 @@ PLUS every `hostPort:` in `infra/kind/kind-config.yaml` (adds 8443, the ingress
 TLS mapping). This list and the `PURPOSE` map in that script are twins — change
 both together. Known limit (F-002): `ss` sees only inside the WSL VM.
 
+**How a host port reaches a service (M0-S3).** kind publishes host ports at
+cluster-CREATE time only, so the route is declared, never port-forwarded:
+`hostPort` in the kind config → `containerPort` = the Service's fixed
+`nodePort`. Live pairs: 5000←30500 (`infra/manifests/mlflow-nodeport.yaml`),
+9000←30900 and 9001←30901 (`infra/helm/minio/values.yaml`), 8081←80 / 8443←443
+(ingress, M5). Each pair is TWINS across two files — `tests/unit/
+test_platform_scripts.py` fails if they drift. Adding a port means
+`make cluster-down && make cluster-up`; there is no live path.
+
 ## Commands (fill as they become real; each idempotent, each with a verify twin)
 | Intent | Command | Verified |
 |---|---|---|
 | Cluster up | `make cluster-up` | VERIFIED 2026-08-16 (M0-S2): created 3-node `mlops-taxi`, re-ran → `already exists — no-op` exit 0, down→up rebuild from the pinned config, all exit 0 |
 | Port pre-check (gotcha #10) | `make ports` | VERIFIED 2026-08-16 (M0-S2): passes clean; RED-TEAMED with a dummy listener on 5000 → exit 2 naming port, purpose and holding pid, through `make cluster-up` too |
 | Cluster down | `make cluster-down` | VERIFIED 2026-08-16 (M0-S2): deletes, and no-ops when already absent (both exit 0) |
-| Platform | `make deploy-platform` | pending M0-S3 |
-| Gate checks | `make verify-m0` … `verify-m8` | pending each milestone |
+| Platform | `make deploy-platform` | VERIFIED 2026-08-16 (M0-S3): MinIO + Postgres + MLflow up; re-run on the live stack = clean upgrade (helm rev 3, namespaces/service/configmap `unchanged`) and it REPAIRED a hand-inflicted `scale --replicas=0` |
+| Gate check M0 | `make verify-m0` | VERIFIED 2026-08-16 (M0-S3): 18 sub-checks GREEN, exit 0; RED-TEAMED by scaling MLflow to 0 → exit 1 naming 5 failures. Secrets come from `.env` (gitignored) via `scripts/platform_secrets.sh` — never printed, never committed |
+| Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | implemented M0-S2; deletion guard unit-tested (`data/raw`, `.env`, `.dvc/cache` survive; escaping paths refused). Full destroy→rebuild cycle is M0-S4's proof |
 | Chain next session | `automation/next_session.sh <executor\|rev\|architect> [delay]` | REAL-CLI proven 2026-08-16 (hello-chain fired +60s; `opus`→claude-opus-5; log+counter OK) |
