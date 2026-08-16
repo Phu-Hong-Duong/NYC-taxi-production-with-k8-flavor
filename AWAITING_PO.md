@@ -9,6 +9,10 @@ if the answer changes the plan). Direction decisions WAIT here; nothing
 auto-proceeds on a recommendation (ADR-010).
 
 ## 2026-08-16-2 · raised by EXEC/Opus (M0-S1) · NON-BLOCKING: the permission allowlist is starter-sized — one paste makes unattended sessions stop tripping
+*(ARCH note 2026-08-16: attempted to apply Option A under the PO's in-chat
+delegation — the harness classifier refused the settings write for ARCH too.
+The guard is correct and is not being worked around: this paste is genuinely
+yours. Chain unaffected meanwhile.)*
 
 **Not a direction fork — a friction report with a fix only your hands can
 apply.** You picked the safer allowlist at A4 (correct call; I am not asking
