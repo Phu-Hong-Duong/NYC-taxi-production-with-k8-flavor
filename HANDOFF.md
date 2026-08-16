@@ -1,5 +1,211 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (r) — M1-S2: pinned, rebuilt byte-for-byte by two witnesses, and a contract review that found four things
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), role:DE with
+the DA hat for the ritual, one story. **PR #6 MERGED on green CI**
+(`lint-test pass 37s`), merge commit `f1ee8b4`, story commit `a2f4bf6`, lineage
+proven: `git branch -r --contains a2f4bf6` → `origin/main`. Tree clean and level
+with origin; the story branch is deleted both sides. **Next: EXECUTOR runs
+M1-S3** (EDA report + KPI definitions + prior-art survey — a pure-docs story,
+role:DA, MLE consulted on verdicts).
+
+### Staleness check of (q)'s Next — reality matched, nothing to reconcile
+`kubectl get nodes` → 3/3 Ready (v1.36.1, ~45m old) · pods Running:
+`mlflow/mlflow-7c8f58857d-lhfmx`, `platform/minio-747bf5487-svswq`,
+`platform/postgres-0`, `local-path-provisioner` · `free -h` 47Gi ·
+`df -h /home/longt` 951G free · no `.dvc` yet (as (q) said) · all 8 raw and 8
+processed months on disk · tree clean at `67d8885`. The cluster is untouched by
+this story — M1-S2 is a local data path — but the claim was checked, not assumed.
+
+### Done (every leg with the command and what came back)
+- **`make data` is the whole path, and the ORDER is the design.**
+  ingest → duckdb → `dvc add` + `dvc push`. Ran end to end: 8 months ingested,
+  `[duckdb] GREEN`, then `dvc push` → `Everything is up to date` ·
+  `dvc status` → `Data and pipelines are up to date` · `dvc status --cloud` →
+  `Cache and remote 'localstore' are in sync` · `[data] GREEN`. DVC runs LAST
+  because it pins what the earlier legs produced; running it first would push
+  the previous run's bytes and leave every downstream proof one run stale.
+- **THE GATE LEG — byte-identical rebuild, 8/8, two witnesses.**
+  `make rebuild-proof`: hashed the outputs, proved the INPUT still matches
+  `data/raw.dvc` (`Data and pipelines are up to date`), deleted
+  `data/processed/` (`data/processed: gone`), rebuilt with ONE command
+  (`SKIP_DVC=1 make data`), and compared:
+
+  ```
+  output                                 sha256 before     sha256 after      bytes         identical
+  test/yellow_tripdata_2019-08.parquet   39e56fef087e6c85  39e56fef087e6c85   113,120,367        yes
+  train/yellow_tripdata_2019-01.parquet  c9f371daea1b30e1  c9f371daea1b30e1   135,350,911        yes
+  train/yellow_tripdata_2019-02.parquet  17eb0be1b3904973  17eb0be1b3904973   127,356,768        yes
+  train/yellow_tripdata_2019-03.parquet  dd2364c94e5d9f34  dd2364c94e5d9f34   142,680,294        yes
+  train/yellow_tripdata_2019-04.parquet  f690290014f9476d  f690290014f9476d   134,945,869        yes
+  train/yellow_tripdata_2019-05.parquet  7fa25e84bd589f13  7fa25e84bd589f13   136,995,276        yes
+  train/yellow_tripdata_2019-06.parquet  e3be46bd05e8001f  e3be46bd05e8001f   127,688,705        yes
+  val/yellow_tripdata_2019-07.parquet    da59cca644c0637f  da59cca644c0637f   117,092,234        yes
+  [rebuild-proof] 8 output(s), all byte-identical: True
+  [rebuild-proof] second witness — DVC's own view of data/processed:
+    Data and pipelines are up to date.
+  [rebuild-proof] GREEN — wiped, rebuilt by one command, byte-identical by two witnesses.
+  ```
+- **RED-TEAM 1 — the proof must refuse a drifted INPUT, and must not delete
+  first.** Appended 20 bytes to `data/raw/yellow_tripdata_2019-03.parquet`
+  (116,017,372 → 116,017,392) and ran `make rebuild-proof`:
+  `FAIL: data/raw does not match its DVC pin — the rebuild would start from
+  different bytes and prove nothing (gotcha #6)` with `modified: data/raw`,
+  exit 1 (make reports 2). It stopped at step 2/5: **`data/processed` still had
+  all 8 files** — the refusal happened before the delete, which is the whole
+  point. Restored with `uv run dvc checkout data/raw.dvc --force` → size back to
+  116,017,372, `sha256 6883b45b…0978 == manifest pin`, `MATCHES PIN: True`,
+  `dvc status` clean. That is also the "wiped data restored by one command" leg,
+  on the un-regenerable half.
+- **RED-TEAM 2 — the comparison must be able to say NO.** Dropped ONE row from
+  `data/processed/val/yellow_tripdata_2019-07.parquet` (6,189,748 → 6,189,747)
+  and re-ran: the rebuild restored the true bytes, so the table printed
+  `val/yellow_tripdata_2019-07.parquet  2c6e8ec07cd5e92b  da59cca644c0637f … NO`,
+  `all byte-identical: False`, exit 1 — naming the one file out of eight.
+- **The DuckDB analyst layer — VIEWS, not copies.** `make duckdb` →
+  `9 view(s): data_health, ingest_months, ingest_rejections, raw_manifest,
+  trips_clean, trips_test, trips_train, trips_val, unknown_domain_values`, and
+  the reconciliation table: every one of the 8 months' view row count EQUALS the
+  `rows_out` its ingest report claimed, `ALL 56,127,878`,
+  `[duckdb] GREEN — 8 month(s), every count reconciled: True`. It exits 1 when
+  they disagree (red-teamed in unit form two ways: truncating a month's parquet,
+  and inflating a report's `rows_out`).
+- **DVC.** `dvc init` → `core.analytics false` immediately (see Defects),
+  `core.autostage true`, remote `localstore` = `/home/longt/dvc-remote/nyc-taxi`.
+  `dvc add data/raw data/processed` → `raw.dvc` 838,211,473 bytes/8 files,
+  `processed.dvc` 1,035,241,847 bytes/16 files. `dvc push` → `26 files pushed`,
+  remote verified on disk: **26 blobs, 1,873,455,658 bytes**.
+- **Data Contract Review ritual (DA block) — four challenges, none of them
+  polite.** Minutes at `docs/rituals/2026-08-16_data-contract-review.md`; the
+  first-use template at `docs/rituals/TEMPLATE_data-contract-review.md`. Every
+  figure came from a query against a named view — no raw parquet was read.
+  Two challenges produced a CHANGE, one was ANSWERED with the number that
+  settles it, one is CARRIED as F-005 with dissent recorded.
+- **Tests + lint.** `uv run pytest tests/unit -q` → **79 passed** (was 57; 22
+  new, cluster-free AND network-free). `uv run ruff check src tests scripts` →
+  `All checks passed!`. CI green on the PR.
+- **Docs**: CLAUDE.md gains duckdb 1.5.5 + dvc 3.67.1 pin rows, four command
+  rows (`make data`, `make duckdb`, the `query` path, `make rebuild-proof`) and
+  a new "The analyst layer + DVC (M1-S2)" section · `docs/gotchas.md` #32 and
+  #33 · `data/README.md` rewritten (view table, DVC section with the honest
+  limit) · LEARNING_GUIDE field note (field-note law satisfied).
+
+### The review's findings, because they outlive this session
+- **DCR-02/DCR-04 (CHANGED).** The null batch is **exactly** 261,781 rows in
+  which `passenger_count`, `RatecodeID` and `store_and_fwd_flag` are all null
+  AND `payment_type = 0` — zero exceptions, all 8 months. `payment_type = 0` is
+  not null, so on a dashboard it reads as a payment CATEGORY. And it is not
+  "one vendor batch" as (q) recorded: VendorID 2 contributes 261,562 and
+  **VendorID 5 contributes 219 — all 219 of the trips it has in 56M rows**.
+  Generalized into `configs/data.yaml:analyst.known_domains` (documenting, never
+  enforcing) plus the `unknown_domain_values` view, which now reports
+  `VendorID 4` 264,661 · `payment_type 0` 261,781 · `RatecodeID 99` 949 ·
+  `VendorID 5` 219, each in all 8 months. Drift by VALUE is gotcha #31's quieter
+  sibling: the contract watched columns appear, vanish and get renamed; nothing
+  watched a column grow a new code.
+- **DCR-03 (ANSWERED).** `fare_amount` max **671,123.14** against p99.9
+  **85.50** — but 12 rows in 56,127,878, and the mean moves 13.1740 → 13.1398
+  (0.26%). Not a rejection rule; a threshold picked before S3's EDA would be a
+  guess wearing a rule's clothes. It IS fatal to any MAX/SUM/percentile KPI, so
+  action item AI-2 binds S3's KPI doc to state window and outlier treatment.
+- **DCR-01 (CARRIED → F-005, medium, owner DE).** The 914,459 rejected rows
+  exist only as counts. `duration_above_max` removes 159,300 trips over two
+  hours and nothing on disk can say whether they are meter faults or a real
+  long-haul population. Deliberately a FINDING, not a debt row: no milestone's
+  quoted §9 scope promises this capability, so inventing a landing would be the
+  carried-to-nowhere failure (gotcha #19). Proposed home M1-S3; if S3's scope is
+  judged not to cover writing new ingest artifacts, it is an ARCH scoping call
+  at the M1 boundary, **not a silent slide**.
+- **Dissent recorded, not resolved** (minutes §4): the DA holds F-005 is the
+  most consequential item and that carrying it is a deferral, since every number
+  in S3's EDA will describe only the 98.397% that survived. The DE holds the fix
+  belongs with the story that consumes it. Second, smaller dissent: the DA
+  wanted `unknown_domain_values` folded into `data_health` so no board could
+  avoid it; refused on cost (health is metadata-only and instant, that view
+  scans 56M rows, and a slow health board gets turned off). Settled in the DE's
+  favour, recorded because the reason was good.
+
+### Decisions (craft-level, inside scope, each with its undo)
+- **The DVC remote is a plain directory OUTSIDE the repo, and MinIO was
+  refused.** MinIO is already running and speaks S3 — and lives on a PVC that
+  `make destroy` deletes, so it would be a backup that dies with the thing it
+  protects. `/home/longt/dvc-remote/nyc-taxi` survives destroy and a wrong
+  `rm -rf` in the repo. Honest limit, written into `data/README.md` rather than
+  implied: same physical disk, so it does NOT survive disk loss. Undo: one
+  `dvc remote modify` — the cache is unaffected.
+- **`SKIP_DVC=1` exists for exactly one caller.** `make data` ends in `dvc add`;
+  a rebuild proof that ran the unmodified command would rewrite the pin it is
+  about to be judged against and pass forever — including after the parquet
+  writer stopped being deterministic. Now gotcha #33, guarded by
+  `test_the_proof_rebuilds_without_refreshing_the_pin`. Undo: delete the flag
+  and the proof becomes decoration (the field note asks the reader to try it).
+- **`data/processed` is DVC-tracked even though it is regenerable.** It buys the
+  second, independent witness in the rebuild proof — DVC's hashes, computed by
+  different code from different metadata. Cost: ~1 GB of cache and the same
+  again on the remote. Undo: `dvc remove data/processed.dvc`; the proof then
+  rests on our hashes alone.
+- **Split and month are config literals in the view SQL, never parsed from
+  filenames.** DuckDB will happily hand over the filename, and then a renamed
+  file silently relabels data. Undo: swap the literals for `filename := true`.
+- **Paths are config, view definitions are code.** A view name is a contract
+  cited by S3's EDA, S4's dbt sources and S5's boards; a knob anyone can retune
+  is the wrong home for it. `analyst.database_path` and `known_domains` are
+  config; the SQL is reviewed code.
+- **Root `.gitignore` no longer names `data/raw` or `data/processed`.** DVC
+  wrote `data/.gitignore` and owns it; a second copy would be twins, and a stale
+  root entry would keep hiding the data even if DVC tracking were lost — which
+  is exactly the failure you want loud. Pinned by a test.
+- **`dvc` is a runtime dependency, not a dev one**: `make data` invokes it, and
+  a shipping command's tools belong with the thing that ships.
+- **`make marts`/`deploy-metabase` left as stubs** — S4/S5 own them; half-wiring
+  now would only be undone later.
+
+### Defects / Surprises
+- **Earned gotcha #32 — `dvc init` turns on anonymous usage analytics.** The
+  init banner says so plainly and then scrolls away with the welcome text. This
+  program's charter is one sentence on the subject (CLAUDE.md: "$0 budget —
+  nothing leaves this machine"), so an opt-OUT default is a violation that
+  installs itself. Cost nothing because the banner was read on the first run.
+  Fixed with `dvc config core.analytics false`, committed in `.dvc/config`, and
+  pinned by `test_dvc_analytics_are_off` so a future `dvc init` on a fresh clone
+  cannot restore it quietly. Named siblings to check the same way when they
+  arrive: **dbt (`send_anonymous_usage_stats`) at M1-S4 and Metabase's anonymous
+  tracking at M1-S5.**
+- **Earned gotcha #33 — a rebuild proof that refreshes the pin it is judged
+  against.** Caught in review before it ever ran; see the decision above.
+- **`make` reports exit 2 where the script exits 1.** Both red-teams show
+  `EXIT CODE: 2` because make wraps a failing recipe. The scripts themselves
+  exit 1. Worth knowing before someone writes `verify-m1` expecting 1 from a
+  `make` invocation (M1-S5).
+- **No fork opened.** Nothing this story found needs a PO decision: the two
+  candidate contract changes were both priced and both declined inside the
+  review (261,781 rows and 12 rows respectively), and neither touches a gate, a
+  threshold or `max_rejected_fraction`.
+- **F-001 unchanged and still the PO's** (AWAITING_PO 2026-08-16-2). This
+  session hit the same expansion walls (`;`, `$?`, command substitution refused
+  — not verbs) and worked around them honestly with `subprocess.run` wrappers
+  that print their own `returncode`, which is how both red-team exit codes above
+  were observed. One new shape worth recording: a very long heredoc was refused
+  by the parser outright, so the HANDOFF entry was written as a file and
+  prepended. Nothing new to add to the entry itself.
+
+### Next
+**EXECUTOR runs M1-S3** — EDA report + KPI definitions + prior-art survey
+(role:DA, MLE consulted on the verdicts). It is a pure-docs story that touches
+no cluster state, and the layer it needs is now live: every EDA number must come
+from a named DuckDB view (`make duckdb` rebuilds it in seconds; `python -m
+taxi_mlops.data query "<SQL>"` is the read-only path). Three things S3 should
+carry in: **AI-2** (money KPIs need window + outlier treatment, citing fare max
+671,123.14 vs p99.9 85.50), **AI-4** (the "one vendor batch" wording is
+corrected — two VendorIDs, and 5 appears nowhere else), and **F-005** (the EDA
+can only describe the 98.397% that survived; say so in the report rather than
+letting the omission pass silently — and if S3 judges its scope covers writing
+the rejected-row sidecar, that closes F-005 here). The cluster is up and
+untouched (3/3 Ready, MLflow/MinIO/Postgres Running) and stays that way until
+M1-S5's deliberate rebuild.
+
 ## Session 2026-08-16 (q) — M1-S1: ingest + year-aware contract, 914,459 rows counted out loud, two typed refusals red-teamed
 
 ### State
