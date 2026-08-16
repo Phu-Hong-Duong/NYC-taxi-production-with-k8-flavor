@@ -1,0 +1,23 @@
+version: 2
+
+sources:
+  - name: analyst
+    description: >
+      The DuckDB analyst layer built by `taxi_mlops.data.analyst` (M1-S2),
+      attached read-only. Every view named here is a contract: the EDA report
+      cites it, these marts read it, and M1-S5's boards render it. A view
+      renamed there breaks `dbt build` here, which is the point — the
+      alternative is two definitions of "a clean trip" drifting apart.
+    database: analyst
+    schema: main
+    tables:
+      - name: trips_clean
+        description: "One row per accepted trip, 56,127,878 over 2019-01..08, labelled with its split and month from configs/train.yaml."
+      - name: ingest_months
+        description: "One row per ingested month: rows_in, rows_out, rows_rejected, rejected_fraction. Source of KPI-01 and KPI-02."
+      - name: ingest_rejections
+        description: "Per-rule drop counts (attributed and matched). Source of KPI-03."
+      - name: data_health
+        description: "ingest_months joined to the raw sha256 pins. Source of KPI-05."
+      - name: unknown_domain_values
+        description: "Values present in the data that the TLC dictionary does not describe. Related to KPI-04 — but see monthly_kpis: this view is pre-aggregated per column, so summing it double-counts rows carrying two undocumented values."

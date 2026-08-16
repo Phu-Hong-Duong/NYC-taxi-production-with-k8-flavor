@@ -19,3 +19,12 @@ notebooks/*.ipynb_checkpoints/
 .idea/
 automation/logs/
 automation/STOP
+
+# dbt's build artifacts are regenerable: `make marts`. marts.duckdb is a
+# rebuildable copy of aggregates whose source (data/processed) is DVC-pinned, so
+# it is not a second thing to version — it is a cache with a build command.
+analytics/dbt/marts.duckdb
+analytics/dbt/marts.duckdb.wal
+analytics/dbt/target/
+analytics/dbt/logs/
+analytics/dbt/dbt_packages/

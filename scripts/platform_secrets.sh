@@ -47,11 +47,36 @@ AWS_DEFAULT_REGION=us-east-1
 POSTGRES_PASSWORD=$(gen_secret)
 MLFLOW_DB_USER=mlflow
 MLFLOW_DB_PASSWORD=$(gen_secret)
+MARTS_DB_USER=marts
+MARTS_DB_PASSWORD=$(gen_secret)
 EOF
   chmod 600 "$ENV_FILE"
 else
   echo "[secrets] using existing $ENV_FILE (not regenerated — the old passwords are inside the volumes)"
 fi
+
+# --- 1b. Additive keys: a NEW consumer arriving after .env was written --------
+# M1-S4 taught this shape. `.env` is the source of truth precisely because its
+# passwords are already baked into volumes — so it is never regenerated. But a
+# milestone that adds a NEW database (marts here, Metabase's app-db at M1-S5)
+# needs a NEW credential, and hard-failing "your .env is missing MARTS_DB_USER"
+# would leave the operator hand-editing a secrets file: exactly the manual step
+# the recipe exists to remove (MLOps charter).
+#
+# The distinction that makes this safe, and the reason this is a SEPARATE list
+# from REQUIRED below: a value here is NOT yet inside any volume, so generating
+# it is creation, not rotation. The moment a key's value has been written into a
+# data directory it graduates to REQUIRED and must never be regenerated.
+# Format: NAME=literal  (no value => generate a random secret)
+ADDITIVE=(MARTS_DB_USER=marts MARTS_DB_PASSWORD=)
+for spec in "${ADDITIVE[@]}"; do
+  key="${spec%%=*}"; literal="${spec#*=}"
+  if ! grep -q "^${key}=" "$ENV_FILE"; then
+    value="${literal:-$(gen_secret)}"
+    printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+    echo "[secrets] added $key to $ENV_FILE (new consumer; no existing volume holds it)"
+  fi
+done
 
 # Read it without exporting the whole file into our environment's children.
 # shellcheck disable=SC1090
@@ -60,7 +85,8 @@ set -a; source "$ENV_FILE"; set +a
 # A missing key here means .env predates a new requirement — say which one
 # instead of applying a Secret with an empty value that fails hours later.
 REQUIRED=(MINIO_ROOT_USER MINIO_ROOT_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-          POSTGRES_PASSWORD MLFLOW_DB_USER MLFLOW_DB_PASSWORD)
+          POSTGRES_PASSWORD MLFLOW_DB_USER MLFLOW_DB_PASSWORD
+          MARTS_DB_USER MARTS_DB_PASSWORD)
 missing=()
 for k in "${REQUIRED[@]}"; do
   [[ -n "${!k:-}" ]] || missing+=("$k")
