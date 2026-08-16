@@ -1,0 +1,7 @@
+# All knobs live in configs/, none in code. Filled at M1/M2; shape fixed now.
+data:
+  train_months: ["2019-01", "2019-02", "2019-03", "2019-04", "2019-05", "2019-06"]
+  val_month: "2019-07"
+  test_month: "2019-08"
+target: trip_duration_minutes
+model: {}      # LightGBM params at M2

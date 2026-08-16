@@ -1,0 +1,4 @@
+# The promotion gate — written BEFORE the first training run (BLUEPRINT M2).
+# champion alias moves only if: model_mae <= gate_ratio * baseline_mae (test month)
+gate_ratio: 0.85
+metric: mae

@@ -1,0 +1,4 @@
+# M6. reference = test month; drift_share threshold triggers retrain workflow.
+reference_month: "2019-08"
+drift_share_threshold: 0.5
+demo_months: ["2020-03", "2025-01"]   # statistical drift vs schema drift

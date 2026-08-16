@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crosstown Mobility — how the project works</title>
+<style>
+  .viz-root{
+    color-scheme: light;
+    --page:#f9f9f7; --surface-1:#fcfcfb;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --border:rgba(11,11,11,.10); --border-2:#c3c2b7;
+    --good:#006300; --bad:#d03b3b;
+    --r-de:#2a78d6; --r-da:#eb6834; --r-mle:#1baf7a; --r-mlops:#eda100;
+    --r-sre:#e87ba4; --r-po:#008300; --r-rev:#4a3aa7; --r-arch:#e34948;
+    --wash-flyte:rgba(42,120,214,.06); --wash-po:rgba(0,131,0,.07);
+    --wash-rev:rgba(74,58,167,.07); --wash-arch:rgba(227,73,72,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])) .viz-root{
+      color-scheme: dark;
+      --page:#0d0d0d; --surface-1:#1a1a19;
+      --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --border:rgba(255,255,255,.10); --border-2:#383835;
+      --good:#0ca30c; --bad:#d03b3b;
+      --r-de:#3987e5; --r-da:#d95926; --r-mle:#199e70; --r-mlops:#c98500;
+      --r-sre:#d55181; --r-po:#008300; --r-rev:#9085e9; --r-arch:#e66767;
+      --wash-flyte:rgba(57,135,229,.10); --wash-po:rgba(0,131,0,.12);
+      --wash-rev:rgba(144,133,233,.10); --wash-arch:rgba(230,103,103,.09);
+    }
+  }
+  :root[data-theme="dark"] .viz-root{
+    color-scheme: dark;
+    --page:#0d0d0d; --surface-1:#1a1a19;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --border:rgba(255,255,255,.10); --border-2:#383835;
+    --good:#0ca30c; --bad:#d03b3b;
+    --r-de:#3987e5; --r-da:#d95926; --r-mle:#199e70; --r-mlops:#c98500;
+    --r-sre:#d55181; --r-po:#008300; --r-rev:#9085e9; --r-arch:#e66767;
+    --wash-flyte:rgba(57,135,229,.10); --wash-po:rgba(0,131,0,.12);
+    --wash-rev:rgba(144,133,233,.10); --wash-arch:rgba(230,103,103,.09);
+  }
+  html,body{margin:0;padding:0}
+  .viz-root{
+    background:var(--page); color:var(--ink); min-height:100vh;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 60px}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:6px}
+  h1{font-size:21px;margin:0 0 4px;letter-spacing:-.2px}
+  .sub{color:var(--ink-2);font-size:13px;line-height:1.5;max-width:820px;margin:0}
+  .stamp{color:var(--muted);font-size:11.5px;margin-top:6px}
+  button.theme{
+    background:var(--surface-1);border:1px solid var(--border);color:var(--ink-2);
+    border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;flex:none;
+  }
+  h2{font-size:15px;margin:34px 0 4px}
+  .h2sub{color:var(--ink-2);font-size:12.5px;margin:0 0 12px;line-height:1.5}
+  .panel{
+    background:var(--surface-1);border:1px solid var(--border);border-radius:14px;
+    padding:14px 14px 8px;overflow-x:auto;
+  }
+  svg{display:block;width:100%;height:auto}
+  svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:14px 2px 2px}
+  .chip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px}
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .card b{font-size:13px;display:block;margin-bottom:5px}
+  .card p{margin:0;font-size:12px;color:var(--ink-2);line-height:1.55}
+  footer{margin-top:34px;color:var(--muted);font-size:11.5px;line-height:1.6}
+  /* SVG shared classes */
+  .box{fill:var(--surface-1);stroke:var(--border-2);stroke-width:1}
+  .boxT{font-size:12.5px;font-weight:600;fill:var(--ink)}
+  .boxS{font-size:10.5px;fill:var(--ink-2)}
+  .lbl{font-size:10.5px;fill:var(--ink-2)}
+  .lblM{font-size:10px;fill:var(--muted)}
+  .flow{stroke:var(--ink-2);stroke-width:1.8;fill:none}
+  .soft{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .dash{stroke-dasharray:4 4}
+  .ext{fill:var(--page);stroke:var(--border-2);stroke-dasharray:5 4}
+</style>
+</head>
+<body class="viz-root" data-palette="#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948">
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Crosstown Mobility — how the project works</h1>
+    <p class="sub">The ETA &amp; Reliability Program on one page: a taxi trip-duration model and the
+    production system around it, built on a local Kubernetes cluster by a simulated seven-role
+    organization. Follow the circled numbers ①→⑧ through the platform, then see who hands what
+    to whom, then the road from M0 to M9.</p>
+    <p class="stamp">BLUEPRINT v2.1 · 2026-08-12 · reflects the current plan (Flyte-only; the Airflow fork remains open) · hover any box for detail</p>
+  </div>
+  <button class="theme" onclick="tgl()">light / dark</button>
+</header>
+
+<div class="legend" aria-label="role legend">
+  <span class="chip"><span class="dot" style="background:var(--r-de)"></span>DE · data engineer</span>
+  <span class="chip"><span class="dot" style="background:var(--r-da)"></span>DA · data analyst</span>
+  <span class="chip"><span class="dot" style="background:var(--r-mle)"></span>MLE · ML engineer</span>
+  <span class="chip"><span class="dot" style="background:var(--r-mlops)"></span>MLOps · platform</span>
+  <span class="chip"><span class="dot" style="background:var(--r-sre)"></span>SRE · reliability</span>
+  <span class="chip"><span class="dot" style="background:var(--r-po)"></span>PO · you</span>
+  <span class="chip"><span class="dot" style="background:var(--r-rev)"></span>REV · reviewer ◆</span>
+  <span class="chip"><span class="dot" style="background:var(--r-arch)"></span>ARCH · grand architect</span>
+</div>
+
+<h2>1 · The platform loop</h2>
+<p class="h2sub">Everything inside the dashed boundary runs on your laptop's kind cluster for $0.
+Data flows left to right into a served model; monitoring flows back into retraining — the loop
+is the product.</p>
+<div class="panel">
+<svg viewBox="0 0 1120 668" role="img" aria-label="Platform architecture diagram">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/>
+    </marker>
+    <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+    </marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--r-de)"/>
+    </marker>
+  </defs>
+
+  <!-- external actors -->
+  <g><title>Public source: NYC TLC trip record data — monthly parquet files</title>
+    <rect class="ext" x="48" y="14" width="180" height="46" rx="9"/>
+    <text class="boxT" x="60" y="33">NYC TLC trip records</text>
+    <text class="boxS" x="60" y="49">monthly parquet · 2015 → now</text>
+  </g>
+  <g><title>GitHub Actions: lint + unit tests on every PR; image builds</title>
+    <rect class="ext" x="262" y="14" width="176" height="46" rx="9"/>
+    <text class="boxT" x="274" y="33">GitHub Actions CI</text>
+    <text class="boxS" x="274" y="49">lint · unit tests · images</text>
+  </g>
+  <g><title>Fictional consumers of the ETA signal</title>
+    <rect class="ext" x="906" y="14" width="176" height="46" rx="9"/>
+    <text class="boxT" x="918" y="33">Consumers</text>
+    <text class="boxS" x="918" y="49">dispatch · pricing · app</text>
+  </g>
+
+  <!-- cluster boundary -->
+  <rect x="24" y="86" width="1072" height="556" rx="14" fill="none" stroke="var(--border-2)" stroke-dasharray="7 5"/>
+  <text class="lblM" x="460" y="106">local kind cluster — 3 nodes on Docker Desktop / WSL2 · $0 · destroy &amp; rebuild is rehearsed</text>
+
+  <!-- Flyte container -->
+  <g><title>Flyte 2 — the single DAG owner (ADR-005). Monthly schedule, cached steps, retries. Fallback: flyte-binary 1.16 (ADR-002)</title>
+    <rect x="44" y="120" width="600" height="172" rx="10" fill="var(--wash-flyte)" stroke="var(--r-de)" stroke-opacity=".45"/>
+    <text class="boxT" x="152" y="146" font-size="12">Flyte — the single DAG owner</text>
+    <text class="boxS" x="395" y="146">· monthly schedule · cache · retries</text>
+    <circle cx="632" cy="136" r="4" fill="var(--r-mlops)"/><text class="lblM" x="598" y="140">MLOps</text>
+  </g>
+
+  <!-- box 1 ingest -->
+  <g><title>DE: download with checksums+retries, pandera year-aware contract, counted rejections, DVC pin. A corrupted file is refused loudly.</title>
+    <rect class="box" x="60" y="162" width="152" height="112" rx="9"/>
+    <text class="boxT" x="72" y="183" font-size="12">① Ingest + validate</text>
+    <text class="boxS" x="72" y="201">TLC download · checksums</text>
+    <text class="boxS" x="72" y="216">pandera schema by year</text>
+    <text class="boxS" x="72" y="231">loud rejects, counted</text>
+    <text class="boxS" x="72" y="246">DVC pins every snapshot</text>
+    <circle cx="198" cy="260" r="4" fill="var(--r-de)"/>
+  </g>
+  <!-- box 2 features -->
+  <g><title>MLE: the ONE transform path — training and serving import these same functions; the M5 parity test proves it (1e-6)</title>
+    <rect class="box" x="228" y="162" width="136" height="112" rx="9" stroke="var(--r-mle)" stroke-width="1.5"/>
+    <text class="boxT" x="240" y="183">② Features</text>
+    <text class="boxS" x="240" y="201">the ONE shared path</text>
+    <text class="boxS" x="240" y="216">train and serve import</text>
+    <text class="boxS" x="240" y="231">the same functions</text>
+    <text class="boxS" x="240" y="246">(skew is structural)</text>
+    <circle cx="350" cy="260" r="4" fill="var(--r-mle)"/>
+  </g>
+  <!-- box 3 train -->
+  <g><title>MLE: baseline + LightGBM; FLAML scout proposes a family (hypotheses only); Optuna refines it in Postgres-backed, MLflow-nested, pruned trials</title>
+    <rect class="box" x="378" y="162" width="136" height="112" rx="9"/>
+    <text class="boxT" x="390" y="183">③ Train + tune</text>
+    <text class="boxS" x="390" y="201">baseline · LightGBM</text>
+    <text class="boxS" x="390" y="216">FLAML scouts families</text>
+    <text class="boxS" x="390" y="231">Optuna refines winner</text>
+    <text class="boxS" x="390" y="246">MLflow-nested + pruned</text>
+    <circle cx="500" cy="260" r="4" fill="var(--r-mle)"/>
+  </g>
+  <!-- gate diamond -->
+  <g><title>The promotion gate: champion alias moves only if MAE ≤ 0.85 × baseline on the held-out month. Nobody bypasses it — not AutoML, not the MLE.</title>
+    <path d="M572,180 L612,220 L572,260 L532,220 Z" fill="var(--surface-1)" stroke="var(--ink)" stroke-width="1.5"/>
+    <text class="boxT" x="572" y="217" text-anchor="middle">④</text>
+    <text class="boxS" x="572" y="232" text-anchor="middle">gate</text>
+    <text class="lblM" x="622" y="166">MAE ≤ 0.85 × baseline</text>
+    <text class="lblM" x="622" y="179">(held-out month)</text>
+  </g>
+
+  <!-- flow arrows band 1 -->
+  <path class="flow" marker-end="url(#a)" d="M104,60 L100,158"/>
+  <text class="lblM" x="112" y="92">monthly pull</text>
+  <path class="flow" marker-end="url(#a)" d="M213,218 L224,218"/>
+  <path class="flow" marker-end="url(#a)" d="M365,218 L374,218"/>
+  <path class="flow" marker-end="url(#a)" d="M515,220 L528,220"/>
+
+  <!-- registry -->
+  <g><title>MLflow 3: experiment tracking + model registry. Models carry signatures; aliases (champion/challenger) are the ONLY interface serving knows.</title>
+    <rect class="box" x="380" y="336" width="216" height="82" rx="9"/>
+    <text class="boxT" x="394" y="358">⑤ MLflow — tracking + registry</text>
+    <text class="boxS" x="394" y="376">runs · params · metrics · artifacts</text>
+    <text class="boxS" x="394" y="391">champion / challenger aliases</text>
+    <text class="boxS" x="394" y="406">lineage back to Flyte execution</text>
+    <circle cx="580" cy="404" r="4" fill="var(--r-mle)"/>
+  </g>
+  <path class="flow" marker-end="url(#a)" d="M572,260 L572,332"/>
+  <text class="lbl" x="584" y="292" fill="var(--good)" style="fill:var(--good)">pass → champion alias</text>
+  <text class="lbl" x="584" y="308" style="fill:var(--bad)">fail → challenger only</text>
+
+  <!-- kserve -->
+  <g><title>MLOps deploys; SRE guards. mlserver reads the MLflow model format natively; canary at 10% under load; the rollback is typed and rehearsed BEFORE the flip.</title>
+    <rect class="box" x="700" y="318" width="252" height="118" rx="9"/>
+    <text class="boxT" x="714" y="340">⑥ KServe serving</text>
+    <text class="boxS" x="714" y="358">mlserver runtime ← champion alias</text>
+    <text class="boxS" x="714" y="373">parity vs offline: within 1e-6</text>
+    <text class="boxS" x="714" y="388">canary 10% → 100% · rehearsed rollback</text>
+    <text class="boxS" x="714" y="403">transformer + Feast features (M8)</text>
+    <text class="boxS" x="714" y="418">go-live gated by SRE readiness review</text>
+    <circle cx="922" cy="332" r="4" fill="var(--r-mlops)"/><circle cx="936" cy="332" r="4" fill="var(--r-sre)"/>
+  </g>
+  <path class="flow" marker-end="url(#a)" d="M596,377 L696,377"/>
+  <text class="lblM" x="604" y="368">storageUri via MinIO</text>
+  <path class="flow" marker-end="url(#a)" d="M940,318 C980,240 990,140 992,64"/>
+  <text class="lblM" x="965" y="150" >JSON in →</text>
+  <text class="lblM" x="965" y="164">predictions</text>
+
+  <!-- feast -->
+  <g><title>M8: Feast online store (Redis). Zone-window aggregates; training joins are point-in-time correct; the acceptance test proves online == offline features.</title>
+    <rect class="box dash" x="978" y="318" width="118" height="118" rx="9" stroke="var(--border-2)"/>
+    <text class="boxT" x="990" y="340">Feast <tspan class="lblM">(M8)</tspan></text>
+    <text class="boxS" x="990" y="358">online store</text>
+    <text class="boxS" x="990" y="373">(Redis) · zone</text>
+    <text class="boxS" x="990" y="388">aggregates ·</text>
+    <text class="boxS" x="990" y="403">online = offline,</text>
+    <text class="boxS" x="990" y="418">proven</text>
+    <circle cx="1080" cy="332" r="4" fill="var(--r-de)"/>
+  </g>
+  <path class="soft dash" marker-end="url(#am)" d="M978,377 L956,377"/>
+
+  <!-- band 3: analyst / monitoring / drift -->
+  <g><title>DA works only on the clean tables the DE publishes — never raw files. Memos, not just dashboards: where the model fails, what drift means.</title>
+    <rect class="box" x="60" y="474" width="238" height="76" rx="9"/>
+    <text class="boxT" x="74" y="496">DuckDB analyst layer</text>
+    <text class="boxS" x="74" y="514">DA queries clean tables only</text>
+    <text class="boxS" x="74" y="529">EDA · error &amp; drift memos ·</text>
+    <text class="boxS" x="74" y="543">prior-art survey</text>
+    <circle cx="282" cy="488" r="4" fill="var(--r-da)"/>
+  </g>
+  <path class="soft" marker-end="url(#am)" d="M134,292 L160,470"/>
+  <text class="lblM" x="88" y="382">clean tables</text>
+
+  <g><title>SRE: kube-prometheus-stack. SLOs argued from this system's numbers; every alert proven by firing it; gamedays inject failures with predicted signatures.</title>
+    <rect class="box" x="520" y="474" width="204" height="84" rx="9"/>
+    <text class="boxT" x="534" y="496">⑦ Prometheus + Grafana</text>
+    <text class="boxS" x="534" y="514">latency p95 · errors · traffic SLOs</text>
+    <text class="boxS" x="534" y="529">alerts tested by firing them</text>
+    <text class="boxS" x="534" y="544">gamedays: rehearsed failure</text>
+    <circle cx="708" cy="488" r="4" fill="var(--r-sre)"/>
+  </g>
+  <path class="soft" marker-end="url(#am)" d="M790,436 L680,470"/>
+  <text class="lblM" x="700" y="456">metrics</text>
+
+  <g><title>Evidently compares live months against the 2019 reference. Statistical drift (COVID 2020) and schema drift (2025 new column) are caught by DIFFERENT gates with different signatures.</title>
+    <rect class="box" x="764" y="474" width="212" height="84" rx="9"/>
+    <text class="boxT" x="778" y="496">⑧ Evidently drift watch</text>
+    <text class="boxS" x="778" y="514">reference 2019 vs live month</text>
+    <text class="boxS" x="778" y="529">COVID-2020 = stats drift alarm</text>
+    <text class="boxS" x="778" y="544">2025 column = schema refusal</text>
+    <circle cx="946" cy="544" r="4" fill="var(--r-sre)"/><circle cx="960" cy="544" r="4" fill="var(--r-da)"/>
+  </g>
+  <path class="soft" marker-end="url(#am)" d="M866,436 L866,470"/>
+
+  <!-- retrain loop -->
+  <path class="flow dash" marker-end="url(#ab)" stroke="var(--r-de)"
+        d="M866,558 C866,566 856,566 836,566 L160,566 C100,566 50,558 50,500 L50,320 C50,304 56,296 66,292"/>
+  <text class="lbl" x="308" y="560" style="fill:var(--r-de)">drift &gt; threshold → scheduled retrain → auto challenger</text>
+
+  <!-- shared services strip -->
+  <g><title>One storage story: every save/load in this diagram rides MinIO's S3 API; every database need rides the one Postgres.</title>
+    <rect class="box" x="56" y="580" width="566" height="42" rx="9"/>
+    <text class="boxT" x="70" y="598">MinIO — the ONE S3 story</text>
+    <text class="boxS" x="70" y="614">data-raw · data-processed · mlflow-artifacts · flyte-meta · dvc-store</text>
+    <rect class="box" x="646" y="580" width="430" height="42" rx="9"/>
+    <text class="boxT" x="660" y="598">Postgres — the ONE database</text>
+    <text class="boxS" x="660" y="614">mlflow backend · optuna studies · feast registry</text>
+  </g>
+</svg>
+</div>
+
+<h2>2 · How the roles work in tandem</h2>
+<p class="h2sub">Roles talk through committed artifacts, never vibes. Each arrow below is a real
+hand-off: the thing named on it is produced by one role and consumed unchanged by the next.
+Two outside forces keep everyone honest.</p>
+<div class="panel">
+<svg viewBox="0 0 1120 250" role="img" aria-label="Role hand-off chain">
+  <defs>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/>
+    </marker>
+  </defs>
+  <!-- PO band -->
+  <rect x="40" y="12" width="1040" height="34" rx="9" fill="var(--wash-po)" stroke="var(--r-po)" stroke-opacity=".4"/>
+  <circle cx="58" cy="29" r="4" fill="var(--r-po)"/>
+  <text class="lbl" x="70" y="33">PO (you) — settles forks, ratifies gates, accepts milestones · every ask arrives with options + a recommendation + a default</text>
+
+  <!-- chain -->
+  <g><title>DE owns ingestion, contracts, DuckDB layer, DVC</title>
+    <rect class="box" x="60" y="96" width="130" height="56" rx="9"/>
+    <circle cx="76" cy="114" r="4" fill="var(--r-de)"/>
+    <text class="boxT" x="86" y="118">DE</text>
+    <text class="boxS" x="76" y="138">builds the data platform</text>
+  </g>
+  <g><title>MLE owns features, training, scout/sniper, registry entries</title>
+    <rect class="box" x="300" y="96" width="130" height="56" rx="9"/>
+    <circle cx="316" cy="114" r="4" fill="var(--r-mle)"/>
+    <text class="boxT" x="326" y="118">MLE</text>
+    <text class="boxS" x="316" y="138">models to beat the gate</text>
+  </g>
+  <g><title>MLOps owns cluster, pipeline plumbing, serving deploys, CI</title>
+    <rect class="box" x="540" y="96" width="130" height="56" rx="9"/>
+    <circle cx="556" cy="114" r="4" fill="var(--r-mlops)"/>
+    <text class="boxT" x="566" y="118">MLOps</text>
+    <text class="boxS" x="556" y="138">ships it reproducibly</text>
+  </g>
+  <g><title>SRE owns SLOs, canary, rollback, alerts, gamedays</title>
+    <rect class="box" x="780" y="96" width="130" height="56" rx="9"/>
+    <circle cx="796" cy="114" r="4" fill="var(--r-sre)"/>
+    <text class="boxT" x="806" y="118">SRE</text>
+    <text class="boxS" x="796" y="138">keeps its promises</text>
+  </g>
+  <g><title>DA interprets: error memos, drift memos — meaning, not just detection</title>
+    <rect class="box" x="972" y="96" width="132" height="56" rx="9"/>
+    <circle cx="988" cy="114" r="4" fill="var(--r-da)"/>
+    <text class="boxT" x="998" y="118">DA</text>
+    <text class="boxS" x="988" y="138">explains what it means</text>
+  </g>
+  <path class="flow" marker-end="url(#b)" d="M190,124 L296,124"/>
+  <text class="lblM" x="196" y="114">contract + clean tables</text>
+  <path class="flow" marker-end="url(#b)" d="M430,124 L536,124"/>
+  <text class="lblM" x="436" y="114">registered model (signed)</text>
+  <path class="flow" marker-end="url(#b)" d="M670,124 L776,124"/>
+  <text class="lblM" x="676" y="114">live InferenceService</text>
+  <path class="flow" marker-end="url(#b)" d="M910,124 L968,124"/>
+  <text class="lblM" x="906" y="114">drift alarms</text>
+  <!-- loop back -->
+  <path class="flow dash" marker-end="url(#b)" stroke="var(--r-da)" d="M1040,96 C1000,56 500,52 368,90"/>
+  <text class="lbl" x="430" y="82" style="fill:var(--r-da)">drift memo → PO retrain fork → MLE ships the next challenger</text>
+
+  <!-- REV + ARCH bands -->
+  <rect x="40" y="190" width="506" height="40" rx="9" fill="var(--wash-rev)" stroke="var(--r-rev)" stroke-opacity=".4"/>
+  <circle cx="58" cy="210" r="4" fill="var(--r-rev)"/>
+  <text class="lbl" x="70" y="207">REV ◆ — fresh-session reviews after M2 · M3 · M7:</text>
+  <text class="lbl" x="70" y="222">re-derives a number, must file a finding, never self-closes</text>
+  <rect x="566" y="190" width="514" height="40" rx="9" fill="var(--wash-arch)" stroke="var(--r-arch)" stroke-opacity=".4"/>
+  <circle cx="584" cy="210" r="4" fill="var(--r-arch)"/>
+  <text class="lbl" x="596" y="207">ARCH — audits EVERY milestone boundary (Fable, fresh session):</text>
+  <text class="lbl" x="596" y="222">samples the sweep, re-checks carries, countersigns or vetoes</text>
+  <path class="soft dash" d="M290,190 L290,156"/>
+  <path class="soft dash" d="M820,190 L820,156"/>
+</svg>
+</div>
+
+<h2>3 · The road — ten milestones, gated boundaries</h2>
+<p class="h2sub">One milestone per session, each ending in something you can SEE. Between every
+pair sits the boundary ritual: <b>G</b> leftover sweep (nothing carried silently) →
+<b>E</b> next kickoff drafted by the executor (Opus) → <b>F</b> Grand Architect countersign or
+veto (Fable). ◆ marks the fresh-eyes review gates.</p>
+<div class="panel">
+<svg viewBox="0 0 1120 232" role="img" aria-label="Milestone roadmap">
+  <line x1="70" y1="96" x2="1051" y2="96" stroke="var(--grid)" stroke-width="2"/>
+  <!-- boundary ticks -->
+  <g fill="var(--surface-1)" stroke="var(--border-2)">
+    <rect x="107" y="82" width="36" height="15" rx="4"/><rect x="216" y="82" width="36" height="15" rx="4"/>
+    <rect x="325" y="82" width="36" height="15" rx="4"/><rect x="434" y="82" width="36" height="15" rx="4"/>
+    <rect x="543" y="82" width="36" height="15" rx="4"/><rect x="652" y="82" width="36" height="15" rx="4"/>
+    <rect x="761" y="82" width="36" height="15" rx="4"/><rect x="870" y="82" width="36" height="15" rx="4"/>
+    <rect x="979" y="82" width="36" height="15" rx="4"/>
+  </g>
+  <g font-size="8.5" fill="var(--muted)" text-anchor="middle">
+    <text x="125" y="93">G·E·F</text><text x="234" y="93">G·E·F</text><text x="343" y="93">G·E·F</text>
+    <text x="452" y="93">G·E·F</text><text x="561" y="93">G·E·F</text><text x="670" y="93">G·E·F</text>
+    <text x="779" y="93">G·E·F</text><text x="888" y="93">G·E·F</text><text x="997" y="93">G·E·F</text>
+  </g>
+  <!-- nodes -->
+  <g>
+    <circle cx="70" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-mlops)" stroke-width="2"/>
+    <circle cx="179" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-de)" stroke-width="2"/>
+    <circle cx="288" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-mle)" stroke-width="2"/>
+    <circle cx="397" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-mle)" stroke-width="2"/>
+    <circle cx="506" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-mlops)" stroke-width="2"/>
+    <circle cx="615" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-mlops)" stroke-width="2"/>
+    <circle cx="724" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-sre)" stroke-width="2"/>
+    <circle cx="833" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-sre)" stroke-width="2"/>
+    <circle cx="942" cy="96" r="17" fill="var(--surface-1)" stroke="var(--r-de)" stroke-width="2"/>
+    <circle cx="1051" cy="96" r="17" fill="var(--surface-1)" stroke="var(--border-2)" stroke-width="2"/>
+  </g>
+  <g font-size="10.5" font-weight="600" fill="var(--ink)" text-anchor="middle">
+    <text x="70" y="100">M0</text><text x="179" y="100">M1</text><text x="288" y="100">M2</text>
+    <text x="397" y="100">M3</text><text x="506" y="100">M4</text><text x="615" y="100">M5</text>
+    <text x="724" y="100">M6</text><text x="833" y="100">M7</text><text x="942" y="100">M8</text>
+    <text x="1051" y="100">M9</text>
+  </g>
+  <!-- titles -->
+  <g font-size="10" fill="var(--ink-2)" text-anchor="middle">
+    <text x="70" y="134">cluster +</text><text x="70" y="147">org bootstrap</text>
+    <text x="179" y="134">data platform</text><text x="179" y="147">+ prior art</text>
+    <text x="288" y="134">baseline +</text><text x="288" y="147">the gate ◆</text>
+    <text x="397" y="134">AutoML ×</text><text x="397" y="147">Optuna ◆</text>
+    <text x="506" y="134">Flyte pipeline</text><text x="506" y="147">on-cluster</text>
+    <text x="615" y="134">KServe serve</text><text x="615" y="147">+ readiness</text>
+    <text x="724" y="134">SLO · canary</text><text x="724" y="147">· gameday</text>
+    <text x="833" y="134">drift + retrain</text><text x="833" y="147">loop ◆</text>
+    <text x="942" y="134">Feast +</text><text x="942" y="147">side-by-side</text>
+    <text x="1051" y="134">stretch: Ray,</text><text x="1051" y="147">CI smoke</text>
+  </g>
+  <g font-size="10" fill="var(--muted)" text-anchor="middle">
+    <text x="70" y="170">show: MLflow UI</text>
+    <text x="179" y="170">show: EDA report</text>
+    <text x="288" y="170">show: refused promo</text>
+    <text x="397" y="170">show: bake-off table</text>
+    <text x="506" y="170">show: cached rerun</text>
+    <text x="615" y="170">show: parity 1e-6</text>
+    <text x="724" y="170">show: live rollback</text>
+    <text x="833" y="170">show: 2 drift alarms</text>
+    <text x="942" y="170">show: parity table</text>
+    <text x="1051" y="170">opt-in</text>
+  </g>
+  <text class="lblM" x="70" y="210">Every milestone: accept-when written BEFORE work · verified by running · closed only after the Architect countersigns · "NOT CLOSABLE" is a respected verdict.</text>
+</svg>
+</div>
+
+<h2>4 · The four laws that hold it together</h2>
+<div class="cards">
+  <div class="card"><b>One storage story</b><p>MinIO's S3 API serves data, DVC, MLflow artifacts,
+  Flyte metadata, and KServe model pulls. Learn one interface, reuse it five times — swap in real
+  S3 later by editing a values file.</p></div>
+  <div class="card"><b>One DAG owner</b><p>Flyte orchestrates everything; DVC versions data but
+  never orchestrates. Two DAG owners in one repo is a confusion tax this project refuses to pay.</p></div>
+  <div class="card"><b>One features path</b><p>Training and serving import the same transform
+  functions, so train/serve skew is structurally hard — and the serving parity test (offline ==
+  online within 1e-6) proves it anyway.</p></div>
+  <div class="card"><b>One gate, no side doors</b><p>Champion moves only on held-out-month
+  evidence: not for the hand-built model, not for AutoML's best, not for Optuna's. Gates loosen
+  only by your decision as PO.</p></div>
+</div>
+
+<footer>
+  Sources of truth in the repo: docs/BLUEPRINT.md (v2.1, §9 milestones) · docs/org/ORG.md + ROLES.md ·
+  docs/PROMPTS.md (A–G) · ledgers/ (signoffs · findings · debt · deployments) · docs/gotchas.md.
+  Open fork: whether Airflow joins as an M9 ETL hand-off story — current plan is Flyte-only.
+</footer>
+
+</div>
+<script>
+function tgl(){
+  const r=document.documentElement;
+  const cur=r.getAttribute('data-theme');
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+  const now=(cur? cur==='dark' : dark) ? 'light' : 'dark';
+  r.setAttribute('data-theme',now);
+}
+</script>
+</body>
+</html>

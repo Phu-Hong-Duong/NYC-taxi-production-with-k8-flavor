@@ -1,0 +1,28 @@
+# Namespace layout — one concern per namespace, mirrors BLUEPRINT §3 storage story.
+apiVersion: v1
+kind: Namespace
+metadata: {name: platform}     # MinIO, Postgres
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: mlflow}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: flyte}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: kserve}       # controller
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: serving}      # InferenceServices
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: monitoring}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: feast}

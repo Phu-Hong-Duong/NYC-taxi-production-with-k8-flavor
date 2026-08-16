@@ -1,0 +1,7 @@
+# M3 — the Optuna sniper. Space centered on the scout's winner at execution time.
+study_namespace: m3          # gotcha #17: namespace per milestone in shared Postgres
+n_trials: 60
+sampler: {type: tpe, seed: 42}
+pruner: {type: median, n_startup_trials: 10, n_warmup_steps: 20}
+storage: postgres            # resolved via env at runtime; NEVER a DSN in this file
+mlflow: {nested: true, parent_run_name: optuna-m3}

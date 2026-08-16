@@ -1,0 +1,7 @@
+# M3 — the FLAML scout. The scout produces HYPOTHESES (family + starting params);
+# results come only from taxi_mlops.training.evaluate on the held-out month.
+time_budget_s: 1800          # 30 CPU-min cap; raising it is a PO fork (cost/benefit)
+task: regression
+metric: mae                  # scout optimizes what the gate judges
+estimator_list: [lgbm, xgboost, rf, extra_tree]   # families, not verdicts
+seed: 42

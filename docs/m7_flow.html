@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M7 — the drift &amp; retrain loop</title>
+<style>
+  .viz-root{
+    color-scheme: light;
+    --page:#f9f9f7; --surface-1:#fcfcfb;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --border:rgba(11,11,11,.10); --border-2:#c3c2b7;
+    --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+    --r-de:#2a78d6; --r-da:#eb6834; --r-mle:#1baf7a; --r-sre:#e87ba4; --r-rev:#4a3aa7;
+    --wash-rev:rgba(74,58,167,.07);
+    --wash-warn:rgba(250,178,25,.10); --wash-crit:rgba(208,59,59,.07); --wash-good:rgba(12,163,12,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])) .viz-root{
+      color-scheme: dark;
+      --page:#0d0d0d; --surface-1:#1a1a19;
+      --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --border:rgba(255,255,255,.10); --border-2:#383835;
+      --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+      --r-de:#3987e5; --r-da:#d95926; --r-mle:#199e70; --r-sre:#d55181; --r-rev:#9085e9;
+      --wash-rev:rgba(144,133,233,.10);
+      --wash-warn:rgba(250,178,25,.12); --wash-crit:rgba(230,103,103,.10); --wash-good:rgba(12,163,12,.12);
+    }
+  }
+  :root[data-theme="dark"] .viz-root{
+    color-scheme: dark;
+    --page:#0d0d0d; --surface-1:#1a1a19;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --border:rgba(255,255,255,.10); --border-2:#383835;
+    --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+    --r-de:#3987e5; --r-da:#d95926; --r-mle:#199e70; --r-sre:#d55181; --r-rev:#9085e9;
+    --wash-rev:rgba(144,133,233,.10);
+    --wash-warn:rgba(250,178,25,.12); --wash-crit:rgba(230,103,103,.10); --wash-good:rgba(12,163,12,.12);
+  }
+  html,body{margin:0;padding:0}
+  .viz-root{background:var(--page);color:var(--ink);min-height:100vh;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 22px 56px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  h1{font-size:20px;margin:0 0 4px;letter-spacing:-.2px}
+  .sub{color:var(--ink-2);font-size:13px;line-height:1.5;max-width:840px;margin:0}
+  .stamp{color:var(--muted);font-size:11.5px;margin-top:6px}
+  button.theme{background:var(--surface-1);border:1px solid var(--border);color:var(--ink-2);
+    border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;flex:none}
+  h2{font-size:15px;margin:30px 0 4px}
+  .h2sub{color:var(--ink-2);font-size:12.5px;margin:0 0 12px;line-height:1.5}
+  .panel{background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px 14px 8px;overflow-x:auto}
+  svg{display:block;width:100%;height:auto}
+  svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:12px 2px 0}
+  .chip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .box{fill:var(--surface-1);stroke:var(--border-2);stroke-width:1}
+  .boxT{font-size:12.5px;font-weight:600;fill:var(--ink)}
+  .boxS{font-size:10.5px;fill:var(--ink-2)}
+  .lbl{font-size:10.5px;fill:var(--ink-2)}
+  .lblM{font-size:10px;fill:var(--muted)}
+  .flow{stroke:var(--ink-2);stroke-width:1.8;fill:none}
+  .soft{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .dash{stroke-dasharray:4 4}
+  .sigs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  @media (max-width:760px){.sigs{grid-template-columns:1fr}}
+  .sig{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .sig h3{font-size:13px;margin:0 0 8px}
+  .sig table{width:100%;border-collapse:collapse;font-size:12px}
+  .sig td{padding:5px 6px;vertical-align:top;border-top:1px solid var(--grid)}
+  .sig td:first-child{color:var(--muted);white-space:nowrap;width:118px}
+  .sig td:last-child{color:var(--ink-2)}
+  .tagW{color:var(--warn);font-weight:700}
+  .tagC{color:var(--crit);font-weight:700}
+  .tagG{color:var(--good);font-weight:700}
+  footer{margin-top:28px;color:var(--muted);font-size:11.5px;line-height:1.6}
+</style>
+</head>
+<body class="viz-root">
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>M7 — the drift &amp; retrain loop, as logic</h1>
+    <p class="sub">One monthly cycle of the finished system: a "new" month enters, two different
+    gates can catch two different kinds of trouble, and only real drift wakes the retraining
+    machinery — which is allowed to <b>make</b> a challenger but never to <b>ship</b> one.
+    Hover any box for detail.</p>
+    <p class="stamp">BLUEPRINT v2.6 §9/M7 · reference month 2019-08 · drift threshold 0.5 (configs/drift.yaml) · 2026-08-16</p>
+  </div>
+  <button class="theme" onclick="tgl()">light / dark</button>
+</header>
+
+<div class="legend">
+  <span class="chip"><span class="dot" style="background:var(--r-de)"></span>DE</span>
+  <span class="chip"><span class="dot" style="background:var(--r-da)"></span>DA</span>
+  <span class="chip"><span class="dot" style="background:var(--r-mle)"></span>MLE</span>
+  <span class="chip"><span class="dot" style="background:var(--r-sre)"></span>SRE</span>
+  <span class="chip"><span class="dot" style="background:var(--r-rev)"></span>REV ◆</span>
+  <span class="chip"><span class="tagG">✓</span>&nbsp;quiet</span>
+  <span class="chip"><span class="tagW">⚠</span>&nbsp;statistical drift</span>
+  <span class="chip"><span class="tagC">✕</span>&nbsp;schema drift</span>
+</div>
+
+<h2>1 · One monthly cycle</h2>
+<div class="panel">
+<svg viewBox="0 0 1120 700" role="img" aria-label="M7 monthly loop flowchart">
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/>
+    </marker>
+    <marker id="mm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+    </marker>
+    <marker id="mc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--crit)"/>
+    </marker>
+    <marker id="mw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/>
+    </marker>
+  </defs>
+
+  <!-- row 1 -->
+  <g><title>Flyte launch plan on a monthly cron — the only clock in the system</title>
+    <rect class="box" x="40" y="28" width="160" height="52" rx="9"/>
+    <text class="boxT" x="54" y="50">Monthly cron</text>
+    <text class="boxS" x="54" y="66">Flyte launch plan</text>
+  </g>
+  <g><title>The demo's time machine: historical months are replayed as if they were arriving now</title>
+    <rect class="box" x="240" y="28" width="210" height="52" rx="9"/>
+    <text class="boxT" x="254" y="50">A "new" month arrives</text>
+    <text class="boxS" x="254" y="66">replayed history: 2019-09 → 2025-01</text>
+  </g>
+  <path class="flow" marker-end="url(#m)" d="M200,54 L236,54"/>
+  <path class="flow" marker-end="url(#m)" d="M450,54 L476,54"/>
+
+  <g><title>DE's year-aware pandera contract — the schema gate. All dtype casting lives here.</title>
+    <rect class="box" x="480" y="28" width="200" height="52" rx="9" stroke="var(--r-de)"/>
+    <text class="boxT" x="494" y="50">① Ingest + validate</text>
+    <text class="boxS" x="494" y="66">pandera contract, year-aware</text>
+    <circle cx="664" cy="42" r="4" fill="var(--r-de)"/>
+  </g>
+  <path class="flow" marker-end="url(#m)" d="M680,54 L716,54"/>
+
+  <!-- D1 diamond -->
+  <g><title>Gate 1 — schema: does this month still have the SHAPE the contract expects?</title>
+    <path d="M760,16 L804,54 L760,92 L716,54 Z" fill="var(--surface-1)" stroke="var(--ink)" stroke-width="1.5"/>
+    <text class="boxS" x="760" y="51" text-anchor="middle">schema</text>
+    <text class="boxS" x="760" y="64" text-anchor="middle">OK?</text>
+  </g>
+  <path class="flow" marker-end="url(#m)" d="M804,54 L846,54"/>
+  <text class="lblM" x="810" y="46">YES</text>
+
+  <g><title>Batch inference as a product: champion scores the month; predictions land where consumers (and the DA) can query them</title>
+    <rect class="box" x="850" y="28" width="240" height="66" rx="9" stroke="var(--r-mle)"/>
+    <text class="boxT" x="864" y="48">② Score with champion</text>
+    <text class="boxS" x="864" y="64">predictions table → parquet ·</text>
+    <text class="boxS" x="864" y="78">DuckDB view · Metabase board</text>
+    <circle cx="1074" cy="42" r="4" fill="var(--r-mle)"/>
+  </g>
+
+  <!-- schema NO branch: around the right edge -->
+  <path class="flow dash" stroke="var(--crit)" marker-end="url(#mc)"
+        d="M760,92 L760,120 L1104,120 L1104,470 L1094,470"/>
+  <text class="lbl" x="770" y="112" style="fill:var(--crit)">NO — the shape changed</text>
+
+  <!-- row 2 -->
+  <path class="flow" marker-end="url(#m)" d="M970,94 L970,310"/>
+  <g><title>SRE's model-watcher: Evidently compares the frozen 2019-08 reference against the new month; drift share goes to Pushgateway → Grafana</title>
+    <rect class="box" x="770" y="314" width="310" height="66" rx="9" stroke="var(--r-sre)"/>
+    <text class="boxT" x="784" y="336">③ Drift check (Evidently)</text>
+    <text class="boxS" x="784" y="352">reference 2019-08 vs this month →</text>
+    <text class="boxS" x="784" y="366">drift share → Pushgateway → Grafana panel</text>
+    <circle cx="1064" cy="328" r="4" fill="var(--r-sre)"/>
+  </g>
+  <path class="flow" marker-end="url(#m)" d="M766,347 L702,347"/>
+
+  <!-- D2 diamond -->
+  <g><title>Gate 2 — statistics: is this month still the WORLD the model learned? Threshold pre-declared in configs/drift.yaml</title>
+    <path d="M656,301 L700,347 L656,393 L612,347 Z" fill="var(--surface-1)" stroke="var(--ink)" stroke-width="1.5"/>
+    <text class="boxS" x="656" y="342" text-anchor="middle">drift share</text>
+    <text class="boxS" x="656" y="356" text-anchor="middle">&gt; 0.5?</text>
+  </g>
+
+  <!-- NO quiet -->
+  <path class="flow" stroke="var(--good)" marker-end="url(#m)" d="M656,393 L656,436"/>
+  <text class="lbl" x="666" y="420" style="fill:var(--good)">NO</text>
+  <g><title>Most months end here: metrics logged, report archived, system sleeps until the next cron</title>
+    <rect x="580" y="440" width="240" height="58" rx="9" fill="var(--wash-good)" stroke="var(--good)"/>
+    <text class="boxT" x="594" y="462"><tspan style="fill:var(--good)">✓</tspan> Quiet month <tspan class="lblM">(e.g. 2019-10)</tspan></text>
+    <text class="boxS" x="594" y="479">log the report · sleep until next cron</text>
+  </g>
+
+  <!-- YES statistical -->
+  <path class="flow" stroke="var(--warn)" marker-end="url(#mw)" d="M612,347 L566,347"/>
+  <text class="lbl" x="578" y="339" style="fill:var(--warn)">YES</text>
+  <text class="lblM" x="330" y="306" style="fill:var(--warn)">the world changed ↓</text>
+  <g><title>The COVID demo: 2020-03 replayed → the alarm fires with a number that needs no persuasion</title>
+    <rect x="320" y="314" width="242" height="66" rx="9" fill="var(--wash-warn)" stroke="var(--warn)"/>
+    <text class="boxT" x="334" y="336"><tspan style="fill:var(--warn)">⚠</tspan> Statistical drift</text>
+    <text class="boxS" x="334" y="352">Grafana alert fires with the number</text>
+    <text class="boxS" x="334" y="366">(e.g. 2020-03 — COVID month)</text>
+    <circle cx="546" cy="328" r="4" fill="var(--r-sre)"/>
+  </g>
+
+  <path class="flow" marker-end="url(#m)" d="M441,380 L441,436"/>
+  <g><title>The loop's payoff: a retrain no human started. Full M4 pipeline; the unchanged promotion gate still judges; result is a CHALLENGER, nothing more.</title>
+    <rect class="box" x="320" y="440" width="242" height="80" rx="9" stroke="var(--r-mle)"/>
+    <text class="boxT" x="334" y="462">④ Auto-retrain</text>
+    <text class="boxS" x="334" y="478">full pipeline → evaluate → gate</text>
+    <text class="boxS" x="334" y="492">→ CHALLENGER registered</text>
+    <text class="boxS" x="334" y="506">lineage intact · zero hands</text>
+    <circle cx="546" cy="454" r="4" fill="var(--r-mle)"/>
+  </g>
+
+  <!-- governance line + humans -->
+  <path class="soft dash" d="M300,420 L300,625"/>
+  <text class="lbl" x="40" y="414">⟵ automation ends here — auto-retrain ≠ auto-deploy</text>
+  <path class="flow" marker-end="url(#m)" d="M316,480 L274,480"/>
+  <g><title>Promotion to traffic is a human-plus-machinery decision: DA interprets, then the M6 ladder — shadow, DA verdict, canary, champion</title>
+    <rect class="box" x="40" y="440" width="230" height="120" rx="9" stroke="var(--r-da)"/>
+    <text class="boxT" x="54" y="462">⑤ Humans + the M6 ladder</text>
+    <text class="boxS" x="54" y="480">DA drift memo — what ACTUALLY</text>
+    <text class="boxS" x="54" y="494">changed, in domain terms</text>
+    <text class="boxS" x="54" y="510">then: shadow → DA verdict →</text>
+    <text class="boxS" x="54" y="524">canary 10% → champion</text>
+    <text class="boxS" x="54" y="542">deployments ledger rows throughout</text>
+    <circle cx="248" cy="551" r="4" fill="var(--r-da)"/><circle cx="234" cy="551" r="4" fill="var(--r-sre)"/>
+  </g>
+
+  <!-- schema refusal box -->
+  <g><title>The 2025 demo: a new TLC column (cbd_congestion_fee) is refused UPSTREAM — nothing downstream even runs. A completely different signature from the drift alarm.</title>
+    <rect x="830" y="440" width="260" height="92" rx="9" fill="var(--wash-crit)" stroke="var(--crit)"/>
+    <text class="boxT" x="844" y="462"><tspan style="fill:var(--crit)">✕</tspan> Schema drift — REFUSED</text>
+    <text class="boxS" x="844" y="479">error names the column</text>
+    <text class="boxS" x="844" y="493">(e.g. 2025-01: cbd_congestion_fee)</text>
+    <text class="boxS" x="844" y="507">nothing downstream runs</text>
+    <text class="boxS" x="844" y="521">fix: DE adapts the contract (a fork)</text>
+    <circle cx="1074" cy="454" r="4" fill="var(--r-de)"/>
+  </g>
+
+  <!-- loop back -->
+  <path class="soft dash" marker-end="url(#mm)" d="M700,498 L700,600 L28,600 L28,54 L36,54"/>
+  <text class="lblM" x="330" y="616">…and the cycle waits for the next month</text>
+
+  <!-- REV band -->
+  <rect x="40" y="640" width="1050" height="40" rx="9" fill="var(--wash-rev)" stroke="var(--r-rev)" stroke-opacity=".4"/>
+  <circle cx="58" cy="660" r="4" fill="var(--r-rev)"/>
+  <text class="lbl" x="70" y="657">◆ REV monitoring review (fresh session, after the milestone): re-derives the drift share from raw data,</text>
+  <text class="lbl" x="70" y="671">audits that the alert claims match the wiring, files its mandatory finding — closes nothing itself</text>
+</svg>
+</div>
+
+<h2>2 · The two signatures, side by side</h2>
+<p class="h2sub">The distinguishable-signatures doctrine at work: two kinds of "the data changed,"
+caught by different gates, looking nothing alike — so 2 a.m. you never confuses them.</p>
+<div class="sigs">
+  <div class="sig" style="border-top:3px solid var(--crit)">
+    <h3><span class="tagC">✕ Signature A — schema drift</span></h3>
+    <table>
+      <tr><td>demo month</td><td>2025-01 (TLC adds <code>cbd_congestion_fee</code>)</td></tr>
+      <tr><td>caught by</td><td>Gate 1 — the DE's pandera contract, <b>upstream</b></td></tr>
+      <tr><td>what you see</td><td>a loud validation error naming the new column</td></tr>
+      <tr><td>pipeline state</td><td>halted before scoring — no predictions, no drift check</td></tr>
+      <tr><td>who acts</td><td>DE (adapt the contract; feature impact → a PO fork)</td></tr>
+      <tr><td>wrong response</td><td>"just add the column and rerun" — that's how silent skew is born</td></tr>
+    </table>
+  </div>
+  <div class="sig" style="border-top:3px solid var(--warn)">
+    <h3><span class="tagW">⚠ Signature B — statistical drift</span></h3>
+    <table>
+      <tr><td>demo month</td><td>2020-03 (COVID empties the streets)</td></tr>
+      <tr><td>caught by</td><td>Gate 2 — the SRE's Evidently watcher, <b>downstream</b></td></tr>
+      <tr><td>what you see</td><td>Grafana alert with the drift-share number</td></tr>
+      <tr><td>pipeline state</td><td>completed — predictions written, report archived</td></tr>
+      <tr><td>who acts</td><td>machine retrains → challenger; DA interprets; ladder decides</td></tr>
+      <tr><td>wrong response</td><td>auto-deploying the retrained model — drift ≠ permission</td></tr>
+    </table>
+  </div>
+</div>
+
+<h2>3 · The time machine — replayed history as the demo</h2>
+<p class="h2sub">The loop is exercised by feeding historical months as if they were arriving now —
+real drift, chosen at dataset-selection time precisely for this moment.</p>
+<div class="panel">
+<svg viewBox="0 0 1120 150" role="img" aria-label="Replayed months timeline">
+  <line x1="60" y1="88" x2="1060" y2="88" stroke="var(--grid)" stroke-width="2"/>
+  <g fill="var(--surface-1)">
+    <circle cx="100" cy="88" r="9" stroke="var(--good)" stroke-width="2"/>
+    <circle cx="230" cy="88" r="9" stroke="var(--good)" stroke-width="2"/>
+    <circle cx="360" cy="88" r="9" stroke="var(--good)" stroke-width="2"/>
+    <circle cx="490" cy="88" r="9" stroke="var(--good)" stroke-width="2"/>
+    <circle cx="620" cy="88" r="9" stroke="var(--good)" stroke-width="2"/>
+    <circle cx="750" cy="88" r="13" stroke="var(--warn)" stroke-width="2.5"/>
+    <circle cx="990" cy="88" r="13" stroke="var(--crit)" stroke-width="2.5"/>
+  </g>
+  <g font-size="11" text-anchor="middle" fill="var(--ink-2)">
+    <text x="100" y="120">2019-09</text><text x="230" y="120">2019-10</text>
+    <text x="360" y="120">2019-11</text><text x="490" y="120">2019-12</text>
+    <text x="620" y="120">2020-01</text>
+    <text x="750" y="120" font-weight="600">2020-03</text>
+    <text x="870" y="93" fill="var(--muted)">· · ·</text>
+    <text x="990" y="120" font-weight="600">2025-01</text>
+  </g>
+  <g font-size="11" text-anchor="middle">
+    <text x="100" y="66" style="fill:var(--good)">✓</text><text x="230" y="66" style="fill:var(--good)">✓</text>
+    <text x="360" y="66" style="fill:var(--good)">✓</text><text x="490" y="66" style="fill:var(--good)">✓</text>
+    <text x="620" y="66" style="fill:var(--good)">✓</text>
+    <text x="750" y="56" style="fill:var(--warn)" font-weight="700">⚠ alarm + auto-retrain</text>
+    <text x="990" y="56" style="fill:var(--crit)" font-weight="700">✕ refused upstream</text>
+  </g>
+  <text class="lblM" x="60" y="30">quiet months prove the loop can also do NOTHING — an alarm that fires every month is a broken alarm</text>
+</svg>
+</div>
+
+<footer>
+  Sources of truth: docs/BLUEPRINT.md §9/M7 · configs/drift.yaml (reference 2019-08 · threshold 0.5 ·
+  demo months 2020-03, 2025-01) · gotchas #6, #13 · the M6 ladder it hands off to. Companion to the
+  full-platform blueprint (docs/architecture.html).
+</footer>
+
+</div>
+<script>
+function tgl(){
+  const r=document.documentElement;
+  const cur=r.getAttribute('data-theme');
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+  r.setAttribute('data-theme',(cur? cur==='dark' : dark) ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>

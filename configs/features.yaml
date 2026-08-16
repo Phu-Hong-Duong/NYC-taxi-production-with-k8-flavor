@@ -1,0 +1,8 @@
+# Feature-set registry — versioned; both tracks and serving reference sets by name.
+# v1: M2 request-scoped. v2: M3 artisan (dossier survivors). Sets are additive
+# manifests over the ONE shared transform path (src/taxi_mlops/features).
+sets:
+  v1: [pickup_hour, pickup_weekday, trip_distance, pu_zone, do_zone]   # M2
+  # NOTE: trip_distance is post-trip odometer — serving-time availability under
+  # formal review at the M3 Design Review (artisan playbook §5 trap 3, gotcha #21).
+  v2: []   # filled at M3-S2 from ablation survivors, by name

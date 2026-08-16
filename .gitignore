@@ -1,68 +1,14 @@
-# --- Python ---
+.env
+.venv/
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-build/
+*.pyc
+data/raw/
+data/processed/
+mlruns/
+.dvc/cache/
+.pytest_cache/
+.ruff_cache/
 dist/
 *.egg-info/
-.eggs/
-
-# --- Virtual environments ---
-.venv/
-venv/
-env/
-
-# --- Tooling caches ---
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.tox/
-.coverage
-coverage.xml
-htmlcov/
-
-# --- Notebooks ---
-.ipynb_checkpoints/
-
-# --- Secrets & credentials ---
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-kubeconfig
-*.kubeconfig
-secrets/
-service-account*.json
-
-# --- Data (NYC TLC trip files are large; keep them out of history) ---
-data/
-*.parquet
-*.csv
-*.csv.gz
-
-# --- Terraform / infra state ---
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-!*.tfvars.example
-crash.log
-
-# --- Kubernetes / Helm ---
-charts/**/charts/
-*.tgz
-
-# --- IDE ---
+notebooks/*.ipynb_checkpoints/
 .idea/
-.vscode/
-
-# --- OS ---
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# --- Logs ---
-*.log
-logs/

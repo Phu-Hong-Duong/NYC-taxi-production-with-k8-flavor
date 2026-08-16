@@ -1,0 +1,15 @@
+# CI from day one: lint + cluster-free unit tests on every PR. images.yml at M3.
+name: ci
+on:
+  pull_request:
+  push: {branches: [main]}
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      - run: uv sync --all-groups
+      - run: uv run ruff check src tests pipelines
+      - run: uv run pytest tests/unit -q

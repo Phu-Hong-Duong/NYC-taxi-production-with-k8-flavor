@@ -1,0 +1,15 @@
+# kind cluster: 1 control-plane + 2 workers. Pins observed at M0 go to CLAUDE.md.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mlops-taxi
+nodes:
+  - role: control-plane
+    extraPortMappings:            # host access for ingress-routed services
+      - containerPort: 80
+        hostPort: 8081            # KServe ingress (port family in CLAUDE.md)
+      - containerPort: 443
+        hostPort: 8443
+  - role: worker
+  - role: worker
+# TODO(M0): local registry pattern (containerdConfigPatches) OR rely on `kind load`.
+# Decide at M0, record in ADR if registry pattern chosen.
