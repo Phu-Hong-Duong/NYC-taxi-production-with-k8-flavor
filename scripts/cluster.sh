@@ -102,7 +102,20 @@ guard_path() {
 
 cmd_destroy() {
   echo "[destroy] protected, never touched: ${DENY[*]}"
-  cmd_down
+
+  # The cluster is the most expensive thing destroy deletes, so it obeys DRY_RUN
+  # like everything else. It did NOT until M0-S4: cmd_down ran unconditionally
+  # while the footer printed "nothing was deleted" — a preview that deleted the
+  # cluster (gotcha #30). Observed live, not reasoned about.
+  if [[ "${DRY_RUN:-0}" == "1" ]]; then
+    if cluster_exists; then
+      echo "[destroy] WOULD delete kind cluster '$CLUSTER' (and with it every PVC inside)"
+    else
+      echo "[destroy] skip   kind cluster '$CLUSTER' (already absent)"
+    fi
+  else
+    cmd_down
+  fi
 
   local rel
   for rel in "${REGENERABLE[@]}"; do
