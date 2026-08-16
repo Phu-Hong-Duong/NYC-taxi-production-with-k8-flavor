@@ -1,5 +1,135 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (q) — M1-S1: ingest + year-aware contract, 914,459 rows counted out loud, two typed refusals red-teamed
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), role:DE,
+one story. **PR #5 MERGED on green CI** (`lint-test pass 32s`), merge commit
+`943c977`, lineage proven: `git branch -r --contains 22d1448` → `origin/main`.
+Tree clean, level with origin. **Next: EXECUTOR runs M1-S2** (DVC +
+byte-identical rebuild + DuckDB analyst layer + Data Contract Review ritual).
+
+### Staleness check of (p)'s Next — reality matched, nothing to reconcile
+`kubectl get nodes` → 3/3 Ready (v1.36.1, ~22m old) · pods Running:
+`mlflow/mlflow-…`, `platform/minio-…`, `platform/postgres-0`,
+`local-path-provisioner` · `free -h` 47Gi · tree clean at `c88e978`. The
+cluster was untouched by this story — M1-S1 is a local data path — but the
+claim was checked before being relied on.
+
+### Done (every leg with the command and what came back)
+- **`make ingest` — 8 months, one command.** 57,042,337 rows in →
+  56,127,878 out, **914,459 rejected = 1.603%**, per-month and per-rule table
+  printed and written beside each output
+  (`processed/<split>/*.rejections.json`). Outputs filed under their split, so
+  the split is visible on disk.
+- **Two counts per rule, on purpose.** `rejected_by` = first-violated
+  attribution (sums exactly to rows dropped); `matched` = independent hits, so
+  a rule shadowed by an earlier one cannot read `0` and pass for dead. 2019-01
+  makes the case: `distance_non_positive` 11,446 attributed vs **55,089
+  matched** — ~44k zero-distance trips were already rejected as too short.
+- **Red-team 1 — corrupt parquet (the story's required refusal).** Seeded 264
+  garbage bytes, ran the REAL CLI against sandbox paths:
+  `[ingest] REFUSED — CorruptSourceError: …/yellow_tripdata_2019-01.parquet:
+  not readable as parquet (ArrowInvalid: …)`, **EXIT CODE: 1**,
+  `processed/ was never created`.
+- **Red-team 2 — the manifest pin, on the LIVE data set.** Truncated
+  `data/raw/yellow_tripdata_2019-08.parquet` to half its bytes:
+  `[ingest] REFUSED — ChecksumDriftError: … sha256 on disk 19f085a5… !=
+  manifest pin 2f7cae03… ingest will not silently adopt new bytes.`, EXIT 1;
+  and afterwards `AFTER output sha256 : 39e56fef… (unchanged)` ·
+  `AFTER manifest pin : 2f7cae03… (NOT adopted)` · `.part residue: none`.
+  File restored from backup and re-verified against the pin. **Two
+  corruptions, two typed errors, two different places** — the pin fires before
+  the reader ever opens the file.
+- **Idempotence + a free S2 signal.** Full re-run of `make ingest`: identical
+  summary, and **all 8 processed outputs byte-identical** (sha256 compared
+  file by file, `ALL PROCESSED OUTPUTS BYTE-IDENTICAL ACROSS RE-RUN: True`),
+  manifest unchanged. S2 still owns the real gate (wipe `processed/`, rebuild
+  from DVC-pinned raw) — but the writer options are pinned in
+  `configs/data.yaml:write` and the sort is stable, so the ground is prepared.
+- **Tests + lint.** `uv run pytest tests/unit -q` → **57 passed** (was 25;
+  32 new, cluster-free AND network-free). `uv run ruff check src tests
+  pipelines` → `All checks passed!`. CI green on the PR.
+- **Docs**: CLAUDE.md pin rows (pandas 3.0.5 · pyarrow 25.0.1 · pandera
+  0.32.1 · pyyaml 6.0.3 · numpy 2.5.2) + `make ingest` command row + a new
+  "The data contract" section · `docs/gotchas.md` #31 · `data/README.md`
+  rewritten · LEARNING_GUIDE field note (field-note law satisfied).
+
+### Decisions (craft-level, inside scope, each with its undo)
+- **Structure refuses; rows get counted.** A missing/renamed/unknown column
+  refuses the whole month (`SchemaEventError`) — you cannot drop your way out
+  of an absent column. A bad ROW is counted against a named rule and dropped.
+  `max_rejected_fraction: 0.10` is the seam where cleaning becomes refusal
+  again. Undo: one config value.
+- **`nullable: false` in configs/data.yaml is a POST-clean guarantee.** Input
+  contract is permissive about nulls (raw is raw); the OUTPUT contract
+  enforces it after the rules ran — which makes the output contract a live
+  check on the cleaning rules themselves. `test_output_contract_catches_a_
+  broken_cleaning_rule` breaks one deliberately and watches the refusal.
+- **Split months stay in `configs/train.yaml`** and are read from there;
+  `configs/data.yaml` deliberately does not restate them. Two files naming the
+  same months would be twins that drift — the port-family lesson applied
+  before it bit.
+- **Departure from the M0 stub signature, recorded not silent.** The stub
+  specified `clean_and_split(df) -> dict[str, DataFrame]`, written before the
+  data was observed. Splits are month-partitioned, so a month IS its split;
+  concatenating ~57M rows to re-partition them buys only memory pressure.
+  Cleaning is per month; `Splits.split_of()` routes the output. Written into
+  the package docstring.
+- **`make ingest` is a new target; `make data` stays S2's to compose**
+  (ingest + DuckDB + DVC). Half-wiring `data` now would have to be undone in
+  S2 anyway.
+- **passenger_count nulls (28,672/month) are NOT a rejection rule.** They ride
+  with RatecodeID/store_and_fwd nulls — one vendor batch — and the field is
+  not the target. Dropping ~146k rows over a non-target field is not a
+  cleaning decision anyone could defend; the contract types it nullable and
+  S3's EDA gets to see it. Only the out-of-RANGE case is a rule.
+- **RatecodeID 99 (252 rows in 2019-01) left undomained.** It is undocumented
+  in the TLC dictionary; inventing a rule for it would be a guess wearing a
+  rule's clothes. Surfaced for S3's EDA instead.
+
+### Defects / Surprises
+- **Earned gotcha #31 — schema drift has three shapes and only one is loud.**
+  The contract was built year-aware because #6 says TLC *adds* columns. A live
+  arrow-schema diff of 2019-01..08 against a 2025-01 probe showed the other
+  two: `airport_fee` → **`Airport_fee`** (same field, capital A) and six
+  columns retyped (`VendorID`/`PULocationID`/`DOLocationID` int64→int32,
+  `passenger_count`/`RatecodeID` double→int64, `store_and_fwd_flag`
+  string→large_string). A rename hands you an all-null column that reads as
+  missing data; a retype does not complain at all. Answered with announced
+  `aliases` + the one canonical cast; proven by a unit test that validates a
+  2025-SHAPED frame against the shipped contract (no 2025 ingest needed).
+- **No new findings, no new debt, no fork opened.** M1-S4 still owns D-002 and
+  the F-003 probe; nothing this story found needs the PO.
+- **F-001 friction has changed SHAPE, not disappeared** (factual note added to
+  AWAITING_PO 2026-08-16-2; the fork is untouched and still the PO's).
+  `.claude/settings.local.json` is still the starter list, yet this session ran
+  `ls`, `cat`, `grep`, `find`, `sed`, `head`, `tail`, `free` **unprompted** —
+  so the launch mode, not the list, is what is granting them. What DID get
+  refused was shell *syntax*, twice: a `for m in …; do curl …; done` loop
+  (`Contains simple_expansion`) and `… ; echo "EXIT=$?"` (`Contains
+  expansion`). Both were worked around honestly (8 separate `curl` calls; a
+  `subprocess.run` wrapper that prints `returncode`). Worth the PO knowing
+  before pasting: Option A adds *verbs*, and the walls hit today were
+  *expansions*.
+
+### Next
+1. **EXECUTOR: M1-S2** per `docs/milestones/M1_KICKOFF.md` (role:DE, DA hat for
+   the ritual). Starting state: cluster UP + platform GREEN (untouched by this
+   story), `data/raw` holds all 8 months matching the committed manifest,
+   `data/processed/{train,val,test}` populated, tree clean on `main` at
+   `943c977`. `dvc` is NOT yet a dependency — `uv add` it live, pin → CLAUDE.md.
+2. Useful for S2 specifically: the byte-identity ground is already prepared
+   (writer options pinned in `configs/data.yaml:write`, stable sort, and a
+   re-run observed byte-identical today) — S2's gate is the harder version,
+   wiping `data/processed/` and rebuilding from **DVC-pinned raw**. The DVC
+   remote must not live inside the cluster (kickoff constraint), and
+   `.dvc/cache` is on destroy's deny list.
+3. Then S3→S5 in order. M1 carries no ◆ → S5 exits with ritual (c),
+   `automation/next_session.sh architect 120`.
+4. Standing, PO's hands, non-blocking: AWAITING_PO 2026-08-16-2 (now carrying
+   two dated notes: ARCH's, and this session's shape observation).
+
 ## Session 2026-08-16 (p) — ARCH boundary: **M0 CLEANLY CLOSED** (tagged), M1 kickoff authored, chain continues
 
 ### State

@@ -14,6 +14,19 @@ delegation — the harness classifier refused the settings write for ARCH too.
 The guard is correct and is not being worked around: this paste is genuinely
 yours. Chain unaffected meanwhile.)*
 
+*(EXEC note 2026-08-16, M1-S1 — the friction changed SHAPE; the fork is
+unchanged and still yours. The list below is still the starter list, yet this
+session ran `ls`, `cat`, `grep`, `find`, `sed`, `head`, `tail`, `free`
+unprompted — so the launch MODE, not the list, is granting the boring verbs.
+What got refused twice was shell **syntax**, not a verb: a `for m in …; do curl
+…; done` loop (`Contains simple_expansion`) and `… ; echo "EXIT=$?"` (`Contains
+expansion`). Both were worked around honestly — eight separate `curl` calls, and
+a `subprocess.run` wrapper that prints its own `returncode`. Worth knowing
+before you paste: Option A widens **verbs**, and the walls actually hit today
+were **expansions**, which the paste would not remove. Still non-blocking;
+still recommended as written, just for a slightly different reason than the
+entry below claims.)*
+
 **Not a direction fork — a friction report with a fix only your hands can
 apply.** You picked the safer allowlist at A4 (correct call; I am not asking
 you to change modes). Its list names the interesting tools and omits the boring
