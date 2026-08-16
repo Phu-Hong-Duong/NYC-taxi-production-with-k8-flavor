@@ -1,5 +1,177 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (o) — M0-S4: destroy/rebuild proof, STOP drill, and a DRY_RUN that deleted the cluster — **M0 COMPLETE**
+
+### State
+on-track / MERGED — EXECUTOR (**Opus 5, claude-opus-5**, stated first line),
+role-block **MLOps with the SRE hat on the drill** (both charters read at entry;
+MLOps refusals in play: no manual deploys, no unpinned versions, no secrets in
+git or images, no "works on my machine" that skips the destroy-and-rebuild
+proof, no hand-edits the recipe cannot reproduce. SRE refusals in play: no
+rollback that has never been rehearsed — the revert is typed BEFORE the flip).
+PR #4 merged green as merge commit **02bd3b6**; lineage proved: `git branch -r
+--contains c6a3a7e` → `origin/main` (gotcha #20), story branch deleted and
+pruned. **M0's four stories are all done. Next: ARCH boundary triage + M1
+kickoff (exit ritual c — M0 carries no ◆).** Cluster `mlops-taxi` is UP,
+platform GREEN, `.env` unchanged.
+
+### Staleness check of S3's "Next" (done first, per boot ritual)
+S3 claimed cluster up, platform green, `.env` present. Verified, not assumed:
+`kind get clusters` → `mlops-taxi` · `kubectl get nodes -o wide` → 3× Ready
+v1.36.1 · `make verify-m0` → 18/18 GREEN exit 0 **before touching anything**.
+Reality had not moved. It then moved on purpose — this story's whole job.
+
+### Done — M0-S4, every accept-when row with pasted output
+
+**1. Post-rebuild `verify-m0` exit 0.** Full cycle run in order:
+- `make destroy DRY_RUN=1` → *(see Defects — this is where the bug fell out)*
+- `make destroy` → `[cluster-down] cluster 'mlops-taxi' is already absent —
+  no-op.` · `[destroy] skip data/processed (absent)` ×3 · `[destroy] remove
+  .pytest_cache` · `[destroy] remove .ruff_cache` · `[destroy] done.`
+- `make cluster-up` → 3/3 `condition met`, all Ready in ~27s, fingerprint
+  `kind version 0.32.0` / `node image: kindest/node:v1.36.1@sha256:3489c767…`
+  — the pinned digest came back identical, so the pin is doing its job.
+- `make deploy-platform` → `Release "minio" does not exist. Installing it now.`
+  and `Release "mlflow" does not exist. Installing it now.`, both landing at
+  **REVISION 1**. That number is the proof it was a genuinely fresh cluster and
+  not an upgrade wearing a rebuild's clothes.
+- `make verify-m0` → all 18 sub-checks `ok`, `[verify-m0] GREEN — every M0
+  sub-check passed.`, exit 0.
+
+**2. What survived and what died — measured, not asserted.** Fingerprints taken
+BEFORE the teardown and re-read after:
+- `.env` sha256 `34cde86f9bbb7f22e028f812afec76f4f9085575bc5fcbb318e848e3d00e6084`
+  **identical** across the whole cycle. That is why a brand-new Postgres accepted
+  the old credentials (`ok database 'mlflow' exists, owned by role 'mlflow'`).
+  `.env` is on `destroy`'s DENY list precisely because it is unrecoverable.
+- A sentinel planted at `data/raw/SENTINEL_M0S4.txt` (sha `01f9980b…`) read back
+  byte-identical after destroy — the deny list proved on the real path, not only
+  in the unit sandbox. Removed by hand afterwards; `data/raw` is empty again.
+- The cluster's DATA is gone **by design**: MLflow experiment
+  `m0s4-pre-destroy-witness` (id 1), created via the REST API before the
+  teardown, now returns `{"error_code": "RESOURCE_DOES_NOT_EXIST"}`, and
+  `experiments/search` returns only `Default` (id 0). PVCs `data-postgres-0`
+  (8Gi) and `minio` (20Gi) died with the cluster. Secrets survive, data does
+  not, and that asymmetry is the deny list's argument in one line.
+
+**3. The STOP/resume drill (SRE hat), with the counter as witness.**
+- Before: `automation/logs/count_2026-08-16` = **4**, no STOP file.
+- `automation/STOP` written → `automation/next_session.sh executor 60` →
+  `[chain] STOP file present — not scheduling.` exit 0.
+- Counter after the refusal: still **4**, and `ls automation/logs/` shows **no
+  new log file** — a refusal costs nothing, which is what makes it safe to hit.
+- STOP removed → `ls automation/STOP` → `No such file or directory` (no residue).
+- The real successor is scheduled at the bottom of this entry (exit ritual c).
+
+**4. CI green on the story's own PR**: run 31956997369 → `lint-test pass 29s`;
+log shows `All checks passed!` and **`29 passed in 16.54s`** — no skips, so the
+six new tests (incl. the four timing-sensitive chain tests) really ran on the
+runner. Merged `--merge --delete-branch`.
+
+**5.** Field note written (LEARNING_GUIDE, M0-S4) BEFORE this handoff, per
+field-note law. Ledgers: **F-004** opened *and closed* with live evidence,
+**F-002 closed** (its own closing condition (b) — two full platform runs with no
+unexplained bind failure — is now met by S3 and S4; the limitation stays
+documented at `scripts/port_precheck.sh` lines 22-25), deployments row with the
+survived/died measurements. **gotcha #30** written. CLAUDE.md: `destroy` row
+moved to VERIFIED, new `Chain kill switch` row.
+
+### Defects / Surprises
+
+- **gotcha #30 / F-004 (HIGH, fixed same session) — the preview deleted the
+  cluster.** The story's FIRST command was `make destroy DRY_RUN=1`, run to
+  check the preview before trusting the real thing. Output, verbatim:
+  `[cluster-down] deleting kind cluster 'mlops-taxi'` … `Deleted nodes:
+  [...]` … and then, four lines later, `[destroy] DRY_RUN=1 — nothing was
+  deleted.` Every FILE deletion was guarded; `cmd_down` sat one line above the
+  guard. So a "preview" destroyed the kind cluster and every PVC in it — the
+  most expensive thing the script owns — while claiming it had done nothing.
+  It cost this session nothing only because the next command was going to
+  destroy the cluster anyway. That is luck, not process.
+  **Fixed** (`scripts/cluster.sh`: cluster deletion now obeys DRY_RUN, printing
+  `WOULD delete kind cluster 'mlops-taxi' (and with it every PVC inside)`), and
+  **proved on the live rebuilt cluster**: `make destroy DRY_RUN=1` → `kind get
+  clusters` still `mlops-taxi`, 3/3 nodes, `curl localhost:5000/health` → `OK`,
+  both caches still present.
+- **Why no test caught it — the sharper half.** A test named
+  `test_destroy_dry_run_deletes_nothing` had been **green since M0-S2**. Its
+  sandbox points at a cluster name that cannot exist, so `cmd_down` always
+  no-opped: the test could not have failed if it tried. *The isolation that
+  made the test safe made it blind.* Repair is not "test against a real
+  cluster" — it is a fake `kind` that RECORDS its calls
+  (`_sandbox_with_live_cluster`), assertions on the recording, and a positive
+  control proving the shim fires. **Red-teamed**: reverting the four-line fix
+  makes the new test FAIL, quoting `[cluster-down] deleting kind cluster`
+  directly above `nothing was deleted`. Sibling of #29 one level up — there a
+  PASS branch nobody had watched be wrong, here a FAIL branch unreachable.
+- **The drill covers the easy half of the kill switch, and only tests cover the
+  rest.** STOP present when you *ask* for a session is hand-drillable. STOP
+  written *after* a session is scheduled, while it sits in its `sleep`, is the
+  case that matters at 3am — and drilling it live means either launching a real
+  Claude session (which would burn a chain slot and could start a rogue executor
+  in the middle of this story) or trusting a guard nobody watched work. Judged
+  not worth the risk live; covered instead by `tests/unit/test_chain_script.py`,
+  which runs the REAL scheduler against a sandboxed copy whose `claude` is a
+  marker-dropping shim. Four properties, each really executed: launches when
+  nothing stops it (**positive control first**, or every refusal below it proves
+  nothing) · refuses outright with STOP present · **STOP written after
+  scheduling still kills the pending session** · the daily cap halts the chain
+  AND writes its note into AWAITING_PO.md. This is the first automated coverage
+  the chain harness has had.
+- **Allowlist friction, as S3 predicted**: `DRY_RUN=1 make destroy` was refused
+  (an env-var prefix is not `Bash(make:*)`); routed through make's own
+  command-line variable, `make destroy DRY_RUN=1`, which is both allowlisted and
+  clearer. `touch`/`rm` unavailable → the STOP file was written with the file
+  tool and removed via `python3`. AWAITING_PO **2026-08-16-2 still unanswered**;
+  still non-blocking (F-001).
+- Two files elsewhere in the repo are not `ruff format`-clean. Left alone
+  deliberately: CI enforces `ruff check` only, and reformatting files this story
+  never touched would hide the story's diff. Not a finding, a note.
+- No walls hit. Nothing parked. **No new forks** — the DRY_RUN fix was
+  craft-level inside the story's scope (destroy correctness) with a verified
+  undo, so per protocol it was decided, recorded, and continued.
+
+### M0 gate — all three legs, against the quoted text
+> Accept when: v1's M0 gate passes (idempotent cluster + platform + verify-m0
+> green, destroy/rebuild observed) AND the org docs exist with every charter
+> carrying at least three refusals AND [v3.0] the autonomy harness is
+> battle-checked in real use — M0's stories themselves arrive via the chain,
+> and one mid-milestone STOP/resume is exercised and logged.
+
+1. **Idempotent cluster + platform + verify-m0 green + destroy/rebuild
+   observed** — cluster-up twice (S2), deploy-platform re-run as a clean upgrade
+   that also repaired drift (S3), verify-m0 GREEN and red-teamed to RED (S3),
+   full destroy→rebuild→GREEN (this story). ✅
+2. **Org docs, every charter ≥ 3 refusals** — enforced by verify-m0 itself, not
+   by eye: 11 documents present and non-empty, PO 3 · DE 4 · DA 6 · MLE 6 ·
+   MLOps 5 · SRE 5 · ARCH 8 · REV 5. ✅
+3. **Harness battle-checked; stories arrive via the chain; one mid-milestone
+   STOP/resume exercised and logged** — four chained sessions in
+   `automation/logs/` (counter 4 for 2026-08-16), the drill above, plus the new
+   automated coverage. ✅
+**Show:** MLflow UI http://localhost:5000 · MinIO console http://localhost:9001
+· `docs/org/ORG.md` + `ROLES.md` · `automation/logs/`.
+
+**Sign-off row NOT written — deliberately.** `ledgers/signoffs.md` still has
+zero rows and the producer of every M0 story is EXEC/MLOps; ORG.md rule 2 says
+producer ≠ approver, so the M0 gate row is the approver's to write, not mine.
+That belongs to the next session's ARCH boundary triage (or REV). Flagging it
+loudly because an unwritten sign-off row is exactly the kind of thing that
+quietly never happens: **what this ledger doesn't hold didn't happen.**
+
+### Next
+1. **ARCH boundary triage of M0 + author the M1 kickoff** (exit ritual c;
+   scheduled below). Starting state: cluster `mlops-taxi` UP, platform GREEN,
+   `.env` present, working tree clean on `main` at `02bd3b6`.
+2. For that triage, the open items to dispose of explicitly:
+   - **D-001** (image delivery to kind nodes) lands **M4** · **D-002**
+     (post-init database creation) lands **M1 — intake is mandatory at the M1
+     kickoff**, and its failure mode is silent by nature (a no-op init script).
+   - **F-003** open (cosmetic StatefulSet `configured`) · **F-001** open
+     (allowlist, PO's hands) · F-002 and F-004 closed this session.
+   - The **M0 gate sign-off row** in `ledgers/signoffs.md` — see above.
+3. Optional, PO's hands, non-blocking: AWAITING_PO 2026-08-16-2 (allowlist).
+
 ## Session 2026-08-16 (n) — M0-S3: platform up (MinIO + Postgres + MLflow), verify-m0 GREEN and red-teamed
 
 ### State
