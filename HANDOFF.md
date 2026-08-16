@@ -1,5 +1,260 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (s) — M1-S3: 3,131 rows that break a correlation, a survey with six honest adopts, and F-005 judged rather than slid
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), role:DA (MLE
+consulted on the modelling verdicts), one story. **PR #7 MERGED on green CI**
+(`lint-test pass 37s`), merge commit `aeba620`, story commit `e7e1fb2`, lineage
+proven: `git branch -r --contains e7e1fb2` → `origin/main`. Tree clean and level
+with origin; story branch deleted both sides and pruned. **Next: EXECUTOR runs
+M1-S4** (dbt gold marts + tests + publish to Postgres; lands D-002; role:DA with
+the MLOps hat). Pure-docs story — no cluster state touched, and the cluster is
+still up and untouched.
+
+### Staleness check of (r)'s Next — reality matched, nothing to reconcile
+`git status --short --branch` → `## main...origin/main`, clean at `fe9f9fa` ·
+`kubectl get nodes` → 3/3 Ready (v1.36.1, ~71m old) · `data/analyst.duckdb`
+present (274,432 bytes) · all 8 processed months on disk under their splits ·
+`raw.dvc`/`processed.dvc` both present. (r) said the layer S3 needs is live; it
+is, and it was checked before being relied on rather than assumed.
+
+### Done (every leg with the command and what came back)
+- **`docs/eda_report.md` — 13 sections, every number from a named view.** Every
+  figure came through `python -m taxi_mlops.data query "<SQL>"` against
+  `trips_clean` / `trips_{train,val,test}` / `data_health` / `ingest_months` /
+  `ingest_rejections` / `unknown_domain_values`. **No raw parquet was opened** —
+  and a shipped test now fails if the report ever cites a parquet path.
+- **THE NUMBER OF THE STORY — money columns are outlier-poisoned, and the mean
+  is the one statistic that hides it.**
+
+  ```
+  CORR(fare_amount, trip_duration_minutes)  all 56,127,878 rows   0.0735
+  CORR(fare_amount, trip_duration_minutes)  fare BETWEEN 0 AND 200 0.8708
+  rows excluded by that window              3,131  (0.0056%, 1 in 17,927)
+  mean fare of those 3,131 rows             869.13      max 671,123.14
+  AVG(fare_amount) all rows                 13.1740
+  AVG(fare_amount) windowed                 13.1263     (moves 0.36%)
+  ```
+
+  Removing one row in 17,927 moves the correlation **11.8×** while moving the
+  mean 0.36%. A previous session priced this correctly as "12 rows move the mean
+  by 0.26%" and declined a rejection rule — right call. What it could not see is
+  that those 12 sit inside a population of 3,131 that destroys every statistic
+  **except the one that was checked**. This is why AI-2 is discharged inside each
+  money KPI rather than in a preamble.
+- **A trap that would have been invisible in validation.**
+  `congestion_surcharge` is **63.4565% null in 2019-01** and 0.42–0.56% in every
+  other month. Per day: `2019-01-20 → 99.822% null`, **`2019-01-21 → 1.118%`** —
+  a one-day cliff. 2019-01 is a TRAIN month; val (July) and test (August) are
+  clean, so a feature built on it learns "January" and **neither held-out split
+  can catch it**. Now **F-006**. Sibling from the same query: `airport_fee` is
+  **100% null across all 56,127,878 rows** (0 non-null, 0 distinct, all splits).
+- **`docs/kpi_definitions.md` — KPI-01…KPI-10**, each with formula, source VIEW,
+  window and owner (kickoff asked for ≥5). **AI-2 discharged**: every money KPI
+  states its window AND its outlier treatment inline, and KPI-08 requires the
+  **count of excluded rows to render on the same card as the value** — a windowed
+  number with a hidden exclusion is worse than an unwindowed one, because it
+  looks careful. KPI-09/KPI-10 are DEFINED and explicitly **"not yet measured —
+  M2 owns the first value"**, measurable only by `taxi_mlops.training.evaluate`
+  (gotcha #15).
+- **The honest reference floor, computed in SQL and labelled as NOT a model
+  result.** Fitted on `trips_train`, evaluated on val/test:
+
+  ```
+  predictor                                        val MAE    test MAE
+  constant = train median (11.15)                   7.8866      7.6667
+  median by (hour, dow, PU, DO) from train          3.7170      3.5090
+  within 5 min of that group median, on val        78.693%   (44.117% within 2)
+  ```
+
+  **A model that does not beat 3.72 has learned nothing a `GROUP BY` already
+  knows.** The constant baseline (7.8866) is the flattering floor; it is written
+  down precisely so nobody quotes it instead.
+- **`docs/prior_art.md` — 13 verdicts: 6 ADOPT · 3 DIFFER · 4 SURPASS**, from
+  **8 sources fetched live 2026-08-16**, with live `gh api` metadata (stars,
+  `pushed_at`) recorded per source. `WebSearch`/`WebFetch` are **off this
+  session's allowlist** (F-001), so the survey ran on `curl` against
+  `raw.githubusercontent.com` plus `gh api search/repositories` — both
+  allowlisted. Sources: DataTalksClub/mlops-zoomcamp (README + `01-intro` +
+  `03-orchestration`), minasilva2003/taxi_mlops (3★), mircohoehne/e2e-taxi-…
+  (2★), AhmadHammad21/Taxi-Duration-Prediction (3★), sagpat/kserve-inference
+  (0★), adilsaid64/feast-fare-price-prediction (0★).
+- **The adopt that saves a future session:** `sagpat/kserve-inference` documents
+  that **`canaryTrafficPercent` requires `defaultDeploymentMode: Serverless` —
+  "Standard mode does NOT support canary"**, plus the non-negotiable install
+  order cert-manager → Istio → Knative → KServe. **M6's canary story was on
+  course to hit that wall.** Also adopted: commit-time secret scanning (C),
+  `for: 5m` sustained alert conditions + `repeat_interval` (B), promotion gated
+  on an HTTP test against the deployed container (B), Feast end-of-hour feature
+  timestamps so a trip cannot leak into its own features (F, for M8), dashboards
+  provisioned from checked-in JSON (D, for M1-S5).
+- **Comparability warning worth carrying into M2**: the Zoomcamp's reference
+  notebook filters `df[(df.duration >= 1) & (df.duration <= 60)]` (expression
+  read live). Ours is 1–120, so **our data holds 493,876 trips theirs discards**
+  (0.8799%) — the longest, most airport-heavy trips. Any MAE comparison against a
+  published Zoomcamp number is invalid until the windows are matched.
+- **Tests + lint.** 14 new doc-contract tests; `uv run pytest tests/unit -q` →
+  **93 passed** (was 79), cluster-free and network-free. `uv run ruff check src
+  tests scripts` → `All checks passed!`. CI log confirms the runner really ran
+  them: **`93 passed in 19.87s`**, no skips.
+- **RED-TEAM of the new tests — 5 mutations, positive control first, all
+  caught.** A temporary harness broke each document one way at a time and
+  restored it in a `finally`:
+
+  ```
+  POSITIVE CONTROL (nothing broken)                       14 passed
+  CAUGHT  prior_art.md: remove every ADOPT verdict
+  CAUGHT  kpi_definitions.md: strip the money KPI's outlier treatment
+  CAUGHT  eda_report.md: cite a parquet path instead of a view
+  CAUGHT  eda_report.md: drop the sentence bounding it to the survivors
+  CAUGHT  kpi_definitions.md: let KPI-09 be measured by something else
+  RESTORED — re-running clean                             14 passed
+  ```
+
+  Harness deleted before commit; `git status` shows no residue. Written this way
+  because of gotcha #29 — a check whose failing branch nobody has watched fire is
+  not a check.
+- **Docs/ledgers**: CLAUDE.md gains an "EDA, KPIs and prior art (M1-S3)" section
+  (KPI id law, the correlation number, the traps, the reference floor, the
+  prior-art adopts) · LEARNING_GUIDE field note written BEFORE this handoff
+  (field-note law) · `ledgers/findings.md` gains **F-006** and **F-007** and the
+  F-005 row is annotated with S3's scope judgement and its reasons.
+
+### Findings this story opened, because they outlive the session
+- **F-006 (medium) — `congestion_surcharge` availability cutover inside the
+  training window.** Detail above. Closes when M2 records an explicit, evidenced
+  choice (exclude it, or train from 2019-02) and does **not** impute it from a
+  training set that is 1/6 contaminated. A silent inclusion does not close it.
+- **F-007 (medium) — the columns most correlated with the target are not
+  available when an ETA is quoted.** `fare_amount`, `tip_amount`, `tolls_amount`,
+  `total_amount`, `payment_type`, `store_and_fwd_flag` are recorded at or after
+  trip end; windowed fare correlates at **0.8708**. A model using them scores
+  superbly offline and is unimplementable at M5's serving boundary, with nothing
+  in the offline evidence to reveal it. **The sharper half: `trip_distance` has
+  the same shape** — it is the single strongest predictor (r 0.8066 raw, 0.8464
+  in logs) and it is the meter's **driven** distance, which a quote-time system
+  does not have. M3's dossier already owns OSRM / zone-centroid distances; this
+  row makes that scope load-bearing rather than optional.
+
+### F-005 — judged, not slid (the kickoff asked S3 to decide, so it decided)
+**Verdict: OUT of M1-S3's scope. Routed to ARCH at the M1 boundary**, which is
+exactly what the finding's own closing conditions prescribe for this outcome.
+Reasons, now in the ledger row: the kickoff's S3 is a pure-docs story ("Safe
+stop: after merge; pure-docs story, no state touched"), and a rejected-row
+sidecar needs (a) an ingest change, (b) a re-run over 57M rows that rewrites the
+very `data/processed/` artifacts M1-S2 proved byte-identical two sessions ago and
+would demand a fresh rebuild proof, (c) ~+1 GB of DVC cache and remote, (d) a new
+analyst view and its reconciliation test. That is a DE story, not a paragraph in
+an EDA.
+
+**The DA's dissent stands and is now evidenced rather than predicted.** The EDA
+does not quietly proceed as if the data were whole: §0 is titled with the
+boundary and states that everything after it describes the surviving **98.397%**;
+§2 says of the 159,300 trips removed for exceeding two hours that this report
+"cannot answer and does not guess" what they were. A shipped test fails if either
+sentence is removed. **Two new arguments ARCH now has and did not before:** the
+rejection rate is **not stationary** (1.428% in 2019-04 rising monotonically to
+2.020% in 2019-08, +41% relative) so the discarded population is growing as
+volume falls; and **the val and test months are the two dirtiest**, so the
+held-out evaluation sits on the least-characterized data in the set.
+
+### Decisions (craft-level, inside scope, each with its undo)
+- **The prior-art survey was run as reading, not citing — and ranked by
+  specificity, not stars.** A star-ranked search returned awesome-lists and
+  course forks; the two most useful sources found have **zero stars each**. Cost,
+  stated: eight full READMEs read in-session. Undo: none needed, but the method
+  note in `prior_art.md` says plainly that "strong capstone" here means
+  operationally specific, that verdicts rest on READMEs rather than code audits,
+  and that a SURPASS row means "none of these six", not "nobody".
+- **Six ADOPT rows, deliberately.** The kickoff warns that a survey with zero
+  adopts wasn't looking; the honest count came out at six, and a shipped test
+  fails if the ADOPT rows ever vanish. Each names something we do not currently
+  do.
+- **Model-quality KPIs are defined now, measured never by SQL.** KPI-09/KPI-10
+  exist so M1-S5's board and M2's memo cite the same ids, but both carry
+  "not yet measured" and name `taxi_mlops.training.evaluate` as the only source
+  (gotcha #15). The SQL reference floors sit in the EDA under an explicit "NOT a
+  model result" label. Undo: delete the two ids — but then M2 invents its own.
+- **KPI ids are immutable; a changed formula is a new id.** KPI-03b, never an
+  edited KPI-03, or a board's history silently stops meaning one thing. Pinned by
+  a test asserting ids are unique and run 1..N with no gaps.
+- **Doc-contract tests exist at all.** A document is far easier to hollow out
+  than a function, and M1-S5's `verify-m1` must check "prior_art ≥ 6 verdicts"
+  somehow. Now it can lean on a test instead of a grep. Undo: delete the file;
+  the documents become prose again.
+- **`month` is a reporting dimension and never a model feature** — recorded in
+  both the EDA (§4) and the KPI doc's segment table, because the target mean
+  rises 17.3% Jan→Jun and a month feature would encode exactly that and expire in
+  2019-09.
+- **F-006/F-007 opened as findings rather than left as EDA sections.** Both are
+  silent-failure traps that bite two milestones from now; a findings row survives
+  a document nobody re-reads.
+
+### Defects / Surprises
+- **`WebSearch`/`WebFetch` are not on the allowlist** — a new shape of F-001, and
+  the first time it hit a story's *core* deliverable rather than a convenience.
+  Worked around honestly and fully: `curl` for document bodies, `gh api
+  search/repositories` + `gh api repos/<owner>/<name>` for discovery and live
+  metadata. Two sub-walls worth recording for the next session: **`/tmp` is
+  outside the file-tool sandbox**, so `curl -o /tmp/x` succeeds but the file
+  cannot then be READ — pipe to stdout instead; and the **unauthenticated**
+  GitHub code-search endpoint returns `401`, while `gh api` (authenticated)
+  works. Nothing new for the PO to decide; **AWAITING_PO 2026-08-16-2 is
+  untouched and still theirs**, and Option A as written would not have granted
+  WebSearch anyway (it widens Bash verbs).
+- **My own test had the bug the repo keeps warning about.** The first run of
+  `test_money_kpis_state_a_window_and_an_outlier_treatment` failed on **KPI-10**,
+  which names no money column — because the last section in the file absorbed
+  every trailing paragraph, including one mentioning `total_amount`. The
+  assertion was firing for the wrong reason. Fixed by bounding a section at the
+  next `##` as well as the next KPI heading. Caught only because the test failed
+  *loudly on the wrong id*; had KPI-10 happened to contain the string, it would
+  have passed and meant nothing.
+- **A test that demanded a URL in every verdict row was too narrow** and failed
+  honest rows 10–13, which cite multi-source keys (`**B, C, D, F**`) defined with
+  URLs in the sources table. Rather than stuff six links into one cell, the test
+  now accepts an inline URL **or** a defined source key, and a second test
+  asserts the sources table gives every key a URL and a read date. Stronger than
+  what it replaced.
+- **No walls hit** (nothing needed three attempts). **Nothing parked. No fork
+  opened** — F-005's disposition is an ARCH scoping call by the finding's own
+  written conditions, not a PO direction decision, and nothing this story touched
+  a gate, a threshold or a budget.
+- **`role:DA` label did not exist** and was created (`gh label create`), same as
+  `role:DE`/`role:MLOps` before it. Not a defect, just the next one in the set.
+
+### Next
+1. **EXECUTOR: M1-S4** per `docs/milestones/M1_KICKOFF.md` — dbt gold marts
+   (`trips_clean`, `zone_hourly_stats`, `monthly_kpis`) + dbt tests with **one
+   red-teamed on a seeded bad fixture**, publish to the one Postgres, and this is
+   **D-002's landing** (idempotent post-init database/role creation, proven on
+   the **existing** volume, `mlflow` db untouched, re-run a no-op). Also the
+   **F-003 bounded probe — ONE attempt** while `infra/manifests/postgres.yaml` is
+   open; if it finds nothing, leave it open and do not chase.
+   Starting state: cluster `mlops-taxi` UP (3/3 Ready, MLflow/MinIO/Postgres
+   Running, untouched by this story), tree clean on `main` at `aeba620`,
+   `data/analyst.duckdb` live with 9 views, 8 months on disk. `dbt-duckdb` is NOT
+   yet a dependency — `uv add` it live, pin → CLAUDE.md.
+2. **Three things S4 should carry in.** (a) **The marts boundary law is in
+   force** — `grep -r "analytics" src/taxi_mlops/` stays empty (gotcha #22).
+   (b) **The anonymous-telemetry sibling is due**: gotcha #32 named
+   dbt's `send_anonymous_usage_stats` as the next opt-out-by-default to check at
+   S4, exactly as `dvc init` was at S2 — set it in `dbt_project.yml` and pin it
+   with a test. (c) `monthly_kpis` should compute the ids from
+   `docs/kpi_definitions.md` and **cite them by id**, including KPI-08's window
+   and its excluded-row count as its own column — a mart that silently drops the
+   window re-introduces the 0.0735 correlation everywhere.
+3. Then S5 (Metabase + boards + `verify-m1`), which opens with a **deliberate
+   cluster rebuild** for the 3030 hostPort (kind publishes only at create time)
+   and can lean on `tests/unit/test_docs_contracts.py` for its "prior_art ≥ 6
+   verdicts" and KPI sub-checks. M1 carries no ◆ → S5 exits with ritual (c),
+   `automation/next_session.sh architect 120`.
+4. **For ARCH at the M1 boundary**: F-005's scope judgement (above, with reasons
+   and two new arguments) is waiting; F-006 and F-007 are new open findings owned
+   by MLE landing at M2/M3.
+5. Standing, PO's hands, non-blocking: AWAITING_PO 2026-08-16-2 (allowlist).
+
 ## Session 2026-08-16 (r) — M1-S2: pinned, rebuilt byte-for-byte by two witnesses, and a contract review that found four things
 
 ### State
