@@ -1,2 +1,88 @@
-# mlflow — helm values. Chart + version chosen at its milestone from live sources,
-# recorded in CLAUDE.md pin table. Keep every override commented with WHY.
+# MLflow — tracking server + model registry (BLUEPRINT: the registry/lineage seat).
+#
+# Chart: community-charts/mlflow (repo https://community-charts.github.io/helm-charts)
+# — version pinned in scripts/deploy_platform.sh, recorded in the CLAUDE.md pin
+# table. WHY a community chart rather than plain manifests: MLflow's own image
+# (ghcr.io/mlflow/mlflow) ships without psycopg2 or boto3, so a Postgres backend
+# store plus S3 artifacts needs an image WE build — and M0 builds no image of
+# ours (debt D-001 parks that decision at M4). This chart's image carries both
+# drivers. The chart version is the pin; the app version rides with it.
+#
+# NOTE ON SECRETS: nothing secret is in this file. The database password comes
+# from Secret `mlflow-db`, the S3 keys from `mlflow-s3` — both created by
+# scripts/platform_secrets.sh out of .env (gitignored).
+
+replicaCount: 1
+
+backendStore:
+  # The chart runs `mlflow db upgrade` in an init container. Without it a fresh
+  # Postgres has no MLflow schema and the server crash-loops on first start.
+  databaseMigration: true
+  # Init container that waits for Postgres to answer. Postgres and MLflow come up
+  # in parallel; without this the first rollout is a race we would "fix" by
+  # re-running deploy — and a recipe you must run twice is not idempotent, it is
+  # lucky.
+  databaseConnectionCheck: true
+  postgres:
+    enabled: true
+    # The ONE Postgres, cross-namespace (platform -> mlflow).
+    host: postgres.platform.svc.cluster.local
+    port: 5432
+    database: mlflow
+    # user/password here are placeholders: existingDatabaseSecret below overrides
+    # both. The chart requires the keys to be non-empty to render.
+    user: mlflow
+    password: overridden-by-existingDatabaseSecret
+    driver: psycopg2
+  existingDatabaseSecret:
+    name: mlflow-db
+    usernameKey: username
+    passwordKey: password
+
+artifactRoot:
+  # Clients talk to MinIO directly rather than proxying bytes through the
+  # tracking server. That is the shape gotcha #5 describes: every client context
+  # (local shell, training pod, Flyte task) needs MLFLOW_S3_ENDPOINT_URL + AWS
+  # keys, and finding that out at M0 is far cheaper than at M4.
+  proxiedArtifactStorage: false
+  s3:
+    enabled: true
+    bucket: mlflow-artifacts
+    existingSecret:
+      name: mlflow-s3
+      keyOfAccessKeyId: AWS_ACCESS_KEY_ID
+      keyOfSecretAccessKey: AWS_SECRET_ACCESS_KEY
+
+extraEnvVars:
+  # In-cluster S3 endpoint. Clients OUTSIDE the cluster use http://localhost:9000
+  # (.env) — same bucket, different route.
+  MLFLOW_S3_ENDPOINT_URL: "http://minio.platform.svc.cluster.local:9000"
+  # boto3 refuses to sign without a region even when the endpoint ignores it.
+  AWS_DEFAULT_REGION: "us-east-1"
+
+# ClusterIP: the host route is the separate NodePort Service in
+# infra/manifests/mlflow-nodeport.yaml, because this chart has no `nodePort`
+# field and a random one cannot be mapped in the kind config.
+service:
+  type: ClusterIP
+  port: 5000
+
+# TUITION, PAID 2026-08-16 (gotcha #28): with the chart defaults this pod starts
+# perfectly — "Application startup complete." four times — and then dies at exit
+# 137. MLflow 3.x serves under uvicorn with `--workers 4` by default; four full
+# Python processes, each loading MLflow + SQLAlchemy + boto3, walked straight
+# through a 2Gi limit. The logs show no error, because being OOMKilled is not
+# something a process gets to log. One worker is the honest number for a
+# single-user local cluster; raise it when there is a second user.
+extraArgs:
+  workers: "1"
+
+resources:
+  requests: {cpu: 100m, memory: 512Mi}
+  limits: {memory: 2Gi}
+
+# No auth: this is a $0 single-user local cluster with nothing leaving the
+# machine. Turning it on would put an admin password in the platform's critical
+# path with nobody to protect it from. Revisit if the stack ever leaves localhost.
+auth:
+  enabled: false

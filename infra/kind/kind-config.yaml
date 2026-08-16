@@ -12,11 +12,23 @@ name: mlops-taxi
 nodes:
   - role: control-plane
     image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
-    extraPortMappings:            # host access for ingress-routed services
+    # Host access. kind publishes these at CREATE time only — adding a row here
+    # means the cluster must be re-created (cluster-down + cluster-up), which is
+    # cheap and is exactly why the recipe, not a port-forward, owns this.
+    # containerPort = the NodePort the Service claims; hostPort = the CLAUDE.md
+    # port family, so a human on Windows opens the documented URL. The port
+    # pre-check parses every hostPort below (scripts/port_precheck.sh).
+    extraPortMappings:
       - containerPort: 80
-        hostPort: 8081            # KServe ingress (port family in CLAUDE.md)
+        hostPort: 8081            # KServe ingress (M5)
       - containerPort: 443
         hostPort: 8443
+      - containerPort: 30500      # Service mlflow-nodeport (infra/manifests/)
+        hostPort: 5000            # MLflow UI — the M0 gate's "Show:" artifact
+      - containerPort: 30900      # Service minio (chart: service.nodePort)
+        hostPort: 9000            # MinIO S3 API
+      - containerPort: 30901      # Service minio-console (chart: consoleService.nodePort)
+        hostPort: 9001            # MinIO console
   - role: worker
     image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
   - role: worker

@@ -1,0 +1,37 @@
+# The host route to the MLflow UI: http://localhost:5000 (CLAUDE.md port family,
+# and the M0 gate's "Show: MLflow UI").
+#
+# WHY A SECOND SERVICE rather than `service.type: NodePort` in the chart values:
+# community-charts/mlflow exposes no `nodePort` field, so it would allocate a
+# random port in 30000-32767 — and infra/kind/kind-config.yaml has to name the
+# node port at cluster-CREATE time. A random port cannot be mapped by a recipe.
+# So the chart keeps its ClusterIP Service (unchanged, upgrade-safe) and we own
+# the one fixed address the outside world uses.
+#
+# WHY NOT `kubectl port-forward`: it is a process someone has to remember to
+# start, i.e. a manual deploy step by another name (MLOps charter). This route
+# survives reboots, re-rollouts and a fresh `make cluster-up`.
+#
+# 30500 here and hostPort 5000 in the kind config are twins — change both.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-nodeport
+  namespace: mlflow
+  labels:
+    app.kubernetes.io/name: mlflow
+    app.kubernetes.io/component: host-route
+spec:
+  type: NodePort
+  # Selector copied from the chart's own Service (helm template, chart 1.11.4).
+  # If a chart upgrade renames labels this Service silently selects nothing —
+  # which is why verify-m0 curls the URL instead of trusting the object exists.
+  selector:
+    app: mlflow
+    app.kubernetes.io/name: mlflow
+    app.kubernetes.io/instance: mlflow
+  ports:
+    - name: http
+      port: 5000
+      targetPort: mlflow
+      nodePort: 30500

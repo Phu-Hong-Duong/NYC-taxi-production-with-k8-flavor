@@ -1,2 +1,10 @@
-# postgres — helm values. Chart + version chosen at its milestone from live sources,
-# recorded in CLAUDE.md pin table. Keep every override commented with WHY.
+# DELIBERATELY EMPTY — Postgres is NOT installed by helm.
+#
+# Decided at M0-S3 with the reason written where the resource lives:
+# infra/manifests/postgres.yaml (short version: bitnami/postgresql now defaults
+# to a rolling `:latest` tag, and its pinned tags moved to the frozen
+# `bitnamilegacy` registry — the MLOps charter refuses unpinned versions).
+#
+# This file stays so the reader who greps infra/helm/ for "postgres" is told
+# where it went instead of concluding it was forgotten. Delete it only together
+# with the manifest, i.e. if a maintained chart ever earns the seat back.

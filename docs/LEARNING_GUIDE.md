@@ -9,6 +9,87 @@ months from now.
 
 ## M0
 
+### M0-S3 — The platform: MinIO, Postgres, MLflow, and a gate that says no (2026-08-16, role:MLOps)
+
+**What was built.** `make deploy-platform` brings up the three services the whole
+program leans on — MinIO (the S3), one Postgres (the one database), MLflow
+(tracking + registry) — and `make verify-m0` proves it in 18 sub-checks, exit
+nonzero on any miss. MLflow's UI answers at http://localhost:5000, MinIO's
+console at :9001, and MLflow's artifacts really land in MinIO while its runs
+really land in Postgres. Credentials are generated into a gitignored `.env` and
+pushed into Kubernetes Secrets by `scripts/platform_secrets.sh`; no secret is
+ever printed, and none is in git.
+
+**Why this way.** Five choices worth the ink.
+
+*(1) Postgres by plain manifest, not by chart.* The obvious pick, bitnami's
+`postgresql`, today defaults to `registry-1.docker.io/bitnami/postgresql:latest`
+— a rolling tag — and its pinned tags now live in a frozen `bitnamilegacy`
+registry. The MLOps charter refuses unpinned versions, so the "standard" chart
+would have forced either an unpinned image or a dependency on a deprecated
+registry. Fifty lines of YAML we own, with the image pinned by digest, is the
+cheaper honest answer. Note the shape of that decision: the popular choice was
+rejected on a *property* (pinnability), not on taste.
+
+*(2) MLflow by community chart, and the reason is a missing driver.* MLflow's own
+image ships without `psycopg2` or `boto3` — so a Postgres backend plus S3
+artifacts needs an image somebody builds. M0 builds no image of ours (that
+decision is parked as debt D-001 until M4), and the community chart's image
+carries both drivers. So: chart where the chart earns its keep, manifest where it
+does not. "Use helm for everything" is a policy; "use the thing whose failure mode
+you can live with" is engineering.
+
+*(3) The host route is declared, not forwarded.* `kubectl port-forward` is a
+process a human has to remember to start — a manual deploy step wearing a
+disguise. Instead the kind config maps hostPort 5000 → containerPort 30500, and a
+Service claims nodePort 30500. The cost is honest and worth naming: kind
+publishes ports only at cluster-CREATE time, so adding a port means destroying
+and rebuilding the cluster. The benefit is that a fresh `make cluster-up` on a
+new laptop gives you localhost:5000 with nobody typing anything.
+
+*(4) `.env` is the source of truth, and it is generated once.* Re-generating
+passwords on every deploy would be "idempotent" in the trivial sense and
+catastrophic in practice: the old password is already baked into the Postgres data
+directory. So the script generates only when `.env` is absent, then converges the
+Secrets to it every run. This is why `.env` is on `destroy`'s protected list.
+
+*(5) MLflow gets its own MinIO identity.* The chart ships a default user
+`console`/`console123`; overriding the user list removes it, and MLflow
+authenticates as `mlflow` with `readwrite` — so a leaked MLflow credential cannot
+reconfigure the object store. The access key is a *username* and lives in git; the
+secret key never does.
+
+**The concept underneath.** *Verify the thing, not a proxy for it.* This story's
+best moment was a failure of my own check. `verify-m0` asked "did the Deployment
+roll out?" — and when the red-team scaled MLflow to **zero replicas**, `kubectl
+rollout status` answered *"successfully rolled out"*, exit 0, because zero
+replicas is a complete rollout. The script printed a green line for a service that
+had ceased to exist, while every URL check beside it failed. Readiness is now
+asked as a number (`readyReplicas >= 1` **and** `== spec.replicas`), and the
+lesson is bigger than kubectl: a check whose PASS branch you have never watched be
+wrong is a check you have not tested. That is gotcha #29. Its sibling, gotcha #28,
+came from the same session's first deploy: MLflow logged *"Application startup
+complete"* four times and then vanished — OOMKilled at exit 137 by its own default
+of four uvicorn workers. The logs were clean, because a process does not get to
+log its own OOM kill. **When a container dies without complaining, read the pod
+object, not the log stream.**
+
+**What to look at.** `scripts/verify_m0.sh` (start at `workload_ready` and the
+comment above it — that is the red-team's scar) · `infra/manifests/postgres.yaml`
+(the header argues the chart-vs-manifest choice) · `scripts/platform_secrets.sh`
+(the chain of custody from `.env` to pods) · `tests/unit/test_platform_scripts.py`
+(the port-twin tests: two files holding the same number, and a test that fails
+when they drift).
+
+**What to try yourself.** Run `make verify-m0` — it should be green. Now break it
+on purpose, three different ways, and predict the output before each: `kubectl -n
+platform scale deployment/minio --replicas=0`; `kubectl -n mlflow delete secret
+mlflow-s3`; change `nodePort: 30500` in `infra/manifests/mlflow-nodeport.yaml` to
+`30501` and re-apply. Which failures does the gate catch loudly, which one does it
+catch only through a URL, and which one does `make test` catch before you ever
+reach the cluster? Then run `make deploy-platform` and watch it put everything
+back.
+
 ### M0-S2 — Cluster up, idempotent, with a pre-check that says no (2026-08-16, role:MLOps)
 
 **What was built.** Three real make targets behind two shell scripts:
