@@ -193,6 +193,40 @@ M7's drift memo segment the same way:
 | month | `month` | target mean rises 17.3% Jan→Jun (a reporting dimension **only** — never a model feature, eda_report.md §4) |
 | null batch | `payment_type = 0` | 261,781 rows at 2.6× the mean duration |
 
+## Where each KPI is published (added M1-S4, so M1-S5's cards do not have to guess)
+
+Metabase can only query **Postgres**. Every id below therefore names the mart
+column that carries it, in database `marts`, schema `marts`. A card that cannot
+point at a column here is a card querying something this document does not
+define.
+
+| id | mart | column |
+|---|---|---|
+| KPI-01 | `monthly_kpis` | `kpi_01_trips_ingested` (segmented: `zone_hourly_stats.trips`) |
+| KPI-02 | `monthly_kpis` | `kpi_02_rejection_rate_pct` — **plot the series** |
+| KPI-03 | `rejections_by_rule` | `rejected_by` **and** `matched`, one row per (month, rule) |
+| KPI-04 | `monthly_kpis` | `kpi_04_undocumented_rows`, `kpi_04_undocumented_pct` |
+| KPI-05 | `monthly_kpis` | `kpi_05_raw_sha256`, `raw_file`, `raw_bytes` |
+| KPI-06 | `monthly_kpis` | `kpi_06_median_duration_min` (segmented: `zone_hourly_stats.median_duration_min`) |
+| KPI-07 | `monthly_kpis` | `kpi_07_p90_duration_min` (segmented: `zone_hourly_stats.p90_duration_min`) |
+| KPI-08 | `monthly_kpis` | `kpi_08_mean_fare_windowed` **with** `kpi_08_excluded_rows` — the two travel together, by rule |
+| KPI-09 | — | **not a column anywhere, on purpose** (gotcha #15) |
+| KPI-10 | — | **not a column anywhere, on purpose** (gotcha #15) |
+
+Three notes the boards must honour:
+
+1. **KPI-04 is not the sum of `unknown_domain_values`.** That view is
+   pre-aggregated per (column, value) and 219 trips carry both `VendorID = 5`
+   and `payment_type = 0`, so summing it returns 527,610 where the honest answer
+   is 527,386 distinct rows. `monthly_kpis` counts distinct rows against the
+   documented domains, taking those domains from `configs/data.yaml`.
+2. **KPI-03's zero rows are load-bearing.** `missing_timestamp`,
+   `location_out_of_range` and `passenger_count_out_of_range` appear in the mart
+   with zeros. Filtering them off a card would mean nobody sees the day one
+   starts firing.
+3. `taxi_mlops.training.evaluate` writing KPI-09/KPI-10 into a **predictions
+   mart** is M2/M7's work, not a SQL column added here.
+
 ## What is deliberately NOT a KPI yet
 
 - **Anything requiring the rejected rows** (e.g. "share of trips over 2 hours").

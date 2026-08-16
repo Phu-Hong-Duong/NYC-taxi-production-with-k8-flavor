@@ -1,0 +1,33 @@
+# The profile is CHECKED IN, which is only safe because it holds no credential.
+# dbt's usual reason for keeping profiles.yml out of the repo is that it carries
+# warehouse passwords; ours carries two file paths. The Postgres credentials are
+# NOT here — the publish step (scripts/marts.sh) reaches Postgres over
+# `kubectl exec`, reading .env, and never hands dbt a password.
+#
+# `dbt` is invoked with DBT_PROFILES_DIR pointing at this directory, so there is
+# one profile for the repo and no per-machine ~/.dbt to drift against.
+# NOTE — the telemetry opt-out is NOT here. dbt 1.12 refuses to start if
+# `config:` in profiles.yml and `flags:` in dbt_project.yml are both present
+# ("Using 'config' in profiles.yml is deprecated"), so the opt-out lives in
+# dbt_project.yml's `flags:` block plus DO_NOT_TRACK in scripts/marts.sh.
+# Observed 2026-08-16 (M1-S4) by setting both and being refused.
+
+taxi_marts:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      # dbt's own database, holding the mart tables. Regenerable from
+      # data/processed by `make marts`, therefore gitignored.
+      path: marts.duckdb
+      # THE SOURCE IS THE ANALYST LAYER, NOT THE PARQUET (DA charter refusal #2).
+      # dbt could `read_parquet()` the same files directly — and would then own a
+      # SECOND definition of what `split` and `month` mean, which is exactly the
+      # twins failure this repo keeps paying for. Attaching read-only makes
+      # taxi_mlops.data.analyst the single source of truth: rename a view there
+      # and dbt fails loudly instead of quietly disagreeing.
+      attach:
+        - path: ../../data/analyst.duckdb
+          alias: analyst
+          read_only: true
+      threads: 4

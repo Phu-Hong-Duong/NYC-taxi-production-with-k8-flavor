@@ -1,0 +1,130 @@
+version: 2
+
+# The DA's QA layer. PARALLEL TO, NOT REPLACING, the DE's pandera contracts
+# (BLUEPRINT §9/M1-S6): pandera decides what may enter `data/processed/`; these
+# tests decide what may be PUBLISHED to a board. They overlap on purpose — the
+# accepted_range on trip_duration_minutes restates the contract's [1, 120]
+# rejection rules, so a cleaning rule that stops working is caught a second time,
+# by a different mechanism, on the way to the humans who would otherwise believe
+# the number.
+#
+# Every test here has been SEEN FAILING — `make marts-redteam` unions the
+# out-of-contract fixture in seeds/redteam/ and the run must go red (DA charter:
+# never ship a mart whose tests were never seen failing; gotcha #29).
+
+models:
+  - name: trips_clean
+    description: >
+      Published trip-level fact: every accepted trip 2019-01..08 with the four
+      segment dimensions computed once. Serves humans (ADR-009, gotcha #22).
+    columns:
+      - name: split
+        description: "train / val / test, a literal from configs/train.yaml — never parsed from a filename."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: ["train", "val", "test"]}
+      - name: month
+        tests: [not_null]
+      - name: PULocationID
+        description: "TLC taxi zone. 264/265 are 'unknown', not places."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 265}
+      - name: DOLocationID
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 265}
+      - name: trip_duration_minutes
+        description: "The target. Bounded [1, 120] by the contract's rejection rules — this test is that bound, restated where a board can trip over it."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 120}
+      - name: trip_distance
+        description: "The METER'S DRIVEN distance — not available when an ETA is quoted (F-007). Fine for a human board, a leak for a model."
+        tests:
+          - accepted_range:
+              arguments: {min_value: 0, inclusive: false}
+      - name: pickup_hour
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 23}
+
+  - name: zone_hourly_stats
+    description: "Duration/speed/fare by (month, split, pickup zone, hour). At most 50,880 rows."
+    columns:
+      - name: trips
+        tests: [not_null]
+      - name: pickup_hour
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 23}
+      - name: median_duration_min
+        tests:
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 120}
+      - name: kpi_08_excluded_rows
+        description: "KPI-08's window renders next to its value, by rule."
+        tests: [not_null]
+
+  - name: monthly_kpis
+    description: "One row per month, one column per KPI id from docs/kpi_definitions.md."
+    columns:
+      - name: month
+        tests: [not_null, unique]
+      - name: kpi_01_trips_ingested
+        tests: [not_null]
+      - name: kpi_02_rejection_rate_pct
+        description: >
+          Plotted as a SERIES, never as a threshold: the ingest refuses a month
+          above 10%, which is 5x the worst month observed and would not have
+          noticed the 41% relative rise across these eight months. The bound here
+          is the contract's `max_rejected_fraction`, so a month that somehow got
+          past ingest cannot get onto a board.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 10}
+      - name: kpi_04_undocumented_pct
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}
+      - name: kpi_05_raw_sha256
+        description: "The pin of the bytes these numbers describe. Null here means the board should say so rather than render."
+        tests: [not_null]
+      - name: kpi_06_median_duration_min
+        tests:
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 120}
+      - name: kpi_08_excluded_rows
+        tests: [not_null]
+
+  - name: rejections_by_rule
+    description: "KPI-03 at (month, rule) grain — the only grain it is defined on."
+    columns:
+      - name: rule
+        tests: [not_null]
+      - name: rejected_by
+        description: "First-violated attribution; sums exactly to rows dropped."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0}
+      - name: matched
+        description: "Independent hits. Greater than rejected_by for any rule shadowed by an earlier one."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0}
+
+seeds:
+  - name: redteam_bad_trips
+    description: >
+      Out-of-contract fixture rows, used ONLY by `make marts-redteam`
+      (`--vars '{red_team: true}'`). Never unioned by `make marts`.

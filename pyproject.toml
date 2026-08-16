@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 # Dependencies are added AT M0 with versions observed from live sources that day,
 # recorded in CLAUDE.md's pin table. Do not pre-pin here from memory.
 dependencies = [
+    "dbt-duckdb>=1.11.0",
     "duckdb>=1.5.5",
     "dvc>=3.67.1",
     "pandas>=3.0.5",

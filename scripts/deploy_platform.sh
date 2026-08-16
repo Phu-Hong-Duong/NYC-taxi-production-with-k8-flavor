@@ -9,7 +9,7 @@
 # recipe cannot reproduce).
 #
 # Order matters and is not incidental:
-#   namespaces -> secrets -> Postgres -> MinIO -> MLflow -> host route
+#   namespaces -> secrets -> Postgres -> databases -> MinIO -> MLflow -> host route
 # MLflow's init containers block on Postgres answering AND on the mlflow role
 # existing, and its artifact writes need the bucket + user MinIO's post-install
 # Job creates.
@@ -29,26 +29,31 @@ MINIO_CHART_VERSION="5.4.0"
 MLFLOW_REPO_URL="https://community-charts.github.io/helm-charts"
 MLFLOW_CHART_VERSION="1.11.4"
 
-echo "== [1/6] helm repos (idempotent) =="
+echo "== [1/7] helm repos (idempotent) =="
 "${HELM[@]}" repo add minio "$MINIO_REPO_URL" --force-update >/dev/null
 "${HELM[@]}" repo add community-charts "$MLFLOW_REPO_URL" --force-update >/dev/null
 "${HELM[@]}" repo update minio community-charts >/dev/null
 echo "   minio $MINIO_CHART_VERSION · community-charts/mlflow $MLFLOW_CHART_VERSION"
 
-echo "== [2/6] namespaces =="
+echo "== [2/7] namespaces =="
 # Applied here, not by cluster-up: cluster-up owns the machine (nodes, ports),
 # deploy-platform owns everything inside it. That split is what lets S4's
 # destroy/rebuild prove the two halves separately.
 "${KUBECTL[@]}" apply -f "$REPO_ROOT/infra/manifests/namespaces.yaml"
 
-echo "== [3/6] secrets from .env =="
+echo "== [3/7] secrets from .env =="
 bash "$REPO_ROOT/scripts/platform_secrets.sh"
 
-echo "== [4/6] Postgres (plain manifests — see the file header for why) =="
+echo "== [4/7] Postgres (plain manifests — see the file header for why) =="
 "${KUBECTL[@]}" apply -f "$REPO_ROOT/infra/manifests/postgres.yaml"
 "${KUBECTL[@]}" -n platform rollout status statefulset/postgres --timeout=300s
 
-echo "== [5/6] MinIO =="
+echo "== [5/7] databases + roles in that Postgres (D-002) =="
+# Separate from the manifest on purpose: initdb runs ONCE, on an empty volume,
+# so every database after the first arrives here. See the script's header.
+bash "$REPO_ROOT/scripts/postgres_databases.sh"
+
+echo "== [6/7] MinIO =="
 "${HELM[@]}" upgrade --install minio minio/minio \
   --version "$MINIO_CHART_VERSION" \
   --namespace platform \
@@ -58,7 +63,7 @@ echo "== [5/6] MinIO =="
 # check the data path itself rather than assuming the hook ran.
 "${KUBECTL[@]}" -n platform rollout status deployment/minio --timeout=300s
 
-echo "== [6/6] MLflow + host route =="
+echo "== [7/7] MLflow + host route =="
 "${HELM[@]}" upgrade --install mlflow community-charts/mlflow \
   --version "$MLFLOW_CHART_VERSION" \
   --namespace mlflow \

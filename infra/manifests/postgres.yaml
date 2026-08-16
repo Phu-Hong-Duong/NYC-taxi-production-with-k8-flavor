@@ -22,7 +22,11 @@ metadata:
 data:
   # docker-entrypoint-initdb.d runs ONCE, on an empty data directory. A database
   # added in a later milestone therefore does NOT arrive by editing this file on
-  # an existing volume — it needs a migration Job (ledgers/debt.md D-002).
+  # an existing volume — that path is `scripts/postgres_databases.sh`, which the
+  # deploy recipe runs right after this manifest (D-002, landed M1-S4). This
+  # script stays because it is the empty-volume fast path; the desired state of
+  # the server is the DATABASES list in that script, and `mlflow` is in it too so
+  # the two can never disagree.
   10-mlflow.sh: |
     #!/bin/bash
     set -euo pipefail
@@ -102,9 +106,22 @@ spec:
         - name: initdb
           configMap: {name: postgres-initdb, defaultMode: 0755}
   volumeClaimTemplates:
-    - metadata: {name: data}
+    # THE SERVER-SIDE DEFAULTS ARE WRITTEN OUT ON PURPOSE (F-003, probed M1-S4).
+    # `volumeClaimTemplates` is an ATOMIC list in strategic-merge patch — it has
+    # no patchMergeKey, so kubectl cannot merge it element-wise and compares the
+    # whole list. The apiserver defaults apiVersion/kind/volumeMode/status into
+    # the live copy; a manifest that omits them therefore never equals the live
+    # list, and every `kubectl apply` re-sends the list and reports `configured`
+    # (proved by `kubectl apply -v=9`: the PATCH body is exactly this one field).
+    # Stating the defaults makes desired == live, so apply can say `unchanged`.
+    # storageClassName stays UNSET deliberately — kind's default is rancher
+    # local-path and the apiserver does not write it back, so naming it would
+    # buy nothing and cost portability.
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata: {name: data}
       spec:
         accessModes: [ReadWriteOnce]
-        # kind's default StorageClass is rancher local-path; leaving
-        # storageClassName unset takes it without naming a cloud-specific class.
+        volumeMode: Filesystem
         resources: {requests: {storage: 8Gi}}
+      status: {phase: Pending}

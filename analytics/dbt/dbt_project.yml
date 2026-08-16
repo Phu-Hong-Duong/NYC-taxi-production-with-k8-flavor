@@ -1,0 +1,57 @@
+name: taxi_marts
+version: "1.0.0"
+config-version: 2
+profile: taxi_marts
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# NOTHING LEAVES THIS MACHINE (gotcha #32, the dbt sibling of DVC's opt-out).
+# `uv add dbt-duckdb` pulled in `snowplow-tracker` — that is the telemetry
+# client, and it is opt-OUT by default. The program's charter is one sentence on
+# the subject ($0 budget, no cloud credentials exist here), so the default is a
+# violation that installs itself. Set in THREE places on purpose, because each
+# covers a different way dbt can be invoked:
+#   * here            — every run that uses this project
+#   * profiles.yml    — every run that uses this profile
+#   * scripts/marts.sh — DO_NOT_TRACK/DBT_SEND_ANONYMOUS_USAGE_STATS in the env,
+#                        which also covers `dbt --version` and any subcommand
+#                        that reads flags before the project file
+# Pinned by tests/unit/test_marts.py::test_dbt_telemetry_is_off so a future
+# `dbt init` on a fresh clone cannot quietly restore the default.
+flags:
+  send_anonymous_usage_stats: false
+
+models:
+  taxi_marts:
+    marts:
+      # The DEFAULT is a table: a mart is a published artifact a board queries,
+      # not a query someone re-runs. `trips_clean` overrides this to a view in
+      # its own config block — see the reason in that model's header.
+      +materialized: table
+      +schema: marts
+
+seeds:
+  taxi_marts:
+    redteam:
+      # Fixture rows that are DELIBERATELY out of contract. They enter a model
+      # only when `--vars '{red_team: true}'` is passed, which `make marts`
+      # never does. See seeds/redteam/README.md.
+      +enabled: true
+      +schema: marts
+      # Types are stated, not inferred: `UNION ALL BY NAME` against the real
+      # fact matches on name and would fail on a VARCHAR timestamp.
+      +column_types:
+        split: VARCHAR
+        month: VARCHAR
+        tpep_pickup_datetime: TIMESTAMP
+        tpep_dropoff_datetime: TIMESTAMP
+        PULocationID: BIGINT
+        DOLocationID: BIGINT
+        trip_distance: DOUBLE
+        fare_amount: DOUBLE
+        trip_duration_minutes: DOUBLE

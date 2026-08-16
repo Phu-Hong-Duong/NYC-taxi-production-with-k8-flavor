@@ -24,7 +24,7 @@ verify-m0: ## M0 gate: platform healthy + org docs present (BLUEPRINT §9/M0)
 	@bash scripts/verify_m0.sh
 
 # ---- M1 data & analytics platform (role:DE, role:DA) ----
-.PHONY: ingest data duckdb rebuild-proof marts deploy-metabase verify-m1
+.PHONY: ingest data duckdb rebuild-proof marts marts-redteam deploy-metabase verify-m1
 ingest: ## download->contract->clean->split, counted rejections, sha256 manifest (M1-S1)
 	uv run python -m taxi_mlops.data ingest
 data: ## ingest + duckdb layer + dvc add/push (byte-identical rebuilds; SKIP_DVC=1 leaves the pin alone)
@@ -33,8 +33,10 @@ duckdb: ## (re)build the DuckDB analyst views and reconcile their counts against
 	uv run python -m taxi_mlops.data duckdb
 rebuild-proof: ## wipe data/processed, rebuild from DVC-pinned raw, diff every sha256 (M1-S2 gate leg)
 	@bash scripts/rebuild_proof.sh
-marts: ## dbt build (tests incl.) + publish gold marts to Postgres (Flyte task from M4)
-	@echo "TODO(M1-S6): cd analytics/dbt && dbt build ; publish to postgres"
+marts: ## dbt build (models+tests) + publish gold marts to Postgres (SKIP_PUBLISH=1 stops at DuckDB)
+	@bash scripts/marts.sh
+marts-redteam: ## prove the dbt tests can fail: union the out-of-contract fixture, expect RED
+	@RED_TEAM=1 bash scripts/marts.sh
 deploy-metabase: ## Metabase container, app-db in Postgres, port 3030
 	@echo "TODO(M1-S7)"
 verify-m1: ## empty-cache rebuild + DVC match; corrupt-file refusal; dbt tests green (one red-teamed); boards render

@@ -81,6 +81,8 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | PyYAML | 6.0.3 | 2026-08-16 | `uv add pyyaml` (M1-S1) — configs/*.yaml are read by code from M1 on |
 | duckdb | 1.5.5 | 2026-08-16 | `uv add duckdb` (M1-S2). The analyst layer is VIEWS in this engine — it copies no rows |
 | dvc | 3.67.1 | 2026-08-16 | `uv add dvc` (M1-S2). A runtime dep, not dev: `make data` invokes it. **Analytics disabled at init** — see gotcha #32 |
+| dbt-core | **1.12.2** | 2026-08-16 | `uv run dbt --version` (M1-S4). Note it pulled **snowplow-tracker 1.1.0** in — the telemetry client. Opt-out is `flags.send_anonymous_usage_stats: false` in `dbt_project.yml` + `DO_NOT_TRACK=1` (gotcha #32's dbt sibling, now pinned by a test) |
+| dbt-duckdb | **1.11.0** | 2026-08-16 | `uv run dbt --version` (M1-S4). A runtime dep, not dev: `make marts` invokes it |
 | TLC yellow parquet (2019-01…08) | 8 files, sha256-pinned in `data/raw_manifest.json` | 2026-08-16 | `make ingest`; e.g. 2019-01 = `3ad95f39…26d`, 110,439,634 bytes. Manifest is timestamp-free by design: a diff = the bytes moved |
 | (FLAML/Optuna rows land at their milestones) | | | |
 
@@ -181,6 +183,49 @@ can never disagree (the port-family twins lesson, applied before it bit).
   Comparability warning: the Zoomcamp benchmark filters duration to **1–60 min**;
   ours is **1–120**, so our data holds 493,876 trips theirs discards.
 
+## The gold marts (M1-S4) — what is published, where, and the two rules that govern it
+- **`make marts` is the whole path**: `dbt build` (models AND tests, interleaved
+  — a red test stops the publish) → publish into database `marts`, schema
+  `marts`, in the ONE Postgres. `make marts-redteam` is its twin and must go RED.
+- **Four marts, not three.** `trips_clean` (56,127,878 rows) · `zone_hourly_stats`
+  (44,792) · `monthly_kpis` (8) · **`rejections_by_rule` (80)**. The fourth was
+  added deliberately: M1-S5's board must render **KPI-03**, Metabase can only
+  query Postgres, and `ingest_rejections` lives in DuckDB — an embedded engine no
+  served BI tool can reach. Its grain is (month, rule), so it could not be a
+  column on either aggregate.
+- **dbt SOURCES the analyst layer, attached read-only — it never reads parquet.**
+  `read_parquet` in a dbt model would give the repo a second definition of
+  `split` and `month` one directory from the first. Same rule for KPI-04's
+  documented domains: they come from `configs/data.yaml` as a `--vars` payload
+  that `scripts/marts.sh` reads, with **no default** — an absent var must fail
+  the build, because an empty domain list reports 100% undocumented and looks
+  like a catastrophe.
+- **How data reaches an in-cluster-only Postgres:** DuckDB → CSV on stdout →
+  `kubectl exec -i` → `psql \copy`. No port is published, no port-forward is
+  babysat, no run-time-downloaded DuckDB extension enters the build path.
+  Measured 2,000,000 rows / 104 MB in **1.9s (~55 MB/s)**.
+- **The honest cost of full-grain `trips_clean`, stated because it is real:**
+  ~13 GB in the Postgres volume, and a full-refresh publish holds the old table
+  AND the staging copy at once — **23 GB peak**, plus autovacuum working on the
+  table that is about to be dropped. M4 runs this monthly as a Flyte task and
+  should revisit it as an incremental model. It is published at full grain
+  anyway: a BI layer that cannot reach trip grain is not self-service, and
+  publishing an aggregate under a fact table's name would be a mart that lies.
+- **KPI ids are columns.** `monthly_kpis` carries one `kpi_NN_` column per id,
+  and `docs/kpi_definitions.md` now names the mart column for every id.
+  **KPI-09/KPI-10 are columns NOWHERE** (gotcha #15) — a test fails if they
+  appear. KPI-08's value and its **excluded-row count** travel together, by test.
+- **`accepted_range` and the grain check are OURS**, not `dbt_utils`: a $0,
+  every-version-pinned program does not fetch a package from dbt Hub inside its
+  build path for one macro.
+- **Two independent computations agreed, and that is the layer's best evidence.**
+  `monthly_kpis` computes KPI-04 from `trips_clean` + `configs/data.yaml`; its
+  eight monthly values sum to **527,386** — exactly M1-S3's figure, including the
+  219-trip double-count subtlety. KPI-08's monthly exclusions sum to **3,131**,
+  the EDA's number to the row. Neither was engineered to match.
+- **Boundary law in force** (ADR-009, gotcha #22): `grep -r "analytics"
+  src/taxi_mlops/` is empty and a unit test keeps it that way.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -209,6 +254,9 @@ test_platform_scripts.py` fails if they drift. Adding a port means
 | Ingest (M1-S1) | `make ingest` (`python -m taxi_mlops.data ingest [--month YYYY-MM]`) | VERIFIED 2026-08-16 (M1-S1): 8 months, 57,042,337 → 56,127,878 rows (1.603% rejected, per-rule table printed); re-run = all 8 outputs byte-identical + manifest unchanged. RED-TEAMED twice: seeded corrupt parquet → `CorruptSourceError` naming the file, exit 1, `processed/` never created; truncated pinned raw → `ChecksumDriftError`, exit 1, output sha256 and manifest pin both untouched |
 | Data path, whole (M1-S2) | `make data` (ingest → duckdb → dvc add+push; `SKIP_DVC=1` stops before the pin) | VERIFIED 2026-08-16 (M1-S2): composed run green end to end; DVC leg runs LAST because it pins what the earlier legs produced |
 | Analyst layer (M1-S2) | `make duckdb` (`python -m taxi_mlops.data duckdb`) | VERIFIED 2026-08-16 (M1-S2): 9 views, and the row count of every one of the 8 months equals the `rows_out` its ingest report claimed (56,127,878 total). Exits 1 when they disagree — RED-TEAMED in unit form by truncating a month's parquet and by inflating a report's `rows_out` |
+| Gold marts, whole (M1-S4) | `make marts` (dbt build incl. 34 tests → publish to Postgres; `SKIP_PUBLISH=1` stops at DuckDB) | VERIFIED 2026-08-16 (M1-S4): `dbt build` PASS=39 (4 models, 34 data tests, 1 seed) in 3.24s; publish printed `COPY 56127878` for `trips_clean` — exactly the ingest total — plus 44,792 · 8 · 80 for the aggregates. Re-run is a full refresh into `<name>__staging` swapped in inside ONE transaction, so a reader never sees a half-loaded mart (watched live: the old `trips_clean` still served 56,127,878 rows while `trips_clean__staging` filled) |
+| Prove the mart tests can FAIL | `make marts-redteam` | VERIFIED 2026-08-16 (M1-S4) — see the story's transcript. Unions `seeds/redteam/` (999.5-min and 0.2-min trips) and **inverts the exit code**: a GREEN build with impossible trips in it means the tests are not testing, and the script fails saying so. Never publishes |
+| Databases in the one Postgres (D-002) | `scripts/postgres_databases.sh` (step [5/7] of `make deploy-platform`; `DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S4) on the EXISTING volume (PGDATA initialised 15:47, `marts` created 17:44): run 1 `before = role absent, database absent` → `ok marts owner=marts`; run 2 `before = role present, database present`, nothing changed; `mlflow` no-op on both |
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
 | Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1 |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |

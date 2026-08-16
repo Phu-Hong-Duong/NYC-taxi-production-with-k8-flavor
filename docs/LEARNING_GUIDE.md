@@ -9,6 +9,83 @@ months from now.
 
 ## M1
 
+### M1-S4 — the number that agreed, and a `configured` that finally said `unchanged` (2026-08-16, role:DA + MLOps hat)
+
+**What was built.** A dbt project under `analytics/dbt/` building four marts —
+`trips_clean` (56,127,878 rows), `zone_hourly_stats` (44,792), `monthly_kpis`
+(8), `rejections_by_rule` (80) — with 34 dbt tests, published into the one
+Postgres by `make marts`. Plus D-002's landing (`scripts/postgres_databases.sh`,
+the path a database takes when initdb already ran) and F-003's close.
+
+**Why this way — three things worth the reader's time.**
+
+**(1) The publish opens no port, and that constraint improved the design.**
+Postgres is ClusterIP-only by charter, so the obvious moves — a NodePort, a
+port-forward, DuckDB's `postgres` extension — were each rejected for a reason
+worth naming (publishes a database on the laptop; a background process the
+recipe must babysit; a dependency downloaded at run time). What is left is
+DuckDB writing CSV to stdout piped through `kubectl exec -i` into `psql \copy`.
+It was measured *before* being designed around: 2,000,000 rows / 104 MB in
+**1.9s**. That measurement is why full-grain `trips_clean` was publishable at
+all — the estimate that would have killed it was wrong by an order of magnitude,
+and the only way to find that out was to run it.
+
+**(2) A number that agrees with a number nobody planned to compare.**
+`monthly_kpis.kpi_04_undocumented_rows` counts distinct rows carrying a value
+the TLC dictionary does not describe. It is computed here from `trips_clean` and
+the domains in `configs/data.yaml`, by a completely different route from M1-S3's
+one-off SQL. The eight monthly values sum to **527,386** — *exactly* the figure
+in `docs/kpi_definitions.md`, including the subtlety that summing the
+`unknown_domain_values` view instead would give 527,610 because 219 trips carry
+two undocumented values at once. Same for KPI-08's exclusions: 318+300+…+421 =
+**3,131**, the EDA's number to the row. Neither was engineered to match. Two
+independent implementations landing on the same integer is the cheapest strong
+evidence a data layer can produce, and it is worth deliberately setting up.
+
+**(3) `kubectl apply -v=9` prints the patch, and the patch was one field.**
+F-003 had been open since M0-S3: `kubectl apply` reported `configured` on every
+run for a manifest that changed nothing. The one-attempt probe asked kubectl what
+it was actually sending, and the answer was
+`{"spec":{"volumeClaimTemplates":[…]}}` — nothing else. `volumeClaimTemplates`
+is an **atomic** list in strategic-merge patch, so kubectl compares the whole
+list against the live object, into which the apiserver has defaulted
+`apiVersion`, `kind`, `volumeMode` and `status`. Our manifest omitted all four,
+so desired could never equal live. Writing them out produced the first
+`statefulset.apps/postgres unchanged` in the project's life, with generation
+still 1 and the pod's creationTimestamp untouched.
+
+**The concept underneath.** *A test you have not watched fail is a decoration,
+and the cheapest way to keep watching is to make the failure a command.* The
+protocol asks for one dbt test red-teamed on a seeded bad fixture. The easy
+version is to break something by hand, paste the red output, and put it back —
+which proves the test worked on one afternoon. Instead the fixture is checked in
+under `seeds/redteam/` and `make marts-redteam` unions it behind a dbt var,
+**inverting the exit code**: a green build with two impossible trips in it means
+the tests are not testing, and the script says so and fails. The run also taught
+something the README had predicted wrongly — the downstream tests do not go red,
+they go **SKIP** (19 of them), because `dbt build` interleaves tests with models
+and never hands a failing fact to the aggregates built on it. The README was
+corrected to say so; a prediction that survives contact unedited usually means
+nobody checked.
+
+**What to look at.** `scripts/marts.sh` (the two halves, and the rejected
+alternatives in its header) · `analytics/dbt/models/marts/monthly_kpis.sql` —
+read the KPI-04 comment for why the obvious source is the wrong one ·
+`analytics/dbt/seeds/redteam/README.md` · `scripts/postgres_databases.sh` (the
+`\gexec` + `WHERE NOT EXISTS` form, because `CREATE DATABASE` cannot live in a
+transaction) · `infra/manifests/postgres.yaml`'s `volumeClaimTemplates` block ·
+`tests/unit/test_marts.py`, where every test's docstring names the failure it
+prevents.
+
+**What to try yourself.** Run `make marts-redteam` and watch the SKIPs — then
+delete one line from `seeds/redteam/redteam_bad_trips.csv`'s duration column and
+watch `tests/unit/test_marts.py::test_red_team_fixture_violates_the_range_it_targets`
+catch you defusing your own red team. Then run
+`kubectl apply -f infra/manifests/postgres.yaml -v=9` and find the PATCH body:
+once you have seen kubectl show you its own diff, "it says configured but it
+changes nothing" stops being folklore.
+
+
 ### M1-S3 — 3,131 rows out of 56 million, and what a survey costs when you actually read the sources (2026-08-16, role:DA)
 
 **What was built.** Three documents and nothing else: `docs/eda_report.md`,
