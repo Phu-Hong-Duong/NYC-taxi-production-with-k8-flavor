@@ -1,5 +1,188 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (n) — M0-S3: platform up (MinIO + Postgres + MLflow), verify-m0 GREEN and red-teamed
+
+### State
+on-track / MERGED — EXECUTOR (**Opus 5, claude-opus-5**, stated first line),
+role-block **MLOps** (charter read at entry; refusals in play: no manual deploys
+— everything is a make target; no unpinned versions; no secrets in git or
+images; no "works on my machine" that skips destroy-and-rebuild; no hand-edits
+to cluster state the recipe cannot reproduce). PR #3 merged green as merge
+commit **e1fab16**; lineage proved: `git branch -r --contains d870851` →
+`origin/main` (gotcha #20), story branch deleted and pruned. The platform is
+**UP and GREEN** on kind `mlops-taxi`. **Next: M0-S4 (destroy/rebuild proof +
+mid-milestone STOP/resume drill) — the LAST story of M0.**
+
+### Staleness check of S2's "Next" (done first, per boot ritual)
+S2 claimed the cluster was up, 3 nodes Ready, namespaces written but unapplied.
+Verified, not assumed: `kind get clusters` → `mlops-taxi`; `kubectl get nodes -o
+wide` → 3× Ready v1.36.1 / containerd 2.3.1; `docker ps` → the three
+`kindest/node:v1.36.1` containers; `free -h` → 47Gi. Reality had not moved.
+It moved LATER in this session, on purpose: the kind config gained three host
+port mappings, which kind can only publish at create time, so the cluster was
+deliberately destroyed and rebuilt (`make cluster-down && make cluster-up`,
+exit 0) — a free re-proof of S2's idempotence work.
+
+### Done — M0-S3, every accept-when row with pasted output
+- **`make verify-m0` exits 0 with every sub-check printing** — 18 of them,
+  grouped: `ok kind cluster reachable — 3/3 nodes Ready` · `ok namespace
+  platform/mlflow exists` · `ok platform/statefulset/postgres ready (1/1
+  replicas)` · `ok database 'mlflow' exists, owned by role 'mlflow'` · `ok
+  MLflow schema is in Postgres — experiments table has 1 row(s)` · `ok
+  platform/deployment/minio ready (1/1 replicas)` · `ok bucket mlflow-artifacts
+  exists` · `ok MinIO user 'mlflow' exists (MLflow does not use the root
+  account)` · `ok MinIO S3 API answers on http://localhost:9000` · `ok
+  mlflow/deployment/mlflow ready (1/1 replicas)` · `ok MLflow /health on
+  http://localhost:5000 -> OK` · `ok MLflow UI payload served at
+  http://localhost:5000 (701 bytes of HTML)` · `ok MLflow REST API answers
+  (experiments/search)` · `ok artifact root is s3://mlflow-artifacts (MinIO),
+  not a container filesystem` · `ok all 11 org/ledger documents present and
+  non-empty` · `ok every charter carries >= 3 refusals` (PO 3 · DE 4 · DA 6 ·
+  MLE 6 · MLOps 5 · SRE 5 · ARCH 8 · REV 5) → `[verify-m0] GREEN — every M0
+  sub-check passed.`
+- **MLflow UI answers on http://localhost:5000** via a declared route, not a
+  port-forward: `curl` returns 701 bytes of HTML and `/health` returns `OK`.
+  `docker port mlops-taxi-control-plane` → `30500/tcp -> 0.0.0.0:5000`,
+  `30900/tcp -> 0.0.0.0:9000`, `30901/tcp -> 0.0.0.0:9001` (plus 8081/8443).
+- **RED-TEAM of verify-m0 (the accept-when's teeth, and it drew blood)** —
+  `kubectl -n mlflow scale deployment/mlflow --replicas=0` → `make verify-m0`
+  → **exit 1**, `[verify-m0] RED — 5 sub-check(s) failed`, naming
+  `mlflow/deployment/mlflow has 0/0 ready replicas`, `MLflow /health failed …
+  Connection reset by peer`, the UI, the REST API, and the artifact root. The
+  FIRST run of that red-team exposed a defect in my own script: `kubectl
+  rollout status` prints "successfully rolled out" and exits 0 for a Deployment
+  scaled to **zero**, so verify-m0 printed a green readiness line for a service
+  that had ceased to exist. Fixed (`workload_ready`: `readyReplicas >= 1` AND
+  `== spec.replicas`, rollout check kept because the two fail differently),
+  re-red-teamed, and written up as **gotcha #29**.
+- **A REPEAT `make deploy-platform` is idempotent — and repairs drift.** Run on
+  the live (deliberately broken) stack: `namespace/* unchanged`,
+  `configmap/postgres-initdb unchanged`, `service/postgres unchanged`,
+  `service/mlflow-nodeport unchanged`, `Release "minio" has been upgraded`
+  (REVISION 3), `Release "mlflow" has been upgraded` (REVISION 3), both
+  `successfully rolled out` — and the scaled-to-zero MLflow came back without a
+  human touching it. Then `make verify-m0` → GREEN again.
+- **`helm list -A`**: `minio / platform / rev 3 / deployed / minio-5.4.0 /
+  RELEASE.2024-12-18T13-15-44Z` and `mlflow / mlflow / rev 3 / deployed /
+  mlflow-1.11.4 / 3.15.1`.
+- **Secrets never entered git**: `git check-ignore -v .env` → `.gitignore:1:.env`,
+  and `.env` is absent from `git status` and from the PR. Six Kubernetes Secrets
+  are converged from it each deploy; the script prints names only, and a unit
+  test asserts no generated password appears in its output.
+- **CI green on the story's own PR**: run 31956278577 → `lint-test pass 12s`;
+  the log shows `All checks passed!` and `23 passed in 1.73s` — **no skips**, so
+  the 14 new tests really ran on the runner (openssl present on ubuntu-latest).
+  Merged `--merge --delete-branch`.
+- Field note written (LEARNING_GUIDE, M0-S3) BEFORE this handoff, per field-note
+  law. Ledgers: **D-002** opened (post-init database creation, landing M1 with a
+  quoted scope line), **F-003** opened (cosmetic StatefulSet `configured`),
+  deployments.md got its first row. gotchas **#28** and **#29** written, both
+  earned this session. CLAUDE.md: 7 new pin rows, the host-port routing rule,
+  and two Commands rows moved to VERIFIED.
+
+### Decisions (craft-level, inside story scope, undo verified)
+- **Postgres by plain manifest, NOT by helm.** bitnami/postgresql 18.8.9 — the
+  obvious chart — defaults to `registry-1.docker.io/bitnami/postgresql:latest`;
+  its pinned tags now live in the frozen `bitnamilegacy` registry (the MLflow
+  community chart itself ships `repository: bitnamilegacy/postgresql` with the
+  comment "temporary workaround because of bitnami's deprecation"). The charter
+  refuses unpinned versions, so the chart offered only an unpinned image or a
+  dependency on a deprecated registry. ~100 lines we own, image pinned by
+  DIGEST (`postgres@sha256:a2420e95…`). Undo: one `helm upgrade --install` if
+  upstream settles. `infra/helm/postgres/values.yaml` is kept, deliberately
+  empty, so a reader who greps for it is told where Postgres went.
+- **MLflow by community chart, and the reason is a missing driver, not taste.**
+  MLflow's own image (`ghcr.io/mlflow/mlflow`) ships without psycopg2 or boto3,
+  so Postgres-backend + S3-artifacts needs an image somebody builds — and M0
+  builds no image of ours (D-001 parks that at M4). Chart version 1.11.4 is the
+  pin; its image `burakince/mlflow:3.15.1` rides with it. NOTE for the pin
+  table: BLUEPRINT §7 hypothesised MLflow 3.13.0; live is **3.15.1**.
+- **Host routes are DECLARED (kind hostPort → fixed nodePort), not
+  port-forwarded.** `kubectl port-forward` is a process a human must remember
+  to start — a manual deploy step in disguise (charter). Cost, named honestly:
+  kind publishes ports only at create time, so this required destroying and
+  rebuilding the cluster, and any future port does too. MLflow needed its own
+  NodePort Service (`infra/manifests/mlflow-nodeport.yaml`) because the chart
+  exposes no `nodePort` field and a random one cannot be written into a recipe.
+  The hostPort↔nodePort pairs are twins across two files; three unit tests fail
+  if they drift.
+- **`.env` is generated ONCE and is then the source of truth.** Regenerating
+  passwords every deploy would be trivially "idempotent" and catastrophic — the
+  old password is already inside the Postgres data directory. So: generate if
+  absent, then converge Secrets to it every run (`create --dry-run=client |
+  apply`, which updates rather than erroring or silently keeping a stale
+  value). This is why `.env` sits on `destroy`'s DENY list.
+- **MLflow gets its own MinIO identity (`mlflow`, readwrite), and the chart's
+  default `console`/`console123` user is removed** by overriding the user list.
+  A leaked MLflow credential cannot then reconfigure the object store. The
+  access key is a username and lives in git; the secret key never does, and
+  `platform_secrets.sh` refuses to run if `.env` and the chart values disagree
+  about the name.
+- **Namespaces are applied by `deploy-platform`, not by `cluster-up`.**
+  cluster-up owns the machine (nodes, ports); deploy-platform owns what runs
+  inside it. That split is what lets S4's destroy/rebuild prove the two halves
+  separately.
+- **`mc` runs INSIDE the MinIO pod** for the bucket/user checks, using the pod's
+  own env vars — so no credential ever appears in an argument list, a process
+  table, or a session log.
+- **MLflow `workers: "1"`.** Not a tuning preference: four workers is what
+  OOM-killed it (below). One is the honest number for a single-user local
+  cluster; raise it when there is a second user.
+
+### Defects / Surprises
+- **gotcha #28 — MLflow died with clean logs.** First `make deploy-platform`
+  failed at `Error: context deadline exceeded` after 10 minutes. The pod logs
+  ended with `Application startup complete.` four times and no error. The truth
+  was in the pod object: `"reason":"OOMKilled","exitCode":137`. MLflow 3.x
+  serves under uvicorn with `--workers 4` by default — four full Python
+  processes each loading MLflow + SQLAlchemy + boto3 — through a 2Gi limit.
+  Being OOMKilled is not something a process gets to log. Read the pod object
+  BEFORE the log stream.
+- **gotcha #29 — my own gate lied about a service that was gone** (detail
+  above). The general form is worth more than the fix: *a check whose PASS
+  branch you have never watched be wrong is a check you have not tested.*
+- **F-003 (cosmetic): `kubectl apply` says `statefulset.apps/postgres
+  configured` on EVERY run**, never `unchanged`, which reads like a recipe that
+  mutates the cluster each time. Verified harmless rather than assumed:
+  `kubectl diff -f …` prints nothing, `metadata.generation` = 1 =
+  `status.observedGeneration`, and across three applies the pod kept its
+  original creationTimestamp with 0 restarts. Believed to be kubectl's
+  apply-patch bookkeeping for StatefulSets with `volumeClaimTemplates`. Logged,
+  not chased — and explicitly NOT to be "fixed" by dropping the volume claim.
+- **The MinIO chart's defaults are sized for a datacentre**: `mode: distributed`
+  with 16 replicas, `resources.requests.memory: 16Gi`, `persistence.size:
+  500Gi`. All three overridden with the reason written beside each. A default
+  is a decision somebody else made for a different machine.
+- **`make ports` now REFUSES while our own cluster is up** (it holds 5000/9000/
+  9001/8081/8443). That is S2's design working as intended — the pre-check runs
+  only on the create path — but the next session should not be surprised by a
+  standalone `make ports` failing on a healthy stack.
+- Allowlist friction unchanged from S2: `bash` is not allowlisted (everything
+  runs through `make`), compound commands are sometimes refused mid-chain, and
+  writes outside the repo — including `/tmp` — are sandboxed. AWAITING_PO
+  2026-08-16-2 (Option A paste) is **still unanswered**; still non-blocking.
+- No walls hit (the OOM was diagnosed on attempt 1 of 3). Nothing parked. No new
+  forks — every choice above was craft-level, inside story scope, with a named
+  undo.
+
+### Next
+1. **M0-S4 — destroy/rebuild proof + mid-milestone STOP/resume drill** (kickoff
+   §Stories), the LAST story of M0. Starting state: cluster `mlops-taxi` UP,
+   platform GREEN, `.env` present with live credentials.
+   - `make destroy` → `make cluster-up deploy-platform` → `make verify-m0` green
+     again. NOTE what destroy does and does not touch: it deletes the cluster
+     (and with it every PVC — Postgres and MinIO data are gone by design) but
+     NOT `.env`, so the rebuilt platform comes back with the SAME credentials.
+     That is the point of the deny list; say so in the evidence.
+   - `make destroy` has never been run end-to-end (S2 unit-tested only the
+     dangerous half). Its full cycle is this story's accept-when.
+   - Then the drill the M0 gate requires: `touch automation/STOP` →
+     `automation/next_session.sh executor 60` → observe the refusal → `rm
+     automation/STOP` → schedule the real successor.
+2. M0 is NOT ◆-marked → after S4 the exit is ritual (c):
+   `automation/next_session.sh architect 120`.
+3. Optional, PO's hands, non-blocking: AWAITING_PO 2026-08-16-2 (allowlist).
+
 ## Session 2026-08-16 (m) — M0-S2: idempotent cluster-up, port pre-check red-teamed, node image pin CONFIRMED
 
 ### State
