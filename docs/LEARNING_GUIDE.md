@@ -7,6 +7,85 @@ months from now.
 
 ---
 
+## M1
+
+### M1-S1 — A contract that can say no, and 914,459 rows that were counted out loud (2026-08-16, role:DE)
+
+**What was built.** `taxi_mlops.data` became real: `make ingest` downloads the
+eight configured months (skip-if-present, retried, sha256-pinned in
+`data/raw_manifest.json`), reads them, applies a **year-aware pandera contract**
+and the one and only dtype cast in the codebase, derives
+`trip_duration_minutes`, drops impossible rows against **named, counted rules**,
+re-validates the result against an output contract, and writes each month under
+its split. 57,042,337 rows in, 56,127,878 out, 914,459 rejected — 1.603%, every
+one of them attributable to a rule by name. Two red-teams: a seeded corrupt
+parquet (`CorruptSourceError`, exit 1, `processed/` never created) and a
+truncated pinned file (`ChecksumDriftError`, exit 1, the existing output's
+sha256 and the manifest pin both untouched). 57 unit tests, no cluster, no
+network.
+
+**Why this way.** Three choices did most of the work.
+
+*(1) Structure refuses; rows get counted.* A missing, renamed, or unknown column
+refuses the entire month — you cannot drop your way out of a column that isn't
+there. A passenger count of 42 is one bad row, so it is counted against
+`passenger_count_out_of_range` and dropped. Collapsing those two into one
+mechanism is how data pipelines end up either crashing on a typo or silently
+shipping a thinned month; `max_rejected_fraction` (0.10) is the seam between
+them — past it, cleaning becomes refusal again.
+
+*(2) Two counts per rule.* `rejected_by` attributes each dropped row to the
+**first** rule it violates, so the column sums exactly to rows-dropped and the
+table balances. But that alone makes any rule sitting behind an overlapping
+earlier one read `0` — indistinguishable from a rule that has stopped working.
+So `matched` reports independent hits alongside. In 2019-01 the difference is
+loud: `distance_non_positive` shows 11,446 attributed against 55,089 matched —
+44 thousand zero-distance trips were *already* rejected as too short. One number
+would have hidden that; two make it a fact about the data.
+
+*(3) `nullable: false` in the config means a POST-clean guarantee.* The input
+contract is deliberately permissive about nulls, because raw is raw. The output
+contract enforces the guarantee *after* the rules have run — which turns it into
+a live check on the rules themselves. If `location_out_of_range` ever stops
+firing, the output contract refuses the month instead of handing an out-of-range
+zone id to a model six milestones later. There is a test that breaks that rule
+on purpose to watch it happen.
+
+**The concept underneath.** *Schema drift has three shapes, and only one of them
+is loud.* Gotcha #6 said TLC adds columns by year, so the contract was built
+year-aware. Diffing 2019's arrow schema against a live 2025 probe — 30 seconds
+of curl, because the project's rule is observe-don't-remember — showed the other
+two shapes. `airport_fee` becomes **`Airport_fee`**: same field, capital A. And
+six columns change physical type (`VendorID` int64→int32, `passenger_count`
+double→int64, and so on). An *added* column announces itself the first time
+something asks for it. A *renamed* one hands you an all-null column that looks
+exactly like missing data. A *retyped* one doesn't complain at all — it just
+makes two years quietly disagree. That is now gotcha #31, and the contract
+answers all three the same way: `aliases` that are announced when applied, and
+one canonical cast that makes every year the same table by construction rather
+than by luck. The general lesson is worth more than the taxi data:
+`set(columns) == set(columns)` is not "the schema is stable" — diff the types
+too, and diff case-insensitively before you conclude anything is new.
+
+**What to look at.** `configs/data.yaml` — read the comments as much as the
+values; each number is there because something was observed, and the file says
+what · `src/taxi_mlops/data/contract.py` docstring, which states the
+structure-refuses/rows-get-counted split in four lines · the two-column
+rejection table any `make ingest` prints · `tests/unit/test_data_clean.py::
+test_every_named_rule_fires_exactly_once`, which builds one victim row per rule
+so that no rule can be decorative · `docs/gotchas.md` #31.
+
+**What to try yourself.** Truncate a raw file (`head -c 5000000 x.parquet`) and
+run `make ingest` — watch it refuse at the *pin*, before it ever opens the
+parquet, then confirm the existing output's sha256 didn't move. Then delete that
+month's entry from `data/raw_manifest.json` and run again: now the same file
+reaches the reader and refuses with a different typed error. Two failures, two
+names, two places — that is what "typed refusal" buys. Finally, set
+`on_unknown_column: warn` in `configs/data.yaml`, add a junk column to a frame
+in the tests, and decide for yourself which policy you'd want at 3am.
+
+---
+
 ## M0
 
 ### M0-S4 — Destroying it on purpose, and a preview that wasn't (2026-08-16, role:MLOps + SRE hat)
