@@ -1,5 +1,81 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (p) — ARCH boundary: **M0 CLEANLY CLOSED** (tagged), M1 kickoff authored, chain continues
+
+### State
+on-track — ARCH (**Fable 5, claude-fable-5**, stated first line), M0 boundary
+session per ORG.md rule 7 / ADR-010 (triage → author → continue). M0 is
+**closed and tagged `m0-closed`**; `docs/milestones/M1_KICKOFF.md` is
+authored; the sign-off ledger holds its first row; the chain is scheduled to
+continue (`automation/next_session.sh executor 120`, bottom of this entry).
+**Next: EXECUTOR runs M1-S1 (role:DE — ingest + data contract).**
+
+### Triage (job 1) — every step with live evidence
+- **`make verify-m0` re-run at the boundary: GREEN, exit 0, 18/18 `ok`** —
+  including `ok database 'mlflow' exists, owned by role 'mlflow'`, `ok MLflow
+  /health on http://localhost:5000 -> OK`, `ok every charter carries >= 3
+  refusals` (PO 3 · DE 4 · DA 6 · MLE 6 · MLOps 5 · SRE 5 · ARCH 8 · REV 5).
+- **Lineage spot-check (gotcha #20)**: `git branch -r --contains c6a3a7e` →
+  `origin/main`; tree clean at `7811438`, level with origin.
+- **Dispositions, none silent** (full table in kickoff §0): F-004 FIXED
+  (closed M0-S4, red-teamed regression) · F-002 FIXED (closed by its own
+  condition (b)) · F-003 CARRY as open finding by its own conditions, bounded
+  one-attempt probe folded into M1-S4 (annotated in ledger; deliberately NOT
+  debt) · F-001 = standing PO fork (AWAITING_PO 2026-08-16-2, non-blocking)
+  · **D-002 intaken at the M1 kickoff — absorbed into M1-S4** (existing-volume
+  proof) with S5's rebuild exercising the fresh-volume path; ledger row
+  annotated · D-001 restated CARRY to M4 with its quoted scope re-verified.
+- **The M0 sign-off row S4 flagged is WRITTEN**: `ledgers/signoffs.md` row 1 —
+  producer EXEC/MLOps (S1–S4, PRs #1–#4), approver ARCH/Fable (this session),
+  verdict PASS, evidence incl. this boundary re-run. Producer ≠ approver
+  (ORG.md rule 2) holds; no self-sign-off — the producer of every M0 story was
+  the executor's MLOps, the approver is ARCH.
+- **Verdict: CLEANLY CLOSED**; tag `m0-closed` on this session's commit.
+
+### Authored (job 2) — docs/milestones/M1_KICKOFF.md
+Five stories, each one executor session, mapped to §9/M1 (kickoff S4/S5 =
+blueprint's "S6/S7"): **S1** ingest + pandera contract + counted rejections +
+corrupt-file refusal (DE) · **S2** DVC + byte-identical rebuild from pinned
+raw (gotcha #6) + DuckDB analyst layer + Data Contract Review ritual minutes
+(DE, DA hat) · **S3** EDA + KPI ids + prior-art ≥6 live verdicts (DA) ·
+**S4** dbt marts + red-teamed tests + publish to Postgres, **lands D-002** on
+the existing volume + F-003 bounded probe (DA, MLOps hat) · **S5** Metabase +
+two boards + `make verify-m1` red-teamed (MLOps + DA).
+Preconditions verified LIVE this session: TLC URL `HTTP/2 200`
+(`content-length: 110439634`, real CA — gotcha #9 clean) · disk `free=953Gi` ·
+months = 2019-01…08 from `configs/train.yaml` · deps not yet added (correct;
+`uv add` live at their stories).
+**Planning catch worth the read: port 3030 (Metabase) is in the port family
+but NOT in the kind config's hostPorts — and kind publishes only at CREATE
+time. So M1-S5 opens with a DELIBERATE cluster rebuild** (MLflow verified to
+hold only `Default`, so nothing of value dies; marts return via `make marts`;
+the rebuild doubles as D-002's fresh-volume proof). Planned now, not
+discovered at 3am.
+
+### Decisions
+- **F-003 stays a finding, not debt** — it is an observation defect with a
+  defined closure, and no §9 milestone scope covers "kubectl apply noise"
+  honestly (a carry needs a QUOTED covering scope, gotcha #19; dressing one up
+  would be the exact drift that rule exists to stop). Probe bounded to one
+  attempt inside M1-S4, which touches that manifest anyway.
+- **M0 sign-off approver = ARCH**, not REV: M0 carries no ◆, and rule 2 needs
+  producer ≠ approver, which holds. REV's first mandatory gate remains M2.
+- Kickoff runs 5 stories (template says 3–5): the v2.5 DA-track expansion is
+  absorbed by story count, not by fatter stories.
+
+### Defects / Surprises
+- None in execution. One allowlist friction echo: a compound
+  `make verify-m0 … ; echo` was refused; bare `make verify-m0` ran (F-001
+  behavior, known). The kickoff's risk table restates the workarounds.
+
+### Next
+1. **EXECUTOR: M1-S1** per `docs/milestones/M1_KICKOFF.md` (role:DE; read the
+   DE charter at entry; block header per Prompt D). Starting state: cluster
+   UP, platform GREEN, tree clean on `main`, tag `m0-closed` pushed.
+2. Then S2→S5 in order; each safe-stops after merge. M1 carries no ◆ → exit
+   ritual (c): S5 schedules `automation/next_session.sh architect 120`.
+3. Standing, PO's hands, non-blocking: AWAITING_PO 2026-08-16-2 (allowlist).
+
 ## Session 2026-08-16 (o) — M0-S4: destroy/rebuild proof, STOP drill, and a DRY_RUN that deleted the cluster — **M0 COMPLETE**
 
 ### State
