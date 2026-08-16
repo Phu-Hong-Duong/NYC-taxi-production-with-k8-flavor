@@ -69,6 +69,7 @@ class DataConfig:
     contract: dict[str, Any]
     clean: dict[str, Any]
     write: dict[str, Any]
+    analyst: dict[str, Any]
     splits: Splits
 
     def path_for(self, key: str) -> Path:
@@ -101,5 +102,6 @@ def load_config(
         contract=raw["contract"],
         clean=raw["clean"],
         write=raw["write"],
+        analyst=raw["analyst"],
         splits=load_splits(train_config),
     )

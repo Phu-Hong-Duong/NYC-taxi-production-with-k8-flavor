@@ -79,8 +79,10 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | pandera | 0.32.1 (`import pandera.pandas as pa`) | 2026-08-16 | `uv add pandera` (M1-S1) |
 | numpy | 2.5.2 | 2026-08-16 | transitive via pandas (M1-S1) |
 | PyYAML | 6.0.3 | 2026-08-16 | `uv add pyyaml` (M1-S1) — configs/*.yaml are read by code from M1 on |
+| duckdb | 1.5.5 | 2026-08-16 | `uv add duckdb` (M1-S2). The analyst layer is VIEWS in this engine — it copies no rows |
+| dvc | 3.67.1 | 2026-08-16 | `uv add dvc` (M1-S2). A runtime dep, not dev: `make data` invokes it. **Analytics disabled at init** — see gotcha #32 |
 | TLC yellow parquet (2019-01…08) | 8 files, sha256-pinned in `data/raw_manifest.json` | 2026-08-16 | `make ingest`; e.g. 2019-01 = `3ad95f39…26d`, 110,439,634 bytes. Manifest is timestamp-free by design: a diff = the bytes moved |
-| (FLAML/Optuna/DuckDB rows land at their milestones) | | | |
+| (FLAML/Optuna rows land at their milestones) | | | |
 
 ## The data contract (M1-S1) — where the rules actually live
 Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT
@@ -100,6 +102,38 @@ can never disagree (the port-family twins lesson, applied before it bit).
   than shipped.
 - Observed 2019 rejection rate: **1.60% over 57.0M rows** (8 months, per-rule
   table printed by `make ingest` and written beside every output).
+
+## The analyst layer + DVC (M1-S2) — how data is pinned and how it is asked
+- **`make data` is the whole path**, in one order that is not negotiable:
+  ingest → duckdb → `dvc add` + `dvc push`. DVC runs LAST because it pins what
+  the earlier steps produced. `SKIP_DVC=1` exists for exactly one caller —
+  `make rebuild-proof` — because a proof must never refresh the pin it is judged
+  against (gotcha #33).
+- **The analyst layer is VIEWS, not copies** (`data/analyst.duckdb`, rebuilt by
+  `make duckdb`). The DA cites names — `trips_clean`, `trips_{train,val,test}`,
+  `ingest_months`, `ingest_rejections`, `raw_manifest`, `data_health`,
+  `unknown_domain_values` — never a parquet path. `split` and `month` are
+  literals from `configs/train.yaml`, never parsed from a filename: a renamed
+  file must not be able to relabel data.
+- **The catalogue reconciles or it fails.** `make duckdb` exits 1 if any view's
+  row count disagrees with the ingest report that wrote the data. A catalogue
+  pointing at five months of eight answers every query happily, just smaller.
+- **`known_domains` documents, it does not enforce** (`configs/data.yaml:
+  analyst`). Added by the Data Contract Review; feeds `unknown_domain_values`,
+  which reports what the data contains and the TLC dictionary does not describe.
+  Observed 2019: `VendorID 4` (264,661) · `payment_type 0` (261,781) ·
+  `RatecodeID 99` (949) · `VendorID 5` (219, and it appears NOWHERE else) —
+  each in all 8 months. Drift by VALUE is the sibling of gotcha #31's drift by
+  column, and it is the quieter one.
+- **DVC remote: `/home/longt/dvc-remote/nyc-taxi`** — a plain directory outside
+  the repo. Deliberately NOT MinIO: MinIO lives on a PVC in the kind cluster and
+  `make destroy` takes PVCs with it, so that "backup" would die with the thing
+  it was meant to survive. Honest limit: same physical disk — it survives
+  `make destroy` and a wrong `rm -rf` in the repo, not disk loss.
+  **`core.analytics = false`**, set at init and pinned by a test (gotcha #32).
+- **`data/.gitignore` is DVC's and is the only copy.** The root `.gitignore` no
+  longer names `data/raw` or `data/processed`; two copies would be twins, and a
+  stale root entry would keep hiding the data if DVC tracking were ever lost.
 
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
@@ -127,6 +161,10 @@ test_platform_scripts.py` fails if they drift. Adding a port means
 | Platform | `make deploy-platform` | VERIFIED 2026-08-16 (M0-S3): MinIO + Postgres + MLflow up; re-run on the live stack = clean upgrade (helm rev 3, namespaces/service/configmap `unchanged`) and it REPAIRED a hand-inflicted `scale --replicas=0` |
 | Gate check M0 | `make verify-m0` | VERIFIED 2026-08-16 (M0-S3): 18 sub-checks GREEN, exit 0; RED-TEAMED by scaling MLflow to 0 → exit 1 naming 5 failures. Secrets come from `.env` (gitignored) via `scripts/platform_secrets.sh` — never printed, never committed |
 | Ingest (M1-S1) | `make ingest` (`python -m taxi_mlops.data ingest [--month YYYY-MM]`) | VERIFIED 2026-08-16 (M1-S1): 8 months, 57,042,337 → 56,127,878 rows (1.603% rejected, per-rule table printed); re-run = all 8 outputs byte-identical + manifest unchanged. RED-TEAMED twice: seeded corrupt parquet → `CorruptSourceError` naming the file, exit 1, `processed/` never created; truncated pinned raw → `ChecksumDriftError`, exit 1, output sha256 and manifest pin both untouched |
+| Data path, whole (M1-S2) | `make data` (ingest → duckdb → dvc add+push; `SKIP_DVC=1` stops before the pin) | VERIFIED 2026-08-16 (M1-S2): composed run green end to end; DVC leg runs LAST because it pins what the earlier legs produced |
+| Analyst layer (M1-S2) | `make duckdb` (`python -m taxi_mlops.data duckdb`) | VERIFIED 2026-08-16 (M1-S2): 9 views, and the row count of every one of the 8 months equals the `rows_out` its ingest report claimed (56,127,878 total). Exits 1 when they disagree — RED-TEAMED in unit form by truncating a month's parquet and by inflating a report's `rows_out` |
+| Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
+| Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1 |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |

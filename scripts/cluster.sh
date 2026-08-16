@@ -27,6 +27,7 @@ fi
 REGENERABLE=(
   "data/processed"    # rebuilt by `make data`
   "data/interim"      # rebuilt by `make data`
+  "data/analyst.duckdb"  # the DuckDB catalogue: views over data/processed, rebuilt by `make duckdb`
   "mlruns"            # local MLflow store; the cluster's store is in Postgres/MinIO
   ".pytest_cache"
   ".ruff_cache"

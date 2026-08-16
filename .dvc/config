@@ -1,0 +1,6 @@
+[core]
+    analytics = false
+    autostage = true
+    remote = localstore
+['remote "localstore"']
+    url = /home/longt/dvc-remote/nyc-taxi

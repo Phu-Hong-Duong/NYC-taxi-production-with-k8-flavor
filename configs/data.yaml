@@ -89,6 +89,30 @@ clean:
   # Observed 2019 months reject ~2-3%; the ceiling is deliberately not snug.
   max_rejected_fraction: 0.10
 
+analyst:
+  # The DuckDB analyst layer (M1-S2). PATHS are knobs; the VIEW DEFINITIONS are
+  # code (taxi_mlops.data.analyst) -- a view name is a contract cited by the EDA
+  # report, the dbt sources and the Metabase boards, so it belongs in reviewed
+  # code, not in a value anyone can retune. The file is regenerable from
+  # data/processed/ by `make data`, so it is gitignored and on destroy's
+  # regenerable allowlist.
+  database_path: "data/analyst.duckdb"
+
+  # Documented domains from the TLC data dictionary. REPORTING ONLY: nothing
+  # here rejects a row or refuses a month -- it feeds the `unknown_domain_values`
+  # view, which reports what the data contains but the dictionary does not
+  # describe. Added at M1-S2 after the Data Contract Review (DCR-02/DCR-04):
+  # 2019 ships VendorID 4 and 5, RatecodeID 99 and payment_type 0, none of which
+  # are in the dictionary, and payment_type 0 in particular reads on a dashboard
+  # as a payment CATEGORY rather than as the vendor null-batch marker it is.
+  # A documented domain is not an enforced domain, and the view names the gap
+  # rather than pretending it away (gotcha #31's family: drift by VALUE).
+  known_domains:
+    VendorID:           [1, 2]
+    RatecodeID:         [1, 2, 3, 4, 5, 6]
+    payment_type:       [1, 2, 3, 4, 5, 6]
+    store_and_fwd_flag: ["Y", "N"]
+
 write:
   # Pinned so S2's byte-identical rebuild has a fixed writer contract to prove.
   compression: snappy

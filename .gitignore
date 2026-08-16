@@ -2,8 +2,13 @@
 .venv/
 __pycache__/
 *.pyc
-data/raw/
-data/processed/
+# data/raw and data/processed are DVC's from M1-S2 on: `dvc add` wrote them into
+# data/.gitignore, which is the tracked, authoritative entry. Repeating them here
+# would be twins — and a stale copy here would keep hiding the data even if the
+# DVC tracking were removed by accident, which is exactly the failure you want loud.
+# The DuckDB catalogue is regenerable: `make duckdb`.
+data/analyst.duckdb
+data/analyst.duckdb.wal
 mlruns/
 .dvc/cache/
 .pytest_cache/
