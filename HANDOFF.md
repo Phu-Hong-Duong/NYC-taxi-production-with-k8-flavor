@@ -1,5 +1,138 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (m) — M0-S2: idempotent cluster-up, port pre-check red-teamed, node image pin CONFIRMED
+
+### State
+on-track / MERGED — EXECUTOR (**Opus 5, claude-opus-5**, stated first line),
+role-block **MLOps** (charter read at entry; refusals in play: no manual deploys
+— everything is a make target; no unpinned versions; no secrets in git; no
+hand-edits to cluster state the recipe cannot reproduce). PR #2 merged green as
+merge commit **200ca8e**. The kind cluster `mlops-taxi` is **UP** (3 nodes
+Ready) — that is S3's starting state. **Next: M0-S3 (platform + verify-m0).**
+
+### Staleness check of S1's "Next" (done first, per boot ritual)
+S1 claimed "no kind cluster exists". Verified, not assumed: `kind get clusters`
+→ `No kind clusters found.`, `docker ps` → header row only, `free -h` → 47Gi,
+`git status` clean and level with origin/main. One thing S1 could not know:
+`kubectl config get-contexts` showed a pre-existing `docker-desktop` context as
+current — harmless (Docker Desktop's own k8s is not running), but it is why
+`cluster.sh` addresses the cluster with an explicit `--context kind-mlops-taxi`
+instead of trusting whatever "current" happens to be.
+
+### Done — M0-S2, every accept-when row with pasted output
+- **`make ports` (gotcha #10 pre-check)** → `[ports] OK — all 10 required ports
+  free: 3000 3030 5000 5432 8080 8081 8443 9000 9001 9091`. The 10th is 8443,
+  parsed out of the kind config — the script checks the CLAUDE.md family PLUS
+  every `hostPort:` in `infra/kind/kind-config.yaml`, so the recipe stays the
+  source of truth for what kind actually binds.
+- **RED-TEAM (the accept-when's teeth)** — dummy listener bound on 0.0.0.0:5000:
+  `make ports` → **exit 2**, `[ports] REFUSING: 1 of 10 required ports are
+  already in use. / port 5000 (MLflow UI) held by: LISTEN 0 128 0.0.0.0:5000
+  ... users:(("python3",pid=19066,fd=3))`. Same refusal **through `make
+  cluster-up`** (exit 2, nothing created — the check is wired in, not merely
+  standalone). Listener closed → `make ports` → exit 0, all free.
+- **Idempotence, full lifecycle, every exit code observed 0**: `make cluster-up`
+  (creates) → `make cluster-up` (`cluster 'mlops-taxi' already exists — no-op.`)
+  → `make cluster-down` (deletes) → `make cluster-down` (`already absent —
+  no-op.`) → `kind get clusters` (`No kind clusters found.`) → `make cluster-up`
+  (re-creates) → `make cluster-up` (no-op).
+- **`kubectl get nodes`** → `mlops-taxi-control-plane / worker / worker2` all
+  **Ready**, v1.36.1, containerd://2.3.1, Debian 13 (trixie).
+- **Node image pin CONFIRMED** — the open question S1 left in the pin table
+  ("S2 must confirm it is what `kind create cluster` actually pulls"): create
+  printed `Ensuring node image (kindest/node:v1.36.1)` and `docker inspect
+  mlops-taxi-control-plane` returned `kindest/node:v1.36.1@sha256:3489c767…
+  78f7ebd5` — the exact digest S1 extracted from the binary. Then pinned
+  EXPLICITLY per node in the kind config and re-verified by a from-scratch
+  `cluster-down` → `cluster-up` (exit 0, same digest).
+- **`make destroy` implemented**, verified by unit test rather than by running
+  it (see Decisions): regenerable allowlist (`data/processed`, `data/interim`,
+  `mlruns`, `.pytest_cache`, `.ruff_cache`) screened by a deny guard that
+  realpath-resolves before deleting — `data/raw`, `.env`, `.git`, `.dvc/cache`,
+  `.venv` are unreachable even via symlink or repo-escape. `DRY_RUN=1` previews.
+- **CI green on the story's own PR**: run 31954734573 → `lint-test pass 12s`;
+  the log shows `All checks passed!` and `9 passed in 1.31s` — **no skips**, so
+  the new port tests really ran on the runner too (`ss` present on
+  ubuntu-latest). Merged `--merge --delete-branch`; lineage proved: `git branch
+  -r --contains 054eadf` → `origin/main` (gotcha #20).
+- Field note written (LEARNING_GUIDE, M0-S2) BEFORE this handoff, per field-note
+  law. Ledgers: **D-001** opened (images→kind decision carried to M4 with a
+  quoted BLUEPRINT line), **F-002** opened (WSL port-visibility limit).
+
+### Decisions (craft-level, inside story scope, undo verified)
+- **The port pre-check runs ONLY on the create path.** Once our cluster is up it
+  holds 8081/8443 itself — proven, not assumed: `ss -tlnp` after cluster-up
+  shows `0.0.0.0:8081` and `0.0.0.0:8443`. Checking on the no-op path would make
+  `cluster-up` refuse *because it had succeeded*, killing idempotence. Undo:
+  move one line.
+- **Strict on all nine family ports, including 5432** (annotated "in-cluster
+  only" in CLAUDE.md, so nothing of ours binds it on the host). A host listener
+  there means a foreign Postgres, which is exactly the fleet smell gotcha #10
+  exists to catch. No bypass flag was added on purpose: an override that an
+  unattended session could reach for is a check that will eventually be talked
+  out of refusing. If it ever produces a false refusal, that is a PO fork.
+- **Node image pinned by digest although it equals kind 0.32.0's default.** The
+  charter refuses unpinned versions; a default is a decision someone else can
+  change on your behalf, and this one silently moves the Kubernetes version.
+- **`destroy` was NOT run end-to-end this session.** Its full cycle
+  (destroy → cluster-up → deploy-platform → verify-m0) is M0-S4's accept-when,
+  and spending the cluster here would have bought a weaker version of that
+  proof. Instead the *dangerous* half is unit-tested against a sandbox copy
+  whose kind config names a cluster that cannot exist: a real `data/raw` file,
+  `.env` and `.dvc/cache` blob all survive a real (non-dry-run) destroy while
+  `data/processed` is removed, and four bad paths (`data/raw`, `.env`,
+  `data/raw/../raw/subdir`, `../outside-the-repo`) each make it exit 1 without
+  deleting. Named plainly so S4 does not read "implemented" as "proven".
+- **`.dvc/cache` is on the deny list**, though "cache" sounds regenerable: with
+  a local-only DVC remote it is the only copy. Regenerable = you can name the
+  command that rebuilds it.
+- **Scripts are invoked as `bash scripts/…` from the Makefile and left
+  non-executable.** Sidesteps gotcha #25's exec-bit class entirely (a 100644
+  script that is never executed directly cannot break a fresh clone).
+  `automation/next_session.sh` still needs its 755 — it is called directly.
+- **`TODO(M0): local registry pattern OR kind load` in the kind config was NOT
+  decided.** M0 runs no image of ours; deciding now would be a guess ratified by
+  nothing. Converted from an undated TODO into **debt D-001** with a landing
+  milestone and a quoted scope line (M4, "containerized"), and the comment
+  re-tagged `TODO(M4)` so it cannot drift back.
+
+### Defects / Surprises
+- **The allowlist behaved differently than S1 reported, in both directions.**
+  Simple `cat`/`pwd` calls passed early this session, but a longer compound
+  chain was refused mid-command (`This command contains multiple operations…`),
+  and **`bash` is not allowlisted at all** — so the scripts could only ever be
+  run through `make` (allowlisted) or `uv run pytest`. That is a happy accident
+  for design (it forced everything to be a make target, which the MLOps charter
+  demands anyway) but the next session should not expect S1's exact friction
+  map. AWAITING_PO 2026-08-16-2 (Option A paste) is **still unanswered** — the
+  allowlist in `.claude/settings.local.json` is unchanged. Still non-blocking.
+- **Writes outside the repo are sandboxed** — even `/tmp` (`git commit -F` had
+  to stage its message inside `.git/`). Worth knowing before a session plans to
+  scratch-write anywhere.
+- **`ss` inside WSL cannot see Windows-native listeners** (F-002), yet Docker
+  Desktop publishes ports on the Windows host too — so a clean pre-check does
+  not prove a Windows-side port is free. Documented in the script header with
+  the `Get-NetTCPConnection` follow-up. Confirmed sound for everything inside
+  the VM: our own kind ports do show up in `ss`.
+- No walls hit. Nothing parked.
+
+### Next
+1. **M0-S3 — platform services + verify-m0 green** (kickoff §Stories): `make
+   deploy-platform` (helm upgrade --install MinIO + Postgres + MLflow, values
+   under `infra/helm/*`, MLflow backend-store = platform Postgres, artifacts =
+   MinIO bucket, buckets created, wait Ready) and `make verify-m0` (kubectl
+   waits + MLflow health on :5000 + bucket listing + org docs present + every
+   ROLES.md charter carrying ≥3 REFUSES; nonzero on any miss). Starting state:
+   cluster `mlops-taxi` **UP**, 3 nodes Ready, namespaces NOT yet applied
+   (`infra/manifests/namespaces.yaml` is written but unapplied — S3's call
+   whether it belongs in `deploy-platform`). Craft note from the kickoff still
+   stands: community chart vs plain manifests, 3-attempt wall per chart.
+   `make ports` before deploying: it now says no for real.
+2. Then S4 (destroy/rebuild + the mid-milestone STOP/resume drill). M0 is NOT
+   ◆-marked → after S4 the exit is ritual (c): `automation/next_session.sh
+   architect 120`.
+3. Optional, PO's hands, non-blocking: AWAITING_PO 2026-08-16-2 (allowlist).
+
 ## Session 2026-08-16 (l) — M0-S1: WSL residency verified, toolchain installed, pins recorded, FIRST GREEN CI merged
 
 ### State
