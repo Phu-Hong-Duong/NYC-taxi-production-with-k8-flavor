@@ -9,6 +9,77 @@ months from now.
 
 ## M0
 
+### M0-S4 — Destroying it on purpose, and a preview that wasn't (2026-08-16, role:MLOps + SRE hat)
+
+**What was built.** Nothing new, and that is the story: the platform three
+sessions had carefully assembled was deleted (`make destroy`) and rebuilt from
+the recipe alone (`make cluster-up deploy-platform`), then re-gated
+(`make verify-m0` → 18/18 GREEN, exit 0). Both helm releases came back at
+`REVISION 1` — the proof it was a genuinely fresh cluster and not an upgrade
+wearing a rebuild's clothes. Alongside it, the M0 gate's required kill-switch
+drill: `automation/STOP` present → the scheduler refuses (`[chain] STOP file
+present — not scheduling.`, exit 0, daily counter untouched at 4, no log file
+created), STOP removed → the chain schedules its real successor. Two fixes
+rode along, both earned by the story rather than planned into it.
+
+**Why this way.** The rebuild's value is entirely in *what it measures*, so the
+before/after was instrumented rather than eyeballed. Two fingerprints were taken
+before the teardown — `sha256sum .env` and a deliberately created MLflow
+experiment, `m0s4-pre-destroy-witness` — and re-read after. The `.env` hash came
+back byte-identical (`34cde86f…`), which is what makes the rebuilt Postgres and
+MinIO accept the same credentials; the experiment came back
+`RESOURCE_DOES_NOT_EXIST`, because the PVCs went with the cluster. That
+asymmetry IS the deny list's design: secrets are user-created and unrecoverable,
+so `destroy` may never touch them; tracking data is regenerable by re-running
+the pipeline, so it is allowed to die. A sentinel file was planted in `data/raw`
+for the same reason and read back intact, then removed.
+
+**The concept underneath.** *A dry run must cover the most expensive deletion
+first, not last.* The story's very first command — `make destroy DRY_RUN=1`, run
+to check the preview before trusting the real thing — deleted the entire kind
+cluster and then printed `[destroy] DRY_RUN=1 — nothing was deleted.` The file
+loop was guarded; `cmd_down` sat one line above the guard. It cost nothing only
+because the next command was going to destroy the cluster anyway, which is luck,
+not process.
+
+The second half is worth more than the bug. A test named
+`test_destroy_dry_run_deletes_nothing` had been green since M0-S2. It ran
+against a sandbox whose kind config named a cluster that cannot exist — so the
+delete path always no-opped, and the test could not have failed if it tried.
+**The isolation that made the test safe made it blind.** The repair is not "test
+against a real cluster" (that is how you delete a real cluster); it is to give
+the sandbox a fake `kind` that *records* its calls and assert on the recording,
+plus a positive control proving the fake fires when it should. Same shape as
+gotcha #29 from the previous story, one level up: there, a PASS branch nobody
+had watched be wrong; here, a FAIL branch that could never be reached.
+
+The kill-switch drill has the same seam. The half a human can drill by hand —
+STOP present when you *ask* for a session — is the easy half. The half that
+matters at 3am is STOP created *after* a session is already scheduled, while it
+sits in its `sleep`; drilling that live means either launching a real Claude
+session or trusting a guard nobody watched work. So it is tested instead, in
+`tests/unit/test_chain_script.py`, against a sandboxed copy of the scheduler
+whose `claude` is a shim that drops a marker file. Four properties, each really
+executed: it launches when nothing stops it (positive control first, or every
+refusal below proves nothing), it refuses outright with STOP present, STOP
+written *after* scheduling still kills the pending session, and the daily cap
+halts the chain while leaving a note where the PO actually looks.
+
+**What to look at.** `scripts/cluster.sh` `cmd_destroy` — the DRY_RUN branch and
+the `DENY` array above it, read as a pair · `tests/unit/test_cluster_scripts.py`
+`_sandbox_with_live_cluster` (the recording shim) · `tests/unit/
+test_chain_script.py` (the kill switch, tested where a real session cannot be
+spawned) · `docs/gotchas.md` #30 · `ledgers/deployments.md`, whose newest row
+carries the survived/died measurements.
+
+**What to try yourself.** Revert the four-line DRY_RUN guard in
+`scripts/cluster.sh` and run `uv run pytest tests/unit/test_cluster_scripts.py`:
+the new test fails and quotes `[cluster-down] deleting kind cluster` sitting
+directly above `nothing was deleted` — that pairing is what a blind test looks
+like when it finally opens its eyes. Then delete the whole platform and rebuild
+it while timing yourself; if the rebuild is boring, the recipe is real, and if
+any step needs a human to remember something, that step is not in the recipe yet.
+
 ### M0-S3 — The platform: MinIO, Postgres, MLflow, and a gate that says no (2026-08-16, role:MLOps)
 
 **What was built.** `make deploy-platform` brings up the three services the whole

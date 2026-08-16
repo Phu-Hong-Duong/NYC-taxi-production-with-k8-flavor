@@ -169,3 +169,22 @@ the seed line are earned by THIS project.
     scaled-away workload). General form: a check whose PASS branch you have never
     seen be wrong is a check you have not tested; scale the thing to zero and
     watch what your script says.
+
+30. **A `DRY_RUN` that deleted the cluster while printing "nothing was deleted".**
+    `scripts/cluster.sh destroy` guarded every FILE deletion behind `DRY_RUN`,
+    then called `cmd_down` unconditionally one line earlier — so the preview
+    deleted the single most expensive thing it owns (the kind cluster, and with
+    it every PVC: Postgres data, MinIO objects) and closed with the footer
+    `[destroy] DRY_RUN=1 — nothing was deleted.` Tuition paid 2026-08-16 (M0-S4,
+    on the first command of the story — the preview WAS the teardown, which is
+    the only reason it cost nothing). The second half is the sharper lesson:
+    a unit test named `test_destroy_dry_run_deletes_nothing` had been green
+    since M0-S2. It ran against a sandbox whose kind config named a cluster that
+    cannot exist, so `cmd_down` always no-opped and the bug was invisible —
+    **the isolation that made the test safe made it blind.** Rule: when a test
+    stubs away the dangerous dependency, it no longer tests the dangerous path;
+    give it a shim that RECORDS the call (`kind delete cluster …` written to a
+    log file) and assert on the recording, plus a positive control proving the
+    shim fires when it should. General form: a dry run must cover the most
+    expensive deletion first, not last — and any footer claiming what a script
+    did is a claim to verify, not a summary to trust.

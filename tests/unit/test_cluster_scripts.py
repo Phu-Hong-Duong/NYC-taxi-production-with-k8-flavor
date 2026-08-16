@@ -101,6 +101,53 @@ def test_destroy_dry_run_deletes_nothing(tmp_path):
     assert (tmp_path / "data" / "processed" / "train.parquet").exists()
 
 
+def _sandbox_with_live_cluster(tmp_path: Path) -> tuple[Path, Path, dict]:
+    """Sandbox whose fake `kind` reports the cluster as EXISTING and logs every call.
+
+    The tests above point at a cluster name that cannot exist, which is what makes
+    them safe — and is exactly why they could not see gotcha #30: `cmd_down` always
+    no-opped, so a dry run that deleted a REAL cluster looked identical to one that
+    did not. This shim restores the missing half without going near a real cluster.
+    """
+    script = _sandbox(tmp_path)
+    calls = tmp_path / "kind-calls.log"
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake_kind = bindir / "kind"
+    fake_kind.write_text(
+        "#!/usr/bin/env bash\n"
+        f'echo "$@" >> "{calls}"\n'
+        'if [[ "$1 $2" == "get clusters" ]]; then\n'
+        "  echo sandbox-cluster-that-does-not-exist\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    fake_kind.chmod(0o755)
+    env = {"PATH": f"{bindir}:/usr/bin:/bin"}
+    return script, calls, env
+
+
+def test_destroy_dry_run_spares_the_cluster_itself(tmp_path):
+    """gotcha #30: DRY_RUN must cover the most expensive deletion, not just files."""
+    script, calls, env = _sandbox_with_live_cluster(tmp_path)
+
+    proc = run(str(script), "destroy", env={**env, "DRY_RUN": "1"})
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "WOULD delete kind cluster" in proc.stdout
+    assert "delete cluster" not in calls.read_text()
+
+
+def test_destroy_without_dry_run_does_delete_the_cluster(tmp_path):
+    """Positive control: without it, the test above passes on a broken shim."""
+    script, calls, env = _sandbox_with_live_cluster(tmp_path)
+
+    proc = run(str(script), "destroy", env=env)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "delete cluster --name sandbox-cluster-that-does-not-exist" in calls.read_text()
+
+
 @pytest.mark.parametrize(
     "bad_path",
     ["data/raw", ".env", "data/raw/../raw/subdir", "../outside-the-repo"],
