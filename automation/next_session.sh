@@ -40,11 +40,14 @@ echo $((COUNT + 1)) > "${COUNT_FILE}"
 # PERMISSIONS: set CLAUDE_PERMISSION_FLAGS once in your shell profile (see automation/README.md).
 # Default is the safer acceptEdits mode; unattended clusters usually need the allowlist
 # in .claude/settings.local.json on top of it.
+# The resolved FLAGS are ALSO env-forwarded into the spawned session, so any successor
+# it schedules inherits the same mode — .bashrc exports don't survive non-interactive
+# shells (gotcha #26).
 FLAGS="${CLAUDE_PERMISSION_FLAGS:---permission-mode acceptEdits}"
 
 nohup bash -c "sleep ${DELAY}; \
   [ -f automation/STOP ] && exit 0; \
-  claude --model ${MODEL} ${FLAGS} -p \"\$(cat ${PROMPT})\" >> '${LOG}' 2>&1" \
+  CLAUDE_PERMISSION_FLAGS='${FLAGS}' claude --model ${MODEL} ${FLAGS} -p \"\$(cat ${PROMPT})\" >> '${LOG}' 2>&1" \
   >/dev/null 2>&1 &
 
-echo "[chain] scheduled ${ROLE} (+${DELAY}s, model=${MODEL}, session #$((COUNT+1)) today) → ${LOG}"
+echo "[chain] scheduled ${ROLE} (+${DELAY}s, model=${MODEL}, flags=${FLAGS}, session #$((COUNT+1)) today) → ${LOG}"

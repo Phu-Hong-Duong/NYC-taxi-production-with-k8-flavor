@@ -1,7 +1,12 @@
 {
+  "model": "opus",
   "permissions": {
     "allow": [
-      "PowerShell(git config *)"
+      "Bash(make:*)", "Bash(kubectl:*)", "Bash(helm:*)", "Bash(kind:*)",
+      "Bash(docker:*)", "Bash(git:*)", "Bash(gh:*)", "Bash(uv:*)",
+      "Bash(dbt:*)", "Bash(python:*)", "Bash(python3:*)", "Bash(pytest:*)",
+      "Bash(dvc:*)", "Bash(curl:*)", "Bash(ss:*)", "Bash(free:*)",
+      "Bash(automation/next_session.sh:*)"
     ]
   }
 }

@@ -112,3 +112,16 @@ the seed line are earned by THIS project.
     += `automation/logs/`, `automation/STOP`. Check: `git ls-files -s
     automation/*.sh` shows 100755 AND `git check-ignore automation/STOP`
     succeeds.
+
+26. **A permission mode exported in .bashrc silently dies mid-chain.** Ubuntu's
+    ~/.bashrc opens with an interactive guard (`case $- in *i*)…return`), so a
+    bottom-appended `export CLAUDE_PERMISSION_FLAGS=…` never reaches
+    non-interactive shells — and successors are scheduled FROM claude's
+    non-interactive Bash tool, so after session 1 the var evaporates and the
+    script's acceptEdits fallback takes over. A dangerously-skip chain would
+    quietly degrade and park mid-milestone; the safer mode survives only
+    because it EQUALS the fallback. Tuition 2026-08-16, caught at go-live:
+    next_session.sh now env-forwards the resolved FLAGS into the spawned
+    claude, so the launch mode propagates for the chain's life; the standing
+    allowlist lives in .claude/settings.local.json, not .bashrc. Check: the
+    nohup line contains `CLAUDE_PERMISSION_FLAGS='${FLAGS}'`.
