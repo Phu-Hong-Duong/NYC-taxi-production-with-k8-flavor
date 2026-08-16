@@ -9,13 +9,15 @@ help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "};{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 # ---- M0 foundations & org bootstrap (role:MLOPS) ----
-.PHONY: cluster-up cluster-down destroy deploy-platform verify-m0
-cluster-up: ## create kind cluster (idempotent)
-	@echo "TODO(M0): kind create cluster --config infra/kind/kind-config.yaml (skip if exists)"
-cluster-down: ## delete kind cluster only
-	@echo "TODO(M0): kind delete cluster"
-destroy: ## full teardown: cluster + regenerable state (NEVER data/raw originals or .env)
-	@echo "TODO(M0)"
+.PHONY: cluster-up cluster-down destroy ports deploy-platform verify-m0
+ports: ## gotcha #10 port pre-check over the CLAUDE.md port family + kind hostPorts
+	@bash scripts/port_precheck.sh
+cluster-up: ## create kind cluster (idempotent; port pre-check runs before a create)
+	@bash scripts/cluster.sh up
+cluster-down: ## delete kind cluster only (idempotent)
+	@bash scripts/cluster.sh down
+destroy: ## full teardown: cluster + regenerable state (NEVER data/raw originals or .env; DRY_RUN=1 to preview)
+	@bash scripts/cluster.sh destroy
 deploy-platform: ## MinIO + Postgres + MLflow via helm, values in infra/helm/*
 	@echo "TODO(M0): helm upgrade --install x3; create buckets; wait Ready"
 verify-m0: ## M0 gate: platform healthy + org docs present (BLUEPRINT §9/M0)
