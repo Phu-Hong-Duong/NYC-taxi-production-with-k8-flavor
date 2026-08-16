@@ -101,3 +101,14 @@ the seed line are earned by THIS project.
     shows a log for the session you expected.
 
 ---- seed line — entries below are earned by this project ----
+
+25. **A chain kit authored on Windows ships broken bits.** Two silent ways the
+    harness dies in a fresh WSL clone: (a) git-on-Windows recorded the chain
+    script as 100644 — `automation/next_session.sh: Permission denied` on
+    first use; (b) runtime files were committable — a `git add -A` that
+    catches `automation/STOP` freezes EVERY clone's chain silently, and
+    `automation/logs/` becomes history noise. Tuition paid 2026-08-16
+    (bootstrap, caught pre-clone): `git update-index --chmod=+x`, .gitignore
+    += `automation/logs/`, `automation/STOP`. Check: `git ls-files -s
+    automation/*.sh` shows 100755 AND `git check-ignore automation/STOP`
+    succeeds.

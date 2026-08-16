@@ -21,6 +21,14 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 - Machine: Windows 11 + WSL2 (Ubuntu) + Docker Desktop, 64 GB RAM (user-stated
   2026-08-12; grant ~48 GB to WSL via .wslconfig — VERIFY at M0 with `free -h`).
 - Repo location: must be inside WSL2 fs (`/home/...`). Check `pwd` before anything.
+- Canonical execution home (2026-08-16): `/home/longt/NYC-taxi-production-with-k8-flavor`
+  (WSL Ubuntu, user `longt`; pre-staged by bootstrap). The Windows clone
+  `C:\Users\longt\PycharmProjects\NYC-taxi-production-with-k8-flavor` is the
+  PO's viewing copy — the chain NEVER runs there.
+- Observed 2026-08-16 (bootstrap preflight): `.wslconfig` 48GB WRITTEN, inert
+  until `wsl --shutdown` (was 31Gi); Docker WSL integration was OFF; TLS from
+  WSL clean (Sectigo — no AV interception that day). Go-live checklist:
+  AWAITING_PO.md 2026-08-16-1.
 - Kaspersky AV on host — gotcha #9 before debugging any TLS error.
 - Cluster: kind, config at infra/kind/kind-config.yaml. $0 budget — nothing leaves
   this machine; no cloud credentials exist in this project.
@@ -30,7 +38,10 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 ## Version pins (OBSERVED values — re-verify live at M0/M3 and overwrite; blueprint values are hypotheses)
 | Component | Pinned | Observed on | Source |
 |---|---|---|---|
-| (fill at M0; FLAML/Optuna/DuckDB rows land at their milestones) | | | |
+| Docker Desktop engine | 29.6.2 | 2026-08-16 | `docker version` (bootstrap preflight) |
+| claude CLI (Windows) | 2.1.233 | 2026-08-16 | `claude --version` (bootstrap preflight) |
+| gh CLI (Windows) | 2.96.0 | 2026-08-16 | `gh --version` (bootstrap preflight) |
+| (kind/kubectl/helm/uv/make/python + WSL-side claude/gh: fill at M0-S1; FLAML/Optuna/DuckDB rows land at their milestones) | | | |
 
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
@@ -43,8 +54,8 @@ KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cl
 | Gate checks | `make verify-m0` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` | pending M0 |
-| Chain next session | `automation/next_session.sh <executor\|rev\|architect> [delay]` | proven Session 1 |
-| Pause / resume chain | `touch automation/STOP` / rm + reschedule | proven Session 1 |
+| Chain next session | `automation/next_session.sh <executor\|rev\|architect> [delay]` | REAL-CLI proven 2026-08-16 (hello-chain fired +60s; `opus`→claude-opus-5; log+counter OK) |
+| Pause / resume chain | `touch automation/STOP` / rm + reschedule | REAL-CLI proven 2026-08-16 (refusal printed, exit 0, cap not burned, no residue) |
 
 ## Conventions
 - uv for env/deps; ruff (line 100); pytest markers: unit / integration / smoke.

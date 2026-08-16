@@ -1,5 +1,91 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-16 (k) — Session 1: bootstrap — preflight run, harness PROVEN, M0 kickoff authored, chain PARKED on go-live
+
+### State
+on-track / **PARKED-ON-PO** — ARCH (Fable 5, claude-fable-5, stated first
+line) ran the bootstrap. Preflight executed with pasted evidence; harness
+proven on the REAL CLI; M0 kickoff authored; one fork raised. The chain is
+deliberately NOT started (ADR-010: direction decisions wait; the go-live
+steps need the PO's hands). **PO's move: AWAITING_PO.md entry 2026-08-16-1 —
+Option A paste-block (~15 min), whose last line starts the chain.**
+
+### Done
+- PREFLIGHT (full pastes in-session, summarized): Windows side ✅ git remote
+  + push (`git push --dry-run` → `d5a40c4..740e016`), gh 2.96.0 authed
+  (Phu-Hong-Duong, repo scope), claude 2.1.233, Docker 29.6.2 up, all 9
+  family ports free, TLS from WSL clean (`issuer: …Sectigo…` — no Kaspersky
+  interception, gotcha #9 probed negative). WSL side ⛔: no repo clone in
+  /home/longt; claude MISSING; gh MISSING; make MISSING; flags unset; RAM
+  grant 31Gi (<48); `/var/run/docker.sock` absent (Docker WSL integration
+  OFF). kubectl/kind/helm/uv also absent → M0-S1 installs sudo-free.
+- HARNESS PROVEN on real CLI (Session-1 mandate): (a) hello-chain —
+  `automation/next_session.sh executor 60` with a throwaway prompt scheduled
+  20:57:27, fired +60s, log `automation/logs/20260816_205727_executor.log`
+  reads verbatim: `Model: Opus 5 (claude-opus-5).` / `HELLO-CHAIN OK` — the
+  `opus` alias resolves to the pinned executor model, nohup detach + logging
+  + daily counter all work. (b) kill switch — with STOP present the scheduler
+  printed `[chain] STOP file present — not scheduling.`, exit 0, count NOT
+  incremented (refusals don't burn the cap); STOP removed, no residue.
+  Executor prompt restored from git (`git checkout --`) after the proof.
+- KIT DEFECTS found + fixed pre-clone (gotcha #25 added, first earned entry):
+  chain script was 100644 in git (unexecutable in any fresh clone) →
+  `update-index --chmod=+x` → 100755; `automation/logs/` + `automation/STOP`
+  were committable (a committed STOP would freeze every clone) → .gitignored.
+- `C:\Users\longt\.wslconfig` written ([wsl2] memory=48GB, swap=8GB) per
+  gotcha #2 — inert until the PO's `wsl --shutdown` (paste-block A2).
+- docs/milestones/M0_KICKOFF.md authored (sole author, per template): §0
+  program-start triage, 14-row live-verified precondition table, zero debt
+  intake, 4 stories (S1 residency+toolchain+pins+CI-live-via-own-PR · S2
+  idempotent cluster-up with red-teamed port pre-check · S3 platform
+  MinIO/Postgres/MLflow + verify-m0 · S4 destroy/rebuild + the gate's
+  STOP/resume drill), out-of-scope, risks with fallbacks, ARCH self-check.
+- AWAITING_PO.md entry 2026-08-16-1: Option A (finish WSL setup, recommended,
+  cost stated = PO's ~15 min + two logins + the permission-mode risk call) vs
+  Option B (Windows-native re-platform — demo-easy, cost hides downstream,
+  not recommended). Paste-block A1–A5 verified where scriptable (installer
+  URL probed 200 from WSL).
+- WSL clone pre-staged at `/home/longt/NYC-taxi-production-with-k8-flavor`
+  (cloned from the local repo, origin re-pointed at GitHub, LF + exec bit
+  verified in-clone) — see clone verification paste in this session.
+- CLAUDE.md: environment facts updated with observed 2026-08-16 values; pins
+  rows added (docker 29.6.2, claude 2.1.233 win, gh 2.96.0 win); commands
+  table chain row marked REAL-CLI-proven.
+
+### Decisions
+- PARK, don't guess (ADR-010): preflight's failing rows need credentials
+  (claude/gh logins), a GUI toggle, sudo, and the permission-mode risk choice
+  — every one PO-territory (gotcha #23: credentials and risk modes never ride
+  a default). The Windows-native alternative is recorded as Option B, not
+  auto-taken, though the hello-proof incidentally showed it CAN work.
+- Harness proof scope, honestly: proven on Windows Git Bash (real CLI, real
+  scheduling, real model resolution). The WSL-side re-proof is intrinsic to
+  M0-S1 (the chain firing there at all) + S4's mid-milestone drill, per the
+  M0 gate.
+- Bootstrap commits land directly on main (this session's plan; no PR — the
+  chain's story PRs start at M0-S1).
+
+### Defects/Surprises
+- Kit shipped two chain-killers that only a fresh Linux clone would reveal
+  (exec bit, committable STOP/logs) — caught by inspection before any clone
+  existed; both fixed; gotcha #25 written where the next kit-author will trip.
+- README's one-time setup assumed more WSL than exists (gh/make absent,
+  Docker integration off, no .wslconfig) — the paste-block now carries the
+  complete honest list, each line verified or probed where possible.
+- `_to_delete/git-locks/*` untracked junk sits in the Windows copy (moved git
+  locks, epoch-stamped today) — left untouched (user-created; hard-block
+  class), flagged to PO in the AWAITING_PO postscript.
+
+### Next
+1. PO: AWAITING_PO 2026-08-16-1 Option A block (A1 Docker WSL toggle · A2
+   `wsl --shutdown` · A3 tools+logins · A4 permission mode · A5 start chain).
+   Its last line (`automation/next_session.sh executor 60`) IS the program
+   start; nothing else is owed.
+2. Chain then runs M0 per docs/milestones/M0_KICKOFF.md (S1→S4, exit ritual c
+   → architect boundary session authors M1).
+3. If the PO prefers Option B instead: edit the entry with "B"; ARCH
+   re-plans M0 for Windows-native before anything runs.
+
 ## Session 2026-08-16 (j) — Session 0.9: BUILD-READY — v3.0 autonomous cadence
 
 ### State

@@ -12,3 +12,5 @@ dist/
 *.egg-info/
 notebooks/*.ipynb_checkpoints/
 .idea/
+automation/logs/
+automation/STOP
