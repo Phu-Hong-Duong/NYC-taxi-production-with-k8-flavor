@@ -135,6 +135,52 @@ can never disagree (the port-family twins lesson, applied before it bit).
   longer names `data/raw` or `data/processed`; two copies would be twins, and a
   stale root entry would keep hiding the data if DVC tracking were ever lost.
 
+## EDA, KPIs and prior art (M1-S3) — the numbers other milestones must cite
+- **`docs/kpi_definitions.md` owns every number's id.** KPI-01…KPI-10, each with
+  formula, source VIEW, window, owner. M1-S5's board cards cite ids; M2's error
+  memo and M7's drift memos cite ids. **Changing a formula changes the id**
+  (KPI-03b, not an edited KPI-03) — otherwise a board's history silently stops
+  meaning one thing. KPI-09 (ETA MAE) and KPI-10 (within-5-min rate) are DEFINED
+  but **measured only by `taxi_mlops.training.evaluate`** (gotcha #15).
+- **Every money KPI states its window and its outlier treatment inline** (AI-2,
+  discharged). The reason, in one line: `CORR(fare_amount, trip_duration_minutes)`
+  is **0.0735** over all 56,127,878 rows and **0.8708** over
+  `fare_amount BETWEEN 0 AND 200` — 3,131 excluded rows (0.0056%) change it by
+  11.8×, while the MEAN moves only 0.36%. The robust statistic is the one people
+  check. The count of excluded rows renders on the same card as the value.
+- **`docs/eda_report.md` describes the surviving 98.397%, and says so at §0.**
+  F-005 (rejected rows kept only as counts) was judged OUT of M1-S3's pure-docs
+  scope and routed to ARCH at the M1 boundary, reasons in the ledger row.
+- **Traps the EDA found, now findings**: **F-006** `congestion_surcharge` is
+  63.46% null in 2019-01 with a one-day cliff at **2019-01-21** — a feature built
+  on it learns "January" and val/test (clean months) cannot catch it; `airport_fee`
+  is 100% null in all 8 months. **F-007** the post-trip columns (`fare_amount`,
+  `tip_amount`, `total_amount`, `tolls_amount`, `payment_type`,
+  `store_and_fwd_flag`) are leakage for a quote-time ETA — and `trip_distance`,
+  the strongest predictor (r 0.8066; 0.8464 in logs), is the meter's DRIVEN
+  distance, which M3's dossier must resolve.
+- **The honest reference floor for M2** (EDA statistic, NOT a model result):
+  a train-fitted `GROUP BY (hour, dow, PU, DO)` median gives **3.7170 min val
+  MAE** and **78.693% within 5 min**. The constant-median baseline (7.8866) is
+  the flattering floor and must not be the one quoted.
+- **Other load-bearing observations**: `ln(target)` is symmetric (skew −0.089 vs
+  2.19 raw) · target mean rises **17.3% Jan→Jun** then falls — `month` is a
+  reporting dimension, NEVER a feature · zones **264/265 are "unknown", not
+  places**, and 264→264 is the largest OD "route" (409,128 trips) · ~0.017% of
+  val/test rows carry an OD pair unseen in train, so an unseen-category path is
+  required · rejection rate rises monotonically **1.428% → 2.020%**, so the
+  health board plots a SERIES (the 10% refusal guard sees none of this).
+- **`docs/prior_art.md`: 13 verdicts (6 ADOPT · 3 DIFFER · 4 SURPASS)**, eight
+  sources read live 2026-08-16 via `curl` + `gh api` (WebSearch/WebFetch are off
+  the allowlist — F-001). The adopt that saves a session: **KServe
+  `canaryTrafficPercent` requires Serverless deployment mode; Standard mode does
+  not support canary** — M6's canary story would have hit that wall. Also
+  adopted: commit-time secret scanning, `for: 5m` sustained alert conditions,
+  promotion gated on a deployed-container HTTP test, Feast end-of-hour feature
+  timestamps (M8), dashboards provisioned from checked-in JSON (M1-S5).
+  Comparability warning: the Zoomcamp benchmark filters duration to **1–60 min**;
+  ours is **1–120**, so our data holds 493,876 trips theirs discards.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)

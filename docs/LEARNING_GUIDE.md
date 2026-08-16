@@ -9,6 +9,111 @@ months from now.
 
 ## M1
 
+### M1-S3 — 3,131 rows out of 56 million, and what a survey costs when you actually read the sources (2026-08-16, role:DA)
+
+**What was built.** Three documents and nothing else: `docs/eda_report.md`,
+`docs/kpi_definitions.md` (10 KPIs, each with formula, source view, window and
+owner), and `docs/prior_art.md` filled with **13 verdicts — 6 ADOPT, 3 DIFFER,
+4 SURPASS** — from eight sources fetched live. No code, no cluster, no state
+touched. Every number in the EDA came from a named DuckDB view through
+`python -m taxi_mlops.data query`; no raw parquet was opened.
+
+**Why this way — three things worth the reader's time.**
+
+*(1) The number that teaches the most is a ratio of two numbers you already had.*
+`CORR(fare_amount, trip_duration_minutes)` over all 56,127,878 rows is **0.0735**
+— essentially nothing. Restrict to `fare_amount BETWEEN 0 AND 200` and it is
+**0.8708**. The window excludes **3,131 rows, 0.0056% of the data, one in
+17,927.** So the strongest money relationship in the dataset is completely
+invisible until you remove one row in eighteen thousand.
+
+The lesson is not "outliers matter", which everybody already agrees with while
+continuing to compute means over raw columns. It is that **the damage is not
+proportional to the number of bad rows, and it is not uniform across statistics.**
+The *mean* fare barely moves (13.1740 → 13.1263, 0.36%) — which is exactly what
+makes this dangerous, because someone checks the mean, sees it is stable,
+and concludes the column is fine. Meanwhile the correlation moves by a factor of
+11.8, and any MAX, SUM, variance or high percentile moves by orders of magnitude.
+A previous session had already priced this as "12 rows move the mean by 0.26%"
+and correctly declined to make it a rejection rule. That was right. What it could
+not see is that the same 12 rows sit inside a population of 3,131 that destroys
+every statistic *except* the one that was checked.
+
+This is why `kpi_definitions.md` states a window inside each money KPI rather
+than in a preamble, and why KPI-08 requires the **count of excluded rows to be
+rendered on the same card as the value**. A windowed number whose exclusion is
+hidden is worse than an unwindowed one, because it looks careful.
+
+*(2) A survey where every verdict is "we're better" is a survey that didn't read
+anything.* The protocol in `prior_art.md` warns about this in advance, and the
+warning earned its place: the honest result was **six ADOPT rows**, six practices
+these repos have and we do not. Commit-time secret scanning (we have a discipline
+and one targeted test; they have a hook). Alert rules with a `for: 5m` sustained
+condition and a documented `repeat_interval` — we had named our SLOs and never
+the alert hygiene around them. Promotion gated on an HTTP test against the
+actually-deployed container, not only on offline metrics. Feast features
+timestamped at end-of-hour *so that a trip cannot leak into its own features*.
+And the one that will save a whole session: **KServe's `canaryTrafficPercent`
+does not work in Standard deployment mode** — it needs Serverless — which means
+our M6 canary story was on course to hit a wall that a stranger's 0-star
+repository documented in one line.
+
+That last point is the transferable one. Ranking the search by stars surfaced
+awesome-lists and course forks. The two most useful sources found today have
+**zero stars each** — a KServe install log and a Feast implementation — because
+operational specificity and popularity are close to uncorrelated. The survey was
+worth running only because it was run as *reading*, not as *citing*.
+
+*(3) When your scope does not cover a gap, say where the gap is in the artifact
+itself.* F-005 (the rejected rows exist only as counts) proposed this story as
+its home. It genuinely did not fit — a sidecar means changing ingest, re-running
+57M rows, rewriting the `data/processed/` artifacts a previous session had just
+proved byte-identical, and re-earning that proof. So it was judged out of scope
+and routed to the Architect, **with the reasons written down**. But the EDA does
+not quietly proceed as though the data were complete: §0 is titled with the
+boundary and states that everything following describes 98.397% of the delivery,
+and §2 says of the 159,300 trips removed for exceeding two hours that this
+report "cannot answer and does not guess" what they were. The finding was
+strengthened rather than deferred — the EDA also discovered that the rejection
+rate is *not stationary* (1.428% → 2.020%, +41% relative across eight months)
+and that the val and test months are the two dirtiest, which are new arguments
+the Architect now has and did not before.
+
+**The concept underneath.** *Aggregate statistics have wildly different
+sensitivity to contamination, and the robust one is the one people check.* Means
+are robust to a handful of extreme values; correlations, sums, maxima and
+variances are not. A data-quality process that validates by comparing means will
+pass data that has been rendered meaningless for every other purpose. This is the
+statistical cousin of a lesson this program keeps relearning in other clothes: at
+M0 a readiness check passed a service scaled to zero (gotcha #29), and at M1-S2 a
+rebuild proof would have validated itself against its own output (gotcha #33).
+Each time, the check was real, the check was green, and the check was looking at
+the one quantity that could not move.
+
+**What to look at.** `docs/eda_report.md` §8 (the correlation collapse) and §7b
+(the `congestion_surcharge` cliff between 2019-01-20 and 2019-01-21 — a column
+that is 63% null in one training month and clean in every other, which would be
+invisible in validation because validation is July). `docs/prior_art.md` rows
+1–6, the adopts. `docs/kpi_definitions.md` KPI-08, and KPI-09/KPI-10 which are
+defined but recorded as **"not yet measured — M2 owns the first value"**.
+
+**What to try yourself.** Run the two correlations and watch the number move:
+
+```bash
+make duckdb
+python -m taxi_mlops.data query "SELECT CORR(fare_amount, trip_duration_minutes) FROM trips_clean"
+python -m taxi_mlops.data query "SELECT CORR(fare_amount, trip_duration_minutes) FROM trips_clean WHERE fare_amount BETWEEN 0 AND 200"
+```
+
+Then the harder exercise, which is the point of §11: build the reference floor
+yourself. A `GROUP BY (hour, day-of-week, PU, DO)` median fitted on `trips_train`
+scores **3.7170 min MAE** on `trips_val` and lands within five minutes on
+**78.693%** of trips. Any model that does not beat 3.72 has learned nothing a
+SQL query does not already know — and the *constant* baseline (7.8866) is the
+flattering floor that makes any model look good. Notice how much more comfortable
+it would be to quote the second number, and that this is exactly why the first
+one is written down.
+
 ### M1-S2 — Two witnesses, a pin that must not touch what it measures, and a review that found four things (2026-08-16, role:DE + DA hat)
 
 **What was built.** `data/raw` and `data/processed` went under DVC with a
