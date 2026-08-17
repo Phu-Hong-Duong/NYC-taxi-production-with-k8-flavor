@@ -7,6 +7,89 @@ months from now.
 
 ---
 
+## M3
+
+### M3-S2 — the forbidden feature was replaceable, and measuring it took one query (2026-08-17, role:DA + MLE hat)
+
+**What was built.** Three things and one refusal. `make zones` derives 263
+zone centroids from the sha256-pinned TLC shapefile into a committed table
+(`data/reference/taxi_zone_centroids.csv`), guarded by 13 cluster-free tests.
+`docs/feature_dossier.md` holds 21 candidates harvested live from three real
+solutions plus our own memos, each with a source and a leakage note. The M3
+Design Review minutes fix six decisions (DR-01…DR-06) that bind the next three
+stories. The refusal: M3-S1 was the sequenced-first story and could not run —
+Docker Desktop was down (gotcha #34, second occurrence), so the registry S1
+needs does not exist — and rather than half-build a gate whose four findings
+all close on live transcripts, S1 was parked and the next INDEPENDENT story
+taken.
+
+**Why this way.** F-007(b) had been open since M1-S3 and it is the kind of
+question that invites an essay: `trip_distance` is the strongest predictor in
+the data (r = 0.8066) and it is the meter's *driven* distance, which a serving
+system does not have. The tempting resolutions are both cheap — record an
+assumption that it is "available", or assert that a centroid distance is a fine
+substitute. Neither is a measurement. What the finding actually needed was one
+number: how much of the forbidden column's power does the legal one keep? Once
+the centroid table existed, that number cost a single DuckDB query — **0.7873
+versus 0.8068, i.e. 97.6%** — and the decision stopped being a matter of taste.
+The centroid artifact was built first not because geometry is interesting but
+because *without it the question could not be asked at all*.
+
+The same instinct governed the harvest. It would have been faster to write the
+dossier from what is well known about this competition. Instead three solutions
+were read as code, and the payoff was a fact that no summary contains: the
+top-6% solution concatenates train and test and then takes group means of the
+target. The sloppy reading ("they leaked the labels") is wrong — Kaggle's test
+rows have no label, so `.mean()` skips them. The precise reading is better than
+the sloppy one: what leaks is the *absence of a point-in-time constraint* (a
+January trip gets a mean computed with June in it) and the *count* features,
+which need no label and genuinely use the test period. **The same line of code
+is correct in a competition and disqualifying in production, and the difference
+is the split, not the code.**
+
+**The concept underneath.** *Semantic checks have tolerances; byte identity does
+not — and the gap between them is exactly where a plausible artifact rots.* The
+centroid table has four semantic guards: 263 unique ids, three airports within
+3 km of their published positions, two TLC files agreeing on all 263 boroughs,
+every point inside an NYC bounding box. All four are good checks and all four
+are *bounded*, because a centroid legitimately is not a terminal building. So
+the red-team edited JFK's latitude by **111 metres** — one digit, one row of 263
+— and every one of those checks stayed green. What went red was the sha256 pin
+and the byte-identity twin that re-derives the whole table from the committed
+zip and demands it back unchanged. That twin is `make rebuild-proof`'s argument
+at 263-row scale, and it is the reason a *derived* file is safe to commit at
+all. The general form: when you commit something you could regenerate, the
+thing that keeps it honest is not a validator, it is a re-derivation.
+
+A second, smaller lesson worth the tuition: the test that forbids hardcoding
+`EPSG:2263` failed on its first run — against the script's own header, which
+argues at length about why the projection is never hardcoded. A substring scan
+over source cannot tell code from the prose warning about that code (sibling of
+gotcha #35). The fix was to parse the AST and look only at non-docstring
+constants. A check that reads documentation as a violation is a check the next
+person deletes.
+
+**What to look at.** `scripts/derive_zone_centroids.py` — read the header's
+five rules, then note that the CRS is taken from the `.prj` *inside the zip*
+rather than named · `tests/unit/test_zone_centroids.py`, and specifically which
+test would have caught the 111 m edit · `docs/feature_dossier.md` §0's three
+stated limits and §4's worked leakage example · the minutes' **DR-06**, which
+is a decision minuted with a forward dependency and says so in its own status
+line, because the alternative is a reader six months out assuming the number
+existed.
+
+**What to try yourself.** Change one digit of one latitude in
+`data/reference/taxi_zone_centroids.csv` and run `uv run pytest
+tests/unit/test_zone_centroids.py -q`: watch which legs fire and, more
+instructively, which ones do not. Then run the DR-04 query yourself —
+`uv run python -m taxi_mlops.data query` joining `trips_train` to the centroid
+CSV — and try to *break* the 0.7873: sample only airport trips, or only trips
+under 2 miles, and see where a straight line between two zone centroids stops
+being a good story about a taxi ride. That is the number M3-S3's G2 group has
+to beat.
+
+---
+
 ## M2
 
 ### M2 review — the number nobody computed was the distance to the bar (2026-08-17, role:REV)
