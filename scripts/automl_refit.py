@@ -74,8 +74,9 @@ def main() -> int:
     print("=" * 78)
     print(f"[refit] contender    : {name}")
     print(f"[refit] from study   : {verdict['study']} (best trial {verdict['best_trial_number']})")
-    print("[refit] scale        : " + ("FULL DATA (the deliverable)" if fraction is None
-                                        else f"{fraction:.0%} SAMPLE — SMOKE, not the deliverable"))
+    scale = ("FULL DATA (the deliverable)" if fraction is None
+             else f"{fraction * 100:g}% SAMPLE — SMOKE, not the deliverable")
+    print(f"[refit] scale        : {scale}")
     print(f"[refit] params       : {json.dumps(params, sort_keys=True, default=str)}")
     print(f"[refit] rounds cap   : {verdict['max_rounds']} · early stopping on VAL")
     print("[refit] DR-05: full-data, TRAIN-ONLY; TEST is read once, at M3-S5, by the gate")
@@ -165,7 +166,7 @@ def _log(
                 "do_not_promote": (
                     "no — full-data fit; the gate sees it at M3-S5"
                     if fraction is None
-                    else f"yes — {fraction:.0%} SMOKE sample (F-008)"
+                    else f"yes — {fraction*100:g}% SMOKE sample (F-008)"
                 ),
                 "hyperparameters_from": "optuna sniper (DR-03: automation searches params)",
             }

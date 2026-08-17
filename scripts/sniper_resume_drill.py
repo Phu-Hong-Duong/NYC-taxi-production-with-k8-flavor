@@ -100,8 +100,14 @@ def main() -> int:
     parser.add_argument("--sample-fraction", type=float, default=0.01)
     parser.add_argument("--max-rounds", type=int, default=150)
     parser.add_argument("--timeout", type=float, default=1800.0)
+    parser.add_argument(
+        "--heartbeat-seconds", type=int, default=5,
+        help="short on purpose: the drill must WAIT OUT the grace period to watch the "
+        "killed trial be reaped. A real study uses storage.DEFAULT_HEARTBEAT_S.",
+    )
     parser.add_argument("--out", default="")
     args = parser.parse_args()
+    grace = args.heartbeat_seconds * storage.DEFAULT_GRACE_MULTIPLIER
 
     tuning_cfg = load_yaml(TUNING_CONFIG)
     label = f"resume-drill-{args.feature_set}"
@@ -113,7 +119,8 @@ def main() -> int:
         sys.executable, "scripts/optuna_sniper.py", "--set", args.feature_set,
         "--label", label, "--n-trials", str(args.n_trials),
         "--sample-fraction", str(args.sample_fraction),
-        "--max-rounds", str(args.max_rounds), "--no-mlflow",
+        "--max-rounds", str(args.max_rounds),
+        "--heartbeat-seconds", str(args.heartbeat_seconds), "--no-mlflow",
     ]
 
     print("=" * 78)
@@ -142,6 +149,17 @@ def main() -> int:
         if after_kill["TOTAL"] < args.kill_after_trials:
             raise SystemExit("[drill] FAIL: trials did not survive the kill — not durable")
 
+        # The killed trial is still RUNNING as far as Postgres knows: nothing told
+        # it the process is gone. Waiting out the heartbeat grace period is what
+        # lets arm 2 declare it dead and retry it — the difference between a study
+        # that CONTINUES and one that RECOVERS.
+        print(
+            f"[drill] waiting {grace + 2}s — one heartbeat grace period "
+            f"({args.heartbeat_seconds}s x {storage.DEFAULT_GRACE_MULTIPLIER}) — so the "
+            "trial that died mid-fit can be seen to be dead"
+        )
+        time.sleep(grace + 2)
+
         # --- arm 2: the same command again, no special resume flag --------------
         log2 = logs / f"{label}-arm2.log"
         print(f"\n[drill] arm 2 starting — SAME command, no resume flag; output -> {log2}")
@@ -152,29 +170,42 @@ def main() -> int:
         print(f"[drill] Postgres AFTER the resume: {after_resume}")
 
     opened_at = _first_trial_number(log2)
+    answered = after_resume.get("COMPLETE", 0) + after_resume.get("PRUNED", 0)
+    reaped = after_resume.get("FAIL", 0)
+    stuck = after_resume.get("RUNNING", 0)
     verdict: dict[str, Any] = {
         "study": name,
         "trials_before": before["TOTAL"],
         "trials_at_kill": after_kill["TOTAL"],
+        "states_at_kill": after_kill,
         "trials_after_resume": after_resume["TOTAL"],
-        "states_after_resume": after_kill and after_resume,
+        "states_after_resume": after_resume,
+        "answered_after_resume": answered,
+        "reaped_by_heartbeat": reaped,
+        "still_running": stuck,
         "arm2_opened_with": opened_at,
         "n_trials_requested": args.n_trials,
+        "heartbeat_seconds": args.heartbeat_seconds,
         "logs": [str(log1), str(log2)],
     }
-    ok = (
-        after_kill["TOTAL"] >= args.kill_after_trials
-        and after_resume["TOTAL"] > after_kill["TOTAL"]
-        and after_resume["TOTAL"] == args.n_trials
-    )
+    checks = {
+        "trials survived the SIGKILL": after_kill["TOTAL"] >= args.kill_after_trials,
+        "the trial killed mid-fit was reaped by the heartbeat": reaped >= 1,
+        "no trial is left stuck RUNNING": stuck == 0,
+        f"the study answered all {args.n_trials} requested trials": answered == args.n_trials,
+    }
     print("\n" + "=" * 78)
     print(
-        f"[drill] {after_kill['TOTAL']} trial(s) survived a SIGKILL and the resumed run "
-        f"continued to {after_resume['TOTAL']} of {args.n_trials} requested — the count "
-        "continued because the trials were never in the process."
+        f"[drill] {after_kill['TOTAL']} trial(s) survived a SIGKILL; the resumed run reached "
+        f"{answered} answered of {args.n_trials} requested, having declared {reaped} dead "
+        "trial(s) and retried them. The count continued because the trials were never in "
+        "the process."
     )
     if opened_at is not None:
         print(f"[drill] arm 2 announced it opened the study with {opened_at} existing trial(s)")
+    for claim, held in checks.items():
+        print(f"[drill] {'ok  ' if held else 'FAIL'} {claim}")
+    ok = all(checks.values())
     print(f"[drill] {'PASS' if ok else 'FAIL'}")
     print("=" * 78)
     if args.out:

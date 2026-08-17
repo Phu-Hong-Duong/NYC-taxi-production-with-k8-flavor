@@ -98,7 +98,11 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | scipy | 1.18.0 | 2026-08-17 | transitive via scikit-learn (M2-S2) |
 | pyshp | **3.1.6** | 2026-08-17 | `uv add pyshp` (M3-S2). Pure-Python shapefile reader — zero transitive deps, which is why it beat geopandas for one lookup table |
 | pyproj | **3.7.2** | 2026-08-17 | `uv add pyproj` (M3-S2). Does the ESRI-WKT → WGS84 transform for the zone centroids. **Checked at add time: pandas stayed 3.0.5 and numpy 2.5.2** — gotcha #36's silent-downgrade shape did NOT occur (3 packages touched, one of them the project itself) |
-| (FLAML/Optuna rows land at their milestones) | | | |
+| FLAML | **2.6.0** | 2026-08-17 | `uv add "flaml>=2"` (M3-S4). Imports LightGBM at module scope, so `ensure_openmp()` must run BEFORE `from flaml import AutoML` (gotcha #37's third consumer) |
+| Optuna | **4.9.0** | 2026-08-17 | `uv add "optuna>=4"` (M3-S4). Pulled `alembic` 1.19.1 + `sqlalchemy` 2.0.52 + `colorlog`/`greenlet` in. Note `optuna.integration` is NOT here — Optuna 4 moved it to a separate distribution, which is why `taxi_mlops.tuning.fit` writes its own pruning callbacks |
+| XGBoost | **3.4.1** | 2026-08-17 | `uv add "xgboost>=3"` (M3-S4). The second OpenMP consumer the kickoff named as a risk: **discharged** — it trains under the shim's `LD_LIBRARY_PATH` with no extra work (proved live). It drags **`nvidia-nccl-cu13` 2.31.2 (241 MB)** in as a hard dep on linux — no GPU here, and it is never loaded |
+| psycopg | **3.3.4** (`psycopg[binary]`) | 2026-08-17 | `uv add "psycopg[binary]>=3"` (M3-S4). Optuna's Postgres driver. SQLAlchemy's bare `postgresql://` still means psycopg**2**, so every DSN this repo builds says `postgresql+psycopg://` explicitly (pinned by a test) |
+| **The M3-S4 add touched pandas/numpy not at all** | pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 unchanged | 2026-08-17 | Checked at add time against gotcha #36's silent-downgrade shape. Four packages requested, 12 installed, 1 uninstalled (the project itself, rebuilt) — no core downgrade |
 
 ## The data contract (M1-S1) — where the rules actually live
 Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT

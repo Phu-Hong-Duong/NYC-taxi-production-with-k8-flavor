@@ -74,6 +74,50 @@ def storage_url(
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}"
 
 
+#: How often a running trial stamps "I am alive" into Postgres, in seconds, and
+#: how long a stamp may go stale before the trial is declared dead. Both are
+#: knobs on `rdb_storage` rather than constants at the call site because the
+#: resume drill needs a short pair to WATCH the reaping happen, and a real study
+#: wants a long one so a slow trial is never mistaken for a dead process.
+DEFAULT_HEARTBEAT_S = 60
+DEFAULT_GRACE_MULTIPLIER = 3
+
+
+def rdb_storage(
+    *,
+    heartbeat_interval: int = DEFAULT_HEARTBEAT_S,
+    grace_period: int | None = None,
+    max_retry: int = 1,
+    env_file: Path | None = None,
+    port: int = DEFAULT_LOCAL_PORT,
+) -> object:
+    """The study storage, with a heartbeat — because the first drill found a zombie.
+
+    The kill-and-resume drill (M3-S4) killed the sniper with SIGKILL, and the
+    resume did exactly what §9/M3 asks: the trial count continued. It also left
+    something the transcript would not have shown without looking: the trial that
+    was mid-fit at the moment of the kill stayed **RUNNING in Postgres forever**.
+    Optuna has no way to know the difference between a process that is thinking
+    and a process that no longer exists, so that trial is never completed, never
+    retried, and never counted as failed — while still occupying a slot in every
+    "how many trials do we have" arithmetic that follows.
+
+    A heartbeat is the answer, and it is Optuna's own: a running trial stamps the
+    row, `study.optimize` fails trials whose stamp has gone stale by more than
+    `grace_period`, and `RetryFailedTrialCallback` re-enqueues them with the same
+    parameters. The resumed study then does not merely continue — it recovers.
+    """
+    import optuna
+    from optuna.storages import RetryFailedTrialCallback
+
+    return optuna.storages.RDBStorage(
+        url=storage_url(env_file=env_file, port=port),
+        heartbeat_interval=heartbeat_interval,
+        grace_period=grace_period or heartbeat_interval * DEFAULT_GRACE_MULTIPLIER,
+        failed_trial_callback=RetryFailedTrialCallback(max_retry=max_retry),
+    )
+
+
 def describe(*, host: str = "127.0.0.1", port: int = DEFAULT_LOCAL_PORT) -> str:
     """What a log may say about the storage: where, not how."""
     return f"postgresql+psycopg://<optuna>:<redacted>@{host}:{port}/{DEFAULT_DATABASE}"

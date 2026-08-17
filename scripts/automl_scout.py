@@ -90,7 +90,7 @@ def main() -> int:
     print(f"[scout] families      : {families}  (the config, not a verdict)")
     print(f"[scout] metric        : {automl_cfg['metric']}  · task {automl_cfg['task']}")
     print(f"[scout] time budget   : {budget:,.0f}s" + ("  ** SMOKE OVERRIDE **" if smoke else ""))
-    print(f"[scout] sample        : {args.sample_fraction:.0%} of train, seed {args.seed}")
+    print(f"[scout] sample        : {args.sample_fraction*100:g}% of train, seed {args.seed}")
     print("[scout] DR-03: this track searches HYPERPARAMETERS; the feature set is handed to it")
     print("[scout] gotcha #15: every number FLAML prints below is SCOUT-INTERNAL, never a result")
     print("[scout] the TEST month is not read by this script")
@@ -182,15 +182,20 @@ def main() -> int:
 
 
 def _leaderboard(automl: Any) -> str:
-    """Per-family best, from FLAML's own record. Labelled on every line it prints."""
-    lines = ["", "  scout-internal leaderboard (FLAML's numbers, NOT KPI-09):",
-             f"  {'family':<14} {'best internal loss':>20} {'wall s':>10}"]
-    lines.append(f"  {'-' * 14} {'-' * 20} {'-' * 10}")
+    """Per-family best, from FLAML's own record. Labelled on every line it prints.
+
+    Only the loss is shown. FLAML exposes no per-family wall clock, and an
+    earlier draft of this table printed one from an attribute that does not
+    exist — every cell came back `0.0`, which reads like a measurement and is
+    not one. A column that cannot be measured is not rendered.
+    """
+    lines = ["", "  scout-internal leaderboard (FLAML's own numbers, NOT KPI-09):",
+             f"  {'family':<14} {'best internal loss':>22}",
+             f"  {'-' * 14} {'-' * 22}"]
     for family in getattr(automl, "estimator_list", []) or []:
-        loss = automl.best_loss_per_estimator.get(family)
-        seconds = (getattr(automl, "time_to_find_best_model_per_estimator", {}) or {}).get(family)
+        loss = (automl.best_loss_per_estimator or {}).get(family)
         shown = "not reached in budget" if loss is None or loss == float("inf") else f"{loss:.4f}"
-        lines.append(f"  {family:<14} {shown:>20} {(seconds or 0.0):>10.1f}")
+        lines.append(f"  {family:<14} {shown:>22}")
     return "\n".join(lines)
 
 
@@ -215,7 +220,7 @@ def _log(args: argparse.Namespace, train_cfg: dict[str, Any], verdict: dict[str,
                 "metric_source": "FLAML internal — SCOUT-INTERNAL, NOT the evaluator",
                 "scout_internal": "yes",
                 "sample_run": "yes",
-                "do_not_promote": f"yes — {args.sample_fraction:.0%} sample, a hypothesis (F-008)",
+                "do_not_promote": f"yes — {args.sample_fraction * 100:g}% sample (F-008)",
                 "winning_family": str(verdict["family"]),
             }
         )

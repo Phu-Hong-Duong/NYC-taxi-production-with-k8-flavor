@@ -58,7 +58,7 @@ verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, exp
 	@bash scripts/verify_m2_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
-.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune tune-resume-drill automl-refit verify-m3
+.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune tune-resume-drill automl-refit automation-track f008-guard verify-m3
 zones: ## derive the 263 TLC zone centroids from the sha256-pinned shapefile (M3-S2; --refresh re-downloads)
 	@uv run python scripts/derive_zone_centroids.py $(ZONES_ARGS)
 ablation: ## artisan track: one feature GROUP per experiment on a 15% sample, val only, runs in m3-artisan (M3-S3)
@@ -77,6 +77,10 @@ tune-resume-drill: ## prove the study outlives its process: kill -9 mid-run, re-
 	@uv run python scripts/sniper_resume_drill.py $(DRILL_ARGS)
 automl-refit: ## refit the sniper's winner on the FULL train months through the one evaluator (DR-05; nothing promotes)
 	@uv run python scripts/automl_refit.py $(REFIT_ARGS)
+automation-track: ## the whole M3-S4 track in order (scout x2 -> sniper x2 -> full-data refit x2) under DR-01's declared budget; ~2.5h, run it DETACHED
+	@bash scripts/automation_track.sh
+f008-guard: ## exercise M3-S1's F-008 guard on a real sampled run: exit 2 (disqualified) and exit 3 (no verdict issued)
+	@uv run python scripts/f008_guard_exercise.py
 verify-m3: ## dossier+ablation+leakage red-team; kill/resume; >=1 pruned trial; 5 gate verdicts from our evaluator
 	@echo "TODO(M3)"
 

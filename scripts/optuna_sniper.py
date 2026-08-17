@@ -69,6 +69,11 @@ def main() -> int:
     parser.add_argument("--sample-fraction", type=float, default=DEFAULT_SAMPLE)
     parser.add_argument("--max-rounds", type=int, default=DEFAULT_MAX_ROUNDS)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument(
+        "--heartbeat-seconds", type=int, default=storage.DEFAULT_HEARTBEAT_S,
+        help="how often a running trial stamps Postgres; the drill uses a short one to "
+        "watch a killed trial get reaped and retried",
+    )
     parser.add_argument("--experiment", default="m3-automl")
     parser.add_argument("--story", default="M3-S4")
     parser.add_argument("--label", default="", help="study label; default = sniper-<set>")
@@ -110,7 +115,7 @@ def main() -> int:
     print(f"[sniper] sampler      : {tuning_cfg['sampler']}  · pruner {tuning_cfg['pruner']}")
     cap = f"  · budget {args.budget_seconds:,.0f}s" if args.budget_seconds else "  · no cap"
     print(f"[sniper] trials       : {n_trials}{cap}")
-    print(f"[sniper] sample       : {args.sample_fraction:.0%} of train, seed {args.seed}")
+    print(f"[sniper] sample       : {args.sample_fraction*100:g}% of train, seed {args.seed}")
     print(f"[sniper] storage      : {storage.describe()}")
     print("[sniper] trial value = val MAE from taxi_mlops.training.evaluate ON A SAMPLE —")
     print("[sniper]   an ordering signal, never a verdict (F-008); the winner is refit full-data.")
@@ -143,15 +148,25 @@ def main() -> int:
     with storage.port_forward():
         study = optuna.create_study(
             study_name=name,
-            storage=storage.storage_url(),
+            storage=storage.rdb_storage(heartbeat_interval=args.heartbeat_seconds),
             direction="minimize",
             load_if_exists=True,
             sampler=_sampler(optuna, tuning_cfg["sampler"]),
             pruner=_pruner(optuna, tuning_cfg["pruner"]),
         )
         already = len(study.trials)
+        # How many trials still OWE work. Deliberately not `n_trials - len(trials)`:
+        # a trial killed mid-fit sits in the storage as RUNNING (the drill found
+        # exactly that), and counting it as done would silently shrink a resumed
+        # study by one trial per kill. COMPLETE and PRUNED are the states that
+        # represent an answered question; everything else is still owed.
+        answered = sum(
+            t.state in (optuna.trial.TrialState.COMPLETE, optuna.trial.TrialState.PRUNED)
+            for t in study.trials
+        )
         print(
-            f"\n[sniper] study opened with {already} existing trial(s) — "
+            f"\n[sniper] study opened with {already} existing trial(s), {answered} of them "
+            "answered — "
             + ("a RESUME: the trials were in Postgres, not in the process that made them"
                if already else "a fresh study")
         )
@@ -165,7 +180,7 @@ def main() -> int:
             study.optimize(
                 _objective(args, train, val, categorical, model_cfg, train_cfg, family,
                            centre, fitting, parent),
-                n_trials=max(0, n_trials - already),
+                n_trials=max(0, n_trials - answered),
                 timeout=args.budget_seconds or None,
                 gc_after_trial=True,
             )
@@ -259,7 +274,7 @@ def _open_parent(
             "family": family, "optuna_study": study,
             "metric_source": "taxi_mlops.training.evaluate ON A SAMPLE — ordering only",
             "sample_run": "yes",
-            "do_not_promote": f"yes — {args.sample_fraction:.0%} sample (F-008)",
+            "do_not_promote": f"yes — {args.sample_fraction*100:g}% sample (F-008)",
             # The evidence a resumed study leaves in MLflow: a second parent whose
             # first trial number is not zero.
             "resumed": "yes" if already else "no",
@@ -295,7 +310,7 @@ def _log_trial(
             {
                 "stage": "sniper-trial", "family": family, "feature_set": args.feature_set,
                 "optuna_trial": str(trial.number), "sample_run": "yes",
-                "do_not_promote": f"yes — {args.sample_fraction:.0%} sample (F-008)",
+                "do_not_promote": f"yes — {args.sample_fraction*100:g}% sample (F-008)",
             }
         )
         mlflow.log_params({**params, "best_iteration": model.best_iteration})
@@ -357,7 +372,7 @@ def _report(v: dict[str, Any]) -> str:
         return "\n".join(lines)
     lines += [
         f"[sniper] best trial {v['best_trial_number']}: val MAE "
-        f"{v['best_value_sample_val_mae']:.4f} on a {v['sample_fraction']:.0%} sample "
+        f"{v['best_value_sample_val_mae']:.4f} on a {v['sample_fraction']*100:g}% sample "
         "— an ORDERING number, not KPI-09 (F-008; the refit is what the gate may see)",
         f"[sniper] best params: {json.dumps(v['best_params'], sort_keys=True, default=str)}",
         f"[budget] measured FITTING wall-clock this invocation: {v['fitting_seconds']:,.1f}s "
