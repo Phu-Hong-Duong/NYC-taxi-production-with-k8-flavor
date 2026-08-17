@@ -58,9 +58,13 @@ verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, exp
 	@bash scripts/verify_m2_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
-.PHONY: zones gate-redteam predictions-redteam automl tune verify-m3
+.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune verify-m3
 zones: ## derive the 263 TLC zone centroids from the sha256-pinned shapefile (M3-S2; --refresh re-downloads)
 	@uv run python scripts/derive_zone_centroids.py $(ZONES_ARGS)
+ablation: ## artisan track: one feature GROUP per experiment on a 15% sample, val only, runs in m3-artisan (M3-S3)
+	@uv run python scripts/artisan_ablation.py $(ABLATION_ARGS)
+leakage-redteam: ## fit an aggregate across val ON PURPOSE and watch val inflate while an untouched month does not (M3-S3)
+	@uv run python scripts/leakage_redteam.py $(LEAKAGE_ARGS)
 gate-redteam: ## prove the gate refuses a challenger that beats the FLOOR and is worse than the CHAMPION (M3-S1, F-011)
 	@uv run python scripts/gate_redteam_incumbent.py
 predictions-redteam: ## prove a floor fitted on the wrong window cannot be published (M3-S1, F-012)

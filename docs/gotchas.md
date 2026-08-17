@@ -464,3 +464,37 @@ the seed line are earned by THIS project.
     thing once before believing a green suite; this defect was invisible to every
     synthetic `Metrics` object and would have fired for the first time at M3-S5,
     on the bake-off, against a live champion.
+
+43. **A point-in-time aggregate creates a train/serve skew of its own, and the
+    constraint that makes it legal is what creates it.** M3-S3 built the
+    dossier's strongest feature family — OD-pair median duration, zone-hour mean
+    speed, zone-hour demand — under a strict cutoff: a row in train month *k* is
+    served a table built from months 1..*k−1*. That is the correct answer to
+    dossier §4 trap 2, and it has a consequence nobody in the source material
+    mentions. The first train month gets **NaN** (a sixth of train, 7.3M rows),
+    month 2 gets a one-month window, month 6 gets five — while every held-out row
+    gets the full six. **The feature the model is fitted on is not the feature it
+    is scored on**, so the booster learns how much to trust a column whose
+    reliability it has only ever seen at the wrong end. Measured: the group came
+    in at **−1.63% val MAE and −0.686 KPI-10 points**, the only one of five that
+    made the model worse, and it early-stopped at **iteration 88** against 500 for
+    every other experiment — it found the column, leaned on it, and stopped
+    learning. The lesson is not "aggregates are bad": it is that a point-in-time
+    scheme is a *modelling decision with its own failure mode*, and the window
+    should be constant-width (a trailing N days, identical for train and serve)
+    rather than expanding, precisely so both ends see the same feature. Read
+    beside #15: the community's most-recommended feature is a hypothesis until
+    this program's evaluator has scored it under this program's split.
+
+44. **`ensure_openmp()` re-execs the interpreter, so anything a script did before
+    its first `model.fit` is done twice.** A sibling of #37, and it costs minutes
+    rather than correctness. The shim (`taxi_mlops.training.openmp`) links a
+    vendored `libgomp` and `os.exec`s once with `LD_LIBRARY_PATH` set; it is
+    normally triggered lazily by the first `import lightgbm` inside `model.fit`.
+    In M3-S3's ablation that point is reached *after* six months of parquet have
+    been read and the aggregate tables fitted — all of which the re-exec throws
+    away and repeats. Worse for anyone watching: the re-executed process's stdout
+    is block-buffered rather than line-buffered, so a long run looks hung at the
+    exact line where the shim announced itself. Fix, one line, at the top of any
+    script that loads data before it fits: call `ensure_openmp()` first. Both
+    M3-S3 scripts do, and the log is linear again.

@@ -13,12 +13,14 @@ import types
 
 import pytest
 
-from taxi_mlops.data.config import load_yaml
 from taxi_mlops.features.quote_time import EXCLUDED_COLUMNS
 from taxi_mlops.training import openmp, tracking
 from taxi_mlops.training.datasets import required_columns
+from taxi_mlops.training.run import load_train_config
 
-TRAIN_CFG = load_yaml("configs/train.yaml")
+# Through the ONE loader: `features:` is a pointer into configs/features.yaml
+# since M3-S3 (F-013), and resolving it is what load_train_config is for.
+TRAIN_CFG = load_train_config("configs/train.yaml")
 
 
 # ------------------------------------------------------------------ what is read ---

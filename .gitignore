@@ -40,3 +40,4 @@ analytics/dbt/dbt_packages/
 # here, under a throwaway config, so a corrupt byte never goes near data/raw.
 # The gate deletes it on exit; this entry covers a run that was interrupted.
 .verify_m1_sandbox/
+automation/runs/

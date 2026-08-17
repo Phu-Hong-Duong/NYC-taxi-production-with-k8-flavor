@@ -1,4 +1,4 @@
-"""Feature set v1 — quote-time pure, and the registry of what is refused and why.
+"""The ONE transform path — quote-time pure, and the registry of what is refused.
 
 A "quote-time" feature is one a serving request can carry at the moment a rider
 asks *how long will this take?* — before the trip happens. Everything else is
@@ -8,19 +8,29 @@ unimplementable model.
 
 Two halves, deliberately asymmetric:
 
-- **The include list is a knob** (`configs/train.yaml: features`). Feature sets
-  are meant to be revised; that is what M3's dossier does.
+- **The include list is a knob** (`configs/features.yaml`, resolved by
+  `taxi_mlops.features.sets`). Feature sets are meant to be revised; that is
+  what M3's dossier and ablation did.
 - **The exclude list is law** (`EXCLUSIONS` below, one reason per column) and a
   guard refuses any feature matrix containing one. A configured include that the
   registry excludes raises `FeatureLeakageError` rather than training. This is
   the same argument M2-S1 made about first-match attribution: a switch that can
   break an invariant is a trapdoor, not a knob.
 
+M3-S3 added the third kind of column. A set is now `temporal` (derived from the
+one timestamp a request carries) + `passthrough` (blessed contract columns) +
+**`derived`** — lookups and transforms that need a shipped reference table
+(`zones`, `calendar`) or a train-fitted one (`aggregates`). The exclusion law is
+unchanged and applies to all three: `assert_quote_time_pure` still runs on the
+configured names AND on the output columns, and every derived feature carries a
+`REQUEST_TIME_SOURCE` entry naming where a live request would get it (gotcha
+#21), pinned by a test rather than by good intentions.
+
 On dtypes and gotcha #7 ("one cast, one place"): that law governs TLC COLUMNS,
 whose canonical dtypes belong to `taxi_mlops.data.contract.cast` and nowhere
 else. What this module returns is not TLC data — it is a model input matrix, and
-its encoding (int16 zone ids, float32 passenger count) is a modelling choice
-owned here. The input frame is never modified and nothing is ever written back.
+its encoding (int16 zone ids, float32 distances) is a modelling choice owned
+here. The input frame is never modified and nothing is ever written back.
 """
 
 from __future__ import annotations
@@ -28,7 +38,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 import pandas as pd
+
+from . import aggregates as aggregates_mod
+from . import calendar as calendar_mod
+from . import zones as zones_mod
 
 
 class FeatureLeakageError(ValueError):
@@ -152,13 +167,59 @@ EXCLUDED_COLUMNS: frozenset[str] = frozenset(e.column for e in EXCLUSIONS)
 
 # Included on purpose, with the request-time source named per the artisan
 # playbook's rule (gotcha #21's family: every serving feature says where it comes
-# from at request time).
+# from at request time). A derived feature with no entry here fails a test — the
+# question "can M5 actually compute this?" is answered when the feature is
+# written, not when the deployment crashes.
 REQUEST_TIME_SOURCE: dict[str, str] = {
+    # ---- v1 (M2-S2)
     "hour": "the clock when the quote is asked for",
     "dayofweek": "the calendar day the quote is asked for",
     "PULocationID": "the pickup zone the rider is standing in / requests",
     "DOLocationID": "the drop-off zone the rider types in",
     "passenger_count": "the party size the rider states when booking",
+    # ---- g1: the request clock, re-encoded. Nothing new is needed at serving.
+    "hour_sin": "the request clock, as an angle (23:00 and 00:00 are adjacent)",
+    "hour_cos": "the request clock, as an angle",
+    "weekpos_sin": "position of the request within the week, as an angle",
+    "weekpos_cos": "position of the request within the week, as an angle",
+    "minute_of_day": "the request clock to the minute (08:55 -> 09:05 is not a step)",
+    "part_of_day": "the request clock, bucketed (morning peak / day / night)",
+    "is_weekend": "the request calendar day",
+    "is_holiday": "a shipped federal-holiday table, keyed on the request date",
+    "is_near_holiday": "the same shipped table, +/- one day",
+    "is_business_day": "the request calendar day and the shipped holiday table",
+    # ---- g2/g3: a lookup on the two zone ids the request already carries, in a
+    # 263-row table that ships with the model. No service call, no live join.
+    "centroid_haversine_km": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "centroid_dlat_km": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "centroid_dlon_km": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "centroid_manhattan_km": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "centroid_bearing_deg": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "log1p_haversine_km": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "midpoint_lat": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "midpoint_lon": "shipped zone-centroid table, keyed on the request's PU/DO",
+    "has_geometry": "whether the request's PU/DO are real zones (264/265 are not)",
+    "pu_is_airport": "the request's pickup zone id (JFK 132 / LGA 138 / EWR 1)",
+    "do_is_airport": "the request's drop-off zone id",
+    "is_airport_trip": "either end of the request being an airport zone",
+    "pu_borough": "shipped zone lookup, keyed on the request's PU",
+    "do_borough": "shipped zone lookup, keyed on the request's DO",
+    "borough_pair": "shipped zone lookup, keyed on the request's PU and DO",
+    # ---- g4
+    "passenger_bucket": "the party size the rider states when booking, bucketed",
+    # ---- g5: THE ones that need infrastructure. Today they travel with the
+    # model as a fitted lookup; at M8 they are the Feast candidates the dossier
+    # names, keyed exactly as below with end-of-hour feature timestamps.
+    "od_median_duration_min": (
+        "a TRAIN-fitted lookup keyed on (PU, DO) — shipped with the model at M5, "
+        "an online feature-store read at M8"
+    ),
+    "pu_hour_mean_speed_kmh": (
+        "a TRAIN-fitted lookup keyed on (PU, request hour) — same path as above"
+    ),
+    "pu_hour_trips_per_day": (
+        "a TRAIN-fitted lookup keyed on (PU, request hour) — same path as above"
+    ),
 }
 
 PICKUP_TIMESTAMP = "tpep_pickup_datetime"
@@ -171,15 +232,93 @@ _TEMPORAL_BUILDERS = {
     "dayofweek": lambda ts: ts.dt.dayofweek,
 }
 
+#: Every derived feature, its dtype, and the INPUT columns it needs off the
+#: parquet. The second half is what lets `datasets.required_columns` stay a
+#: narrow read (the exclusion registry expressed as I/O) while feature sets grow:
+#: a set is asked what it needs rather than the reader being widened by hand.
+_DERIVED: dict[str, tuple[str, tuple[str, ...]]] = {
+    name: ("float32", (PICKUP_TIMESTAMP,))
+    for name in ("hour_sin", "hour_cos", "weekpos_sin", "weekpos_cos")
+}
+_DERIVED.update(
+    {
+        "minute_of_day": ("int16", (PICKUP_TIMESTAMP,)),
+        "part_of_day": ("int16", (PICKUP_TIMESTAMP,)),
+        "is_weekend": ("int16", (PICKUP_TIMESTAMP,)),
+        "is_holiday": ("int16", (PICKUP_TIMESTAMP,)),
+        "is_near_holiday": ("int16", (PICKUP_TIMESTAMP,)),
+        "is_business_day": ("int16", (PICKUP_TIMESTAMP,)),
+        "has_geometry": ("int16", ("PULocationID", "DOLocationID")),
+        "pu_is_airport": ("int16", ("PULocationID",)),
+        "do_is_airport": ("int16", ("DOLocationID",)),
+        "is_airport_trip": ("int16", ("PULocationID", "DOLocationID")),
+        "pu_borough": ("int16", ("PULocationID",)),
+        "do_borough": ("int16", ("DOLocationID",)),
+        "borough_pair": ("int16", ("PULocationID", "DOLocationID")),
+        "passenger_bucket": ("int16", ("passenger_count",)),
+    }
+)
+_DERIVED.update(
+    {
+        name: ("float32", ("PULocationID", "DOLocationID"))
+        for name in (
+            "centroid_haversine_km",
+            "centroid_dlat_km",
+            "centroid_dlon_km",
+            "centroid_manhattan_km",
+            "centroid_bearing_deg",
+            "log1p_haversine_km",
+            "midpoint_lat",
+            "midpoint_lon",
+        )
+    }
+)
+_DERIVED.update(
+    {
+        name: ("float32", (PICKUP_TIMESTAMP, "PULocationID", "DOLocationID"))
+        for name in aggregates_mod.AGGREGATE_FEATURES
+    }
+)
+
+DERIVED_FEATURES: frozenset[str] = frozenset(_DERIVED)
+
+#: The derived features that cannot be computed from the request alone — they
+#: need `aggregates.fit` to have been run on TRAIN months first. Named as a set
+#: so `build_features` can refuse clearly instead of producing a column of NaN,
+#: which would look exactly like "these zones were never seen".
+FITTED_FEATURES: frozenset[str] = frozenset(aggregates_mod.AGGREGATE_FEATURES)
+
 
 def feature_names(cfg: dict[str, Any]) -> list[str]:
     """The feature matrix's columns, in order. The ONE answer to 'what does it eat?'."""
-    names = list(cfg["temporal"]) + list(cfg["passthrough"])
+    names = list(cfg["temporal"]) + list(cfg["passthrough"]) + list(cfg.get("derived", []))
     duplicates = [n for n in set(names) if names.count(n) > 1]
     if duplicates:
-        raise ValueError(f"configs/train.yaml features: duplicated column(s) {duplicates}")
+        raise ValueError(f"configs/features.yaml: duplicated column(s) {duplicates}")
+    unknown = [n for n in cfg.get("derived", []) if n not in _DERIVED]
+    if unknown:
+        raise ValueError(
+            f"configs/features.yaml names derived feature(s) {unknown}, which "
+            f"taxi_mlops.features.quote_time cannot build. Known: {sorted(_DERIVED)}."
+        )
     assert_quote_time_pure(names)
     return names
+
+
+def source_columns(cfg: dict[str, Any]) -> list[str]:
+    """Every INPUT column this set needs off disk — passthrough plus what derives.
+
+    Asked rather than hardcoded, so adding a feature that needs a new column
+    cannot produce a KeyError three layers down in a reader nobody edited.
+    """
+    needed = [PICKUP_TIMESTAMP, *cfg["passthrough"]]
+    for name in cfg.get("derived", []):
+        needed.extend(_DERIVED[name][1])
+    seen: list[str] = []
+    for column in needed:
+        if column not in seen:
+            seen.append(column)
+    return seen
 
 
 def categorical_names(cfg: dict[str, Any]) -> list[str]:
@@ -217,11 +356,155 @@ def assert_quote_time_pure(columns: list[str] | pd.Index) -> None:
     )
 
 
-def build_features(df: pd.DataFrame, cfg: dict[str, Any]) -> pd.DataFrame:
-    """DataFrame -> DataFrame. Pure, config-driven, no I/O. Training AND serving.
+def _derived_columns(
+    df: pd.DataFrame,
+    wanted: list[str],
+    fitted: aggregates_mod.PointInTimeAggregates | None,
+) -> dict[str, Any]:
+    """Every derived feature the set asked for, computed once each.
+
+    Shared intermediates (the four centroid lookups, the holiday join) are built
+    lazily and reused: nine geometry features off one `zones.geometry` call, not
+    nine calls returning the same numbers.
+    """
+    if not wanted:
+        return {}
+    for name in wanted:
+        for column in _DERIVED[name][1]:
+            if column not in df.columns:
+                raise ValueError(
+                    f"derived feature {name!r} needs column {column!r}, which the frame "
+                    f"does not carry. A quote request must supply it."
+                )
+
+    out: dict[str, Any] = {}
+    cache: dict[str, Any] = {}
+
+    def timestamps() -> pd.Series:
+        return df[PICKUP_TIMESTAMP]
+
+    def geometry() -> zones_mod.Geometry:
+        if "geometry" not in cache:
+            cache["geometry"] = zones_mod.geometry(df["PULocationID"], df["DOLocationID"])
+        return cache["geometry"]
+
+    def holidays() -> dict[str, Any]:
+        if "holidays" not in cache:
+            cache["holidays"] = calendar_mod.flags(timestamps())
+        return cache["holidays"]
+
+    def aggregate_values() -> dict[str, Any]:
+        if "aggregates" not in cache:
+            if fitted is None:
+                raise ValueError(
+                    "this feature set asks for the point-in-time aggregates "
+                    f"{sorted(FITTED_FEATURES & set(wanted))}, but no fitted tables were "
+                    "passed. They are fitted on TRAIN months only "
+                    "(taxi_mlops.features.aggregates.fit) and handed in; building them "
+                    "from whatever frame is in front of us is exactly the leak dossier "
+                    "§4 trap 2 describes."
+                )
+            cache["aggregates"] = aggregates_mod.transform(fitted, df)
+        return cache["aggregates"]
+
+    for name in wanted:
+        if name in ("hour_sin", "hour_cos"):
+            angle = 2.0 * np.pi * timestamps().dt.hour.to_numpy(dtype="float64") / 24.0
+            out[name] = np.sin(angle) if name.endswith("sin") else np.cos(angle)
+        elif name in ("weekpos_sin", "weekpos_cos"):
+            ts = timestamps()
+            position = (
+                ts.dt.dayofweek.to_numpy(dtype="float64") * 24.0
+                + ts.dt.hour.to_numpy(dtype="float64")
+            )
+            angle = 2.0 * np.pi * position / 168.0
+            out[name] = np.sin(angle) if name.endswith("sin") else np.cos(angle)
+        elif name == "minute_of_day":
+            ts = timestamps()
+            out[name] = ts.dt.hour.to_numpy() * 60 + ts.dt.minute.to_numpy()
+        elif name == "part_of_day":
+            # Source A's three bands (hr_6_9 / hr_10_20 / hr_21_5) — the morning
+            # peak, the working day, the night. Labels, not magnitudes: band 2
+            # (night) wraps midnight and is not "two more than" band 0.
+            hour = timestamps().dt.hour.to_numpy()
+            out[name] = np.where(hour < 6, 2, np.where(hour < 10, 0, np.where(hour < 21, 1, 2)))
+        elif name == "is_weekend":
+            out[name] = (timestamps().dt.dayofweek.to_numpy() >= 5).astype("int16")
+        elif name in ("is_holiday", "is_near_holiday", "is_business_day"):
+            out[name] = holidays()[name]
+        elif name == "centroid_haversine_km":
+            out[name] = geometry().haversine_km
+        elif name == "centroid_dlat_km":
+            out[name] = geometry().dlat_km
+        elif name == "centroid_dlon_km":
+            out[name] = geometry().dlon_km
+        elif name == "centroid_manhattan_km":
+            out[name] = geometry().manhattan_km
+        elif name == "centroid_bearing_deg":
+            out[name] = geometry().bearing_deg
+        elif name == "log1p_haversine_km":
+            out[name] = np.log1p(geometry().haversine_km)
+        elif name == "midpoint_lat":
+            out[name] = geometry().midpoint_lat
+        elif name == "midpoint_lon":
+            out[name] = geometry().midpoint_lon
+        elif name == "has_geometry":
+            out[name] = geometry().has_geometry
+        elif name == "pu_is_airport":
+            out[name] = zones_mod.airport_flags(df["PULocationID"])
+        elif name == "do_is_airport":
+            out[name] = zones_mod.airport_flags(df["DOLocationID"])
+        elif name == "is_airport_trip":
+            out[name] = np.maximum(
+                zones_mod.airport_flags(df["PULocationID"]),
+                zones_mod.airport_flags(df["DOLocationID"]),
+            )
+        elif name == "pu_borough":
+            out[name] = zones_mod.borough_codes(df["PULocationID"])
+        elif name == "do_borough":
+            out[name] = zones_mod.borough_codes(df["DOLocationID"])
+        elif name == "borough_pair":
+            table = zones_mod.load_zone_table()
+            width = len(table.boroughs)
+            out[name] = zones_mod.borough_codes(df["PULocationID"]) * width + (
+                zones_mod.borough_codes(df["DOLocationID"])
+            )
+        elif name == "passenger_bucket":
+            # Dossier row 17: zero passengers is a data artefact, not a small
+            # party, so it gets its own label rather than sitting at the bottom
+            # of an ordered scale. Null gets its own label too — the contract
+            # allows it, and folding null into "zero" would invent a party size.
+            count = df["passenger_count"].to_numpy(dtype="float64")
+            bucket = np.full(len(df), 4, dtype="int16")  # 4 = not stated
+            known = ~np.isnan(count)
+            bucket[known & (count <= 0)] = 0
+            bucket[known & (count == 1)] = 1
+            bucket[known & (count >= 2) & (count <= 3)] = 2
+            bucket[known & (count >= 4)] = 3
+            out[name] = bucket
+        elif name in FITTED_FEATURES:
+            out[name] = aggregate_values()[name]
+        else:  # pragma: no cover — _DERIVED and this dispatch are twins
+            raise ValueError(f"derived feature {name!r} has no builder")
+    return out
+
+
+def build_features(
+    df: pd.DataFrame,
+    cfg: dict[str, Any],
+    *,
+    fitted: aggregates_mod.PointInTimeAggregates | None = None,
+) -> pd.DataFrame:
+    """DataFrame -> DataFrame. Config-driven, no I/O. Training AND serving.
 
     Serving parity is structural rather than promised: M5's transformer imports
     this function, so a feature that changes here changes in both places at once.
+
+    `fitted` carries the point-in-time aggregate tables when the set asks for
+    them. It is a parameter and not a module global on purpose: a global would
+    make "which months is this row allowed to remember?" a property of the
+    process rather than of the call, and that question is the whole of dossier
+    §4 trap 2.
     """
     names = feature_names(cfg)
     out = pd.DataFrame(index=df.index)
@@ -251,6 +534,9 @@ def build_features(df: pd.DataFrame, cfg: dict[str, Any]) -> pd.DataFrame:
         out[name] = (
             column.astype("float32") if name == "passenger_count" else column.astype("int16")
         )
+
+    for name, values in _derived_columns(df, list(cfg.get("derived", [])), fitted).items():
+        out[name] = pd.Series(values, index=df.index).astype(_DERIVED[name][0])
 
     out = out[names]
     assert_quote_time_pure(out.columns)
