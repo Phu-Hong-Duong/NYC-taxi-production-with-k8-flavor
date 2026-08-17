@@ -1,5 +1,62 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (ac) — M2 BOUNDARY: cleanly closed, and M3 opens with the gate on the operating table
+
+### State
+on-track — **ARCH (Grand Architect), Fable 5 (`claude-fable-5`, stated first
+line), M2→M3 boundary session.** Triage done, **M2 CLEANLY CLOSED, tagged
+`m2-closed`**, `docs/milestones/M3_KICKOFF.md` authored, chain continued:
+`automation/next_session.sh executor 120`.
+
+### Triage (job 1) — nothing carried silently
+- **`make verify-m2` re-run by the approver: GREEN, 49/49, exit 0** (~30 s;
+  closing line verbatim `[verify-m2] GREEN — every M2 sub-check passed.`).
+  Lineage: `git branch -r --contains e591cdc` → `origin/main`; tree clean at
+  `f47c187`.
+- **Sign-off row added**: M2 gate PASS, producer EXEC (S1–S5, PRs #10–#14),
+  approver ARCH — producer ≠ approver holds. REV's ◆ row (APPROVE WITH
+  CONDITIONS) sits beside it; all three conditions dispositioned below.
+- **Dispositions** (full table in the kickoff §0): REV's F-010/F-011/F-012 +
+  the standing F-008 → **all intaken into M3-S1**, a dedicated gate-hardening
+  story sequenced FIRST because REV's condition is that F-011 closes before
+  the bake-off can promote anything. F-007(b) → M3-S2 (resolved at the Design
+  Review, minutes committed). F-009 → CARRY M5 (quoted). D-001/D-003/D-004 →
+  CARRY M4 (all quoted, none due). F-001 + AWAITING_PO 2026-08-17-1 →
+  standing with the PO, non-blocking, restated.
+- **New finding filed at this triage: F-013** — two bootstrap-era stubs
+  contradict the live truth: `configs/promotion.yaml` carries a second gate
+  (`gate_ratio: 0.85`) that is not THE gate, and `configs/features.yaml` names
+  `trip_distance` inside "v1", a column `EXCLUSIONS` refuses by law. The
+  twins trap, found by reading the configs M3 is about to lean on. Lands
+  M3-S1 (gate half) and M3-S3 (features half).
+
+### The kickoff (job 2) — five stories, and the order IS the argument
+**S1** the gate learns the incumbent (F-011), the checked floor half (F-012),
+the sample rule (F-008), and the honest bar (F-010: the new
+`baseline-group-median-od-fallback` measured, the gate decision argued against
+the REAL +2.71% headroom — the kickoff never re-quotes 7.07%); promotion.yaml
+dies (F-013). Named wall: verify-m2's replay legs must stay green. **S2**
+dossier (≥10 candidates, live harvest via curl/gh-api) + TLC zone-shapefile
+centroids (sha256-pinned) + the Design Review ritual — six agenda items
+including F-007(b)'s formal resolution and the bake-off comparability rule
+(full-data, train-only fits; playbook §3.7's train+val refit NOT used at M3).
+**S3** artisan v2 per the committed playbook (ablation table, experiments
+ledger, leakage red-team on a disposable branch; features.yaml gets one home).
+**S4** FLAML scout ×2 + Optuna sniper in Postgres (optuna DB via D-002's
+recipe; kill-and-resume; ≥1 pruned trial; F-008 guard exercised live). **S5**
+the five-contender bake-off, all verdicts printed, the S1-hardened gate
+decides the alias — with the champion-transition refresh chain
+(predictions→duckdb→marts→boards→memo section) if it moves, then verify-m3 +
+red-team + the ◆ exit. S5 carries a DECLARED mid-story safe stop (two-session
+allowance if the alias moves).
+
+### Next (for the session after this one)
+**EXECUTOR, story M3-S1** (role:MLE) per `docs/milestones/M3_KICKOFF.md` —
+scheduled via `automation/next_session.sh executor 120`. Read the kickoff's S1
+card and the four ledger rows it closes (F-008/F-010/F-011/F-012, each closes
+ONLY by its own conditions) before touching `gate.py`/`registry.py`/`score.py`.
+`make verify-m2` red at any point in S1 is stop-and-fix, not a note.
+
 ## Session 2026-08-17 (ab) — M2 REVIEW: every number re-derived, and a bar with less room than it says
 
 ### State
