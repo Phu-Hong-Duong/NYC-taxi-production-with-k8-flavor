@@ -1,0 +1,170 @@
+{
+  "fitting_seconds": 557.140142924999,
+  "rows": [
+    {
+      "set": "v1",
+      "groups": [],
+      "n_features": 5,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count"
+      ],
+      "val_mae": 3.4935018524850787,
+      "val_within_rate": 79.55177487070014,
+      "delta_mae_pct": 0.0,
+      "delta_within_points": 0.0,
+      "best_iteration": 500,
+      "fit_seconds": 90.75581328199951,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "45e8cf85588e4132b80665c3f77c803b"
+    },
+    {
+      "set": "v1_g1",
+      "groups": [
+        "g1_temporal_extras"
+      ],
+      "n_features": 15,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "hour_sin",
+        "hour_cos",
+        "weekpos_sin",
+        "weekpos_cos",
+        "minute_of_day",
+        "part_of_day",
+        "is_weekend",
+        "is_holiday",
+        "is_near_holiday",
+        "is_business_day"
+      ],
+      "val_mae": 3.4311988702666647,
+      "val_within_rate": 80.14544483242179,
+      "delta_mae_pct": 1.7833962839920985,
+      "delta_within_points": 0.5936699617216448,
+      "best_iteration": 500,
+      "fit_seconds": 119.24779403999946,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "244efb8bde7d4edaa81f1f86d82e2755"
+    },
+    {
+      "set": "v1_g2",
+      "groups": [
+        "g2_centroid_geometry"
+      ],
+      "n_features": 14,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "centroid_haversine_km",
+        "centroid_dlat_km",
+        "centroid_dlon_km",
+        "centroid_manhattan_km",
+        "centroid_bearing_deg",
+        "log1p_haversine_km",
+        "midpoint_lat",
+        "midpoint_lon",
+        "has_geometry"
+      ],
+      "val_mae": 3.4714512045511436,
+      "val_within_rate": 79.73358091122739,
+      "delta_mae_pct": 0.631190389043289,
+      "delta_within_points": 0.18180604052724902,
+      "best_iteration": 500,
+      "fit_seconds": 108.23257146600008,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "15062877e7d542f683322c96e8b065f1"
+    },
+    {
+      "set": "v1_g3",
+      "groups": [
+        "g3_spatial_identity"
+      ],
+      "n_features": 11,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "pu_is_airport",
+        "do_is_airport",
+        "is_airport_trip",
+        "pu_borough",
+        "do_borough",
+        "borough_pair"
+      ],
+      "val_mae": 3.488662951098864,
+      "val_within_rate": 79.58225538578854,
+      "delta_mae_pct": 0.13851148762874652,
+      "delta_within_points": 0.03048051508839933,
+      "best_iteration": 500,
+      "fit_seconds": 110.5564153739997,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "6f69088f283244efa3dbcef0049cca5d"
+    },
+    {
+      "set": "v1_g4",
+      "groups": [
+        "g4_trip_reencodings"
+      ],
+      "n_features": 6,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "passenger_bucket"
+      ],
+      "val_mae": 3.4937731045452716,
+      "val_within_rate": 79.53432666064954,
+      "delta_mae_pct": -0.007764474491401715,
+      "delta_within_points": -0.017448210050602597,
+      "best_iteration": 500,
+      "fit_seconds": 104.65636003700001,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "9d20c414ebb84dd1a397c63b0e8b0c41"
+    },
+    {
+      "set": "v1_g5",
+      "groups": [
+        "g5_point_in_time_aggregates"
+      ],
+      "n_features": 8,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "od_median_duration_min",
+        "pu_hour_mean_speed_kmh",
+        "pu_hour_trips_per_day"
+      ],
+      "val_mae": 3.550294782199997,
+      "val_within_rate": 78.8655863137102,
+      "delta_mae_pct": -1.625673381982576,
+      "delta_within_points": -0.6861885569899471,
+      "best_iteration": 88,
+      "fit_seconds": 23.69118872600029,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "7c98f97c55d64328b6d1e0cd51c9a143"
+    }
+  ]
+}

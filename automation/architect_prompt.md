@@ -32,13 +32,27 @@ Your boundary session does THREE jobs, in order:
    observable Accept-when, evidence plan, safe stopping point · out-of-scope
    named · risks/walls with fallbacks citing ADRs. Sessions are short and
    fresh by design — write stories the executor can finish without context
-   it doesn't have.
+   it doesn't have. A story whose verification needs a long unattended run
+   must say so and name `run_detached.sh` as its exit path (ritual e), so the
+   executor plans for it instead of discovering it at minute forty.
 
 3. CONTINUE OR PARK the chain:
    - Forks blocking everything → AWAITING_PO.md is complete; write the
-     HANDOFF entry; schedule nothing. The chain waits for the PO.
+     HANDOFF entry; schedule nothing. The chain waits for the PO. The
+     AWAITING_PO.md entry is load-bearing beyond the PO's inbox: it is how
+     automation/watchdog.sh tells a deliberate park from a crash, and a park
+     without one will read as a dead chain.
    - Otherwise → HANDOFF entry, commit + push the kickoff, then run:
      `automation/next_session.sh executor 120`
+
+THE SESSION LIFECYCLE LAW (gotcha #45). Ending your turn IS process exit.
+There is no "later", and every Claude Code BACKGROUND TASK you started dies
+with you, mid-write. On 2026-08-17 that ended the chain: an executor detached
+nothing, ended its turn waiting on a run, and killed the run by ending. If a
+verify leg must outlive your session, detach it —
+`automation/run_detached.sh <name> --then-schedule executor -- <command...>` —
+and let it schedule the successor rather than sitting and waiting. Never end
+a turn intending to resume.
 
 Rules that bind you: the PO's fork policy (direction decisions WAIT — no
 auto-default), the marts/features boundary laws, gates never loosened except

@@ -1,5 +1,324 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (ag) — M3-S3 finished: v2 confirmed at full scale, and the test suite disagreed with the story first
+
+### State
+**BLOCKED ON GITHUB, not on the work** — **EXECUTOR, Opus 5 (`claude-opus-5`,
+stated first line), story-scoped fresh session, role:MLE (charter read;
+EXCLUSIONS + the registry refusal in play).** Executed the REMAINDER of
+**M3-S3**, the story session (af) recovered from. The story is **complete and
+verified locally**; `make verify-m2` **GREEN 54/54** after the feature registry
+refactor and the borough fix; **nothing was promoted — `@champion` is version 1,
+run `3adee05a…`, before and after**, checked live at both ends.
+
+**What did NOT happen: the PR.** Every commit is pushed
+(`origin/story/m3-s3-artisan-feature-set-v2`, level with local at `55b83cf`), but
+GitHub is refusing writes — see the wall below. **No PR exists, nothing is
+merged, `main` is untouched.** The first job of the next session is to open and
+merge it; the branch needs no further work.
+
+### WALL — `wall: open the M3-S3 PR, attempts: 3`
+`gh pr create` twice → `HTTP 503 ... api.github.com/graphql`; then the same
+request through the REST path (`gh api .../pulls -f head=… -f base=main`) →
+`HTTP 503`. **Reads are fine throughout** — `gh api repos/…` returns the repo,
+`gh auth status` is green (Phu-Hong-Duong, scopes gist/read:org/repo/workflow),
+and `git push` succeeded. So this is GitHub's write path, not our credentials,
+not our branch, and not the allowlist. Per the standing rule I stopped attacking
+it after three attempts rather than looping.
+
+**What the next session should do, in this order:**
+1. `gh api repos/Phu-Hong-Duong/NYC-taxi-production-with-k8-flavor/pulls --jq 'length'`
+   — a read, and it currently returns `0`.
+2. Open the PR (`gh pr create --fill --label role:MLE`, or the REST form above if
+   GraphQL is still down), then `gh pr checks --watch`, then
+   `gh pr merge --merge --delete-branch`, then `git branch -r --contains 55b83cf`
+   → expect `origin/main` (gotcha #20). The PR body is this HANDOFF entry; every
+   number in it is already in `docs/ablation_m3.md`.
+3. **If GitHub is still 503, do NOT burn the chain retrying.** Write it up in
+   AWAITING_PO.md and take exit ritual (d) — a park with an entry is a decision
+   the watchdog leaves alone; a park without one reads as a crash (gotcha #45).
+   M3-S4 must not start on top of an unmerged story branch: one story per branch
+   is what makes the PR boundary the lineage (protocol §7).
+
+### Staleness check of (af)'s Next — reality matched exactly, and I read it in the order (af) asked
+`automation/runs/m3s3-confirmation.status` FIRST (the new boot step 3):
+**`RUNNING 72793`**, started 14:42:31Z, pid alive in `/proc`. It finished at
+**15:23:07Z, `DONE 0`**, all four arms. Cluster untouched all session; registry
+read live → `nyc-taxi-eta` v1, `@champion` → v1. `automation/STOP` absent.
+
+**One thing (af) could not foresee, handled and worth knowing.** The detached job
+carries `--then-schedule executor`, so it tried to start a successor **while this
+session was mid-story**. It was refused — `[chain] a successor is ALREADY queued`
+— because this session had written `automation/logs/pending_successor` at 14:52Z
+to hold the slot, and `automation/logs/running_session` naming **pid 74470** (the
+live `claude -p` process) so the watchdog would read a working chain rather than
+a dead one. Both markers are the harness's own vocabulary, not a workaround; the
+PO independently landed the stronger form of the same guard mid-session
+(`2946727`, "one session in the tree at a time"), which makes a queued successor
+WAIT for a live `running_session` instead of launching on top of it.
+
+### Done (every leg with the command and what came back)
+
+- **The full-scale confirmation, four arms over 43,987,422 train rows** (val
+  2019-07, 6,189,748 rows, one evaluator, `m3-artisan`):
+
+  | arm | features | val MAE | Δ | KPI-10 | Δ pts | fit s | run |
+  |---|---:|---:|---:|---:|---:|---:|---|
+  | `v1` | 5 | 3.4760 | — | 79.693% | — | 485.0 | `a4d9f9ebd62a4e628ce7dccecce55fd3` |
+  | `v1_g1` | 15 | 3.4145 | **+1.77%** | 80.263% | +0.569 | 579.6 | `9fd1429002104c61ad111c94731109bb` |
+  | `v1_g2` | 14 | 3.4542 | **+0.63%** | 79.894% | +0.200 | 501.1 | `9494748ffcbd4dcd971f31976a03a0f7` |
+  | **`v2`** | **24** | **3.3905** | **+2.46%** | **80.506%** | **+0.813** | 569.4 | `6807116edf4c49d681a31bd941298a81` |
+
+  **Both keeps hold at full data**, so v2's membership is unchanged — decided on
+  the full-scale numbers as the kickoff required, and it happens to have changed
+  nothing. v2 logged **with signature + input example**. Rows in
+  `docs/ablation_m3_confirmation.json`; table in `docs/ablation_m3.md` §5.
+- **The confirmation refuted this story's own written prediction, and the
+  prediction stayed in the document.** §5 argued before the numbers existed that
+  g2 would keep shrinking with data ("a feature whose job is to substitute for
+  missing data is worth less as the data arrives"). Measured: **+0.6312% at 15%,
+  +0.6277% at 100%** — two decimal places apart on 6.7× the rows; g1 the same
+  (+1.7834% → +1.7712%). The collapse is entirely between the **0.5% smoke run**
+  (+2.98%, no MLflow row, inadmissible by playbook §3.3) and 15%. The old
+  paragraph is quoted verbatim above its refutation. Also measured: the groups
+  are additive to within **0.06 points** (1.7712 + 0.6277 = 2.3989 vs 2.4597
+  together), and **v1 reproduced `3.47603843547682` across two invocations 71
+  minutes apart** — and it equals M2-S2's `lightgbm-v1` val MAE from a different
+  script.
+- **A red test in the checkpoint, and it was a real defect** —
+  `uv run pytest tests/unit -q` → **1 failed, 368 passed** on the first run of a
+  suite the killed session never got to run.
+  `test_an_unseen_zone_id_cannot_invent_a_category_code` was correct and
+  `zones.load_zone_table` was wrong: the shipped TLC lookup gives zone **264**
+  Borough `Unknown` and zone **265** Borough `N/A`, and taking both literally
+  minted a seventh borough meaning "we do not know", so `borough_pair` — whose
+  whole job is to be the coarse backoff for every OD pair — carried two
+  categories for the same absence of information (DR-04 condition 1 asks for
+  ONE). `NOT_A_PLACE_BOROUGHS` folds the spellings; a second test pins both
+  halves (the nulls collapse **and** the six real boroughs survive, so a later
+  "fix" cannot flatten the column and stay green). Now **gotcha #46**. Suite
+  after: **371 passed**, `uv run ruff check .` clean (one E501 also fixed).
+- **The defect was RE-MEASURED, not annotated.** Zone 265 is 0.2238% of train
+  rows, which makes the effect small but not measured — so g3's arm was re-run at
+  the same 15% and seed after the fold (`--story M3-S3-postfix`): the **v1 control
+  reproduced to ten decimal places** (`3.4935018525`), and g3 moved **+0.1385% →
+  +0.1534%** against a 0.50% bar. Verdict unchanged, and the control is what
+  licenses reading the move as the fix rather than as noise.
+  `docs/ablation_m3_g3_postfix.json`, table in §7.
+- **`make verify-m2` → GREEN, 54/54, exit 0** — run twice (once for the
+  transcript, once counting `ok` lines). It exercises the new feature registry
+  where it matters: re-scoring the champion resolves set `v1` through
+  `configs/features.yaml` over 5,950,708 rows and still returns **3.2608**.
+- **The PO's recovery harness is in git** (`8ecfcde`): `run_detached.sh`,
+  `watchdog.sh` + `crontab.watchdog`, `toast.sh`, the `next_session.sh` markers,
+  exit ritual (e) in all three prompts, `tests/unit/test_watchdog.py`. It was
+  sitting uncommitted while `docs/gotchas.md` #45 (committed) described it —
+  the repo documented scripts git did not have. **15 passed** across
+  `test_watchdog.py` + `test_chain_script.py`.
+- **Registry untouched, checked at both ends**: `search_registered_models()` →
+  `['nyc-taxi-eta']`, versions `[1]`, `get_model_version_by_alias(...,'champion')`
+  → version 1 / run `3adee05a855a424bb664c7fea3735703`. No registry API appears
+  in this story's diff and a test keeps it out.
+- **DR-01 budget, artisan track: 3,313.9 s logged of 9,000** across 15 runs —
+  the 15% ablation 557.1 · the confirmation 2,135.0 · the **455.5 s orphan arm
+  from the killed run, counted because the CPU really burned** · the post-fix
+  re-measurement 166.2. Two red-team arms logged no `fit_seconds`, so the total
+  is reported as a **floor**, not a figure.
+- **F-013 CLOSED, both halves** (the features half was this story's): the row was
+  already written by the checkpoint; this session re-proved its central claim
+  live (`verify-m2` GREEN after the refactor).
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **I finished the story rather than handing the numbers to a fresh session.**
+  The new lifecycle law says a session must never end a turn intending to resume;
+  it does not say a session may not stay alive while a **detached** job runs. The
+  run was already `setsid`-ed by (af), so my waiting risked nothing — if this
+  session had died, the job would still have finished and scheduled a successor.
+  The alternative burned a session to re-read a context I already had.
+- **The g3 re-measurement was run even though it could not change the verdict.**
+  ~166 s of fitting to replace "the affected rows are few" with a number and a
+  reproducing control. This program's standing preference; cheap here.
+- **§2's sample table was left at the numbers its verdicts were taken on**, with
+  the post-fix re-measurement as a separate §7 row rather than an edit. Editing
+  measured rows to match later code would make the table describe a run nobody
+  did.
+- **The recovery harness was committed by me, though the PO wrote it.** It is
+  their work and the commit says so; leaving it in the working tree was the exact
+  risk #45 was filed about.
+- **No findings row for the borough defect.** It was born in an unmerged
+  checkpoint commit and died in the same PR — a register row that opens and
+  closes without ever reaching `main` is noise. It is a gotcha (#46), a doc
+  section (§7) and a test instead.
+
+### Open items this story did NOT touch (none silently)
+- **`make train` still cannot fit a set that uses the point-in-time aggregates**
+  (`run.py` never fits the tables). Costs nothing today — g5 was dropped, v2
+  needs no fitted tables — and the failure is loud. A future story that admits an
+  aggregate group owes `run.py` that path. `docs/ablation_m3.md` §7.
+- **g1's +1.77% is not attributed to any member of the group.** The obvious
+  suspect is `minute_of_day` (v1 gave the model an integer hour and nothing
+  finer). If it carries most of the win, v2 is paying for nine columns to get the
+  value of one — a cheap, named experiment for a successor.
+- **One seed.** g2 sits 0.13 points above the bar at full scale; a 3-seed sweep
+  is the reasonable want, and ~5,690 s of artisan budget remains.
+- **The chain harness has no red-team twin.** `test_watchdog.py` (11) covers the
+  logic including "a fork is never auto-resumed", but nothing yet kills a real
+  detached job and watches the watchdog ring. Named for ARCH's boundary triage.
+
+### Next
+**First: land this story** — open and merge the PR per the wall section above.
+It is minutes of work when GitHub answers, and until it does, **M3-S4 is
+blocked** by the one-story-per-branch rule rather than by anything technical.
+
+**Then M3-S4** — the automation track (FLAML scout × Optuna sniper, run twice, the
+`optuna` database via D-002's recipe, kill-and-resume, ≥1 pruned trial). It is
+the next unstarted, unblocked story; S3 leaves it everything it needs: v2 exists
+and is measured, `configs/features.yaml` resolves both sets, and DR-03 keeps the
+axes disjoint — **automation searches HYPERPARAMETERS on feature sets it does not
+invent**, which is the only thing that lets M3-S5's 2×2 answer "features or
+tuning?".
+
+Two things S4 should read before it starts anything long: **its fits are the
+other half of the DR-01 equal-budget law** (artisan spent 3,313.9 s of 9,000, and
+the actuals must be printed), and **anything long goes through
+`automation/run_detached.sh`** — this story's numbers exist only because (af)
+re-launched them that way. S1's F-008 guard is live and S4 is required to
+exercise it once on a real sampled run.
+
+Chain: scheduled `automation/next_session.sh executor **900**` rather than the
+usual 120 — a fifteen-minute delay is the cheapest thing that might make the
+GitHub outage irrelevant, and a successor that boots into the same 503 achieves
+nothing but a burnt session. `pending_successor` (this session's slot-hold, which
+correctly refused the detached job's attempt to start a successor on top of a
+live session) was cleared before scheduling; `running_session` is left naming
+**pid 74470** on purpose — it is true until this process exits, and `2946727`
+makes the queued session wait for exactly that rather than launch into a shared
+working tree.
+
+## Session 2026-08-17 (af) — the chain died waiting for something it had killed
+
+### State
+**RECOVERY session, run by the PO's own Claude on the Windows side against the
+WSL repo — NOT a chain session, no role block, no story executed.** It exists
+because the chain was dead and could not restart itself. Branch
+`story/m3-s3-artisan-feature-set-v2`, two commits, **PR not opened — M3-S3 is
+NOT done.** The full-scale confirmation is re-running detached; the chain will
+resume by itself when it lands.
+
+### What happened, with the receipts
+The M3-S3 executor (log `automation/logs/20260817_125839_executor.log`) ended
+its turn with **"I'll pick this up when the confirmation run reports."** In
+`claude -p` there is no later: ending the turn is process exit. Three failures
+stacked, now gotcha **#45**:
+
+1. **It killed the run by ending.** The confirmation was a Claude Code
+   *background task* — a child of the session process. Its output file ends
+   `[killed]` at **13:50:07Z**, mid-`mlflow` model-logging, and the three
+   polling tasks carry the same kill timestamp to the second. One arm of four
+   had finished: `artisan-v1`, full-scale, **val MAE 3.4760**, FINISHED
+   13:40:05Z. That row is real and is still in MLflow `m3-artisan`.
+2. **The exit ritual was never reached**, so `next_session.sh` was never
+   called. The ritual had four endings and none of them covered "an async job
+   is in flight", so a fifth was invented. Counter still read 14, no successor,
+   no error.
+3. **Nothing watched.** Chain liveness was entirely "each session schedules the
+   next". It stayed dead **38 minutes**, until a human read a status pane.
+
+Damage was time only, by luck: 23 files — four feature modules, the ablation,
+the leakage red-team, 33 tests — were sitting **uncommitted** the whole time.
+
+### Done (each leg with the command and what came back)
+- **The work is in git.** `467afa9` — checkpoint commit of all 23 paths, taken
+  by this session, explicitly NOT a claim that the story is done.
+- **`automation/run_detached.sh`** — long jobs via `setsid`, own process group,
+  `automation/runs/<name>.{log,status}`, and `--then-schedule <role>` so **the
+  job** hands the chain forward rather than a session sitting and waiting.
+  Proven before it was trusted: a smoke job printed `LATE-OUTPUT-AFTER-
+  LAUNCHER-DIED` and went `DONE 0` twelve seconds after every process that
+  launched it was gone.
+- **The confirmation is re-running under it**, all four arms for one
+  self-consistent table: `automation/runs/m3s3-confirmation` → `--full-scale
+  --sets v1,v1_g1,v1_g2,v2 --log-model --out docs/ablation_m3_confirmation.json`.
+  On completion it schedules an executor by itself.
+- **`automation/watchdog.sh`** + `automation/crontab.watchdog`, installed and
+  live (`crontab -l`), every 10 minutes. **It may restart an ACCIDENT and never
+  a DECISION**: a chain parked on a fork writes AWAITING_PO.md, and that diff is
+  how it tells the two apart. RED conditions (fork parked · detached run FAILED
+  or KILLED · daily cap · 3 failed restarts in 15 min) ring and do not restart.
+- **The alarm reuses the PO's own notifier** (`~/.claude/toast.ps1`, the one the
+  Notification hooks already drive), tag `ChainWatchdog`, alarm sound, urgent,
+  stays until dismissed. Verified end to end from a cron-like `env -i` shell:
+  `~/.claude/toast.log` records `ChainWatchdog | shown | held=1`.
+- **`next_session.sh` now leaves liveness visible from outside**:
+  `pending_successor` and `running_session` markers, `setsid` on the queued
+  session, and a refusal to queue a second successor. Existing
+  `tests/unit/test_chain_script.py` still **4 passed** — pinned behaviour intact.
+- **`tests/unit/test_watchdog.py` — 11 passed**, sandbox chain, fake `claude`,
+  recording toast. Includes the one that matters most: *a fork is never
+  auto-resumed*.
+- Exit ritual **(e)** added to all three prompts, plus the lifecycle law
+  outright: ending a turn kills your children, so never end one intending to
+  resume. `automation/README.md` at v3.1.
+
+### Decisions (craft-level, undo verified, taken without the PO)
+- **The confirmation re-runs all four arms rather than the three outstanding
+  ones.** The script does one narrow read and shares the fitted tables across
+  experiments, so an internally consistent table is worth ~9 minutes of re-fit.
+  **Cost, stated because it is a real one:** MLflow `m3-artisan` now holds
+  **two full-scale `artisan-v1` rows** — the orphan at 13:40:05Z from the killed
+  run, and this run's. Whoever writes the table must cite which run produced it.
+- **Confirmation rows go to `docs/ablation_m3_confirmation.json`**, not
+  `docs/ablation_m3.json` — that file holds the 15% SAMPLE rows and §4's table
+  is built from them. Overwriting it would have destroyed recorded evidence.
+  If the successor prefers the doc's original naming, that is a rename, not a
+  re-run.
+- **Harness changes sit on the story branch**, not on main. The chain executes
+  whatever branch is checked out, so the fix had to be reachable now. They must
+  survive the M3-S3 merge.
+
+### Defects/Surprises
+- **A hand-rolled toast reported success and was never shown.** The first
+  notifier used the `{1AC14E77-…}\WindowsPowerShell` AUMID, which is no longer
+  registered on this machine: Windows accepts the call and silently drops it.
+  It returned `TOAST_OK`. The PO's own `toast.ps1` documents this trap and
+  solves it by sending under the Claude Desktop AUMID — which is the argument
+  for reusing an existing notifier rather than writing a second one.
+  `automation/toast.sh` now reads `held=` back out of `toast.log` instead of
+  trusting its own exit code.
+- **The first `test_watchdog.py` primed its fixture by running the watchdog
+  once** — which healed the sandbox chain and left a queued successor, so seven
+  tests reported GREEN without ever reaching the condition they named. They
+  passed vacuously. The hash is now written directly; the reason is in the
+  fixture docstring.
+- Gotchas **#43 and #44 were already taken** by the dying session's own field
+  notes, which were in the uncommitted tree. This one is **#45**.
+- `docs/ablation_m3.md` still carries its `<!-- CONFIRMATION TABLE -->`
+  placeholder, and §5's trend table still reads "see the table below".
+
+### Next
+**The chain resumes itself** — `automation/runs/m3s3-confirmation` schedules an
+executor when it finishes (started 14:42:31Z, ~9 min/arm, expect ~15:20Z).
+Nothing to do by hand unless it rings.
+
+The next executor should, in order:
+1. `cat automation/runs/m3s3-confirmation.status` — **DONE** means the numbers
+   are yours in `docs/ablation_m3_confirmation.json`; **FAILED/KILLED** means
+   read the `.log` and re-detach, do not foreground it.
+2. Fill `<!-- CONFIRMATION TABLE -->` and §5's last row in `docs/ablation_m3.md`
+   from those rows, **naming the run id** the table came from (two full-scale
+   v1 rows exist — see Decisions).
+3. Re-check the keep verdicts at full scale. §7 already warns g2's +0.63% sample
+   margin sits close to the 0.50% bar and that a substitute-for-missing-data
+   feature is worth *less* as rows arrive — so **g2 flipping to a drop is a
+   live outcome, not a failure**, and v2's membership follows the full-scale
+   numbers rather than the sample's.
+4. `make verify-m2` before the PR; open it with `role:MLE`; keep the harness
+   commit in the merge.
+
+Cluster was 3/3 Ready, 17/17 Running throughout; nothing was promoted;
+`@champion` is version 1. `automation/STOP` absent. 14 sessions used today —
+the counter did not move during this recovery, because no chain session ran.
+
 ## Session 2026-08-17 (ae) — M3-S1: the gate learned what it was being compared to
 
 ### State

@@ -9,6 +9,117 @@ months from now.
 
 ## M3
 
+### M3-S3 — the strongest feature in the literature lost, and the sample that lied was the one nobody was allowed to quote (2026-08-17, role:MLE)
+
+**What was built.** Feature set **v2**, earned group by group. Five feature
+groups were declared in `configs/features.yaml` in a fixed order *before anything
+was fitted* (Design Review DR-03), each was fitted as its own experiment against
+a v1 reference on a 15% stratified sample, and each was kept or dropped against
+DR-02's bar: **>= 0.50% relative val MAE, with KPI-10 not going down**. Two
+survived. Alongside them: the ONE home for feature-set definitions (F-013's
+features half — `configs/features.yaml` is now the registry and
+`configs/train.yaml` holds a pointer), a zone-geometry module, a committed
+holiday table, a point-in-time aggregate builder, and the mandated leakage
+red-team. **Nothing was promoted** — the registry API does not appear in this
+story's diff, and a test now keeps it that way.
+
+**Why this way — three decisions worth the space.**
+
+*(1) Groups, not features.* Every verdict in `docs/ablation_m3.md` is about a
+group of features admitted or refused together. That is less precise than
+per-feature attribution and it is the honest unit: the keep-threshold is a
+maintenance-cost bar, and what gets maintained is a family of related columns in
+the shared transform path, not one column. The cost is stated in the doc's limits
+section — g1's win is not attributed to any member of it.
+
+*(2) Every group tried is in the table, including the three that lost.* DR-02
+calls this the anti-forking-paths condition and it is the least glamorous rule in
+the milestone. Three of five groups failed. A table containing only g1 and g2
+would have described the same work and implied a hit rate of 100%.
+
+*(3) The point-in-time constraint went into the type, not into a comment.*
+`aggregates.fit(...)` defaults to `point_in_time=True`; the tables it returns
+carry the flag; `describe()` prints `LEAKY BY REQUEST` in capitals when it is
+off; and exactly one script may turn it off.
+
+**The concept underneath — two of them, and they point in opposite directions.**
+
+*The first: a feature's value is not a property of the feature.* The dossier's
+row 14 family — historical OD-pair medians and zone-hour traffic proxies — is
+"the single strongest aggregate family in the sources", and it is the only group
+of the five that made this model **worse** (−1.63% val MAE, −0.686 KPI-10
+points). Not because the idea is bad, but because of two things about *our*
+situation that the sources did not share. Their cluster ids came from a KMeans
+fit over raw coordinates and carried no information by themselves; **our
+`PULocationID`/`DOLocationID` already ARE the OD pair the aggregate is keyed on**,
+so the aggregate mostly re-states a column the model has. And their split let
+them compute group means over everything; ours does not, so the legal version
+serves a train row a one-month window and a validation row a six-month one — the
+feature the model is fitted on is not the feature it is scored on. That is
+gotcha #43, and it is a failure mode created by the fix, not by the flaw.
+
+*The second: the protocol that looks like ceremony is the one that saves you —
+and it saved this story by DISAGREEING with the person running it.* The playbook
+says sample-first, then confirm winners at full scale. Watch the
+centroid-geometry group — the F-007(b) substitute this whole milestone was built
+around — measured at three data sizes: **+2.98%** on a 0.5% harness smoke run,
+**+0.6312%** on the 15% ablation, **+0.6277%** on all 43,987,422 rows.
+
+This session wrote the explanation *before* the last number existed, and the
+explanation was wrong. It predicted the decline would continue, on a real
+mechanism: centroid distance is a smooth ordering over zone pairs the tree has
+too few rows to learn individually, so a feature whose job is to stand in for
+missing data should be worth less as the data arrives. The measurement says that
+effect is **exhausted by 6.6M rows** — 15% and 100% agree to two decimal places
+on both surviving groups. The prediction is still in `docs/ablation_m3.md` §5
+with its refutation printed underneath it, because a forecast deleted after the
+fact teaches nothing and this one is instructive twice: **the sample that lied
+was the 220k smoke test the protocol had already ruled inadmissible** (no MLflow
+row, so by playbook §3.3 not a result), and the sample the protocol *did* trust
+was accurate to 0.02 percentage points. Sampling error is not a slope; it is a
+small-sample effect with a size, and the protocol's job is to keep you from
+quoting the run that has it.
+
+**The red team, and what it actually showed.** The drill fitted the aggregate
+tables across the validation month on purpose — the same line the top-6% Kaggle
+solution runs, which is *correct there* because its test period interleaves its
+train period. Expected: validation inflates, an untouched month stays flat.
+Observed: validation improved by **1.56%** and the untouched month got **3.83%
+worse**. Both halves matter. The leak did not merely flatter a measurement, it
+damaged the model — and the leaky arm ran all 500 boosting rounds without early
+stopping, because the one mechanism that would normally halt a bad direction is
+the one a contaminated validation set defeats first. The illegal version would
+have cleared DR-02's keep-threshold on both conditions and been admitted into v2
+by the same rule that admitted the two honest groups.
+
+**The third thing, and it is about the process rather than the model.** This
+story was written across two sessions because the first one was killed
+mid-confirmation (gotcha #45). The second one started by running the test suite
+the first never reached — and one of the first session's own 33 new tests was
+**red**. It had written a correct test for the unseen-category law and a loader
+that failed it, because the TLC lookup spells "not a place" two ways and the
+comment in the loader generalised from the id its author checked (gotcha #46).
+The uncomfortable reading is not "tests are good": it is that **an
+uncommitted, unrun test suite is indistinguishable from a passing one**, and
+that a story is not done when its numbers arrive — it is done when the cheap
+checks have been allowed to disagree with it.
+
+**What to look at.** `docs/ablation_m3.md` §4 and §5 — the two findings, with the
+tables, and §5's refuted prediction left standing · §7's re-measurement of the
+borough fold, which is what a defect correction looks like when it is measured
+instead of argued · `docs/leakage_redteam_m3.md` §3 · `configs/features.yaml`,
+which is now the whole answer to "what does the model eat?" and carries the group
+order that was fixed before the fitting · `src/taxi_mlops/features/aggregates.py`'s
+module docstring, which argues the window-stability point that keeps a raw count
+from becoming a proxy for `month` · gotchas #43, #44, #45 and #46.
+
+**What to try yourself.** Re-run one group at a sample size of your choosing
+(`make ablation ABLATION_ARGS="--sets v1,v1_g2 --sample-fraction 0.05"`) and plot
+its delta against the two in §5 — the slope is the point, and it is a property of
+the feature rather than of the run. Then flip the drill's one switch by hand
+(`aggregates.fit(frame, target, point_in_time=False)`) on a set you believe in and
+see how much better everything gets. The uncomfortable part is how good it feels.
+
 ### M3-S1 — the gate learned what it was being compared to (2026-08-17, role:MLE)
 
 **What was built.** Four refusals the gate could not make before. It now judges

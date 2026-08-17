@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..data.config import DataConfig, load_config, load_yaml
-from ..features import quote_time
+from ..features import quote_time, sets
 from . import baselines, gate
 from . import model as model_mod
 from . import registry as registry_mod
@@ -63,7 +63,17 @@ class RunResult:
 
 
 def load_train_config(path: str = "configs/train.yaml") -> dict[str, Any]:
-    return load_yaml(path)
+    """THE loader. Everything that reads the training config comes through here.
+
+    It resolves `features:` against `configs/features.yaml` (M3-S3, F-013) so
+    every consumer — this module, `score.py`, `verify-m2`, the red teams — sees
+    the same expanded column list from the same one home. Resolving at the single
+    loader rather than at each call site is the point: a caller that forgot would
+    get a KeyError, but a caller that resolved differently would get a model.
+    """
+    cfg = load_yaml(path)
+    cfg["features"] = sets.resolve(cfg["features"])
+    return cfg
 
 
 def _splits(

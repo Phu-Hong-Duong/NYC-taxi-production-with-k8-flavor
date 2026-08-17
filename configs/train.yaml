@@ -6,31 +6,25 @@ data:
 target: trip_duration_minutes
 
 # ---------------------------------------------------------------- features ---
-# Feature set v1 (M2-S2, role:MLE) — QUOTE-TIME PURE: every column here is
-# knowable at the moment a rider asks "how long will this take?".
+# WHICH feature set this program trains and serves. The set's DEFINITION is not
+# here: since M3-S3 it lives in `configs/features.yaml`, the one home (F-013's
+# features half, Design Review AI-6). This block may hold `version` and
+# `registry` and nothing else — `taxi_mlops.features.sets.resolve` refuses a
+# stray column list, because the stub that used to sit in features.yaml went
+# stale AND named an excluded column, which is the failure two homes produce.
 #
-# The INCLUDE list is a knob. The EXCLUDE list is NOT, and is not here: it lives
-# in `taxi_mlops.features.quote_time.EXCLUSIONS` with a reason per column, and a
-# guard refuses any feature matrix that contains one. The asymmetry is
-# deliberate and is the same argument M2-S1 made about first-match attribution:
-# a switch that can break an invariant is a trapdoor, not a knob. Adding a
-# column below that the registry excludes fails loudly (FeatureLeakageError),
-# so this file cannot quietly re-admit leakage.
+# The INCLUDE list is a knob. The EXCLUDE list is NOT, and is in neither file: it
+# lives in `taxi_mlops.features.quote_time.EXCLUSIONS` with a reason per column,
+# and a guard refuses any feature matrix that contains one.
+#
+# STILL v1 AFTER M3-S3, on purpose. `nyc-taxi-eta` version 1 is serving and its
+# signature is over v1's five columns; `verify-m2` §1 and `score.py` both fail
+# if this line stops matching what the champion eats. v2 is measured, logged and
+# waiting in the registry — the bake-off at M3-S5 is what decides whether this
+# line moves, and it moves as part of a promotion, never on its own.
 features:
   version: v1
-  # Derived from tpep_pickup_datetime — the ONE timestamp a quote request has.
-  # `month` is absent BY LAW (CLAUDE.md): the target mean rises 17.3% Jan->Jun,
-  # so month is a reporting dimension and a model that learns it learns the
-  # calendar, not the city.
-  temporal: ["hour", "dayofweek"]
-  # Carried straight through from the contract's blessed columns.
-  passthrough: ["PULocationID", "DOLocationID", "passenger_count"]
-  # Declared to LightGBM as categorical. Zone ids are labels, not magnitudes:
-  # zone 264 is not "two more than 262", and 264/265 are "unknown", not places
-  # (eda_report.md §9). dayofweek joins them because Saturday is not 6/7ths of
-  # Sunday; `hour` stays ordered on purpose — range splits (the morning peak,
-  # the evening peak) are exactly what a tree should be allowed to make.
-  categorical: ["PULocationID", "DOLocationID", "dayofweek"]
+  registry: configs/features.yaml
 
 # --------------------------------------------------------------- baselines ---
 # The honest reference floor, RE-DERIVED here through the model's own evaluator

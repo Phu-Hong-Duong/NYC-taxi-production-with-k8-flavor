@@ -1,8 +1,133 @@
-# Feature-set registry — versioned; both tracks and serving reference sets by name.
-# v1: M2 request-scoped. v2: M3 artisan (dossier survivors). Sets are additive
-# manifests over the ONE shared transform path (src/taxi_mlops/features).
+# THE feature-set registry — the ONE home for "what does the model eat?".
+#
+# F-013 (features half) / Design Review AI-6, landed at M3-S3. Until this story
+# this file carried a bootstrap-era stub whose `v1` line named `trip_distance` —
+# a column `taxi_mlops.features.quote_time.EXCLUSIONS` refuses BY LAW and DR-04
+# keeps excluded. Two definitions of "v1" one directory apart, one of them stale
+# and leaky, is the port-family twins lesson wearing a feature set's clothes.
+#
+# So the stub is gone and this file is now real: `configs/train.yaml: features`
+# holds a VERSION and a pointer here, and `taxi_mlops.features.sets.resolve`
+# is the only thing that turns the two into a column list. There is no second
+# place a feature set can be defined — a test fails if `configs/train.yaml`
+# grows a `temporal`/`passthrough`/`derived` key of its own again.
+#
+# The asymmetry M2-S2 established is unchanged and this file inherits it: the
+# INCLUDE lists below are a knob; the EXCLUDE list is LAW and is not here. It
+# lives in `taxi_mlops.features.quote_time.EXCLUSIONS` with a reason and a
+# ledger row per column, and `FeatureLeakageError` refuses a set defined here
+# that re-admits one. This file cannot quietly legalise leakage.
+#
+# Every derived name below must exist in `quote_time._DERIVED_BUILDERS` and must
+# carry an entry in `quote_time.REQUEST_TIME_SOURCE` (gotcha #21: a serving
+# feature that cannot say where it comes from at request time is a feature that
+# will be discovered missing at M5). Both are pinned by tests.
+
+# ------------------------------------------------------------------ groups ---
+# Design Review DR-03, agenda item 3. These five groups and THIS ORDER were
+# committed before M3-S3 fitted anything — DR-02's anti-forking-paths condition:
+# a group list assembled after the numbers arrive is a garden of forking paths
+# with the forks pruned. Every group is reported in `docs/ablation_m3.md`,
+# survivors AND drops.
+groups:
+  g1_temporal_extras:
+    dossier_rows: [3, 4, 5, 6]
+    question: "does finer / cyclic / calendar time beat a bare integer hour for a tree?"
+    derived: [hour_sin, hour_cos, weekpos_sin, weekpos_cos, minute_of_day,
+              part_of_day, is_weekend, is_holiday, is_near_holiday, is_business_day]
+    categorical: [part_of_day]
+  g2_centroid_geometry:
+    dossier_rows: [7, 8, 9, 10, 11]
+    question: "what is the F-007(b) quote-time substitute worth ON TOP of zone identity?"
+    derived: [centroid_haversine_km, centroid_dlat_km, centroid_dlon_km,
+              centroid_manhattan_km, centroid_bearing_deg, log1p_haversine_km,
+              midpoint_lat, midpoint_lon, has_geometry]
+    categorical: []
+  g3_spatial_identity:
+    dossier_rows: [12, 13]
+    question: "can coarse, always-defined spatial labels help the 1.48% fallback rows?"
+    derived: [pu_is_airport, do_is_airport, is_airport_trip,
+              pu_borough, do_borough, borough_pair]
+    categorical: [pu_borough, do_borough, borough_pair]
+  g4_trip_reencodings:
+    dossier_rows: [17]
+    question: "expected ~zero for a tree — included so 'expected zero' is measured once"
+    derived: [passenger_bucket]
+    categorical: [passenger_bucket]
+  g5_point_in_time_aggregates:
+    dossier_rows: [14, 15, 16]
+    question: "does congestion MEMORY beat congestion identity — and can we keep it legal?"
+    # The HIGH-leakage family (dossier §4 traps 1-2). Fitted on TRAIN months only
+    # and keyed point-in-time by month: a row in train month k sees an aggregate
+    # built from months 1..k-1 and NOTHING else, so the first train month gets
+    # NaN rather than a number containing its own answer. val/test see all six.
+    # `taxi_mlops.features.aggregates` is the only place this is computed, and
+    # M3-S3's mandated red-team fits the same tables across ALL months to watch
+    # val inflate while the untouched test month does not move.
+    derived: [od_median_duration_min, pu_hour_mean_speed_kmh, pu_hour_trips_per_day]
+    categorical: []
+
+# -------------------------------------------------------------------- sets ---
+# A set is `base` + zero or more groups. `base` is spelled out exactly once so a
+# group set and the production set cannot drift apart by a copy-paste.
+base:
+  # Derived from tpep_pickup_datetime — the ONE timestamp a quote request has.
+  # `month` is absent BY LAW (CLAUDE.md): the target mean rises 17.3% Jan->Jun,
+  # so month is a reporting dimension and a model that learns it learns the
+  # calendar of 2019, which is the one thing guaranteed not to repeat.
+  temporal: [hour, dayofweek]
+  # Carried straight through from the contract's blessed columns.
+  passthrough: [PULocationID, DOLocationID, passenger_count]
+  derived: []
+  # Declared to LightGBM as categorical. Zone ids are labels, not magnitudes:
+  # zone 264 is not "two more than 262", and 264/265 are "unknown", not places
+  # (eda_report.md §9). dayofweek joins them because Saturday is not 6/7ths of
+  # Sunday; `hour` stays ordered on purpose — range splits (the morning peak,
+  # the evening peak) are exactly what a tree should be allowed to make.
+  categorical: [PULocationID, DOLocationID, dayofweek]
+
 sets:
-  v1: [pickup_hour, pickup_weekday, trip_distance, pu_zone, do_zone]   # M2
-  # NOTE: trip_distance is post-trip odometer — serving-time availability under
-  # formal review at the M3 Design Review (artisan playbook §5 trap 3, gotcha #21).
-  v2: []   # filled at M3-S2 from ablation survivors, by name
+  # ---- v1: M2's promoted champion eats exactly this. NOT editable — version 1
+  # of `nyc-taxi-eta` carries a signature over these five names in this order,
+  # and `verify-m2` §1 and `score.py` both fail if the config stops matching it.
+  # A changed feature set is a NEW set with a new name, never an edit — the same
+  # law `configs/train.yaml: baselines` states for baselines.
+  v1:
+    groups: []
+
+  # ---- the five ablation sets: base + exactly ONE group each (playbook §3.2,
+  # "one change per experiment"). Their numbers are in docs/ablation_m3.md.
+  v1_g1: {groups: [g1_temporal_extras]}
+  v1_g2: {groups: [g2_centroid_geometry]}
+  v1_g3: {groups: [g3_spatial_identity]}
+  v1_g4: {groups: [g4_trip_reencodings]}
+  v1_g5: {groups: [g5_point_in_time_aggregates]}
+
+  # ---- v2: the artisan survivors, admitted by GROUP — a set assembled
+  # feature-by-feature from the winners of a group experiment would be reporting
+  # a number nothing was ever measured at.
+  #
+  # Two of the five declared groups cleared DR-02's >=0.50% relative val-MAE bar
+  # with KPI-10 up as well. Every group tried is in `docs/ablation_m3.md` with
+  # its measured delta, drops included:
+  #
+  #   g1 temporal extras       +1.78%  KPI-10 +0.594 pts   KEEP
+  #   g2 centroid geometry     +0.63%  KPI-10 +0.182 pts   KEEP
+  #   g3 spatial identity      +0.14%  KPI-10 +0.030 pts   drop (under the bar)
+  #   g4 trip re-encodings     -0.01%  KPI-10 -0.017 pts   drop (measured zero, as predicted)
+  #   g5 point-in-time aggs    -1.63%  KPI-10 -0.686 pts   drop — and it is the
+  #     surprise of this milestone. The strongest family in every source we read
+  #     is the one that LOST here, because the only legal version of it is
+  #     weaker than the zone identity v1 already carries. See the ablation doc §4
+  #     and `docs/leakage_redteam_m3.md` for what the ILLEGAL version buys.
+  v2:
+    groups: [g1_temporal_extras, g2_centroid_geometry]
+
+  # ---- the leakage red-team's set. IDENTICAL columns to v1_g5; the difference
+  # is not in this file at all, it is the `--leaky-aggregates` flag that fits the
+  # tables across every month instead of point-in-time. Named here so the run
+  # that produced the inflated number is findable, and so nobody mistakes it for
+  # a set anyone may train on.
+  redteam_g5_leaky:
+    groups: [g5_point_in_time_aggregates]
+    do_not_use: "fitted with --leaky-aggregates; exists only to be watched inflating"

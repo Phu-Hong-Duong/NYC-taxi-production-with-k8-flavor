@@ -13,7 +13,6 @@ import pandas as pd
 import pytest
 from conftest import raw_frame
 
-from taxi_mlops.data.config import load_yaml
 from taxi_mlops.features import quote_time
 from taxi_mlops.features.quote_time import (
     EXCLUDED_COLUMNS,
@@ -23,8 +22,12 @@ from taxi_mlops.features.quote_time import (
     categorical_names,
     feature_names,
 )
+from taxi_mlops.training.run import load_train_config
 
-TRAIN_CFG = load_yaml("configs/train.yaml")
+# Through the ONE loader (M3-S3): `configs/train.yaml: features` is a pointer
+# into `configs/features.yaml` now, so a raw load_yaml would hand this file a
+# version string where it expects columns.
+TRAIN_CFG = load_train_config("configs/train.yaml")
 FEATURES_CFG = TRAIN_CFG["features"]
 
 # The six columns F-007(a) names. Hard-coded here on purpose: if someone deletes

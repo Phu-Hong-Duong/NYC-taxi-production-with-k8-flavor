@@ -464,3 +464,101 @@ the seed line are earned by THIS project.
     thing once before believing a green suite; this defect was invisible to every
     synthetic `Metrics` object and would have fired for the first time at M3-S5,
     on the bake-off, against a live champion.
+
+43. **A point-in-time aggregate creates a train/serve skew of its own, and the
+    constraint that makes it legal is what creates it.** M3-S3 built the
+    dossier's strongest feature family — OD-pair median duration, zone-hour mean
+    speed, zone-hour demand — under a strict cutoff: a row in train month *k* is
+    served a table built from months 1..*k−1*. That is the correct answer to
+    dossier §4 trap 2, and it has a consequence nobody in the source material
+    mentions. The first train month gets **NaN** (a sixth of train, 7.3M rows),
+    month 2 gets a one-month window, month 6 gets five — while every held-out row
+    gets the full six. **The feature the model is fitted on is not the feature it
+    is scored on**, so the booster learns how much to trust a column whose
+    reliability it has only ever seen at the wrong end. Measured: the group came
+    in at **−1.63% val MAE and −0.686 KPI-10 points**, the only one of five that
+    made the model worse, and it early-stopped at **iteration 88** against 500 for
+    every other experiment — it found the column, leaned on it, and stopped
+    learning. The lesson is not "aggregates are bad": it is that a point-in-time
+    scheme is a *modelling decision with its own failure mode*, and the window
+    should be constant-width (a trailing N days, identical for train and serve)
+    rather than expanding, precisely so both ends see the same feature. Read
+    beside #15: the community's most-recommended feature is a hypothesis until
+    this program's evaluator has scored it under this program's split.
+
+44. **`ensure_openmp()` re-execs the interpreter, so anything a script did before
+    its first `model.fit` is done twice.** A sibling of #37, and it costs minutes
+    rather than correctness. The shim (`taxi_mlops.training.openmp`) links a
+    vendored `libgomp` and `os.exec`s once with `LD_LIBRARY_PATH` set; it is
+    normally triggered lazily by the first `import lightgbm` inside `model.fit`.
+    In M3-S3's ablation that point is reached *after* six months of parquet have
+    been read and the aggregate tables fitted — all of which the re-exec throws
+    away and repeats. Worse for anyone watching: the re-executed process's stdout
+    is block-buffered rather than line-buffered, so a long run looks hung at the
+    exact line where the shim announced itself. Fix, one line, at the top of any
+    script that loads data before it fits: call `ensure_openmp()` first. Both
+    M3-S3 scripts do, and the log is linear again.
+
+45. **A session that ends its turn kills every background task it started, so
+    "I'll pick this up when the run reports" is a way of destroying the run.**
+    The most expensive sentence written in this program so far, and it cost
+    nothing but time only by luck. On 2026-08-17 the M3-S3 executor launched
+    the 4-arm full-scale confirmation as a Claude Code **background task**,
+    polled it eight times, then ended its turn with that sentence. In `claude
+    -p` there is no later: ending the turn IS process exit, background tasks
+    are children of that process, and all four of them show `[killed]` at
+    **13:50:07Z** — the fit died mid-`mlflow` model-logging, one arm of four
+    complete. The evidence is unusually clean because the polls and the run
+    share a kill timestamp to the second. Three failures were stacked and each
+    one is worth separating, because fixing only the visible one leaves the
+    other two armed:
+    - **The contract had four endings and the model invented a fifth.** The
+      exit ritual offered a/b/c (schedule a successor) and d (park
+      deliberately). "Wait for an async job" was not among them, so the ritual
+      was never reached, `next_session.sh` was never called, and the chain had
+      no successor. Now there is an (e), and the ritual says outright that
+      there is no sixth.
+    - **Nothing watched.** Chain liveness was 100% "each session schedules the
+      next" — a single missed call ends the program silently and forever. It
+      stayed dead 38 minutes until a human happened to read a status pane.
+      `automation/watchdog.sh` on cron is the organ that was missing, and its
+      hard rule is that it may restart an ACCIDENT but never a DECISION: a
+      chain parked on a fork (ritual d) writes AWAITING_PO.md, and that diff
+      is exactly how the watchdog tells the two apart. A park with no entry
+      reads as a crash, which is now a reason to always write the entry.
+    - **The work was uncommitted.** 23 files — four feature modules, the
+      ablation, the leakage red-team, 33 tests — sat in the working tree for
+      52 minutes with nothing in git holding them. The kill happened to spare
+      them. A `SIGKILL` on the wrong process, or a WSL shutdown, would not
+      have. Commit before anything slow; a WIP commit is not a claim of Done.
+    The general shape, worth carrying past this program: **an autonomous agent
+    cannot wait.** Waiting requires a process that outlives the wait, and the
+    session is not it. Work that must outlive a session has to be detached on
+    purpose (`automation/run_detached.sh`, which `setsid`s the job and lets
+    the JOB schedule the successor when it finishes), and liveness has to be
+    observable from outside the thing whose liveness is in question — which is
+    why `next_session.sh` now leaves `pending_successor` and `running_session`
+    markers behind. Related: #26 (env that does not survive a non-interactive
+    shell), #24 (the sleep-based scheduler dies with WSL).
+
+46. **A reference file can spell its own null two ways, and a code comment that
+    checked one of them will swear it does not.** `data/reference/
+    taxi_zone_lookup.csv` — the TLC's own file, sha256-pinned, read live —
+    gives zone **264** Borough `Unknown` and zone **265** Borough `N/A`. Both
+    rows mean "this id is not a place"; the program has said so since M1
+    ("zones 264/265 are unknown, not places") and DR-04 condition 1 requires
+    every spatial feature to give them ONE named fallback. `load_zone_table`
+    built its code table straight from the column, so 265 quietly became a
+    seventh borough whose meaning was "we do not know" — and `borough_pair`,
+    whose entire job is to be the coarse backoff that exists for every OD pair,
+    carried two categories for the same absence of information. The comment
+    directly above the loop asserted "a borough IS defined for them
+    (`Unknown`)", which was **true for the id its author checked** and false
+    for the other one. What caught it was not review: it was an existing
+    unseen-category test asserting both ids land on the same code, run for the
+    first time by the next session (the story that wrote it was killed before
+    `pytest` — gotcha #45). Two lessons, and the second is the transferable
+    one: a comment that generalises from one example is a claim, not a
+    citation; and when a fold like this is introduced, the test must pin BOTH
+    halves — the nulls collapse **and** the real categories survive — or
+    tomorrow's fix for a different bug flattens the column and stays green.

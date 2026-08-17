@@ -1,0 +1,15 @@
+# Crosstown ETA & Reliability Program — autonomous chain watchdog.
+# Installed 2026-08-17 after the chain died silently for 38 minutes (gotcha #45).
+# It restarts an ACCIDENT and never a DECISION; RED conditions raise the PO's
+# own Claude toast instead. Read automation/watchdog.sh before changing this.
+#
+# Remove with:  crontab -r        Inspect with:  crontab -l
+# Pause the chain without touching cron:  touch automation/STOP
+SHELL=/bin/bash
+# cron's default PATH is /usr/bin:/bin — too thin for this. claude and uv live
+# in ~/.local/bin, and the Windows System32 entries are what make powershell.exe
+# (the toast) reachable through WSL interop from a daemon-started job.
+PATH=/home/longt/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/mnt/c/Windows/System32:/mnt/c/Windows/System32/WindowsPowerShell/v1.0
+# .bashrc exports do not reach cron (gotcha #26's cousin): state the mode here.
+CLAUDE_PERMISSION_FLAGS=--permission-mode acceptEdits
+*/10 * * * * cd /home/longt/NYC-taxi-production-with-k8-flavor && ./automation/watchdog.sh >> automation/logs/watchdog_cron.log 2>&1
