@@ -105,12 +105,30 @@ sys.exit(0 if {'predictions', 'prediction_runs'} <= names else 1)
 fi
 
 # ---- 2. dbt build (models + tests, interleaved) ------------------------------
+#
+# --no-partial-parse IS LOAD-BEARING, and it cost this project a broken build to
+# learn (gotcha #38, M2-S4). dbt caches a parsed manifest in
+# `target/partial_parse.msgpack`, and the node paths in it — `root_path` — are
+# recorded RELATIVE TO THE DIRECTORY DBT WAS RUN FROM. One hand-run of `dbt`
+# from the repo root therefore poisons every subsequent `make marts`: the cache
+# says `root_path: analytics/dbt`, this script runs from `analytics/dbt`, and
+# the seed load fails with `No files found that match the pattern
+# "analytics/dbt/seeds/redteam/redteam_bad_trips.csv"` — naming a file that
+# plainly exists, from a script whose own cwd is correct. Measured cost of
+# turning the cache off on this project: nothing (5.74s vs 5.91s, i.e. inside
+# the noise — there are five models). A build that can be broken by where
+# somebody once stood is not idempotent, which is the property this whole script
+# is built around.
+#
+# It is spelled out at each of the three call sites rather than hoisted into a
+# shell array, deliberately: gotcha #35 is a test that parses an array in this
+# very file and truncated it at the first `)` inside a comment.
 echo "== [1/2] dbt build (models AND tests; a red test stops the publish) =="
 cd "$DBT_DIR"
 if [[ "$RED_TEAM" == "1" ]]; then
   # The failure IS the result here, so the exit code is inverted deliberately:
   # a GREEN build under the red-team fixture means the tests are not testing.
-  if uv run dbt build --vars "$DBT_VARS"; then
+  if uv run dbt build --no-partial-parse --vars "$DBT_VARS"; then
     echo "[marts] RED-TEAM FAILED: dbt build was GREEN with out-of-contract rows in it." >&2
     echo "[marts] The tests are not testing. Do not ship these marts." >&2
     exit 1
@@ -126,11 +144,11 @@ if [[ "$RED_TEAM" == "1" ]]; then
   # green before exiting — three seconds, and the red-team stops being something
   # somebody has to remember to clean up after.
   echo "[marts] restoring the local DuckDB layer to green …"
-  uv run dbt build --vars "$GREEN_VARS" >/dev/null
+  uv run dbt build --no-partial-parse --vars "$GREEN_VARS" >/dev/null
   echo "[marts] restored. Postgres was never touched; run 'make marts' to republish."
   exit 0
 fi
-uv run dbt build --vars "$DBT_VARS"
+uv run dbt build --no-partial-parse --vars "$DBT_VARS"
 cd "$REPO_ROOT"
 
 if [[ "$SKIP_PUBLISH" == "1" ]]; then

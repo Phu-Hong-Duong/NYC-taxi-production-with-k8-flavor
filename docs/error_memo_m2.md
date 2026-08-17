@@ -5,9 +5,11 @@ interpretation · **Subject:** `models:/nyc-taxi-eta@champion` → registry vers
 **1**, MLflow run `3adee05a855a424bb664c7fea3735703`, feature set v1
 (quote-time pure, five features, no distance).
 
-**Board:** [Error segments](http://localhost:3030) — Metabase dashboard
-**"Error segments (M2)"**, defined in
-`analytics/metabase/boards/error_segments.json`, converged by `make boards`.
+**Board:** [Error segments (M2)](http://localhost:3030/dashboard/4) — 11 cards,
+defined in `analytics/metabase/boards/error_segments.json` and converged by
+`make boards`. The **name** is the address that survives (boards are idempotent
+by name, M1-S5); the id was 4 when this memo was written, and would be renumbered
+by a `make destroy` and rebuild, so trust the name over the URL.
 Every card on it cites a KPI id from `docs/kpi_definitions.md`. Every number in
 this memo comes from that board's mart (`marts.error_segments`) or from the
 `predictions` view under it — the queries are named per section, and none of
@@ -22,7 +24,14 @@ make predictions   # scores THAT champion, publishes data/predictions/  (M2-S4)
 make duckdb        # catalogues it; refuses if a held-out row lacks a prediction
 make marts         # builds + tests error_segments, publishes it to Postgres
 make boards        # renders the error-segment board from checked-in JSON
+
+uv run python scripts/error_memo_numbers.py   # reprints EVERY number below
 ```
+
+That last command is this memo's twin: one section per section here, in this
+order, printing the query it ran. A memo full of figures nobody can re-run is a
+memo nobody can check — and it earned itself on its first run, catching four
+last-digit rounding slips in §4 and §6 that had been typed rather than pasted.
 
 ---
 
@@ -197,8 +206,8 @@ Newark (1) at either end:
 
 | bucket | trips | share | KPI-11 | floor MAE | KPI-12 | mean actual |
 |---|---:|---:|---:|---:|---:|---:|
-| touches JFK / LGA / EWR | 524,702 | 8.818% | **5.7340** | 5.9685 | **59.988%** | 35.18 |
-| no airport | 5,426,006 | 91.182% | 3.0217 | 3.2712 | 83.558% | 12.46 |
+| touches JFK / LGA / EWR | 524,702 | 8.817% | **5.7340** | 5.9685 | **59.988%** | 35.18 |
+| no airport | 5,426,006 | 91.183% | 3.0217 | 3.2712 | 83.558% | 12.45 |
 
 Airport trips are 8.8% of the fleet, carry **1.90× the error** and are quoted
 within five minutes **24 points less often**. And the floor is nearly as bad
@@ -257,7 +266,7 @@ where it has plenty.
 **The error is asymmetric, and it is asymmetric the wrong way.** On test the
 champion over-quotes 54.55% of trips and under-quotes 45.45% — but when it is
 early it is early by 2.77 minutes on average and when it is late it is late by
-**3.86**. **10.82% of test riders (13.44% on val) are quoted a number at least
+**3.85**. **10.82% of test riders (13.44% on val) are quoted a number at least
 five minutes shorter than the truth.** KPI-10 counts both directions equally;
 a rider does not. If M5's SLO is written from KPI-10 alone it will be indifferent
 to a change that trades early quotes for late ones. **Recommendation to SRE and

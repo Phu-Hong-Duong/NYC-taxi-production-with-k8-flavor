@@ -1,5 +1,212 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (z) — M2-S4: the error memo, its board, and a build broken by where somebody once stood
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), **role:DA**
+(MLE consulted on interpretation), one story. **M2-S4 COMPLETE.** This session
+did NOT start from a clean handoff: it **inherited a rescued working tree** from
+a sitting killed mid-story by a monthly spend limit, committed by the morning
+operator as `d505d83` with the explicit warning *"NOT VERIFIED: no pytest run, no
+ruff run, no dbt build, no CI. Treat every file here as a draft."* Everything
+below is this session running that draft, finding what was wrong with it, and
+fixing it. **Next: EXECUTOR runs M2-S5** (`verify-m2` + the ◆ exit), scheduled
+by ritual (a).
+
+### Staleness check — reality had MOVED, in a direction no handoff described
+There was no (z)-precursor "Next" to check, so the check was of the rescue commit
+itself. Platform held: `kubectl get nodes` → 3/3 Ready v1.36.1 (4h55m) ·
+`kubectl get pods -A --field-selector=status.phase!=Running` → `No resources
+found` · `curl localhost:5000/health` → `200` · `localhost:3030/api/health` →
+`200`. Docker Desktop was up, so gotcha #34 did not fire.
+
+What had moved is that the killed sitting **had already run `make predictions`
+successfully at 05:52** — 156 MB of parquet under `data/predictions/` and a
+`predictions.json` whose numbers match the champion's registry tags exactly. So
+the draft was further along than its own commit message claimed for the *data*,
+and exactly as unverified as it claimed for the *code*. Both untracked files the
+operator flagged for judgement were judged rather than ignored (below).
+
+### Done (every leg with the command and what came back)
+
+- **The two flagged strays were judged, and one was a real bug's fingerprint.**
+  `marts.duckdb` at the repo root: opened it — **0 tables, 12 KB, empty**.
+  `predictions_run.log`: run output, superseded by my own re-run. Deleted both.
+  But the operator's instinct was right that the root database "looks like a
+  script resolving its path relative to the wrong directory" — it was the
+  *symptom* of a defect, just not in this story's new code, and finding the cause
+  cost the session its longest detour. Proven not to recur: after the fix, three
+  full `make marts` runs left no file at the repo root.
+
+- **`make marts` was BROKEN on arrival, and the error blamed a file that plainly
+  exists.** First run: `Done. PASS=56 WARN=0 ERROR=1`, failing at the red-team
+  seed with `IO Error: No files found that match the pattern
+  "analytics/dbt/seeds/redteam/redteam_bad_trips.csv"`. The file is present; the
+  script `cd`s to `analytics/dbt` correctly; M1-S4 ran the same command green.
+  **Cause (now gotcha #38): dbt's partial-parse cache records each node's
+  `root_path` RELATIVE to the directory dbt was last run from.** Read straight
+  out of the stale manifest: `root_path: analytics/dbt`. The killed sitting had
+  run `dbt` by hand from the repo root — the same event that left the empty
+  `marts.duckdb` there. **Two symptoms, one cause.**
+
+  **Fix, and it is a fix rather than a note telling people where to stand:**
+  `--no-partial-parse` at all three `dbt build` call sites. Measured cost on this
+  project: **nothing** (5.74s vs 5.91s — there are five models). **Red-teamed by
+  re-poisoning the cache the same way** (`dbt parse --project-dir analytics/dbt`
+  from the repo root; confirmed `root_path: analytics/dbt` back in the manifest)
+  and re-running: **ERROR=1 became `Done. PASS=57 WARN=0 ERROR=0`**. A fix for a
+  bug you cannot reproduce on demand is a hope. Pinned by
+  `test_every_dbt_build_disables_the_partial_parse_cache`, which matches the
+  INVOCATION and not the word (three `echo` lines in that file also say "dbt
+  build" — gotcha #35's lesson, one file over), and which was itself red-teamed
+  by removing the flag and watching it fail.
+
+- **`make predictions` verified by running it MYSELF, not by trusting the
+  inherited artifacts.** Exit 0. It resolved `models:/nyc-taxi-eta@champion` →
+  version 1, run `3adee05a855a424bb664c7fea3735703`, 500 trees, features matching
+  the config, and then did the thing that makes this more than a gesture:
+
+  ```
+  [score] registry says version 1 was promoted at KPI-09 3.2608 on test; scoring it now measures 3.2608
+  [score] MATCH — the published rows describe the model the gate promoted.
+  [score] wrote    6,189,748 rows -> data/predictions/val/predictions_2019-07.parquet
+  [score] wrote    5,950,708 rows -> data/predictions/test/predictions_2019-08.parquet
+  ```
+
+  It scores what was **promoted**, not a fresh fit, and mints nothing — no run,
+  no version, no alias move. All four evaluator numbers reproduced M2-S3's to
+  four decimals (3.4760 / 3.7170 val, 3.2608 / 3.5090 test), the **fifth**
+  independent re-derivation of the group-median floor.
+
+- **The third reconciliation is live.** `make duckdb` → **12 views**, and a new
+  per-split check that every held-out row has a prediction: `val 6,189,748 ==
+  6,189,748 · test 5,950,708 == 5,950,708 · ALL 12,140,456 == 12,140,456`, exit 1
+  on disagreement. Re-run after my own scoring run — the rows I wrote reconcile,
+  not just the rows I inherited.
+
+- **`make marts` green and published**: `Done. PASS=57 WARN=0 ERROR=0` (was 39 at
+  M1-S4), `COPY 1151` for `error_segments` beside the unchanged `COPY 56127878` /
+  `44792` / `8` / `80`. **`make marts-redteam` still goes RED** on the named test
+  after my edit to the script (`FAIL 2
+  accepted_range_trips_clean_trip_duration_minutes__120__1`, `PASS=37 ERROR=1`,
+  script inverted to exit 0) — I changed the build command, so the twin had to be
+  re-proven, not assumed.
+
+- **The board renders, and a card actually ran.** `make boards` created
+  **`Error segments (M2)` with 11 cards** (id 4); the two existing boards printed
+  `card updated` for all 17 of their cards with ids 2 and 3 stable — idempotence
+  by NAME held while a whole new board landed. `--verify` GREEN on all three:
+
+  ```
+  ok   dashboard 'Error segments (M2)' exists with 11 cards
+  ok   dashboard 'Error segments (M2)': every card queries the 'marts' warehouse
+  ok   dashboard 'Error segments (M2)': no card claims KPI-09/KPI-10 (gotcha #15)
+  ok   dashboard 'Error segments (M2)': card 'KPI-13 · what the booster buys, by hour of day (test)' RAN and returned 24 row(s)
+  ```
+
+- **The memo got a twin, and the twin immediately earned itself.** The draft left
+  three scratch helpers named `_memo_numbers{,2,3}.py`, self-declared *"SCRATCH —
+  deleted before commit"* (two of them also held the session's only ruff errors).
+  Rather than delete them, I folded them into ONE committed
+  `scripts/error_memo_numbers.py` — one section per memo section, in order,
+  printing the query it ran, paths resolved from the repo root rather than the
+  caller's cwd (the very trap that had just broken the build). Run against the
+  published mart it reproduced **every** number in `docs/error_memo_m2.md` except
+  **four last-digit rounding slips**, which had been typed rather than pasted and
+  are now corrected in the memo: §4 airport share `8.818% → 8.817%` (exact
+  8.81747), no-airport share `91.182% → 91.183%` (exact 91.18253), no-airport
+  mean actual `12.46 → 12.45` (exact 12.4548), and §6's late-bias `3.86 → 3.85`
+  (exact 3.8549). Small, and the point is not their size: they are the difference
+  between a number computed once and a number anyone can recompute.
+
+- **The mart's licence to exist is a rollup test, and it passes.** KPI-11/12/13
+  are NEW ids because the window is a segment rather than a split (the id law),
+  and `assert_error_segments_reconcile` fails the build unless the whole-split
+  row reproduces the evaluator's KPI-09/KPI-10 to four decimals. Observed:
+  `test 3.2608 == 3.2608, 81.480 == 81.480` · `val 3.4760 == 3.4760, 79.693 ==
+  79.693`. `prediction_runs` (which READS the evaluator's manifest and computes
+  nothing) is never published to Postgres, so no board can render KPI-09/10.
+
+- **Tests + lint.** `uv run pytest tests/unit -q` → **272 passed** (was 255 at
+  M2-S3: +16 from the draft, +1 mine). `ruff check src tests scripts pipelines`
+  → `All checks passed!` (the draft arrived with 3 errors; 2 died with the
+  scratch scripts, 1 was an import sort). Boundary law: `grep -rn analytics
+  src/taxi_mlops/` → empty.
+
+### The memo's finding, in one paragraph (it is the deliverable)
+The gate recorded +7.07% over the honest floor. Split by whether the floor had a
+group median to give: on the **98.521%** of test rows it could answer the booster
+is worth **+1.88%** (~3.7 seconds); on the **1.479%** it could not, it is worth
+**+68.19%**, because there the floor predicts the global median and is wrong by
+**18.57 minutes**. **Three quarters of the champion's entire advantage over a SQL
+query is bought on 1.48% of the rows.** That is not an argument against the model
+— generalising to unseen combinations is exactly what a lookup table cannot do —
+but it means the gate's margin is dominated by **coverage**, not accuracy, so
+anything that changes how often the floor falls back moves the bar more than it
+moves the model. **That is F-008 arriving from a second direction, and it lands
+on M3.** The sharpest single number: of the 970 longest trips the contract admits
+(100–120 min), **KPI-12 is 0.000%** — not one quoted within five minutes — with
+the model's ceiling (92.155 min) sitting below the data's (120.0). Correct
+behaviour for `l1` with no distance feature, and the business case for M3's
+dossier.
+
+### Defects / Surprises
+- **gotcha #38 (new)** — dbt's partial-parse cache, above. The general form is
+  worth more than the instance: *a cache keyed on ambient state that no input
+  mentions turns a build into a function of where somebody once stood.* When a
+  build fails naming a file you can see, suspect the cache before the code.
+- **F-009 (new, medium, lands M5)** — raised by the draft's code comments but
+  **never written to the ledger**; recorded properly this session. On MLflow
+  3.15.1 `mlflow.lightgbm.load_model("models:/<name>@champion")` raises
+  `No such artifact: 'MLmodel'` while `get_model_info()` on the SAME uri resolves
+  happily: MLflow 3 stores logged-model artifacts under `models/m-<id>/artifacts`
+  but the registry version's `source` still says `runs:/<run>/model`, so the
+  registry-uri load path looks where nothing was written. The error names an
+  artifact, so it reads as a corrupt model; the model is fine. Worked around in
+  ONE place (`score.load_champion` resolves the alias to the logged-model uri and
+  announces it). **M5 serves this champion by exactly this kind of URI** — a
+  serving story meeting this for the first time meets it as a deployment failure.
+- **A false alarm I chased and did NOT write down as a finding.** My piped
+  `make predictions` showed the OpenMP shim's second announcement line but not
+  its first, which looked like `execv` discarding buffered stdout — I proved that
+  mechanism is real with a standalone probe before noticing the line had been cut
+  by my own `tail -30`. The shim already passes `flush=True` and behaves as
+  documented. Recorded because the near-miss is the lesson: I nearly filed a
+  defect against another role's module on evidence my own command had mangled.
+- **AWAITING_PO 2026-08-17-1 is still unanswered** and Option B is in effect by
+  default: `libgomp1` is NOT installed (`glob('/usr/lib/*/libgomp.so.1')` → none;
+  `openmp_status()` → `(False, 'not loadable yet…')`), so the shim re-execs on
+  every training invocation. Non-blocking, exactly as its entry says.
+
+### Craft calls made inside scope (recorded, per the protocol)
+1. **Folded the three scratch scripts into one committed checker** rather than
+   deleting them as their own docstrings instructed. A memo nobody can re-run is
+   a memo nobody can check — and it found four errors on its first execution,
+   which settles the argument.
+2. **`--no-partial-parse` rather than documenting the correct cwd.** Verified
+   undo (remove the flag; the test goes red), and it costs nothing measurable.
+3. **Deleted both untracked strays** after opening them, rather than
+   `.gitignore`-ing the root `marts.duckdb`. Ignoring it would have hidden the
+   fingerprint of a live bug — precisely what the operator warned about.
+4. **KPI-09/KPI-10 appear on NO card**, keeping M1-S5's test intact. The kickoff
+   permitted them as evaluator-sourced values; the board reaches the same place
+   through KPI-11's whole-split row, which the rollup test already guarantees
+   equals them. A permission is not an obligation.
+
+### Next (for the session after this one)
+**M2-S5 — `make verify-m2`, red-teamed, and the ◆ exit (role:MLOps).** Reality it
+will inherit, stated so it can be staleness-checked: cluster up, 3/3 Ready ·
+MLflow holding `nyc-taxi-eta` version 1 aliased `@champion` (registry NOT touched
+by this story) · `data/predictions/` present with 12,140,456 rows and
+`predictions.json` · analyst layer at **12 views** with three reconciliations
+green · Postgres holding **5 marts** including `error_segments` (1,151 rows) ·
+Metabase holding **3 dashboards / 28 cards** · `make marts` green at PASS=57 and
+`make marts-redteam` red on its named test · 272 unit tests · tree clean on
+`main` after this PR merges. Note for S5's own checklist: its kickoff already
+requires a sub-check that **no stray `_handoff_entry.md` sits at the repo root** —
+this session's two strays at the root are a second argument for widening that
+check to any unexpected root artefact, and `marts.duckdb` is the concrete example.
+
 ## Session 2026-08-17 (y) — M2-S3: the gate was watched saying no, and a model fitted to noise turned out to BE the median
 
 ### State

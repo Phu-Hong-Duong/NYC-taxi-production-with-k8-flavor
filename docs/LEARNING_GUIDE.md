@@ -9,6 +9,102 @@ months from now.
 
 ## M2
 
+### M2-S4 — a segment number is only worth the rollup that checks it (2026-08-17, role:DA)
+
+**What was built.** The model stopped being a pair of headline numbers. `make
+predictions` scores the **registered champion** — not a fresh fit — on val and
+test and publishes one row per held-out trip (`data/predictions/`, 12,140,456
+rows) carrying the five features it saw, the truth, its quote and the honest
+floor's quote for the same trip. `make duckdb` gained a third reconciliation over
+those rows, `make marts` gained an `error_segments` mart (1,151 rows, grain
+segment x split), and Metabase gained an **11-card error-segment board**. The
+deliverable on top is `docs/error_memo_m2.md`: where v1 fails, in zones, hours
+and trip lengths, every number from a named view or mart.
+
+**Why this way.** Four choices worth naming.
+
+*(1) Score what was PROMOTED, not what was fitted.* A re-fit reproduces the
+champion's numbers to four decimals — M2-S3 watched it happen — but it is a
+different MLflow run, and predictions labelled with a version the registry has
+never heard of are evidence about a model nobody deployed. So `score.py` resolves
+`models:/nyc-taxi-eta@champion`, reads the version back, stamps it on every row,
+and mints nothing. Then it does the thing that makes this more than a gesture:
+the champion's own promotion tags say it was gated at KPI-09 **3.2608** on test,
+so scoring it now must return 3.2608, and the command **refuses to write** if it
+does not. Either the model that loaded is not the model that was promoted, or
+this path builds features differently from the one that fitted it — both are
+defects, and neither has any other symptom.
+
+*(2) New ids, because the window is new.* Segment MAE is **KPI-11**, not
+"KPI-09 by zone". The id law (a changed formula is a new id, never an edit) is
+what stops a board's history from silently changing meaning, and a window is part
+of a formula. But a new id invites a subtler failure — a SQL layer that quietly
+filters or duplicates rows and reports beautiful, wrong segments. So the mart
+publishes an `overall` row per split, and a dbt test fails the build unless
+KPI-11 **is** KPI-09 and KPI-12 **is** KPI-10 to four decimals. *A segment number
+that cannot roll up to the evaluator's number is not a segmentation of it.* That
+test is what makes it legitimate for a mart to carry model-error numbers at all
+without breaking gotcha #15.
+
+*(3) The memo got a twin.* The three scratch scripts this story's first sitting
+left behind became one committed `scripts/error_memo_numbers.py` — one section per
+memo section, in order, printing the query it ran. It earned itself on its first
+execution by catching **four last-digit rounding slips** (§4's airport shares and
+mean, §6's late-bias) that had been typed rather than pasted. A memo full of
+figures nobody can re-run is a memo nobody can check, and the gap between "I
+computed this" and "anyone can recompute this" is exactly where numbers rot.
+
+*(4) The finding that matters most is about coverage, not accuracy.* The gate
+recorded +7.07% over the floor. Split by whether the floor had a group median to
+give: on the **98.52%** of test rows it could answer, the booster is worth
+**1.88%** — under four seconds; on the **1.48%** it could not, it is worth
+**68.19%**, because the floor's answer there is the global median and is wrong by
+18.57 minutes. **Three quarters of the champion's entire advantage over a SQL
+query is bought on 1.48% of the rows.** That is not an argument against the model
+— generalising to unseen combinations is precisely what a lookup table cannot do
+— but it means the gate's margin is dominated by *coverage*, so anything changing
+how often the floor falls back moves the bar more than it moves the model. Which
+is **F-008** seen from the other side, arriving at M3 from a second direction.
+
+**The concept underneath.** *An aggregate is a claim that a population is
+homogeneous, and it is almost always false.* KPI-10 says 81.5% of riders are
+quoted within five minutes; the memo says that number is 93.7% for a five-minute
+hop and **0.000%** for the 970 longest trips the contract admits — not "low",
+zero, with the model's ceiling (92.2 min) sitting below the data's (120.0). The
+mechanism is honest rather than broken: with an `l1` objective and no distance
+feature, the conditional median of a New York taxi trip given only (hour, day,
+origin, destination) is simply not 108 minutes. Segmenting does not improve the
+model; it converts one number everybody trusts into several numbers somebody can
+act on — which is why §7 of the memo is addressed to named roles at named
+milestones rather than to the reader.
+
+**The other lesson, and it cost the session an hour.** `make marts` failed
+naming a file that plainly exists. The cause was dbt's partial-parse cache, which
+records node paths **relative to wherever dbt was last run** — one hand-run from
+the repo root by the previous, killed sitting had poisoned it (gotcha #38). Two
+things generalise. First: *when a build fails naming a file you can see, suspect
+the cache before the code.* Second, and it is the reason the fix is
+`--no-partial-parse` rather than a note telling people where to stand: a cache
+keyed on ambient state that no input mentions turns a build into a function of
+where somebody once stood. The fix was red-teamed by re-poisoning the cache the
+same way and watching ERROR=1 become PASS=57 — because a fix for a bug you cannot
+reproduce on demand is a hope.
+
+**What to look at.** `docs/error_memo_m2.md` §1 (the coverage decomposition) and
+§2 (the ceiling) · `analytics/dbt/tests/assert_error_segments_reconcile.sql` —
+nine lines that license the whole mart · `src/taxi_mlops/training/score.py`'s
+`_check_against_registry` · `scripts/error_memo_numbers.py` next to the memo,
+read as a pair · gotcha #38 · **F-009** in `ledgers/findings.md`, which M5 will
+meet as a deployment failure if it does not read it first.
+
+**What to try yourself.** Run `uv run python scripts/error_memo_numbers.py 1` and
+then compute the same decomposition by hand from the two rows it prints — the
+point is to feel how much of a headline margin can hide inside 1.5% of a
+population. Then break the rollup deliberately: add a `WHERE split = 'test'` to
+`error_segments.sql`'s overall row and run `make marts`, and watch
+`assert_error_segments_reconcile` refuse the build. A test you have never seen
+fail is a test you are trusting on faith.
+
 ### M2-S3 — a gate is worth what its refusals are worth (2026-08-17, role:MLE)
 
 **What was built.** `make train` became real, and it can now fail. The path is
