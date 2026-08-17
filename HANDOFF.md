@@ -1,5 +1,159 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (ag) — M3-S3 finished: v2 confirmed at full scale, and the test suite disagreed with the story first
+
+### State
+on-track — **EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped
+fresh session, role:MLE (charter read; EXCLUSIONS + the registry refusal in
+play).** Executed the REMAINDER of **M3-S3**, the story session (af) recovered
+from. Merged as **PR #17**. `make verify-m2` **GREEN 54/54** after the feature
+registry refactor and the borough fix. **Nothing was promoted: `@champion` is
+version 1, run `3adee05a…`, before and after** — checked live at both ends.
+
+### Staleness check of (af)'s Next — reality matched exactly, and I read it in the order (af) asked
+`automation/runs/m3s3-confirmation.status` FIRST (the new boot step 3):
+**`RUNNING 72793`**, started 14:42:31Z, pid alive in `/proc`. It finished at
+**15:23:07Z, `DONE 0`**, all four arms. Cluster untouched all session; registry
+read live → `nyc-taxi-eta` v1, `@champion` → v1. `automation/STOP` absent.
+
+**One thing (af) could not foresee, handled and worth knowing.** The detached job
+carries `--then-schedule executor`, so it tried to start a successor **while this
+session was mid-story**. It was refused — `[chain] a successor is ALREADY queued`
+— because this session had written `automation/logs/pending_successor` at 14:52Z
+to hold the slot, and `automation/logs/running_session` naming **pid 74470** (the
+live `claude -p` process) so the watchdog would read a working chain rather than
+a dead one. Both markers are the harness's own vocabulary, not a workaround; the
+PO independently landed the stronger form of the same guard mid-session
+(`2946727`, "one session in the tree at a time"), which makes a queued successor
+WAIT for a live `running_session` instead of launching on top of it.
+
+### Done (every leg with the command and what came back)
+
+- **The full-scale confirmation, four arms over 43,987,422 train rows** (val
+  2019-07, 6,189,748 rows, one evaluator, `m3-artisan`):
+
+  | arm | features | val MAE | Δ | KPI-10 | Δ pts | fit s | run |
+  |---|---:|---:|---:|---:|---:|---:|---|
+  | `v1` | 5 | 3.4760 | — | 79.693% | — | 485.0 | `a4d9f9ebd62a4e628ce7dccecce55fd3` |
+  | `v1_g1` | 15 | 3.4145 | **+1.77%** | 80.263% | +0.569 | 579.6 | `9fd1429002104c61ad111c94731109bb` |
+  | `v1_g2` | 14 | 3.4542 | **+0.63%** | 79.894% | +0.200 | 501.1 | `9494748ffcbd4dcd971f31976a03a0f7` |
+  | **`v2`** | **24** | **3.3905** | **+2.46%** | **80.506%** | **+0.813** | 569.4 | `6807116edf4c49d681a31bd941298a81` |
+
+  **Both keeps hold at full data**, so v2's membership is unchanged — decided on
+  the full-scale numbers as the kickoff required, and it happens to have changed
+  nothing. v2 logged **with signature + input example**. Rows in
+  `docs/ablation_m3_confirmation.json`; table in `docs/ablation_m3.md` §5.
+- **The confirmation refuted this story's own written prediction, and the
+  prediction stayed in the document.** §5 argued before the numbers existed that
+  g2 would keep shrinking with data ("a feature whose job is to substitute for
+  missing data is worth less as the data arrives"). Measured: **+0.6312% at 15%,
+  +0.6277% at 100%** — two decimal places apart on 6.7× the rows; g1 the same
+  (+1.7834% → +1.7712%). The collapse is entirely between the **0.5% smoke run**
+  (+2.98%, no MLflow row, inadmissible by playbook §3.3) and 15%. The old
+  paragraph is quoted verbatim above its refutation. Also measured: the groups
+  are additive to within **0.06 points** (1.7712 + 0.6277 = 2.3989 vs 2.4597
+  together), and **v1 reproduced `3.47603843547682` across two invocations 71
+  minutes apart** — and it equals M2-S2's `lightgbm-v1` val MAE from a different
+  script.
+- **A red test in the checkpoint, and it was a real defect** —
+  `uv run pytest tests/unit -q` → **1 failed, 368 passed** on the first run of a
+  suite the killed session never got to run.
+  `test_an_unseen_zone_id_cannot_invent_a_category_code` was correct and
+  `zones.load_zone_table` was wrong: the shipped TLC lookup gives zone **264**
+  Borough `Unknown` and zone **265** Borough `N/A`, and taking both literally
+  minted a seventh borough meaning "we do not know", so `borough_pair` — whose
+  whole job is to be the coarse backoff for every OD pair — carried two
+  categories for the same absence of information (DR-04 condition 1 asks for
+  ONE). `NOT_A_PLACE_BOROUGHS` folds the spellings; a second test pins both
+  halves (the nulls collapse **and** the six real boroughs survive, so a later
+  "fix" cannot flatten the column and stay green). Now **gotcha #46**. Suite
+  after: **371 passed**, `uv run ruff check .` clean (one E501 also fixed).
+- **The defect was RE-MEASURED, not annotated.** Zone 265 is 0.2238% of train
+  rows, which makes the effect small but not measured — so g3's arm was re-run at
+  the same 15% and seed after the fold (`--story M3-S3-postfix`): the **v1 control
+  reproduced to ten decimal places** (`3.4935018525`), and g3 moved **+0.1385% →
+  +0.1534%** against a 0.50% bar. Verdict unchanged, and the control is what
+  licenses reading the move as the fix rather than as noise.
+  `docs/ablation_m3_g3_postfix.json`, table in §7.
+- **`make verify-m2` → GREEN, 54/54, exit 0** — run twice (once for the
+  transcript, once counting `ok` lines). It exercises the new feature registry
+  where it matters: re-scoring the champion resolves set `v1` through
+  `configs/features.yaml` over 5,950,708 rows and still returns **3.2608**.
+- **The PO's recovery harness is in git** (`8ecfcde`): `run_detached.sh`,
+  `watchdog.sh` + `crontab.watchdog`, `toast.sh`, the `next_session.sh` markers,
+  exit ritual (e) in all three prompts, `tests/unit/test_watchdog.py`. It was
+  sitting uncommitted while `docs/gotchas.md` #45 (committed) described it —
+  the repo documented scripts git did not have. **15 passed** across
+  `test_watchdog.py` + `test_chain_script.py`.
+- **Registry untouched, checked at both ends**: `search_registered_models()` →
+  `['nyc-taxi-eta']`, versions `[1]`, `get_model_version_by_alias(...,'champion')`
+  → version 1 / run `3adee05a855a424bb664c7fea3735703`. No registry API appears
+  in this story's diff and a test keeps it out.
+- **DR-01 budget, artisan track: 3,313.9 s logged of 9,000** across 15 runs —
+  the 15% ablation 557.1 · the confirmation 2,135.0 · the **455.5 s orphan arm
+  from the killed run, counted because the CPU really burned** · the post-fix
+  re-measurement 166.2. Two red-team arms logged no `fit_seconds`, so the total
+  is reported as a **floor**, not a figure.
+- **F-013 CLOSED, both halves** (the features half was this story's): the row was
+  already written by the checkpoint; this session re-proved its central claim
+  live (`verify-m2` GREEN after the refactor).
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **I finished the story rather than handing the numbers to a fresh session.**
+  The new lifecycle law says a session must never end a turn intending to resume;
+  it does not say a session may not stay alive while a **detached** job runs. The
+  run was already `setsid`-ed by (af), so my waiting risked nothing — if this
+  session had died, the job would still have finished and scheduled a successor.
+  The alternative burned a session to re-read a context I already had.
+- **The g3 re-measurement was run even though it could not change the verdict.**
+  ~166 s of fitting to replace "the affected rows are few" with a number and a
+  reproducing control. This program's standing preference; cheap here.
+- **§2's sample table was left at the numbers its verdicts were taken on**, with
+  the post-fix re-measurement as a separate §7 row rather than an edit. Editing
+  measured rows to match later code would make the table describe a run nobody
+  did.
+- **The recovery harness was committed by me, though the PO wrote it.** It is
+  their work and the commit says so; leaving it in the working tree was the exact
+  risk #45 was filed about.
+- **No findings row for the borough defect.** It was born in an unmerged
+  checkpoint commit and died in the same PR — a register row that opens and
+  closes without ever reaching `main` is noise. It is a gotcha (#46), a doc
+  section (§7) and a test instead.
+
+### Open items this story did NOT touch (none silently)
+- **`make train` still cannot fit a set that uses the point-in-time aggregates**
+  (`run.py` never fits the tables). Costs nothing today — g5 was dropped, v2
+  needs no fitted tables — and the failure is loud. A future story that admits an
+  aggregate group owes `run.py` that path. `docs/ablation_m3.md` §7.
+- **g1's +1.77% is not attributed to any member of the group.** The obvious
+  suspect is `minute_of_day` (v1 gave the model an integer hour and nothing
+  finer). If it carries most of the win, v2 is paying for nine columns to get the
+  value of one — a cheap, named experiment for a successor.
+- **One seed.** g2 sits 0.13 points above the bar at full scale; a 3-seed sweep
+  is the reasonable want, and ~5,690 s of artisan budget remains.
+- **The chain harness has no red-team twin.** `test_watchdog.py` (11) covers the
+  logic including "a fork is never auto-resumed", but nothing yet kills a real
+  detached job and watches the watchdog ring. Named for ARCH's boundary triage.
+
+### Next
+**M3-S4** — the automation track (FLAML scout × Optuna sniper, run twice, the
+`optuna` database via D-002's recipe, kill-and-resume, ≥1 pruned trial). It is
+the next unstarted, unblocked story; S3 leaves it everything it needs: v2 exists
+and is measured, `configs/features.yaml` resolves both sets, and DR-03 keeps the
+axes disjoint — **automation searches HYPERPARAMETERS on feature sets it does not
+invent**, which is the only thing that lets M3-S5's 2×2 answer "features or
+tuning?".
+
+Two things S4 should read before it starts anything long: **its fits are the
+other half of the DR-01 equal-budget law** (artisan spent 3,313.9 s of 9,000, and
+the actuals must be printed), and **anything long goes through
+`automation/run_detached.sh`** — this story's numbers exist only because (af)
+re-launched them that way. S1's F-008 guard is live and S4 is required to
+exercise it once on a real sampled run.
+
+Chain: `automation/logs/{pending_successor,running_session}` were both cleared by
+this session at exit before scheduling, so the successor starts clean.
+
 ## Session 2026-08-17 (af) — the chain died waiting for something it had killed
 
 ### State

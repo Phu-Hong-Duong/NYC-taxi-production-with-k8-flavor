@@ -92,12 +92,26 @@ the one a contaminated validation set defeats first. The illegal version would
 have cleared DR-02's keep-threshold on both conditions and been admitted into v2
 by the same rule that admitted the two honest groups.
 
+**The third thing, and it is about the process rather than the model.** This
+story was written across two sessions because the first one was killed
+mid-confirmation (gotcha #45). The second one started by running the test suite
+the first never reached — and one of the first session's own 33 new tests was
+**red**. It had written a correct test for the unseen-category law and a loader
+that failed it, because the TLC lookup spells "not a place" two ways and the
+comment in the loader generalised from the id its author checked (gotcha #46).
+The uncomfortable reading is not "tests are good": it is that **an
+uncommitted, unrun test suite is indistinguishable from a passing one**, and
+that a story is not done when its numbers arrive — it is done when the cheap
+checks have been allowed to disagree with it.
+
 **What to look at.** `docs/ablation_m3.md` §4 and §5 — the two findings, with the
-tables · `docs/leakage_redteam_m3.md` §3 · `configs/features.yaml`, which is now
-the whole answer to "what does the model eat?" and carries the group order that
-was fixed before the fitting · `src/taxi_mlops/features/aggregates.py`'s module
-docstring, which argues the window-stability point that keeps a raw count from
-becoming a proxy for `month` · gotchas #43 and #44.
+tables, and §5's refuted prediction left standing · §7's re-measurement of the
+borough fold, which is what a defect correction looks like when it is measured
+instead of argued · `docs/leakage_redteam_m3.md` §3 · `configs/features.yaml`,
+which is now the whole answer to "what does the model eat?" and carries the group
+order that was fixed before the fitting · `src/taxi_mlops/features/aggregates.py`'s
+module docstring, which argues the window-stability point that keeps a raw count
+from becoming a proxy for `month` · gotchas #43, #44, #45 and #46.
 
 **What to try yourself.** Re-run one group at a sample size of your choosing
 (`make ablation ABLATION_ARGS="--sets v1,v1_g2 --sample-fraction 0.05"`) and plot

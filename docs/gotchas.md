@@ -540,3 +540,25 @@ the seed line are earned by THIS project.
     why `next_session.sh` now leaves `pending_successor` and `running_session`
     markers behind. Related: #26 (env that does not survive a non-interactive
     shell), #24 (the sleep-based scheduler dies with WSL).
+
+46. **A reference file can spell its own null two ways, and a code comment that
+    checked one of them will swear it does not.** `data/reference/
+    taxi_zone_lookup.csv` — the TLC's own file, sha256-pinned, read live —
+    gives zone **264** Borough `Unknown` and zone **265** Borough `N/A`. Both
+    rows mean "this id is not a place"; the program has said so since M1
+    ("zones 264/265 are unknown, not places") and DR-04 condition 1 requires
+    every spatial feature to give them ONE named fallback. `load_zone_table`
+    built its code table straight from the column, so 265 quietly became a
+    seventh borough whose meaning was "we do not know" — and `borough_pair`,
+    whose entire job is to be the coarse backoff that exists for every OD pair,
+    carried two categories for the same absence of information. The comment
+    directly above the loop asserted "a borough IS defined for them
+    (`Unknown`)", which was **true for the id its author checked** and false
+    for the other one. What caught it was not review: it was an existing
+    unseen-category test asserting both ids land on the same code, run for the
+    first time by the next session (the story that wrote it was killed before
+    `pytest` — gotcha #45). Two lessons, and the second is the transferable
+    one: a comment that generalises from one example is a claim, not a
+    citation; and when a fold like this is introduced, the test must pin BOTH
+    halves — the nulls collapse **and** the real categories survive — or
+    tomorrow's fix for a different bug flattens the column and stays green.

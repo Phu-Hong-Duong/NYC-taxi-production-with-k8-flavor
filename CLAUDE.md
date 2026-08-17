@@ -594,6 +594,46 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **Nothing was promoted.** `@champion` is version 1 before and after; the full
   run used `--no-promote` and its runs live in experiment `m3-gate`.
 
+## Feature set v2 (M3-S3) — five groups tried, two kept, and the family the sources swear by lost
+- **`configs/features.yaml` is THE feature-set registry** (F-013's features half,
+  **row CLOSED**): `base` + five declared `groups` + the sets; `configs/train.yaml:
+  features` holds a `version` and a `registry` pointer and NOTHING else, and
+  `taxi_mlops.features.sets.resolve` is the only expansion in the program — it
+  RAISES if a column list grows back in `train.yaml`. The include list stays a
+  knob; **`quote_time.EXCLUSIONS` is still the LAW** and every set in the registry
+  is walked by a test that refuses one that re-admits an excluded column.
+- **The five groups and their order were committed BEFORE anything was fitted**
+  (DR-02 anti-forking-paths). Verdicts on a 15% sample, confirmed at full data,
+  val 2019-07 only, keep bar **≥0.50% relative val MAE with KPI-10 not down**:
+  **g1 temporal extras +1.77% KEEP · g2 centroid geometry +0.63% KEEP · g3
+  spatial identity +0.15% DROP · g4 trip re-encodings −0.01% DROP · g5
+  point-in-time aggregates −1.63% DROP.** Three of five lost and all three are in
+  the table — `docs/ablation_m3.md`.
+- **v2 = base + g1 + g2, 24 features**, full-data val **3.3905 (+2.46% over v1),
+  KPI-10 80.506%**, logged with signature + input example (run
+  `6807116edf4c49d681a31bd941298a81`, experiment `m3-artisan`). **No number in
+  this story has faced the gate** — the bar is 3.2848 on test and that is M3-S5's.
+  `configs/train.yaml` still names **v1**: the config line moves as part of a
+  promotion or not at all.
+- **The confirmation confirmed, and the pre-registered explanation was wrong.**
+  g2 measured **+0.6312% at 15% and +0.6277% at 100%**; the doc predicted the
+  delta would keep shrinking with data and §5 keeps the prediction beside its
+  refutation. The run that lied was the **0.5% smoke test** the protocol had
+  already ruled inadmissible. v1 reproduced **3.47603843547682** across two
+  invocations 71 minutes apart, and it equals M2-S2's number from another script.
+- **The strongest family in every source is the one that lost.** g5's legal,
+  point-in-time version made the model worse on both KPIs — our `PULocationID`/
+  `DOLocationID` already ARE the key the aggregate is grouped on, and the honest
+  window means the feature the model is FITTED on is not the feature it is SCORED
+  on (gotcha #43). The mandated leakage red-team (`make leakage-redteam`) fitted
+  the same tables across val on purpose: **+1.56% on the month it saw, −3.83% on
+  the untouched month** — it would have cleared the keep bar and been admitted.
+  The leaky switch defaults off, lives in the type, and only one script may flip it.
+- **DR-01 budget, artisan track: 3,313.9 s logged of 9,000** (two red-team arms
+  logged no `fit_seconds`, so it is a floor). The track stopped on its stop rule.
+- **Anything long runs detached.** `automation/run_detached.sh` + `watchdog.sh` on
+  cron; ending a turn kills every background task the session started (gotcha #45).
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -639,7 +679,9 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Reprint every number in the error memo | `uv run python scripts/error_memo_numbers.py [section…]` | VERIFIED 2026-08-17 (M2-S4): all 7 sections reproduce `docs/error_memo_m2.md` from `marts.error_segments` + the `predictions` view — and caught 4 last-digit rounding slips on its first run, which were fixed in the memo |
 | Error-segment board (M2-S4) | `make boards` (same path as M1-S5; `--verify` is the read-only twin) | VERIFIED 2026-08-17 (M2-S4): `Error segments (M2)` created with **11 cards**, every card citing a KPI id and querying the `marts` warehouse; `--verify` green on all 3 dashboards incl. `card 'KPI-13 · what the booster buys, by hour of day (test)' RAN and returned 24 row(s)` and `no card claims KPI-09/KPI-10` |
 | Zone centroids (M3-S2) | `make zones` (`uv run python scripts/derive_zone_centroids.py`; `ZONES_ARGS=--refresh` re-downloads) | VERIFIED 2026-08-17 (M3-S2): 263 zones from the sha256-pinned TLC shapefile, CRS **read from the .prj** (`NAD83 / New York Long Island (ftUS)`), landmarks JFK **0.63 km** · LGA **0.11 km** · EWR **0.26 km** from their published points, `.dbf` and `taxi_zone_lookup.csv` agree on borough+zone for all 263, every centroid inside the NYC bbox. Idempotent: re-run gives sha256 `37910367…` unchanged. RED-TEAMED by a **111 m** edit to one of 263 rows → the sha256-pin leg AND the byte-identity re-derivation leg both fail while all 11 semantic checks still pass (the landmark tolerance is 3 km), restore → 13/13 |
-| Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5), **RE-VERIFIED and WIDENED 2026-08-17 (M3-S1): GREEN 54/54** (was 49 — five sub-checks added to §2, none removed). §2 now replays M3's transcripts too, WITH the incumbent each one records; pins the floor by name; and measures the DIRECTION of the floor change from two committed transcripts (`3.5090 -> 3.3518 on the same 5,950,708 rows`), because a floor swap is only not-a-loosening if the new floor is harder. It re-reads and re-reconciles, it NEVER re-fits |
+| Artisan ablation (M3-S3) | `make ablation` (15% sample, six arms) · `make ablation ABLATION_ARGS="--full-scale --sets v1,v1_g1,v1_g2,v2 --log-model"` (the confirmation) | VERIFIED 2026-08-17 (M3-S3): six sample arms in `m3-artisan` (557.1 s of fitting) then the four-arm confirmation on **43,987,422** rows (2,135.0 s) → **v1 3.4760 · g1 +1.77% · g2 +0.63% · v2 3.3905 (+2.46%, KPI-10 80.506%)**, v2 logged with signature + input example. v1 reproduced `3.47603843547682` across two invocations 71 min apart. Val only, registry untouched. **Run it detached** (`automation/run_detached.sh`) — a session that waits for it kills it (gotcha #45) |
+| Prove a leaky aggregate flatters val and nothing else (M3-S3) | `make leakage-redteam` (`uv run python scripts/leakage_redteam.py`) | VERIFIED 2026-08-17 (M3-S3): the same tables fitted across the val month ON PURPOSE → **+0.0551 min on the month it saw, −0.1367 min on the untouched month** (2019-06, held out for the drill so the TEST month stays unread), inflation **+0.1917 min**. Arm B would have cleared DR-02's keep bar. `aggregates.fit` defaults `point_in_time=True`; only this script may pass False, and a test fails if the leaky switch stops leaking |
+| Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5), **RE-VERIFIED and WIDENED 2026-08-17 (M3-S1): GREEN 54/54**, **RE-RUN GREEN 54/54 2026-08-17 (M3-S3)** after the feature-registry refactor and the borough fix (was 49 — five sub-checks added to §2, none removed). §2 now replays M3's transcripts too, WITH the incumbent each one records; pins the floor by name; and measures the DIRECTION of the floor change from two committed transcripts (`3.5090 -> 3.3518 on the same 5,950,708 rows`), because a floor swap is only not-a-loosening if the new floor is harder. It re-reads and re-reconciles, it NEVER re-fits |
 | Prove the M2 gate can go RED | `make verify-m2-redteam` (`bash scripts/verify_m2_redteam.sh`) | VERIFIED 2026-08-17 (M2-S5): deletes the `@champion` alias → **RED, exit 1, 4 FAILs**, the first naming `models:/nyc-taxi-eta@champion does not resolve`, **38 sub-checks still ran and passed**; alias restored by EXIT trap → **GREEN**. Deletes only the POINTER — no version, no run, no artifact |  **RE-RUN 2026-08-17 (M3-S1): PASSED, restored run GREEN at 54 sub-checks**
 | Prove the gate refuses a WORSE-THAN-CHAMPION challenger (M3-S1) | `make gate-redteam` (`uv run python scripts/gate_redteam_incumbent.py`) | VERIFIED 2026-08-17 (M3-S1): a challenger built as the champion **+0.06 min** on every quote scored **3.2667 / 81.423%**, cleared the floor bar at **+2.54%**, and was **REFUSED on both incumbent conditions** against version 1's 3.2608 / 81.480% while the floor conditions still passed. The bypass (`incumbent_version=None`) was refused by `registry.promote`. Registry identical before and after (alias 1, versions [1]). ~6 min; it is a .py and not a heredoc because the OpenMP shim re-execs and stdin cannot be replayed (gotcha #37) |
 | Prove a wrong-window floor cannot be published (M3-S1) | `make predictions-redteam` (`bash scripts/predictions_redteam.sh`) | VERIFIED 2026-08-17 (M3-S1): floor fitted on 2019-01 instead of six months → re-fit measured **4.1138** against the version's `gate_floor_mae` **3.5090** → **write REFUSED, exit 2**, and all three published files **byte-identical by sha256** before and after |
@@ -688,3 +730,8 @@ MLflow faults print the same `MLmodel` error — one is F-009, the other is a
 client without MinIO credentials (#39), and **a number that has been through a
 `%.4f` exists only at that precision, so comparing a fresh measurement against it
 compares against rounding noise (#42 — it refused the champion against itself)**.
+Newest, and both cost a session: **ending a turn kills every background task the
+session started, so "I'll pick this up when the run reports" destroys the run
+(#45 — the chain died for 38 minutes; `automation/run_detached.sh` and the cron
+`watchdog.sh` are the answer)**, and a reference file can spell its own null two
+ways while the comment above the loop swears it does not (#46).
