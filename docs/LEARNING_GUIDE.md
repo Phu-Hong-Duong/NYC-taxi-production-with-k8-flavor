@@ -9,6 +9,72 @@ months from now.
 
 ## M3
 
+### M3-S4 — the drill passed, and the thing it found was a corpse the pass rate could not see (2026-08-17, role:MLE)
+
+**What was built.** The automation half of M3's 2×2: a FLAML **scout** that
+spends `configs/automl.yaml`'s 1,800 s naming a model family and a starting
+region, an Optuna **sniper** that searches inside it with TPE + MedianPruner
+against a study living in the one Postgres, a **full-data refit** that turns the
+study's best parameters into a bake-off contender through the one evaluator, and
+the plumbing under all three — `taxi_mlops.tuning.{storage,space,fit}`. Plus the
+two arms §9/M3 asks to *watch*: kill-and-resume, and a pruner. Nothing promotes.
+
+**Why this way — three decisions worth the space.**
+
+*(1) The study's storage is the feature, so it got the design.* Optuna will
+happily keep a study in memory or in a SQLite file and the search will look
+identical. The one thing this arm exists to demonstrate — kill the process, run
+the same command, watch the trial count continue — is a property of *where the
+trials are*, and of nothing else. So the storage got a module, a credential
+chain that ends in `.env` (never a config, never argv), and a test that walks
+every file under `configs/` looking for a connection string.
+
+*(2) A port-forward, deliberately, over the tidier answer.* Publishing 5432
+would be cleaner — except kind publishes host ports at cluster-CREATE time only,
+so it costs a `cluster-down && cluster-up`, and that takes the PVCs, and with
+them MLflow's backend, the registry and the champion. The tunnel is uglier and
+strictly reversible. It is also thematically right: the tunnel dies with the
+process while the trials do not, which is the demonstration.
+
+*(3) The scout's leaderboard lost a column.* The first draft printed per-family
+wall-clock from a FLAML attribute that does not exist. Every cell came back
+`0.0` — which reads like a measurement. The column was deleted rather than
+fixed: FLAML does not expose the number, and a zero that looks like a timing is
+worse than a missing column.
+
+**The concept underneath.** *A test that passes tells you what it checked, not
+what is true.* The resume drill passed on its first run and printed exactly what
+the milestone gate asks for: three trials survived a `kill -9`, the resumed
+process continued the count, transcript pasted. It was also, quietly, wrong. The
+trial that was mid-fit at the instant of the kill stayed `RUNNING` in Postgres
+**forever** — Optuna cannot distinguish a process that is thinking from one that
+no longer exists — so the study asked for `n_trials - len(trials)` more work and
+delivered seven answered trials where eight were requested. One trial lost per
+kill, invisible to anyone reading the total rather than the *states*. The fix is
+Optuna's own (a heartbeat plus `RetryFailedTrialCallback`, and counting
+`COMPLETE + PRUNED` rather than rows), but the lesson is the shape: the drill
+was written to satisfy a sentence, and the sentence was satisfiable by a system
+that was silently losing work. **Ask what a green light would still be
+compatible with.** The same instinct killed the 16-trial pruning smoke as
+evidence: zero trials pruned is what a healthy pruner looks like on easy data
+*and* what a pruner wired to nothing looks like, so the propagation path is
+pinned by a test that forces a prune instead.
+
+**What to look at.** `docs/automation_track_m3.md` §3 — both drill transcripts,
+before and after, kept side by side · `src/taxi_mlops/tuning/storage.py`'s
+`rdb_storage` docstring, which is the finding written where the fix is ·
+`tests/unit/test_tuning.py::test_a_pruned_trial_really_raises_out_of_the_boosters_callback`
+and its `_prune_probe.py` child process (gotcha #37 again: re-execing pytest
+restarts the test session inside itself) · `scripts/automation_track.sh`'s
+header, where the 9,000 s is split **before** any result exists.
+
+**What to try yourself.** Run `make tune-resume-drill DRILL_ARGS="--heartbeat-seconds
+3600"` and watch the drill fail on the leg it added — the grace period never
+elapses, the killed trial is never reaped, and the study reports one fewer
+answered trial than it asked for. That is what the first version of this code
+did on every kill, and the only difference between the two runs is whether
+anybody looked past `TOTAL`.
+
 ### M3-S3 — the strongest feature in the literature lost, and the sample that lied was the one nobody was allowed to quote (2026-08-17, role:MLE)
 
 **What was built.** Feature set **v2**, earned group by group. Five feature

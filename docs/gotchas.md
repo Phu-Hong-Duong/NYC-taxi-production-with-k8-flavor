@@ -562,3 +562,23 @@ the seed line are earned by THIS project.
     citation; and when a fold like this is introduced, the test must pin BOTH
     halves — the nulls collapse **and** the real categories survive — or
     tomorrow's fix for a different bug flattens the column and stays green.
+
+47. **A SIGKILLed Optuna trial stays `RUNNING` in the storage forever, so a
+    resumed study silently loses one trial per kill.** Found by M3-S4's own
+    kill-and-resume drill, on the run that *passed*. Optuna has no way to
+    distinguish a process that is thinking from a process that no longer
+    exists, so the trial that was mid-fit at the instant of the kill is never
+    completed, never retried and never failed — while still occupying a row.
+    Any arithmetic of the shape `n_trials - len(study.trials)` then asks for
+    too little work: the drill requested 8 trials and got **7 answered plus a
+    corpse**, which is invisible to anybody reading `TOTAL` rather than the
+    per-state counts. Two halves to the fix, and both are needed: build the
+    storage with `RDBStorage(heartbeat_interval=…, failed_trial_callback=
+    RetryFailedTrialCallback(...))` so `study.optimize` can declare a stale
+    trial dead and re-enqueue it, **and** count the trials that are ANSWERED
+    (`COMPLETE` + `PRUNED`) rather than the rows that exist. The transferable
+    lesson is the one in the field note: the drill was written to satisfy a
+    sentence ("the trial count continues"), and the sentence was satisfiable by
+    a system that was quietly dropping work — so ask what a green light would
+    still be compatible with. Related: #45 (the reason anything is killed at
+    all), #17 (why the study is namespaced in the first place).

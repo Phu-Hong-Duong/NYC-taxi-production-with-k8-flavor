@@ -4,6 +4,21 @@
 SHELL := /bin/bash
 MONTH ?= 2019-09
 
+# The one supported way to run something that must OUTLIVE the session starting
+# it (gotcha #45: a Claude Code background task is a CHILD of the session and
+# dies with it, which cost the chain 38 minutes on 2026-08-17). It is a make
+# target and not just a script call because `make` is the interface every role
+# already has: an unattended session should never have to reach past it.
+#   make detach NAME=m3s4-automation-track ROLE=executor TARGET=automation-track
+# ROLE is the successor the JOB schedules on completion — the launching session
+# must then schedule nothing itself (next_session.sh refuses the double anyway).
+.PHONY: detach
+detach: ## run a make TARGET detached so it survives this session; the JOB schedules ROLE after (gotcha #45)
+	@test -n "$(NAME)"   || { echo "make detach needs NAME=<slug>" >&2; exit 2; }
+	@test -n "$(TARGET)" || { echo "make detach needs TARGET=<make target>" >&2; exit 2; }
+	@test -n "$(ROLE)"   || { echo "make detach needs ROLE=executor|rev|architect" >&2; exit 2; }
+	@automation/run_detached.sh $(NAME) --then-schedule $(ROLE) -- make $(TARGET)
+
 .PHONY: help
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "};{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
