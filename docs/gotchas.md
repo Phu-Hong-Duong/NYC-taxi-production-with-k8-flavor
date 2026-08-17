@@ -345,3 +345,33 @@ the seed line are earned by THIS project.
     and does it twice. The honest fix is `sudo apt install libgomp1`, which is
     the PO's hands; debt **D-004** puts it in M4's image, because a shim should
     not be what makes a container work.
+
+
+38. **dbt's partial-parse cache stores node paths RELATIVE to wherever dbt was
+    last run, so one hand-run from the wrong directory breaks `make marts` — and
+    the error names a file that plainly exists.** M2-S4 inherited a working tree
+    from a session killed mid-story. `make marts` failed at the seed:
+    `IO Error: No files found that match the pattern
+    "analytics/dbt/seeds/redteam/redteam_bad_trips.csv"` — a path that resolves
+    perfectly from the repo root and not at all from `analytics/dbt`, which is
+    where `scripts/marts.sh` correctly `cd`s before building. The file was
+    present, the script's cwd was right, the diff had not touched seeds, and the
+    previous milestone had run the same command green. Cause: dbt caches a parsed
+    manifest in `target/partial_parse.msgpack`, and each node's `root_path` in it
+    is recorded relative to the invocation directory. The killed session had run
+    `dbt` by hand from the repo root (the same event left an empty 12K
+    `marts.duckdb` there — two symptoms, one cause), which wrote
+    `root_path: analytics/dbt` into the cache; every later in-directory build
+    then joined that onto the project dir and looked for
+    `analytics/dbt/analytics/dbt/...`-shaped paths. Fix: `--no-partial-parse` at
+    all three `dbt build` call sites in `scripts/marts.sh`, measured to cost
+    **nothing** on this project (5.74s vs 5.91s — five models). Red-teamed by
+    re-poisoning the cache the same way (`dbt parse --project-dir analytics/dbt`
+    from the repo root, confirmed `root_path: analytics/dbt` back in the
+    manifest) and re-running `make marts`: **ERROR=1 became PASS=57**. General
+    form, and it is the reason this one is worth its entry: a cache keyed on
+    ambient state that no input mentions turns a build into a function of where
+    somebody once stood. When a build fails naming a file you can see, suspect
+    the cache before the code — and prefer deleting the cache to teaching every
+    caller to stand in the right place. Sibling of gotcha #33's order law: both
+    are cases where a step's correctness depends on something outside the step.

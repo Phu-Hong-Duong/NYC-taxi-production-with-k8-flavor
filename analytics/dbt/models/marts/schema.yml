@@ -123,6 +123,66 @@ models:
           - accepted_range:
               arguments: {min_value: 0}
 
+  - name: error_segments
+    description: >
+      Where the champion is wrong, at (split, segment, segment_value) grain, with
+      the honest floor's error on the same rows. Aggregates the evaluator's
+      published row-level predictions; computes no prediction and re-scores no
+      model. Serves M2-S4's error memo and the error-segment board.
+    columns:
+      - name: split
+        description: "val (2019-07) or test (2019-08). Train is never scored — a model's error on the rows it was fitted to is not a finding."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: ["val", "test"]}
+      - name: segment
+        description: "Which dimension this row cuts by: overall, hour, dayofweek, pickup_zone, dropoff_zone, passenger_count, duration_band, unseen_group."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["overall", "hour", "dayofweek", "pickup_zone", "dropoff_zone",
+                         "passenger_count", "duration_band", "unseen_group"]
+      - name: segment_value
+        tests: [not_null]
+      - name: trips
+        description: "Rows in the segment. Summed over any one segment type it equals the split's row count, which is what assert_error_segments_reconcile checks."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 1}
+      - name: kpi_11_mae_min
+        description: >
+          KPI-11 — segment ETA MAE in minutes. On the `overall` row this equals
+          KPI-09, by construction and by test; it is a different id because its
+          window is a segment (docs/kpi_definitions.md rule 5).
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 120}
+      - name: kpi_12_within_tol_pct
+        description: "KPI-12 — segment within-tolerance rate, percent. Tolerance comes from configs/train.yaml and rides in `tolerance_minutes` on every row."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}
+      - name: kpi_13_margin_vs_floor_pct
+        description: >
+          KPI-13 — what the booster buys over the honest floor here, as a percent
+          of the floor's MAE. NEGATIVE means the `GROUP BY` wins in this segment.
+          No accepted_range: bounding it would be bounding the finding.
+        tests: [not_null]
+      - name: floor_mae_min
+        description: "The group-median floor's MAE on the identical rows — the gate's bar, per segment."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 120}
+      - name: tolerance_minutes
+        description: "KPI-12's tolerance, published ON the row so a card can never render the rate without it (KPI-08's rule, applied to a rate)."
+        tests: [not_null]
+
 seeds:
   - name: redteam_bad_trips
     description: >

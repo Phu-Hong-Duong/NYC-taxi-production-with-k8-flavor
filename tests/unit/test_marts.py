@@ -116,12 +116,16 @@ def test_dbt_sources_are_analyst_views_that_exist():
     Prevents: dbt growing a SECOND definition of `split` and `month` via
     read_parquet(), which is exactly how two row counts start disagreeing.
     """
-    from taxi_mlops.data.analyst import VIEWS
+    # OPTIONAL_VIEWS counts: `predictions` and `prediction_runs` exist only after
+    # a champion has been scored (M2-S4), and `error_segments` sources them. What
+    # this test is actually protecting is that every name in sources.yml is a view
+    # the analyst layer KNOWS ABOUT — a typo'd or deleted view still fails.
+    from taxi_mlops.data.analyst import OPTIONAL_VIEWS, VIEWS
 
     sources = yaml.safe_load(read(MODELS.parent / "sources.yml"))["sources"]
     (analyst,) = [s for s in sources if s["name"] == "analyst"]
     named = {t["name"] for t in analyst["tables"]}
-    missing = named - set(VIEWS)
+    missing = named - set(VIEWS) - set(OPTIONAL_VIEWS)
     assert not missing, f"sources.yml names views the analyst layer does not build: {missing}"
 
     for model in MODELS.glob("*.sql"):
@@ -373,3 +377,22 @@ def test_dbt_pins_live_in_the_project_metadata():
     assert "dbt-duckdb>=" in pyproject
     lock = json.loads("{}") if False else read(REPO / "uv.lock")
     assert 'name = "dbt-duckdb"' in lock and 'name = "dbt-core"' in lock
+
+
+def test_every_dbt_build_disables_the_partial_parse_cache():
+    """gotcha #38: dbt's parse cache records node paths relative to the last cwd.
+
+    One hand-run of `dbt` from the repo root poisons it, and every later
+    `make marts` then fails on a seed whose file plainly exists. The flag is what
+    makes the build a function of its inputs rather than of where somebody once
+    stood, so it belongs at EVERY call site — a red-team branch that keeps the
+    cache would fail differently from the branch it is supposed to mirror.
+    """
+    script = read(REPO / "scripts" / "marts.sh")
+    # Match the INVOCATION, not the word: this file's own prose and three `echo`
+    # lines say "dbt build" too, and a test that counts those is a test that
+    # passes for the wrong reason (gotcha #35's lesson, one file over).
+    builds = [ln.strip() for ln in script.splitlines() if "uv run dbt build" in ln]
+    assert len(builds) == 3, f"expected 3 dbt build call sites, found {len(builds)}: {builds}"
+    for line in builds:
+        assert "--no-partial-parse" in line, f"dbt build without --no-partial-parse: {line}"

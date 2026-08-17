@@ -401,6 +401,51 @@ can never disagree (the port-family twins lesson, applied before it bit).
   4.1138, model 3.2608 → **3.4207** (worse), margin 7.07% → **16.85%** (better).
   M3's scout and sniper sample BY DESIGN.
 
+## Row-level predictions, the error memo and its board (M2-S4) — where v1 is wrong, visibly
+- **`make predictions` scores what was PROMOTED, never a fresh fit.** It resolves
+  `models:/nyc-taxi-eta@champion`, reads the version back, stamps it on every row
+  and mints nothing (no run, no version, no alias move). 12,140,456 rows to
+  `data/predictions/<split>/` plus `predictions.json` provenance. The strongest
+  thing it does is **refuse**: the champion's promotion tag says KPI-09 3.2608 on
+  test, so re-scoring must return 3.2608 or the write is abandoned — a model that
+  loads differently from the one that was gated has no other symptom.
+- **`data/predictions/` is gitignored and deliberately NOT DVC-tracked.** It is
+  model OUTPUT, regenerable in ~4 min from DVC-pinned inputs plus a registry
+  version. A `.dvc` pin would need refreshing every time the champion moves (M3's
+  bake-off, M7's retrains) — a pin stale by design is worse than none, because it
+  looks like provenance. The real provenance is `predictions.json` + the registry.
+- **`make duckdb` now runs THREE reconciliations** (views: 12). The new one:
+  prediction rows == held-out rows per split, or exit 1. Observed 2026-08-17:
+  6,189,748 + 5,950,708 = **12,140,456 == 12,140,456**.
+- **KPI-11/12/13 are NEW ids because the WINDOW is new** (segment, not split) —
+  the id law applied, not argued around. What licenses a mart carrying model-error
+  numbers at all (gotcha #15): `assert_error_segments_reconcile` fails the build
+  unless the whole-split row reproduces the evaluator's KPI-09/KPI-10 to four
+  decimals. **A segment number that cannot roll up to the evaluator's is not a
+  segmentation of it.** `prediction_runs` (which READS the evaluator's manifest,
+  never computes) is never published to Postgres, so no board can render KPI-09/10.
+- **The memo's headline is about COVERAGE, not accuracy** (`docs/error_memo_m2.md`).
+  The gate's +7.07% decomposes: on the **98.521%** of test rows where the floor has
+  a real group median the booster is worth **+1.88%** (~3.7 s); on the **1.479%**
+  where it falls back it is worth **+68.19%** (floor MAE 18.5704). **Three quarters
+  of the model's entire advantage over a `GROUP BY` is bought on 1.48% of rows** —
+  F-008 from the other side, and it lands on M3.
+- **The ceiling finding**: of the 970 longest trips the contract admits (100–120
+  min), KPI-12 is **0.000%** — not one quoted within 5 min — mean quote 47.93 vs
+  mean truth 107.92. Max prediction ever on test **92.155** against a max truth of
+  **120.0**. Correct behaviour for `l1` with no distance feature, and the business
+  case for M3's dossier. Airports (JFK/LGA/EWR, 8.817% of trips) carry **1.90×**
+  the error at **59.988%** KPI-12; the floor is nearly as bad, so the gap is
+  informational, not algorithmic. **1–5 min trips are the ONE segment >5,000 trips
+  where the floor beats the booster** (−0.88% test, −0.79% val — both months).
+- **`scripts/error_memo_numbers.py` is the memo's twin** — one section per memo
+  section, printing the query it ran. It caught **four last-digit rounding slips**
+  on its first run. A memo nobody can re-run is a memo nobody can check.
+- **`make marts` builds with `--no-partial-parse`, and that is load-bearing**
+  (gotcha #38): dbt's parse cache records node paths relative to wherever dbt was
+  last run, so one hand-run from the repo root breaks every later build with an
+  error naming a file that plainly exists. Costs nothing here (5 models).
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -442,6 +487,9 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Baselines + LightGBM v1 (M2-S2) | `python -m taxi_mlops.training train` (`--ablation` adds the log1p variant; `--train-months` is the sample-first override; `--no-mlflow` is a smoke test, never a result) | VERIFIED 2026-08-17 (M2-S2): 43,987,422 train rows, 4 MLflow runs in `m2-modeling`, `lightgbm-v1` logged WITH signature + input example (7 artifacts in MinIO). The two floors came back **7.8866** and **3.7170** val MAE — the EDA's SQL numbers to four decimals, from different code. Registry left EMPTY on purpose (S3's) |
 | Train + gate + promote (M2-S3) | `make train` (`--no-promote` prints the verdict only; `--hobble shuffled-target` is the red team; **exit 1 = the gate refused**) | VERIFIED 2026-08-17 (M2-S3): 43,987,422 train rows, 500/500 rounds, verdict **PROMOTE** at +7.07% over the honest floor (3.2608 vs 3.5090 test) and +1.158 KPI-10 points, `nyc-taxi-eta` version 1 aliased `@champion` with signature + input example, exit 0. Every number in the table reproduced M2-S2's to four decimals. Re-promoting the same run is a NO-OP (`noop? True`, versions still `[1]`) |
 | Prove the gate can REFUSE | `make train-redteam` (`bash scripts/train_redteam.sh`) | VERIFIED 2026-08-17 (M2-S3): a challenger fitted on permuted train labels went through the SAME gate with promotion ENABLED → **REFUSE on both conditions** (−118.49% KPI-09, −32.018 points KPI-10), CLI exit 1, script inverted it to 0. Registry snapshot identical across the run (`versions=[] · alias @champion -> UNSET` before AND after). Hobbled run kept and tagged `red_team`/`hobbled`/`do_not_promote`; it is not a registry version |
+| Score the champion, publish rows (M2-S4) | `make predictions` (`python -m taxi_mlops.training predict`; `--no-write` prints the numbers and publishes nothing) | VERIFIED 2026-08-17 (M2-S4): resolved `models:/nyc-taxi-eta@champion` → version 1, run `3adee05a…`, 500 trees, features matched the config; re-scored **3.2608** on test against the version's own `gate_challenger_mae` tag → `MATCH — the published rows describe the model the gate promoted`; wrote 6,189,748 + 5,950,708 rows + `predictions.json`. Registry untouched (it registers nothing). Needs the F-009 resolution step to load at all |
+| Reprint every number in the error memo | `uv run python scripts/error_memo_numbers.py [section…]` | VERIFIED 2026-08-17 (M2-S4): all 7 sections reproduce `docs/error_memo_m2.md` from `marts.error_segments` + the `predictions` view — and caught 4 last-digit rounding slips on its first run, which were fixed in the memo |
+| Error-segment board (M2-S4) | `make boards` (same path as M1-S5; `--verify` is the read-only twin) | VERIFIED 2026-08-17 (M2-S4): `Error segments (M2)` created with **11 cards**, every card citing a KPI id and querying the `marts` warehouse; `--verify` green on all 3 dashboards incl. `card 'KPI-13 · what the booster buys, by hour of day (test)' RAN and returned 24 row(s)` and `no card claims KPI-09/KPI-10` |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |

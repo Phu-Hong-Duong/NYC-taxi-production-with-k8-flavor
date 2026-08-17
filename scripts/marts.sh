@@ -52,17 +52,27 @@ export DBT_PROFILES_DIR="$DBT_DIR"
 # The tables the publish moves, in dependency-free order (each is standalone in
 # Postgres). `trips_clean` is first because it is the expensive one — if the
 # pipe is going to fail, fail before the cheap ones have been swapped.
-MARTS=(trips_clean zone_hourly_stats monthly_kpis rejections_by_rule)
+MARTS=(trips_clean zone_hourly_stats monthly_kpis rejections_by_rule error_segments)
 
 # ---- 1. known_domains: ONE definition, passed in, never copied into SQL ------
 # monthly_kpis computes KPI-04 against the documented TLC domains. Those live in
 # configs/data.yaml:analyst.known_domains and are read from there — a copy
 # pasted into a .sql file would be the twins failure the port family and the
 # split months already taught this repo (CLAUDE.md).
-DBT_VARS="$(python3 - "$REPO_ROOT/configs/data.yaml" <<'PY'
+#
+# M2-S4 adds a second one on the same terms: `tolerance_minutes` is KPI-12's
+# tolerance and it lives in configs/train.yaml (evaluate.tolerance_minutes),
+# where KPI-10 already reads it. A `5.0` typed into error_segments.sql would be a
+# rate whose definition disagrees with the model's the day the DA and the SRE
+# argue about the SLO — which is the M5 conversation this number exists for.
+DBT_VARS="$(python3 - "$REPO_ROOT/configs/data.yaml" "$REPO_ROOT/configs/train.yaml" <<'PY'
 import json, sys, yaml
 cfg = yaml.safe_load(open(sys.argv[1]))
-print(json.dumps({"known_domains": cfg["analyst"]["known_domains"]}))
+train = yaml.safe_load(open(sys.argv[2]))
+print(json.dumps({
+    "known_domains": cfg["analyst"]["known_domains"],
+    "tolerance_minutes": float(train["evaluate"]["tolerance_minutes"]),
+}))
 PY
 )"
 GREEN_VARS="$DBT_VARS"
@@ -73,13 +83,52 @@ v = json.loads(sys.argv[1]); v['red_team'] = True; print(json.dumps(v))" "$DBT_V
   echo "== RED TEAM: the out-of-contract fixture is UNIONED IN — this build MUST fail =="
 fi
 
+# ---- 1b. the one upstream this build cannot fabricate ------------------------
+# `error_segments` sources the analyst layer's `predictions` view, which exists
+# only after a champion has been scored (`make predictions`, M2-S4). dbt's own
+# failure for a missing source is a DuckDB "table does not exist" three frames
+# deep in a compiled model — true, and useless. Say the sentence instead.
+if [[ ! -f "$REPO_ROOT/data/analyst.duckdb" ]]; then
+  echo "[marts] FAIL: no data/analyst.duckdb — run \`make data\` first." >&2
+  exit 1
+fi
+if ! uv run python -c "
+import duckdb, sys
+con = duckdb.connect('$REPO_ROOT/data/analyst.duckdb', read_only=True)
+names = {r[0] for r in con.execute('SHOW TABLES').fetchall()}
+sys.exit(0 if {'predictions', 'prediction_runs'} <= names else 1)
+"; then
+  echo "[marts] FAIL: the analyst layer has no 'predictions' view." >&2
+  echo "[marts] The error_segments mart aggregates the champion's published rows." >&2
+  echo "[marts] Run:  make predictions  &&  make duckdb" >&2
+  exit 1
+fi
+
 # ---- 2. dbt build (models + tests, interleaved) ------------------------------
+#
+# --no-partial-parse IS LOAD-BEARING, and it cost this project a broken build to
+# learn (gotcha #38, M2-S4). dbt caches a parsed manifest in
+# `target/partial_parse.msgpack`, and the node paths in it — `root_path` — are
+# recorded RELATIVE TO THE DIRECTORY DBT WAS RUN FROM. One hand-run of `dbt`
+# from the repo root therefore poisons every subsequent `make marts`: the cache
+# says `root_path: analytics/dbt`, this script runs from `analytics/dbt`, and
+# the seed load fails with `No files found that match the pattern
+# "analytics/dbt/seeds/redteam/redteam_bad_trips.csv"` — naming a file that
+# plainly exists, from a script whose own cwd is correct. Measured cost of
+# turning the cache off on this project: nothing (5.74s vs 5.91s, i.e. inside
+# the noise — there are five models). A build that can be broken by where
+# somebody once stood is not idempotent, which is the property this whole script
+# is built around.
+#
+# It is spelled out at each of the three call sites rather than hoisted into a
+# shell array, deliberately: gotcha #35 is a test that parses an array in this
+# very file and truncated it at the first `)` inside a comment.
 echo "== [1/2] dbt build (models AND tests; a red test stops the publish) =="
 cd "$DBT_DIR"
 if [[ "$RED_TEAM" == "1" ]]; then
   # The failure IS the result here, so the exit code is inverted deliberately:
   # a GREEN build under the red-team fixture means the tests are not testing.
-  if uv run dbt build --vars "$DBT_VARS"; then
+  if uv run dbt build --no-partial-parse --vars "$DBT_VARS"; then
     echo "[marts] RED-TEAM FAILED: dbt build was GREEN with out-of-contract rows in it." >&2
     echo "[marts] The tests are not testing. Do not ship these marts." >&2
     exit 1
@@ -95,11 +144,11 @@ if [[ "$RED_TEAM" == "1" ]]; then
   # green before exiting — three seconds, and the red-team stops being something
   # somebody has to remember to clean up after.
   echo "[marts] restoring the local DuckDB layer to green …"
-  uv run dbt build --vars "$GREEN_VARS" >/dev/null
+  uv run dbt build --no-partial-parse --vars "$GREEN_VARS" >/dev/null
   echo "[marts] restored. Postgres was never touched; run 'make marts' to republish."
   exit 0
 fi
-uv run dbt build --vars "$DBT_VARS"
+uv run dbt build --no-partial-parse --vars "$DBT_VARS"
 cd "$REPO_ROOT"
 
 if [[ "$SKIP_PUBLISH" == "1" ]]; then

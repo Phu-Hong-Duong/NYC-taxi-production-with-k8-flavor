@@ -26,10 +26,13 @@ from conftest import raw_frame
 
 from taxi_mlops.data import __main__ as cli
 from taxi_mlops.data.analyst import (
+    OPTIONAL_VIEWS,
     VIEWS,
     build,
     build_sql,
     database_path,
+    predicted_months,
+    prediction_reconciliation,
     reconciliation,
     rejection_reconciliation,
     report,
@@ -357,3 +360,146 @@ def test_rejection_counts_are_queryable_per_rule(analyst_cfg):
     configured = sorted(r["name"] for r in analyst_cfg.clean["rules"])
     assert [r[0] for r in rules] == configured
     assert months[0] == len(ROWS)
+
+
+# --------------------------------------------------------------------------- #
+# The published predictions (M2-S4): a view that must not exist until it can,
+# and a reconciliation that must refuse a model scored on a subset.
+# --------------------------------------------------------------------------- #
+
+
+def seed_predictions(cfg, *, months=None, drop=0, relabel=None):
+    """Write prediction files the way `taxi_mlops.training.score` writes them.
+
+    Deliberately through the SHIPPING writer and off the SHIPPING processed
+    parquet, so this exercises the contract other layers cite rather than a
+    fixture invented here.
+    """
+    import pandas as pd
+
+    from taxi_mlops.training import predictions as predictions_mod
+
+    months = months or list(cfg.splits.val + cfg.splits.test)
+    for month in months:
+        source = pd.read_parquet(cfg.processed_path(month))
+        rows = len(source) - drop
+        source = source.head(rows)
+        matrix = pd.DataFrame(
+            {
+                "hour": source["tpep_pickup_datetime"].dt.hour.astype("int16"),
+                "dayofweek": source["tpep_pickup_datetime"].dt.dayofweek.astype("int16"),
+                "PULocationID": source["PULocationID"].astype("int16"),
+                "DOLocationID": source["DOLocationID"].astype("int16"),
+                "passenger_count": source["passenger_count"].astype("float32"),
+            }
+        )
+        actual = source["trip_duration_minutes"].astype("float64")
+        frame = predictions_mod.build_frame(
+            split=relabel or cfg.splits.split_of(month),
+            month=month,
+            features=matrix,
+            actual=actual,
+            predicted=actual.to_numpy() + 1.0,
+            floor_predicted=actual.to_numpy() + 2.0,
+            floor_unseen=[False] * rows,
+            model_name="nyc-taxi-eta",
+            model_version="1",
+        )
+        predictions_mod.write(frame, cfg.predictions_path(month), cfg)
+    predictions_mod.write_manifest(
+        predictions_mod.manifest(
+            model={"name": "nyc-taxi-eta", "alias": "champion", "version": "1"},
+            floor={"name": "baseline-group-median"},
+            tolerance_minutes=5.0,
+            metrics=[],
+        ),
+        cfg.predictions_manifest_path(),
+    )
+
+
+def test_the_data_path_builds_when_no_model_has_ever_been_scored(analyst_cfg, capsys):
+    """The catalogue must not depend on the modelling path.
+
+    Prevents the dependency running backwards: `make data`, `make rebuild-proof`
+    and the whole M1 gate run on a repo where no champion exists, and a layer that
+    refused to build without one would make the data path wait for a model.
+    """
+    assert predicted_months(analyst_cfg) == []
+    assert sorted(build(analyst_cfg)) == sorted(VIEWS)
+    assert report(analyst_cfg) is True
+    assert "no model output" in capsys.readouterr().out
+
+
+def test_scored_months_add_exactly_the_optional_views_and_reconcile(analyst_cfg):
+    seed_predictions(analyst_cfg)
+    assert predicted_months(analyst_cfg) == list(
+        analyst_cfg.splits.val + analyst_cfg.splits.test
+    )
+    assert sorted(build(analyst_cfg)) == sorted(VIEWS + OPTIONAL_VIEWS)
+    rows = prediction_reconciliation(analyst_cfg)
+    assert [(split, month, agree) for split, month, _o, _e, agree in rows] == [
+        ("val", "2019-02", True),
+        ("test", "2019-03", True),
+    ]
+    assert report(analyst_cfg) is True
+
+
+def test_the_view_derives_the_error_columns_every_consumer_reads(analyst_cfg):
+    """`abs_error_minutes` is defined ONCE, in the view, from the two columns
+    that define it — so a mart, a card and a memo cannot mean three things."""
+    seed_predictions(analyst_cfg)
+    build(analyst_cfg)
+    con = __import__("duckdb").connect(str(database_path(analyst_cfg)), read_only=True)
+    try:
+        columns = {r[0] for r in con.execute("DESCRIBE predictions").fetchall()}
+        errors = con.execute(
+            "SELECT DISTINCT ROUND(abs_error_minutes, 6), ROUND(signed_error_minutes, 6), "
+            "ROUND(floor_abs_error_minutes, 6) FROM predictions"
+        ).fetchall()
+    finally:
+        con.close()
+    assert {"abs_error_minutes", "signed_error_minutes", "floor_abs_error_minutes"} <= columns
+    # the fixture quotes every trip 1 minute long and the floor 2 minutes long
+    assert errors == [(1.0, 1.0, 2.0)]
+
+
+def test_reconciliation_refuses_a_model_scored_on_a_subset(analyst_cfg):
+    """RED-TEAM. A model scored on 90% of a holdout produces a perfectly
+    plausible MAE — an average over a subset nobody chose, with no symptom."""
+    seed_predictions(analyst_cfg, drop=2)
+    build(analyst_cfg)
+    rows = prediction_reconciliation(analyst_cfg)
+    assert [agree for *_rest, agree in rows] == [False, False]
+    assert report(analyst_cfg) is False
+
+
+def test_reconciliation_refuses_predictions_labelled_with_the_wrong_split(analyst_cfg):
+    """RED-TEAM, and the reason the join is a FULL OUTER one: relabelling a
+    holdout is undetectable downstream — every number stays right and describes
+    the wrong month."""
+    seed_predictions(analyst_cfg, months=list(analyst_cfg.splits.val), relabel="test")
+    build(analyst_cfg)
+    rows = prediction_reconciliation(analyst_cfg)
+    # the val month is missing entirely, and a ('test', '2019-02') pair appears
+    # that the ingest report has never heard of
+    assert ("test", "2019-02", False) in [(s, m, a) for s, m, _o, _e, a in rows]
+    assert report(analyst_cfg) is False
+
+
+def test_prediction_runs_reports_the_evaluators_numbers_and_never_computes_them(analyst_cfg):
+    """The provenance view: which champion produced these rows. It is read from
+    the manifest the evaluator wrote — this layer has no other way to know, and
+    must not acquire one."""
+    seed_predictions(analyst_cfg)
+    build(analyst_cfg)
+    con = __import__("duckdb").connect(str(database_path(analyst_cfg)), read_only=True)
+    try:
+        rows = con.execute(
+            "SELECT DISTINCT model_name, model_version, model_alias FROM prediction_runs"
+        ).fetchall()
+    finally:
+        con.close()
+    # the seeded manifest carries no split metrics, so the view is empty of rows
+    # but exists and is typed — an absent view and an empty one are different
+    # failures and only the first should ever be silent
+    assert rows == []

@@ -153,10 +153,14 @@ def test_metabase_reads_the_warehouse_as_marts_never_as_the_superuser():
 # ------------------------------------------------------------- the boards ----
 
 
-def test_there_are_exactly_two_boards_and_they_are_the_named_ones():
-    """The M1 gate says 'the two Metabase boards'. Three boards is a different
-    deliverable; one is a missing one."""
-    assert {b["name"] for b in boards()} == {"Data health", "KPI board"}
+def test_the_boards_are_exactly_the_ones_the_gates_name():
+    """The M1 gate says 'the two Metabase boards'; M2's kickoff adds the
+    error-segment board by name. An unnamed fourth board is a different
+    deliverable; a missing one is a missing gate leg.
+
+    Widened at M2-S4 rather than deleted: the assertion's value is that the set is
+    CLOSED, not that it has two members."""
+    assert {b["name"] for b in boards()} == {"Data health", "KPI board", "Error segments (M2)"}
 
 
 def test_every_card_cites_a_kpi_id_that_the_kpi_doc_actually_defines():
@@ -217,7 +221,7 @@ def test_every_card_queries_a_mart_and_never_a_raw_table_or_a_parquet_path():
     analyst DuckDB, would give the repo a second definition of `split`/`month`
     and would not be reachable by Metabase anyway."""
     marts = {"marts.trips_clean", "marts.zone_hourly_stats", "marts.monthly_kpis",
-             "marts.rejections_by_rule"}
+             "marts.rejections_by_rule", "marts.error_segments"}
     for board in boards():
         for card in board["cards"]:
             sql = card["sql"]

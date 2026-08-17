@@ -21,3 +21,22 @@ sources:
         description: "ingest_months joined to the raw sha256 pins. Source of KPI-05."
       - name: unknown_domain_values
         description: "Values present in the data that the TLC dictionary does not describe. Related to KPI-04 — but see monthly_kpis: this view is pre-aggregated per column, so summing it double-counts rows carrying two undocumented values."
+      - name: predictions
+        description: >
+          One row per held-out trip (val + test), written by
+          `taxi_mlops.training.score` under `data/predictions/`: the five
+          quote-time features the champion actually saw, the actual duration, the
+          champion's quote and the honest floor's quote. MODEL OUTPUT, read
+          through the analyst layer — the boundary law's one-way door (ADR-009):
+          marts may read what the model wrote, model code never reads marts.
+          Present only after `make predictions`; the whole data path builds
+          without it.
+      - name: prediction_runs
+        description: >
+          Provenance for the rows above, read from the manifest the same command
+          wrote: which registered model and version produced them, and what
+          `taxi_mlops.training.evaluate` measured for it per split. The ONLY place
+          KPI-09/KPI-10 values appear in this project's SQL, and they are read,
+          never computed (gotcha #15 forbids a second producer). Never published
+          to Postgres: its one consumer is the test that checks `error_segments`'
+          whole-split row against the evaluator.
