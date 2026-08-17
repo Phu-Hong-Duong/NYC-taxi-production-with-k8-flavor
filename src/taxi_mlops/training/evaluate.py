@@ -109,13 +109,21 @@ def evaluate(
 
 
 def results_table(results: list[Metrics]) -> str:
-    """The one table this milestone quotes. KPI ids in the header, so nothing is retyped."""
+    """The one table this milestone quotes. KPI ids in the header, so nothing is retyped.
+
+    The name column widens to fit its widest entry. It used to be fixed at 27, and
+    M2-S3's red-team contender (`lightgbm-v1-hobbled-shuffled-target`, 35 chars)
+    pushed every following column out of alignment on exactly the run whose output
+    is pasted into a refusal transcript — the one table most likely to be retyped
+    by hand, which is where numbers get corrupted.
+    """
+    width = max(27, *(len(m.contender) for m in results))
     header = (
-        "  contender                    split       rows      KPI-09      KPI-10   "
+        f"  {'contender':<{width}}  split       rows      KPI-09      KPI-10   "
         "  RMSE   medAE   p90AE"
     )
     rule = (
-        "  ---------------------------  -----  -----------  ----------  ----------  "
+        f"  {'-' * width}  -----  -----------  ----------  ----------  "
         "------  ------  ------"
     )
     lines = [
@@ -128,7 +136,7 @@ def results_table(results: list[Metrics]) -> str:
     ]
     for m in results:
         lines.append(
-            f"  {m.contender:<27}  {m.split:<5}  {m.n:>11,}  {m.mae:>10.4f}  "
+            f"  {m.contender:<{width}}  {m.split:<5}  {m.n:>11,}  {m.mae:>10.4f}  "
             f"{m.within_tolerance_rate:>9.3f}%  {m.rmse:>6.3f}  {m.median_ae:>6.3f}  "
             f"{m.p90_ae:>6.3f}"
         )

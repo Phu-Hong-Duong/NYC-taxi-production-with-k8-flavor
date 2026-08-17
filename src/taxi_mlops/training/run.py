@@ -5,8 +5,10 @@ The shape matters more than the code: every number printed at the end came from
 makes the comparison a comparison (gotcha #15) — and it is why a bug in the
 evaluator shows up as all three numbers moving, not as a discovery.
 
-M2-S3 owns the promotion gate and `make train`. This module deliberately does not
-promote, does not set an alias, and does not touch the registry.
+M2-S3 added the second half: the same invocation now submits the model to the
+promotion gate (`gate.py`) and, only on a verdict that passed, promotes it
+(`registry.py`). The decision is printed with both numbers either way, and a
+refusal leaves the registry exactly as it found it.
 """
 
 from __future__ import annotations
@@ -16,8 +18,9 @@ from typing import Any
 
 from ..data.config import DataConfig, load_config, load_yaml
 from ..features import quote_time
-from . import baselines
+from . import baselines, gate
 from . import model as model_mod
+from . import registry as registry_mod
 from .datasets import Split, load_split
 from .evaluate import Metrics, evaluate, results_table
 
@@ -31,6 +34,21 @@ class Contender:
     predict: Any
     metrics: list[Metrics]
     trained: model_mod.TrainedModel | None = None
+    run_id: str | None = None
+    model_logged: bool = False
+
+    def metric(self, split: str) -> Metrics:
+        return next(m for m in self.metrics if m.split == split)
+
+
+@dataclass
+class RunResult:
+    """What one `make train` produced: the contenders, the verdict, the promotion."""
+
+    contenders: list[Contender]
+    challenger: Contender
+    decision: gate.Decision
+    promotion: registry_mod.Promotion | None = None
 
 
 def load_train_config(path: str = "configs/train.yaml") -> dict[str, Any]:
@@ -73,9 +91,11 @@ def run(
     train_months: tuple[str, ...] | None = None,
     ablation: bool = False,
     log_to_mlflow: bool = True,
+    promote: bool = True,
+    hobble: str | None = None,
     train_config: str = "configs/train.yaml",
-) -> list[Contender]:
-    """Fit and score every contender. Returns them in the order they were scored."""
+) -> RunResult:
+    """Fit, score, gate, and (only on a pass) promote. One command, one verdict."""
     train_cfg = load_train_config(train_config)
     data_cfg = load_config(train_config=train_config)
     features_cfg = train_cfg["features"]
@@ -123,10 +143,22 @@ def run(
         )
     )
 
-    # ---- the model.
-    print("\n[model] fitting LightGBM v1")
+    # ---- the model. The challenger is contenders[2] whether or not it is hobbled:
+    # the red team submits a broken model through THIS path, not a shortcut past it.
+    challenger_name = train_cfg["model"]["name"]
+    if hobble:
+        challenger_name = f"{challenger_name}-hobbled-{hobble}"
+        print(f"\n[model] RED TEAM: fitting a deliberately hobbled challenger ({hobble})")
+        print("[model] It goes through the same fit, the same evaluator and the same gate.")
+    else:
+        print("\n[model] fitting LightGBM v1")
     trained = model_mod.fit(
-        splits["train"], splits["val"], train_cfg["model"], categorical
+        splits["train"],
+        splits["val"],
+        train_cfg["model"],
+        categorical,
+        name=challenger_name,
+        hobble=hobble,
     )
     print(f"[model] best_iteration={trained.best_iteration}")
     contenders.append(
@@ -140,6 +172,7 @@ def run(
                 "best_iteration": trained.best_iteration,
                 "features": ",".join(names),
                 "feature_set_version": features_cfg["version"],
+                **({"hobble": hobble} if hobble else {}),
             },
             predict=trained.predict,
             metrics=_score(trained.name, trained.predict, splits, eval_cfg),
@@ -178,25 +211,108 @@ def run(
     print("[evaluate] (gotcha #15: nothing else in this program may report one)\n")
     print(results_table([m for c in contenders for m in c.metrics]))
 
-    floor = next(c for c in contenders if c.name == "baseline-group-median")
-    floor_val = next(m for m in floor.metrics if m.split == "val").mae
-    model_val = next(m for m in contenders[2].metrics if m.split == "val").mae
+    challenger = contenders[2]
+    floor = next(c for c in contenders if c.name == train_cfg["gate"]["floor"])
+    floor_val, model_val = floor.metric("val").mae, challenger.metric("val").mae
     verdict = "BEATS" if model_val < floor_val else "DOES NOT BEAT"
     print(
-        f"\n[evaluate] {contenders[2].name} {verdict} the honest floor on val: "
+        f"\n[evaluate] {challenger.name} {verdict} the honest floor on val: "
         f"{model_val:.4f} vs {floor_val:.4f} min "
         f"({100 * (floor_val - model_val) / floor_val:+.2f}%)"
     )
-    print("[evaluate] the promotion GATE is M2-S3's; this is a report, not a decision.")
+    print("[evaluate] val is the REPORT. The gate below judges on test, and only test.")
+
+    # ---- the gate. Both numbers, either way.
+    gate_cfg = train_cfg["gate"]
+    holdout = gate_cfg["holdout_split"]
+    decision = gate.decide(challenger.metric(holdout), floor.metric(holdout), gate_cfg)
+    flattering = next(c for c in contenders if c.name == "baseline-constant-median")
+    print("\n" + "=" * 78)
+    print("[gate] PROMOTION GATE — configs/train.yaml: gate (loosening it is a PO fork)")
+    print(gate.verdict_lines(decision))
+    print(
+        f"[gate] context   : the FLATTERING floor (baseline-constant-median) is "
+        f"{flattering.metric(holdout).mae:.4f} min on {holdout} and is NOT the bar — "
+        f"against it this would read as "
+        f"{gate.improvement_pct(decision.challenger_mae, flattering.metric(holdout).mae):+.2f}%."
+    )
+    print("=" * 78)
 
     if log_to_mlflow:
-        _log(contenders, train_cfg, splits)
-    return contenders
+        _log(contenders, train_cfg, splits, decision, challenger)
+
+    promotion = None
+    if not decision.passed:
+        print("\n[promote] SKIPPED — the gate refused. Nothing registered, no alias moved.")
+    elif not promote:
+        print("\n[promote] SKIPPED — --no-promote. The verdict above stands unrecorded.")
+    elif not log_to_mlflow:
+        print("\n[promote] SKIPPED — --no-mlflow leaves no run to register.")
+    else:
+        promotion = _promote(challenger, train_cfg, decision)
+
+    return RunResult(
+        contenders=contenders, challenger=challenger, decision=decision, promotion=promotion
+    )
 
 
-def _log(contenders: list[Contender], train_cfg: dict[str, Any], splits: dict[str, Split]) -> None:
+def _promote(
+    challenger: Contender, train_cfg: dict[str, Any], decision: gate.Decision
+) -> registry_mod.Promotion:
+    """Register the winner and move the alias. Refuses an unservable winner."""
+    import mlflow
+
+    cfg = train_cfg["registry"]
+    if not challenger.model_logged or challenger.run_id is None:
+        raise registry_mod.PromotionError(
+            f"{challenger.name} passed the gate but no model artifact was logged for "
+            "it, so there is nothing to register. A verdict without an artifact is a "
+            "claim about a model that does not exist anywhere but this process."
+        )
+    print()
+    promotion = registry_mod.promote(
+        mlflow.MlflowClient(),
+        model_name=cfg["model_name"],
+        alias=cfg["champion_alias"],
+        run_id=challenger.run_id,
+        description=(
+            "Quote-time ETA for NYC yellow taxi. Versions are contenders promoted "
+            "through taxi_mlops.training.gate on the untouched test month."
+        ),
+        version_tags={
+            "gate_verdict": decision.verdict,
+            "gate_floor": decision.floor,
+            "gate_floor_mae": f"{decision.floor_mae:.4f}",
+            "gate_challenger_mae": f"{decision.challenger_mae:.4f}",
+            "gate_observed_pct": f"{decision.observed_pct:.2f}",
+            "gate_required_pct": f"{decision.required_pct:.2f}",
+            "gate_holdout_split": decision.split,
+            "feature_set": train_cfg["features"]["version"],
+            "metric_source": "taxi_mlops.training.evaluate",
+        },
+    )
+    print(promotion.lines())
+    print(
+        f"[promote] serving resolves models:/{promotion.model_name}@{promotion.alias} "
+        f"-> version {promotion.version} (M5's deployment reads exactly this)."
+    )
+    return promotion
+
+
+def _log(
+    contenders: list[Contender],
+    train_cfg: dict[str, Any],
+    splits: dict[str, Split],
+    decision: gate.Decision,
+    challenger: Contender,
+) -> None:
     """One MLflow run per contender — baselines included, because a floor nobody
-    can look up is a floor that gets rounded in the retelling."""
+    can look up is a floor that gets rounded in the retelling.
+
+    The gate's verdict is logged ON the challenger's run rather than only printed:
+    a number that reaches a slide should be traceable to the run that produced it
+    and to the decision that was taken about it, without asking whoever ran it.
+    """
     import mlflow
     from mlflow.models import infer_signature
 
@@ -213,7 +329,7 @@ def _log(contenders: list[Contender], train_cfg: dict[str, Any], splits: dict[st
             mlflow.set_tags(
                 {
                     "milestone": "M2",
-                    "story": "M2-S2",
+                    "story": "M2-S3",
                     "role": "MLE",
                     "feature_set": train_cfg["features"]["version"],
                     "metric_source": "taxi_mlops.training.evaluate",
@@ -226,6 +342,28 @@ def _log(contenders: list[Contender], train_cfg: dict[str, Any], splits: dict[st
             for metrics in contender.metrics:
                 mlflow.log_metrics(metrics.as_mlflow_metrics())
 
+            if contender is challenger:
+                mlflow.log_metrics(decision.as_mlflow())
+                mlflow.set_tags(
+                    {
+                        "gate_verdict": decision.verdict,
+                        "gate_floor": decision.floor,
+                        "gate_holdout_split": decision.split,
+                    }
+                )
+            if contender.trained is not None and contender.trained.hobble:
+                # Marked in the run's NAME and in its tags, so nobody has to open
+                # it to know what it is. The kickoff allows cleanup OR clear
+                # marking; marking is the better evidence, because a deleted
+                # refusal cannot be checked by anyone who was not watching.
+                mlflow.set_tags(
+                    {
+                        "red_team": "M2-S3",
+                        "hobbled": contender.trained.hobble,
+                        "do_not_promote": "yes — fitted to permuted train labels on purpose",
+                    }
+                )
+
             if contender.trained is not None and contender.trained.target_transform == "none":
                 predictions = contender.trained.predict(example)
                 signature = infer_signature(example, predictions)
@@ -235,6 +373,7 @@ def _log(contenders: list[Contender], train_cfg: dict[str, Any], splits: dict[st
                     signature=signature,
                     input_example=example,
                 )
+                contender.model_logged = True
                 print(f"[mlflow] {contender.name}: model logged with signature + input example")
             elif contender.trained is not None:
                 # A log-space booster predicts logs; serving it correctly needs a
@@ -243,4 +382,5 @@ def _log(contenders: list[Contender], train_cfg: dict[str, Any], splits: dict[st
                 # and says so, rather than logging a model that lies about its units.
                 mlflow.set_tag("model_logged", "no — log-space booster, ablation only")
                 print(f"[mlflow] {contender.name}: metrics only (log-space; see run tag)")
+            contender.run_id = active.info.run_id
             print(f"[mlflow] {contender.name}: run {active.info.run_id}")

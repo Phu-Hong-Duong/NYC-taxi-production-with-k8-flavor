@@ -160,6 +160,14 @@ rows** unless the entry says otherwise.
   Produced by `taxi_mlops.training.evaluate` and by nothing else. For context on
   the same run and through the same evaluator: the group-median floor measured
   **3.7170 / 3.5090** and the constant-median floor **7.8866 / 7.6667**.
+- **Carried by the CHAMPION since 2026-08-17 (M2-S3):** the same values, re-derived
+  to four decimals by a separate `make train` invocation (run
+  `3adee05a855a424bb664c7fea3735703`), now belong to
+  `models:/nyc-taxi-eta@champion` — registry version **1**, promoted through
+  `taxi_mlops.training.gate` on the untouched test month at **+7.07%** over the
+  honest floor (bar: 2.00%). The version's own tags carry `gate_challenger_mae`,
+  `gate_floor_mae` and `gate_observed_pct`, so this number can be re-read from the
+  registry without finding the session that produced it (`docs/promotion_gate_m2.md`).
 - **Reference floor (EDA statistic, NOT a KPI-09 value):** a train-fitted
   `GROUP BY (hour, day-of-week, PU, DO)` median achieves 3.7170 min on val
   (eda_report.md §11). **A model above that number has learned nothing a SQL
@@ -177,6 +185,11 @@ rows** unless the entry says otherwise.
   The group-median floor measured **78.693% / 80.322%** through the same code
   path — i.e. v1 buys one point of within-5-minutes over a `GROUP BY`, which is
   the honest shape of a quote-time model with no distance feature.
+- **A promotion condition since 2026-08-17 (M2-S3), not just a report.** The gate
+  refuses a challenger whose KPI-10 regresses against the floor even when its
+  KPI-09 margin clears the bar: a mean over ~6M rows can improve while more riders
+  are quoted wrongly, and only the second of those is what M5's SLO promises. The
+  champion cleared it at **+1.158 points** (81.480% vs 80.322% on test).
 - **Reference floor (EDA statistic):** the same group-median predictor lands
   within 5 minutes on **78.693%** of val trips (44.117% within 2 minutes).
 - **Why this exists next to KPI-09:** MAE is dominated by the median trip and can

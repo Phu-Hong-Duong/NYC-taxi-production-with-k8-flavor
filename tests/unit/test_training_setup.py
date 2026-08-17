@@ -131,20 +131,38 @@ def test_an_absent_env_file_points_at_the_script_that_owns_it(tmp_path):
 
 
 # ------------------------------------------------------------- the story boundary ---
-def test_this_story_registers_nothing():
-    """M2-S3 owns promotion. A `champion` alias set here would be a gate nobody wrote."""
+def test_the_registry_is_touched_from_exactly_one_module():
+    """M2-S2's version of this test banned the registry API from the whole package,
+    because S2 promoted nothing. M2-S3 owns promotion, so the ban narrows rather
+    than lifting: the mutating calls live in `registry.py` and nowhere else.
+
+    The point is unchanged. `evaluate`, `model` and `run` are read by everyone who
+    wants to know what a number means; a `set_registered_model_alias` buried in
+    one of them would make "what is the champion?" a question you answer by
+    reading the training loop.
+    """
     import pathlib
 
-    source = "\n".join(
-        p.read_text() for p in pathlib.Path("src/taxi_mlops/training").glob("*.py")
-    )
-    # The API SURFACE, not the word: this package's docstrings say "champion" a
-    # lot, precisely to record that S3 owns it. A test that banned the word would
-    # be punishing the documentation for describing the boundary it keeps.
-    for forbidden in (
-        "register_model(",
-        "registered_model_name",
+    mutators = (
+        "create_model_version",
         "set_registered_model_alias",
-        "MlflowClient().set_",
-    ):
-        assert forbidden not in source, f"M2-S2 must not touch the registry: found {forbidden!r}"
+        "create_registered_model",
+        "set_model_version_tag",
+        "register_model(",
+    )
+    for path in pathlib.Path("src/taxi_mlops/training").glob("*.py"):
+        if path.name == "registry.py":
+            continue
+        source = path.read_text()
+        found = [name for name in mutators if name in source]
+        assert not found, f"{path.name} mutates the registry ({found}) — that is registry.py's"
+
+
+def test_the_gate_decision_carries_no_side_effects_into_the_pure_module():
+    """`gate.py` decides and `registry.py` acts. A decision that could register
+    something would make the interesting logic untestable without a cluster."""
+    import pathlib
+
+    source = pathlib.Path("src/taxi_mlops/training/gate.py").read_text()
+    for forbidden in ("import mlflow", "MlflowClient", "open(", "Path("):
+        assert forbidden not in source, f"gate.py acquired a side effect: {forbidden!r}"

@@ -9,6 +9,87 @@ months from now.
 
 ## M2
 
+### M2-S3 — a gate is worth what its refusals are worth (2026-08-17, role:MLE)
+
+**What was built.** `make train` became real, and it can now fail. The path is
+one command: both floors and LightGBM v1 through the one evaluator, then the
+**promotion gate** (`taxi_mlops.training.gate`) on the untouched test month, then
+— only on a verdict that passed — promotion into the MLflow registry
+(`taxi_mlops.training.registry`) with the `champion` alias. The bar is a **2.00%
+KPI-09 margin over the group-median floor**, plus a **KPI-10 non-regression**
+condition, both in `configs/train.yaml` with their reasoning beside them. A
+refusal exits **1**; `make train-redteam` submits a deliberately hobbled
+challenger through the identical path and inverts that, the way
+`RED_TEAM=1 scripts/marts.sh` does.
+
+**Why this way.** Four choices worth naming.
+
+*(1) The gate decides and a different module acts.* `gate.py` is a pure function
+of two `Metrics` objects and a config — no MLflow, no filesystem, pinned by a
+test that greps it for side effects. `registry.py` holds everything that mutates
+state outliving the process. The payoff is not tidiness: it means the interesting
+logic is exhaustively testable without a cluster (a challenger that ties the
+floor, one that buys its mean by quoting more riders wrongly, a comparison on the
+wrong split, a winner with no signature — all unit tests), and the dangerous
+logic is small enough to read in one sitting.
+
+*(2) The margin is a maintenance-cost bar, not a statistical one.* Over 5,950,708
+test rows, even 0.5% is statistically significant, so significance is the wrong
+question. 2% of the floor is about **four seconds** of mean error, and a model
+whose entire advantage over a `GROUP BY` is four seconds does not earn a booster
+to serve, a registry version to track and a rollback to rehearse. The measured
+gap is 7.07%, so the bar has headroom by design — a bar cut to fit the model you
+happen to have is a rubber stamp with a threshold in it.
+
+*(3) The refusal is kept, not deleted.* The kickoff allowed cleanup **or** clear
+marking. Marking won: the hobbled run stays in `m2-modeling` tagged `red_team`,
+`hobbled`, `do_not_promote`, because a deleted refusal cannot be checked by
+anyone who was not watching it happen. What must stay clean is the **registry**,
+and the script proves that by snapshotting it before and after rather than
+asserting it.
+
+*(4) Promotion is idempotent by RUN, not by call.* Re-running against a run
+that is already registered reuses that version and leaves an alias already
+pointing at it alone. This is M1-S5's board law applied to a new surface: a
+converging path that creates a duplicate on every invocation is not converging,
+it is accumulating.
+
+**The concept underneath.** *A gate that has only ever been watched saying yes is
+not evidence of anything.* Any threshold passes the model it was written for —
+that is what writing it after seeing the number does. What makes the bar
+believable is the transcript where it says **no**, with both numbers on screen,
+against a model built to be refused. And the refusal taught something the passing
+run could not: fitted to permuted labels, LightGBM early-stopped at **iteration
+1** and its test MAE came out at **7.6667** — exactly `baseline-constant-median`
+to four decimals. "Learned nothing" is not an abstraction; numerically it *is*
+the median. Which also makes the config's warning concrete: against the
+flattering constant-median floor, the hobbled model scores **+0.00%** — a gate
+built on that floor with a zero margin would have promoted a model fitted to
+noise.
+
+**The mistake worth copying.** Smoke-testing on one train month to save time
+produced a *better-looking* verdict than the full run: margin 16.85% instead of
+7.07%. Not a lucky sample — the **floor is fitted on the same data as the
+challenger**, so shrinking the training set degrades the bar faster than it
+degrades the model. Sampling makes this gate **easier** to pass, and the
+transcript looks better while the model is worse. That is now **F-008**, landing
+M3, because M3's scout and sniper train on samples by design.
+
+**What to look at.** `docs/promotion_gate_m2.md` — the argument, both
+transcripts, and §6's limits · `configs/train.yaml: gate` (read the comments, not
+just the numbers) · `src/taxi_mlops/training/gate.py`, which raises rather than
+warns when asked to judge on val or against the flattering floor ·
+`tests/unit/test_training_gate.py`, which is mostly refusals · `ledgers/
+findings.md` F-008.
+
+**What to try yourself.** Run `make train-redteam` and watch the two FAIL lines.
+Then edit `min_improvement_pct` to `-200` and run it again: the gate will promote
+a model fitted to noise, and the transcript will say so in full — which is the
+clearest possible demonstration of why loosening a threshold is a PO fork and not
+an edit. Put the 2.0 back. Then try `gate.decide` with val metrics in a REPL and
+read the exception: it explains the early-stopping argument to you at the moment
+you would have made the mistake.
+
 ### M2-S2 — the floor a `GROUP BY` already knew, reproduced to four decimals (2026-08-17, role:MLE)
 
 **What was built.** The first model, and the machinery that makes its number

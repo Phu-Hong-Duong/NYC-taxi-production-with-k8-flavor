@@ -1,7 +1,15 @@
-"""CLI: `python -m taxi_mlops.training train`.
+"""CLI: `python -m taxi_mlops.training train` — what `make train` runs.
 
-`make train` stays M2-S3's to wire — the gate verdict is what makes that target
-what it claims to be, and this story deliberately promotes nothing.
+EXIT CODES ARE PART OF THE CONTRACT (M2-S3):
+
+    0  the gate passed and the winner was promoted (or --no-promote was asked for)
+    1  the gate REFUSED — the verdict printed with both numbers, registry untouched
+    2  the command could not be run at all
+
+A refusal exits non-zero on purpose. `make train` is a step in a pipeline from
+M4 onward, and a gate that says "no" while exiting 0 is a gate the pipeline
+cannot hear. `scripts/train_redteam.sh` inverts this deliberately, the way
+`RED_TEAM=1 scripts/marts.sh` does: there, the refusal IS the result.
 """
 
 from __future__ import annotations
@@ -37,6 +45,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="skip tracking — for a cluster-free smoke test, never for a result",
     )
+    train.add_argument(
+        "--no-promote",
+        action="store_true",
+        help="print the gate verdict but do not touch the registry, even on a pass",
+    )
+    train.add_argument(
+        "--hobble",
+        choices=("shuffled-target",),
+        default=None,
+        help="RED TEAM: cripple the challenger on purpose and submit it to the SAME "
+        "gate. Expect exit 1. scripts/train_redteam.sh wraps this and inverts it",
+    )
 
     # A training run redirected to a log file is block-buffered by default, so a
     # 40-minute fit prints nothing until it ends and reads exactly like a hang.
@@ -56,12 +76,15 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.train_months:
             print(f"[run] SAMPLE RUN — train months overridden: {', '.join(args.train_months)}")
-        run(
+        result = run(
             train_months=tuple(args.train_months) if args.train_months else None,
             ablation=args.ablation,
             log_to_mlflow=not args.no_mlflow,
+            promote=not args.no_promote,
+            hobble=args.hobble,
         )
-        return 0
+        # The verdict IS the exit code. See the module docstring.
+        return 0 if result.decision.passed else 1
     return 2
 
 
