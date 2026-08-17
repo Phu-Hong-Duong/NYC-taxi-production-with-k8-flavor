@@ -185,8 +185,15 @@ the actuals must be printed), and **anything long goes through
 re-launched them that way. S1's F-008 guard is live and S4 is required to
 exercise it once on a real sampled run.
 
-Chain: `automation/logs/{pending_successor,running_session}` were both cleared by
-this session at exit before scheduling, so the successor starts clean.
+Chain: scheduled `automation/next_session.sh executor **900**` rather than the
+usual 120 — a fifteen-minute delay is the cheapest thing that might make the
+GitHub outage irrelevant, and a successor that boots into the same 503 achieves
+nothing but a burnt session. `pending_successor` (this session's slot-hold, which
+correctly refused the detached job's attempt to start a successor on top of a
+live session) was cleared before scheduling; `running_session` is left naming
+**pid 74470** on purpose — it is true until this process exits, and `2946727`
+makes the queued session wait for exactly that rather than launch into a shared
+working tree.
 
 ## Session 2026-08-17 (af) — the chain died waiting for something it had killed
 
