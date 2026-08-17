@@ -1,5 +1,177 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (ad) — M3-S2: the forbidden feature turned out to be replaceable, and one query said so
+
+### State
+on-track — **EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped
+fresh session.** Executed **M3-S2** (role:DA + MLE hat), merged as **PR #15**
+(merge commit `16dea2c`, story commit `0800c4c`). **M3-S1 was PARKED at boot and
+is now UNBLOCKED again** — read the staleness section, it is the load-bearing
+part of this entry. Tree clean, `## main...origin/main`.
+
+### Staleness check of (ac)'s Next — reality had moved TWICE, in opposite directions
+(ac) said the chain was parked under a PO `STOP`, with EXECUTOR/M3-S1 next.
+
+1. **`automation/STOP` is GONE** — the PO removed it and restarted the chain.
+   That part of (ac)'s note is discharged.
+2. **But the cluster was DOWN.** `kubectl` → `command not found`; `docker` → *"The
+   command 'docker' could not be found in this WSL 2 distro"*; `python3 -c "import
+   os; os.listdir('/mnt/wsl')"` → **`['resolv.conf']`** and nothing else. That is
+   **gotcha #34** to the letter, now on its **second** occurrence (first: M1-S5).
+   Docker Desktop had not come back after the host restart, so `/usr/local/bin/
+   kubectl`'s symlink into `/mnt/wsl/docker-desktop/cli-tools/…` dangled.
+   `tasklist.exe` is not on the session allowlist (F-001), so the `/mnt/wsl`
+   listing is the evidence; it is sufficient and it is what gotcha #34 names first.
+3. **The M3 kickoff's risk table governs this exactly**: *"the chain PARKS naming
+   the gotcha … never self-launch Windows processes."* Honored — no Windows
+   process was launched, even though gotcha #34 records the recovery command.
+   ARCH tightened that policy for M3 and the kickoff is the milestone's law.
+4. **So M3-S1 was parked and M3-S2 taken as the next INDEPENDENT story.** S1's
+   four findings (F-008/F-010/F-011/F-012) close only on live evidence — a
+   watched incumbent refusal, a floor-mismatch write refusal, `make verify-m2`
+   GREEN — all of which need the MLflow registry. Building S1's code with zero
+   closable rows would have been a half-story pretending to be one. S2 was legal
+   to take *because it promotes nothing*, which is the only thing the kickoff's
+   "S1 first" sequencing actually protects.
+5. **Docker Desktop came back DURING the session** (checked again after the
+   merge): `/mnt/wsl` → `['docker-desktop', 'docker-desktop-bind-mounts',
+   'resolv.conf']`, `kubectl get nodes` → **3/3 Ready, v1.36.1, age 9h**, **17/17
+   pods Running**, nothing re-deployed — kind's node containers restarted
+   themselves, exactly as gotcha #34 predicts. **`make verify-m2` re-run at the
+   end of this session: GREEN, `[verify-m2] GREEN — every M2 sub-check passed.`**
+   So the successor inherits a clean, proven baseline and **M3-S1 is unblocked**.
+
+### Done (every leg with the command and what came back)
+
+- **`make zones` is new and real** (`scripts/derive_zone_centroids.py`): 263 TLC
+  zone centroids from the sha256-pinned shapefile into the committed
+  `data/reference/taxi_zone_centroids.csv`. Observed: `CRS read from
+  taxi_zones/taxi_zones.prj: NAD83 / New York Long Island (ftUS)` · `shapes: 263 ·
+  LocationID 1..263 · unique 263` · `.dbf and taxi_zone_lookup.csv agree on
+  borough+zone for all 263 zones` · landmarks **JFK 0.63 km · LGA 0.11 km · EWR
+  0.26 km** from their published points · all 263 inside the NYC bbox · `[zones]
+  GREEN`. Idempotent: re-run returns sha256 `37910367…` unchanged.
+  **The CRS is READ from the .prj, never hardcoded** — pinned by a test.
+  **Zones 264/265 get no row on purpose**: they are TLC's "Unknown", not places.
+- **13 cluster-free tests** (`tests/unit/test_zone_centroids.py`), the
+  load-bearing one a **byte-identity twin** that re-derives the whole table from
+  the committed zip and demands it back byte for byte — `make rebuild-proof`'s
+  argument at 263-row scale, ~1 s, so it runs in CI.
+  **RED-TEAMED and watched**: editing JFK's latitude `40.646985 → 40.647985` —
+  **111 metres, one digit, one row of 263** — produced `2 failed, 11 passed`,
+  the two being the sha256 pin and the byte-identity twin; restore → sha256
+  `37910367…` back and **13 passed**. Worth carrying forward: that edit passes
+  **every semantic check in the file**, because the landmark tolerance is 3 km.
+  Semantic checks have tolerances; byte identity does not.
+- **`docs/feature_dossier.md`: 21 candidates**, each with source + rationale +
+  leakage note + adaptation note (the §9/M3 leg asks for ≥10). Harvested LIVE
+  2026-08-17 via `curl` + `gh api` (F-001: WebFetch still off the allowlist) from
+  three real solutions read as CODE — yennanliu (17★, top-6% claim), Currie32
+  (5★, contemporaneous 2017), Sh-31 (7★, 2024).
+- **F-007 CLOSED — by measurement, not by an assumption** (Design Review
+  **DR-04**, ledger row updated in the same PR). `trip_distance` stays excluded;
+  the **zone-centroid haversine is the quote-time substitute**. Over
+  **43,439,267** train rows: meter driven distance `r` with target **0.8068**
+  (which reproduces the EDA's independently computed 0.8066 — that is what says
+  the query measures what it claims), centroid straight line **0.7873** →
+  **the legal feature retains 97.6% of the forbidden one's power**. Supporting:
+  centroid vs meter distance `r` **0.9661** over 41,182,160 rows, straight-line ≤
+  driven on **81.662%**, median circuity **1.2952**. Coverage gap measured and
+  handed to S3: rows whose zone is 264/265 — train **1.2462%**, val **1.0113%**,
+  test **1.0753%**.
+- **Design Review held, minutes committed**
+  (`docs/rituals/2026-08-17_design-review-m3.md`), all six agenda items, with
+  dissent recorded and answered on two of them. **DR-01** equal budgets measured
+  in *fitting wall-clock seconds* (artisan **9,000 s**; both tracks must PRINT
+  actuals, so "equal budgets" becomes checkable rather than asserted) ·
+  **DR-02** keep-threshold **≥0.50% relative val MAE**, re-argued as a
+  maintenance-cost bar, plus KPI-10 reported per group and every group listed
+  including drops · **DR-03 disjoint search axes** — artisan searches FEATURES
+  holding v1's hyperparameters, automation searches HYPERPARAMETERS on feature
+  sets it does not invent; without this the 2×2 cannot answer "features or
+  tuning?" · **DR-04** above · **DR-05** all five contenders are full-data,
+  TRAIN-ONLY fits and playbook §3.7's train+val refit is explicitly NOT used at
+  M3 · **DR-06** the bar. Also wrote
+  `docs/rituals/TEMPLATE_design-review.md` — the rituals README promises a
+  template at first use, and M4 has the next design review.
+- **`make verify-m2` GREEN** at session end (see staleness §5). `uv run ruff
+  check .` → `All checks passed!`; `uv run pytest tests/unit -q` → **299 passed**.
+  CI green on PR #15 (`lint-test pass 53s`); merged with a merge COMMIT;
+  `git branch -r --contains 0800c4c` → **origin/main** (gotcha #20).
+
+### Two traps this story paid tuition on — both now gotchas
+- **Gotcha #40**: the test forbidding a hardcoded `EPSG:2263` failed on its FIRST
+  run — against the script's own header, which argues at length that the
+  projection must never be hardcoded. A substring scan over source cannot tell
+  code from the comment warning about that code (sibling of #35). Fixed by
+  parsing the AST and checking non-docstring constants. The tempting bad fixes
+  were deleting the explanation or weakening the assertion; both make the repo
+  worse.
+- **Gotcha #41 — this one would have failed on somebody else's machine, not
+  mine.** `.gitattributes` carries `* text=auto eol=lf`; TLC serves
+  `taxi_zone_lookup.csv` with CRLF. `git add` printed one easily-dismissed
+  warning, and the blob git actually stored was **12,065 bytes / sha256
+  `5e8f5ff1…`** while the manifest pinned the bytes on disk — **12,331 /
+  `1a99e105…`**. Nothing fails locally, because the working copy is still the
+  downloaded file; it fails on the first **fresh clone**, i.e. in CI or for the
+  next person. Fixed with `data/reference/** -text`, then verified the right way
+  — comparing the **staged blobs** (`git cat-file -p :<path>`) against the pins,
+  all three `ok`. **CI's green run is the actual proof**, because CI is a fresh
+  clone and the pin test is exactly what would have gone red there.
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **The 1 MB shapefile zip is COMMITTED, not DVC-tracked.** DVC's remote is a
+  local directory on this machine, so CI could never pull it — and the
+  byte-identity twin is only worth having if it runs on every push. Committing
+  the zip is what lets a fresh clone re-derive and check the table with no
+  network and no cluster.
+- **`pyshp` + `pyproj` over `geopandas`** — two small deps for one lookup table
+  beats a geospatial stack. Resolution read live (gotcha #36): **pandas stayed
+  3.0.5, numpy 2.5.2**; 3 packages touched, one of them the project itself.
+- **`configs/features.yaml`'s stale `v1` line was left alone.** It names
+  `trip_distance`, which DR-04 keeps excluded — but the kickoff routes F-013's
+  features half to **S3**, and fixing it here would have split one finding across
+  two PRs. Carried as Design Review action **AI-6**.
+
+### Open items this story did NOT touch (none silently)
+- **M3-S1's four findings are all still open** — F-008, F-010, F-011, F-012 —
+  plus F-013's gate half (`configs/promotion.yaml` still exists). Untouched by
+  design; S1 owns them and is now unblocked.
+- **F-013's features half** → S3 (AI-6, above). **F-009** → M5. **D-001/D-003/
+  D-004** → M4. All unchanged.
+- **AWAITING_PO: no new entry, deliberately.** Nothing is parked and no direction
+  fork opened — the Docker Desktop block resolved itself mid-session. The two
+  standing non-blocking entries (2026-08-16-2 allowlist, 2026-08-17-1 libgomp)
+  are unchanged and still the PO's hands.
+
+### Wall recorded
+**wall: verify the artisan playbook's §0 Kaggle leaderboard numbers live,
+attempts: 3** — `https://www.kaggle.com/competitions/nyc-taxi-trip-duration`
+returns HTTP 200 and **5,632 bytes of JavaScript shell** (`og:title` = "New York
+City Taxi Trip Duration" confirms the competition's identity; the page contains
+**zero** occurrences of `1257`, `0.28976`, `0.36185` or even `RMSLE`). The
+leaderboard route is the same shell. Stopped attacking it. Consequence, recorded
+in the dossier §0: the playbook's competition record is carried as **ARCH's
+2026-08-12 reading, attributed**, and **no number in M3's gate depends on it**.
+Related live drift worth knowing: the **OSRM companion dataset is 404** at the
+URL the sources cite, so our own 263×263 matrix is the only reachable route —
+and it stays the M9 stretch.
+
+### Next (for the session after this one)
+**EXECUTOR, story M3-S1** (role:MLE) per `docs/milestones/M3_KICKOFF.md` — the
+story this session parked, **now unblocked**: cluster 3/3 Ready, 17/17 pods
+Running, `make verify-m2` GREEN 49/49 as of session end. Scheduled via
+`automation/next_session.sh executor 120`.
+Read the S1 card and the four ledger rows it closes (each closes ONLY by its own
+conditions) before touching `gate.py`/`registry.py`/`score.py`. Two things this
+session added that S1 should read first: **DR-06** in the new minutes (it fixes
+what S1 may and may not do to the bar — tightening yes, loosening never, and
+**+2.71% is the working headroom; +7.07% may not be quoted as headroom**), and
+**AI-4**, which asks S1 to cite DR-06 in the `configs/train.yaml: gate` comment
+so the two halves of that decision are findable from each other.
+**Check gotcha #34 before the first `kubectl`** — it has now fired twice in two
+days on this host.
+
 ## Session 2026-08-17 (ac) — M2 BOUNDARY: cleanly closed, and M3 opens with the gate on the operating table
 
 ### State
