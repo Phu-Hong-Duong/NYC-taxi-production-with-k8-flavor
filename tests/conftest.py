@@ -87,8 +87,15 @@ def data_cfg(tmp_path) -> DataConfig:
     source["raw_dir"] = str(tmp_path / "raw")
     source["processed_dir"] = str(tmp_path / "processed")
     source["manifest_path"] = str(tmp_path / "raw_manifest.json")
+    # The rejected sidecar's path is redirected here too. Miss this and every
+    # test that ingests writes into the REAL data/rejected/, quietly corrupting
+    # the tree the DVC pin describes — a test suite that damages the data is the
+    # worst kind of green.
+    rejected = dict(cfg.rejected)
+    rejected["dir"] = str(tmp_path / "rejected")
     return dataclasses.replace(
         cfg,
         source=source,
+        rejected=rejected,
         splits=Splits(train=("2019-01",), val=("2019-02",), test=("2019-03",)),
     )

@@ -56,8 +56,15 @@ def _sandbox(tmp_path: Path, regenerable: str | None = None) -> Path:
     shutil.copy(PRECHECK, tmp_path / "scripts" / "port_precheck.sh")
     text = CLUSTER_SH.read_text()
     if regenerable is not None:
+        # Split on the array's closing paren AT THE START OF A LINE, not on the
+        # first ')' after the opener: the entries carry prose comments with
+        # parens of their own, and the naive version silently truncated the
+        # array mid-way, producing a script whose remaining entries ran as
+        # COMMANDS (observed M2-S1 — every guard test failed with rc 127).
+        # test_the_catalogue_is_destroyable_and_the_dvc_cache_is_not already
+        # knew this; the helper did not.
         start = text.index("REGENERABLE=(")
-        end = text.index(")", start) + 1
+        end = text.index("\n)", start) + 2
         text = text[:start] + f"REGENERABLE=({regenerable})" + text[end:]
     (tmp_path / "scripts" / "cluster.sh").write_text(text)
     (tmp_path / "infra" / "kind").mkdir(parents=True)

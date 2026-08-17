@@ -68,6 +68,7 @@ class DataConfig:
     source: dict[str, Any]
     contract: dict[str, Any]
     clean: dict[str, Any]
+    rejected: dict[str, Any]
     write: dict[str, Any]
     analyst: dict[str, Any]
     splits: Splits
@@ -91,6 +92,17 @@ class DataConfig:
         """Written BESIDE the output it explains (no silent drops, ever)."""
         return self.processed_path(month).with_suffix(".rejections.json")
 
+    def rejected_path(self, month: str) -> Path:
+        """The retained rejected rows (M2-S1, F-005), mirroring the processed layout.
+
+        A separate tree rather than a sibling file under processed/: it is a
+        different dataset with a different schema and its own DVC pin, and the
+        `data/processed` glob that every rebuild proof and analyst view uses
+        must never accidentally sweep up rows the contract threw away.
+        """
+        name = self.source["filename_pattern"].format(month=month)
+        return repo_root() / self.rejected["dir"] / self.splits.split_of(month) / name
+
 
 def load_config(
     data_config: str | Path = "configs/data.yaml",
@@ -101,6 +113,7 @@ def load_config(
         source=raw["source"],
         contract=raw["contract"],
         clean=raw["clean"],
+        rejected=raw["rejected"],
         write=raw["write"],
         analyst=raw["analyst"],
         splits=load_splits(train_config),

@@ -25,7 +25,15 @@ import pytest
 from conftest import raw_frame
 
 from taxi_mlops.data import __main__ as cli
-from taxi_mlops.data.analyst import VIEWS, build, build_sql, database_path, reconciliation, report
+from taxi_mlops.data.analyst import (
+    VIEWS,
+    build,
+    build_sql,
+    database_path,
+    reconciliation,
+    rejection_reconciliation,
+    report,
+)
 from taxi_mlops.data.ingest import ingest
 
 ROWS = {"2019-01": 12, "2019-02": 9, "2019-03": 6}
@@ -113,8 +121,16 @@ def test_split_labels_come_from_config_not_from_filenames(analyst_cfg):
     for month in analyst_cfg.splits.months:
         split = analyst_cfg.splits.split_of(month)
         assert f"SELECT '{split}' AS split, '{month}' AS month" in statements
-    # one branch per configured month, no more: a glob would silently pick up strays
-    assert statements.count("read_parquet(") == len(analyst_cfg.splits.months)
+    # One branch per configured month per parquet-backed view, no more: a glob
+    # would silently pick up strays. Two such views since M2-S1 — trips_clean
+    # and trips_rejected — and the count is spelled out rather than hardcoded so
+    # a third one has to come here and say so.
+    parquet_views = ("trips_clean", "trips_rejected")
+    assert statements.count("read_parquet(") == len(parquet_views) * len(
+        analyst_cfg.splits.months
+    )
+    for view in parquet_views:
+        assert f"CREATE OR REPLACE VIEW {view} AS" in statements
 
 
 def test_no_view_reads_raw_parquet(analyst_cfg):
@@ -184,6 +200,147 @@ def test_documented_domains_come_from_config(analyst_cfg):
     for column in analyst_cfg.analyst["known_domains"]:
         assert f"'{column}' AS column_name" in statements
     assert "'99'" not in statements  # RatecodeID 99 is data, never a documented value
+
+
+# ------------------------------- the retained rejected rows (M2-S1, F-005) ----
+
+DIRTY = {"2019-01": (40, 3), "2019-02": (20, 1), "2019-03": (20, 0)}
+
+
+@pytest.fixture
+def dirty_cfg(data_cfg, tmp_path):
+    """Months that really lose rows, so the sidecar has something to be wrong about.
+
+    `analyst_cfg`'s months are clean end to end — perfect for the row-count
+    reconciliation and useless for this one, where every count under test is
+    zero unless something was actually rejected.
+    """
+    analyst = dict(data_cfg.analyst)
+    analyst["database_path"] = str(tmp_path / "analyst.duckdb")
+    cfg = dataclasses.replace(data_cfg, analyst=analyst)
+    for month, (rows, bad) in DIRTY.items():
+        df = raw_frame(month, rows)
+        if bad:
+            df.loc[0, "trip_distance"] = 0.0  # distance_non_positive
+        if bad > 1:
+            df.loc[1, "fare_amount"] = -5.0  # fare_negative
+        if bad > 2:
+            # both, in one row: filed under the first, listing both
+            df.loc[2, "trip_distance"] = 0.0
+            df.loc[2, "fare_amount"] = -5.0
+        path = cfg.raw_path(month)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pq.write_table(pa.Table.from_pandas(df, preserve_index=False), path)
+    ingest(list(cfg.splits.months), cfg)
+    return cfg
+
+
+def test_trips_rejected_publishes_the_rows_the_counts_describe(dirty_cfg):
+    """F-005's closing capability, in SQL: not 'how many' but 'which kind'."""
+    build(dirty_cfg)
+    con = __import__("duckdb").connect(str(database_path(dirty_cfg)), read_only=True)
+    try:
+        per_month = con.execute(
+            "SELECT month, COUNT(*) FROM trips_rejected GROUP BY month ORDER BY month"
+        ).fetchall()
+        rules = con.execute(
+            "SELECT rejection_rule, rejection_rules, COUNT(*) FROM trips_rejected "
+            "GROUP BY 1, 2 ORDER BY 1, 2"
+        ).fetchall()
+        splits = con.execute(
+            "SELECT DISTINCT split, month FROM trips_rejected ORDER BY month"
+        ).fetchall()
+    finally:
+        con.close()
+    assert per_month == [(m, bad) for m, (_rows, bad) in sorted(DIRTY.items()) if bad]
+    assert ("distance_non_positive", "distance_non_positive,fare_negative", 1) in rules
+    assert ("fare_negative", "fare_negative", 1) in rules
+    # split labels are config facts here exactly as they are in trips_clean
+    assert splits == [
+        (dirty_cfg.splits.split_of(m), m) for m, (_r, b) in sorted(DIRTY.items()) if b
+    ]
+
+
+def test_a_rejected_row_never_appears_in_the_clean_view(dirty_cfg):
+    """The two views must not overlap. `trips_rejected` is deliberately NOT
+    unioned into `trips_clean`: one careless SELECT must not train on rows the
+    output contract refused."""
+    build(dirty_cfg)
+    con = __import__("duckdb").connect(str(database_path(dirty_cfg)), read_only=True)
+    try:
+        clean_bad = con.execute(
+            "SELECT COUNT(*) FROM trips_clean WHERE trip_distance <= 0 OR fare_amount < 0"
+        ).fetchone()[0]
+        clean_rows, rejected_rows = (
+            con.execute("SELECT COUNT(*) FROM trips_clean").fetchone()[0],
+            con.execute("SELECT COUNT(*) FROM trips_rejected").fetchone()[0],
+        )
+        columns = [r[0] for r in con.execute("DESCRIBE trips_clean").fetchall()]
+    finally:
+        con.close()
+    assert clean_bad == 0
+    assert clean_rows + rejected_rows == sum(rows for rows, _bad in DIRTY.values())
+    assert "rejection_rule" not in columns  # the clean view has no such notion
+
+
+def test_rejection_reconciliation_agrees_rule_by_rule(dirty_cfg):
+    build(dirty_cfg)
+    rows = rejection_reconciliation(dirty_cfg)
+    assert all(agree for *_, agree in rows)
+    # every configured rule is checked for every month, including the ones that
+    # never fire: a rule with no rows is exactly how a broken rule looks
+    assert len(rows) == len(dirty_cfg.clean["rules"]) * len(DIRTY)
+    assert sum(observed for *_, observed, _e, _a in rows) == sum(b for _r, b in DIRTY.values())
+    assert report(dirty_cfg) is True
+
+
+def test_reconciliation_catches_a_sidecar_that_lost_rows(dirty_cfg):
+    """RED-TEAM, the counts' half of the M1-S2 lesson: a sidecar missing rows
+    answers every query happily and only disagrees with what ingest COUNTED."""
+    build(dirty_cfg)
+    victim = dirty_cfg.rejected_path("2019-01")
+    pq.write_table(pq.read_table(victim).slice(0, 1), victim)  # 3 rejected rows -> 1
+
+    disagreed = [r for r in rejection_reconciliation(dirty_cfg) if not r[5]]
+    assert {r[1] for r in disagreed} == {"2019-01"}
+    assert sum(expected - observed for *_, observed, expected, _ in disagreed) == 2
+    assert report(dirty_cfg) is False
+
+
+def test_reconciliation_catches_rows_filed_under_the_wrong_rule(dirty_cfg):
+    """The monthly total can be perfect while every row is misfiled — and a
+    sidecar filed under the wrong rule is useless for the one question it exists
+    to answer. Hence per (month, rule), never per month."""
+    build(dirty_cfg)
+    victim = dirty_cfg.rejected_path("2019-01")
+    table = pq.read_table(victim)
+    index = table.schema.get_field_index("rejection_rule")
+    relabelled = pa.array(["fare_negative"] * table.num_rows, type=table.schema.field(index).type)
+    pq.write_table(table.set_column(index, "rejection_rule", relabelled), victim)
+
+    rows = rejection_reconciliation(dirty_cfg)
+    assert sum(r[3] for r in rows) == 4  # the TOTAL is untouched: 3 + 1 rejected rows
+    disagreed = {(r[1], r[2]) for r in rows if not r[5]}
+    assert disagreed == {("2019-01", "fare_negative"), ("2019-01", "distance_non_positive")}
+    assert report(dirty_cfg) is False
+
+
+def test_cli_duckdb_exits_nonzero_when_the_sidecar_disagrees(dirty_cfg, monkeypatch):
+    """The exit code is the contract, for this reconciliation as for the other."""
+    monkeypatch.setattr(cli, "load_config", lambda *a, **k: dirty_cfg)
+    assert cli.main(["duckdb"]) == 0
+    victim = dirty_cfg.rejected_path("2019-02")
+    pq.write_table(pq.read_table(victim).slice(0, 0), victim)  # 1 rejected row -> 0
+    assert cli.main(["duckdb"]) == 1
+
+
+def test_build_refuses_when_the_sidecar_is_absent(dirty_cfg):
+    """A missing sidecar must say 'run make ingest', not surface as a DuckDB
+    parse error inside someone's query three views later."""
+    missing = dirty_cfg.rejected_path("2019-01")
+    missing.unlink()
+    with pytest.raises(FileNotFoundError, match=missing.name):
+        build(dirty_cfg)
 
 
 def test_rejection_counts_are_queryable_per_rule(analyst_cfg):

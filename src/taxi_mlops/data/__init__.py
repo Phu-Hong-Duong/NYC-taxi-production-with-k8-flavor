@@ -11,10 +11,12 @@ Implemented contracts:
     Year-aware pandera structure check (gotcha #6) and THE dtype cast — all
     casting happens here and nowhere else in the codebase (gotcha #7).
     Unknown/renamed/vanished columns are announced or refused, never silent.
-- `clean.clean(df, month, cfg) -> (DataFrame, RejectionReport)`
+- `clean.clean(df, month, cfg) -> (kept, rejected, RejectionReport)`
     Target derived; impossible rows dropped against NAMED rules with counts on
     both attributions; a month that loses more than the configured fraction is
-    refused outright.
+    refused outright. Since M2-S1 the dropped rows come back as a frame too —
+    the F-005 sidecar, written under `data/rejected/<split>/` and published as
+    the `trips_rejected` view.
 - `contract.validate_output(df, month, cfg) -> DataFrame`
     What downstream is promised — and a live check on the cleaning rules.
 

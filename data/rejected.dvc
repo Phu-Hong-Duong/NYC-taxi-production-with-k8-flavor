@@ -1,0 +1,6 @@
+outs:
+- md5: 5513d189d1f3bcdbf27bab7d674d6364.dir
+  size: 27398597
+  nfiles: 8
+  hash: md5
+  path: rejected

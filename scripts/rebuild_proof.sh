@@ -1,19 +1,25 @@
 #!/usr/bin/env bash
 # The M1 gate's byte-identical rebuild, as a command anyone can re-run (M1-S2).
 #
-# The claim under test: `data/processed/` is a PURE FUNCTION of DVC-pinned raw
-# bytes plus this repo. Not "close enough" — the same sha256, file by file.
+# The claim under test: `data/processed/` AND `data/rejected/` are a PURE
+# FUNCTION of DVC-pinned raw bytes plus this repo. Not "close enough" — the same
+# sha256, file by file.
 #
-#   1. record the sha256 of every processed output
+#   1. record the sha256 of every derived output
 #   2. prove the INPUT is the pinned bytes: `dvc status data/raw.dvc` must be
-#      clean. Per gotcha #6 the proof pins RAW and rebuilds PROCESSED; TLC
-#      backfills months in place, so a re-download is never trusted to be
+#      clean. Per gotcha #6 the proof pins RAW and rebuilds the derived trees;
+#      TLC backfills months in place, so a re-download is never trusted to be
 #      byte-identical and is never part of this proof.
-#   3. delete data/processed/ entirely
+#   3. delete data/processed/ and data/rejected/ entirely
 #   4. rebuild with ONE command (`make data`), with SKIP_DVC=1 so the pin is not
 #      refreshed underneath the thing it is checking
 #   5. diff the sha256 table, and independently ask DVC (`dvc status
-#      data/processed.dvc`) whether the directory it pinned came back
+#      data/processed.dvc data/rejected.dvc`) whether the directories it pinned
+#      came back
+#
+# The rejected sidecar (M2-S1, F-005) is inside the proof, not beside it: it is
+# derived by the same pass from the same bytes, and a "proof" that re-derives
+# half the output of a command is a proof of half a command.
 #
 # Two witnesses on purpose: our own hashes, and DVC's, computed by different
 # code from different metadata. One of them agreeing with itself proves nothing.
@@ -32,23 +38,27 @@ trap 'rm -f "$BEFORE" "$AFTER"' EXIT
 hash_processed() {
   uv run python - "$1" <<'PY'
 import hashlib, pathlib, sys
-root = pathlib.Path("data/processed")
+# Both derived trees. The path is kept RELATIVE TO data/ so the table names
+# processed/... and rejected/... — otherwise two months with the same filename
+# in two trees would collide into one row and one of them would go unchecked.
+root = pathlib.Path("data")
 out = []
-for p in sorted(root.rglob("*.parquet")):
-    h = hashlib.sha256()
-    with p.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            h.update(chunk)
-    out.append(f"{p.relative_to(root)} {h.hexdigest()} {p.stat().st_size}")
+for tree in ("processed", "rejected"):
+    for p in sorted((root / tree).rglob("*.parquet")):
+        h = hashlib.sha256()
+        with p.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        out.append(f"{p.relative_to(root)} {h.hexdigest()} {p.stat().st_size}")
 pathlib.Path(sys.argv[1]).write_text("\n".join(out) + "\n")
-print(f"[rebuild-proof] hashed {len(out)} processed parquet file(s)")
+print(f"[rebuild-proof] hashed {len(out)} derived parquet file(s)")
 PY
 }
 
 echo "[rebuild-proof] 1/5 hashing the current outputs"
 hash_processed "$BEFORE"
 if [[ ! -s "$BEFORE" ]]; then
-  echo "[rebuild-proof] FAIL: nothing in data/processed to prove anything about." >&2
+  echo "[rebuild-proof] FAIL: nothing in data/processed or data/rejected to prove anything about." >&2
   exit 1
 fi
 
@@ -67,14 +77,16 @@ fi
 echo "  data/raw.dvc: $raw_status"
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
-  echo "[rebuild-proof] DRY_RUN=1 — WOULD delete data/processed and re-run 'SKIP_DVC=1 make data'."
+  echo "[rebuild-proof] DRY_RUN=1 — WOULD delete data/processed and data/rejected,"
+  echo "                then re-run 'SKIP_DVC=1 make data'."
   echo "[rebuild-proof] nothing deleted, nothing rebuilt."
   exit 0
 fi
 
-echo "[rebuild-proof] 3/5 deleting data/processed"
-rm -rf "${REPO_ROOT:?}/data/processed"
+echo "[rebuild-proof] 3/5 deleting data/processed and data/rejected"
+rm -rf "${REPO_ROOT:?}/data/processed" "${REPO_ROOT:?}/data/rejected"
 test ! -e data/processed && echo "  data/processed: gone"
+test ! -e data/rejected && echo "  data/rejected: gone"
 
 echo "[rebuild-proof] 4/5 rebuilding with ONE command: SKIP_DVC=1 make data"
 SKIP_DVC=1 make data
@@ -112,11 +124,13 @@ sys.exit(0 if ok else 1)
 PY
 
 echo
-echo "[rebuild-proof] second witness — DVC's own view of data/processed:"
-proc_status="$(uv run dvc status data/processed.dvc 2>&1)"
-echo "  $proc_status"
-if ! grep -q "up to date" <<<"$proc_status"; then
-  echo "[rebuild-proof] FAIL: our hashes matched but DVC says the directory changed." >&2
-  exit 1
-fi
+echo "[rebuild-proof] second witness — DVC's own view of the derived trees:"
+for target in data/processed.dvc data/rejected.dvc; do
+  proc_status="$(uv run dvc status "$target" 2>&1)"
+  echo "  $target: $proc_status"
+  if ! grep -q "up to date" <<<"$proc_status"; then
+    echo "[rebuild-proof] FAIL: our hashes matched but DVC says $target changed." >&2
+    exit 1
+  fi
+done
 echo "[rebuild-proof] GREEN — wiped, rebuilt by one command, byte-identical by two witnesses."

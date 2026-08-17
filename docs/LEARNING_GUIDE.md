@@ -7,6 +7,84 @@ months from now.
 
 ---
 
+## M2
+
+### M2-S1 — the rows we threw away had a signature, and 85% of them were the same fault (2026-08-17, role:DE)
+
+**What was built.** The other half of the rejection story. Ingest already
+*counted* every dropped row against a named rule; since this story it *keeps*
+them — `data/rejected/<split>/yellow_tripdata_<month>.parquet`, 16 files, 27 MB,
+every contract column plus the derived target, two extra columns naming the rule
+that filed the row (`rejection_rule`) and every rule it violates
+(`rejection_rules`). DVC-pinned as its own target, published as the
+`trips_rejected` view, and checked by a second reconciliation in `make duckdb`
+that fails the build if the sidecar and the counts ever disagree per (month,
+rule). Then the question F-005 raised in the first place, answered with SQL:
+`docs/rejected_rows_appendix.md`.
+
+**Why this way.** Four choices worth naming. (1) **First-match attribution is
+law, not a knob.** The config *could* have offered `first_match | all_match`,
+and it deliberately does not: `rejection_rule` matches `rejected_by` exactly,
+and that identity is what makes the sidecar checkable against the report. A
+switch that could break an invariant is not a knob, it is a trapdoor. The
+all-match information is published *alongside* instead, as a second column, so
+nothing was lost. (2) **A separate tree, not a sibling file under
+`processed/`.** Different schema, different pin, and — the real reason — every
+rebuild proof and analyst view globs `data/processed`; rows the contract refused
+must not be one careless glob away from the training data. For the same reason
+`trips_rejected` is *not* unioned into `trips_clean`. (3) **The sidecar went
+INTO the rebuild proof, not beside it.** `make rebuild-proof` now wipes and
+re-derives both trees and asks DVC about both `.dvc` files: a proof that
+re-derives half of a command's output is a proof of half a command, and the half
+it skips is the half nobody looks at. (4) **Reconciliation is per (month,
+RULE), never per month.** A sidecar that files every row under the wrong rule
+has a perfect monthly total and is useless for the one question it exists to
+answer — there is a red-team test that relabels a month's rows and watches the
+gate go red on exactly two rules while the total stays 4.
+
+**The concept underneath.** *A count tells you how much; only the rows tell you
+what kind — and the difference is usually the whole answer.* For five sessions
+this program knew that `duration_above_max` removed **159,300** trips and could
+not say whether they were meter faults or a real long-haul population. The EDA
+said so out loud rather than guessing, which was the honest move and also a
+standing debt. One query against the retained rows settled it in a minute:
+**85.0%** of them are a normal short trip — median **2.19 miles**, median fare
+**$12.00** — that was dropped off **the next day at almost the same clock hour**
+(98.97% next-day, 62.64% same hour). The meter measured a fine ride; only the
+session clock is unusable. And the money is the tell that a count could never
+have carried: if those were really 23-hour journeys, the fare would say so.
+Meanwhile **5,601** trips in the 120–180 minute band *are* real long-haul —
+52.78% touch an airport, 32.87% carry an out-of-city rate code against 2.7497%
+of the clean data. So the answer was never "faults **or** long trips". It was
+both, in a ratio of 24 to 1, and no aggregate would ever have shown you that.
+
+A second, smaller lesson: the two free re-proofs. Re-running a *changed* ingest
+returned all 8 processed outputs **byte-identical** — evidence that the change
+touched only the new path. And the sidecar's own numbers were never engineered
+to match anything: 914,459 retained rows against 914,459 counted, across 80
+(month, rule) pairs, computed by different code from different artifacts.
+
+**What to look at.** `src/taxi_mlops/data/clean.py` — `_label_rejected`, and the
+comment explaining why the all-match string is built on the ~1.6% subset rather
+than on 7M rows · `configs/data.yaml:rejected` — the config block that argues
+*against* making itself more configurable · `analyst.rejection_reconciliation`
+and its FULL OUTER JOIN (a rule that exists only in the sidecar is what a
+half-finished rename looks like) · `docs/rejected_rows_appendix.md` §R3, the
+two independent witnesses for the clock artefact · `scripts/verify_m1.sh` leg 1,
+where a `grep -c` counting the wrong lines got replaced by the number the proof
+itself prints.
+
+**What to try yourself.** Two red-teams that take a minute each. Truncate a
+sidecar month (`pq.write_table(pq.read_table(p).slice(0,1), p)`) and run
+`make duckdb` — watch it exit 1 naming the rules. Then do the subtler one:
+*relabel* every row of a month to one rule, leaving the count untouched, and run
+it again. A per-month check would pass; this one names both rules that moved.
+Then read §R2's band table and ask what a histogram of *durations alone* would
+have told you — the answer is "there is a spike near 24 hours", which is the
+observation, not the explanation. The explanation needed the fares.
+
+---
+
 ## M1
 
 ### M1-S5 — a port you cannot add to a running cluster, boards that live in git, and a tool that vanished without being uninstalled (2026-08-17, role:MLOps deploy + DA boards)
