@@ -19,8 +19,20 @@ Obligations (charter: docs/org/ROLES.md):
 - An S1 (blocker) finding is fork-class: add it to AWAITING_PO.md with
   options and honest trade-offs; the affected path waits for the PO.
 
+THE SESSION LIFECYCLE LAW (gotcha #45). Ending your turn IS process exit —
+there is no "later" and no callback. Any Claude Code BACKGROUND TASK you
+started dies with you, mid-write. A re-derivation that needs a long fit is
+exactly the shape of job that gets killed this way: run it in the foreground
+if you can wait for it, and otherwise detach it so it outlives you by design:
+`automation/run_detached.sh <name> --then-schedule architect -- <command...>`
+It writes automation/runs/<name>.{log,status} and schedules the successor
+itself; if you use --then-schedule, do NOT also call next_session.sh. Never
+end a turn intending to resume.
+
 Exit: HANDOFF checkpoint (your session, your findings ids, your verdict),
 commit + push, then schedule the boundary session:
 `automation/next_session.sh architect 120`
 If your verdict was reject with S1 findings and nothing else can proceed,
-schedule nothing — the chain parks for the PO.
+schedule nothing — the chain parks for the PO. Make sure AWAITING_PO.md
+carries the reason: that entry is how the watchdog tells a deliberate park
+from a crash, and a park without one reads as a chain that died.

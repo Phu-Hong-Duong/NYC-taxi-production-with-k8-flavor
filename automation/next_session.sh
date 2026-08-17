@@ -3,6 +3,18 @@
 # Usage: automation/next_session.sh <executor|architect|rev> [delay_seconds=120]
 # Halts silently if automation/STOP exists. Daily cap guards runaway chains.
 # Proven by running at Session 1 (hello-chain) before any real work trusts it.
+#
+# 2026-08-17 (gotcha #45): this script now leaves a TRACE of chain liveness.
+# Before, "is the chain alive?" was unanswerable from outside — a session that
+# ended without calling this script was indistinguishable from one still
+# working, and the program stayed dead in silence for 38 minutes. Two markers
+# under automation/logs/ close that gap and are what automation/watchdog.sh
+# reads:
+#   pending_successor  a session is QUEUED but has not started yet
+#   running_session    a session is running right now, with its pid
+# They also make the double-schedule impossible: a session that detaches a job
+# with `run_detached.sh --then-schedule` must not also schedule by hand, and
+# now it simply cannot.
 set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root
 
@@ -26,6 +38,20 @@ if [ "${COUNT}" -ge "${MAX_PER_DAY}" ]; then
   echo "[chain] daily cap reached — halted; noted in AWAITING_PO.md"; exit 0
 fi
 
+# --- one successor, never two -------------------------------------------------
+# A stale marker (a session that died between the write below and the launch)
+# must not wedge the chain shut, so anything past the grace window is ignored.
+PENDING="automation/logs/pending_successor"
+PENDING_GRACE="${CHAIN_PENDING_GRACE:-900}"
+if [ -f "${PENDING}" ]; then
+  P_AGE=$(( $(date +%s) - $(stat -c %Y "${PENDING}") ))
+  if [ "${P_AGE}" -lt "${PENDING_GRACE}" ]; then
+    echo "[chain] a successor is ALREADY queued ($(cat "${PENDING}"), ${P_AGE}s ago) — refusing to schedule a second."
+    exit 0
+  fi
+  echo "[chain] ignoring stale pending_successor (${P_AGE}s old, grace ${PENDING_GRACE}s)."
+fi
+
 case "${ROLE}" in
   executor)  MODEL="opus";  PROMPT="automation/executor_prompt.md"  ;;
   architect) MODEL="fable"; PROMPT="automation/architect_prompt.md" ;;
@@ -36,6 +62,7 @@ esac
 
 LOG="automation/logs/$(date +%Y%m%d_%H%M%S)_${ROLE}.log"
 echo $((COUNT + 1)) > "${COUNT_FILE}"
+echo "${ROLE} queued $(date -u +%FT%TZ) for +${DELAY}s" > "${PENDING}"
 
 # PERMISSIONS: set CLAUDE_PERMISSION_FLAGS once in your shell profile (see automation/README.md).
 # Default is the safer acceptEdits mode; unattended clusters usually need the allowlist
@@ -45,9 +72,14 @@ echo $((COUNT + 1)) > "${COUNT_FILE}"
 # shells (gotcha #26).
 FLAGS="${CLAUDE_PERMISSION_FLAGS:---permission-mode acceptEdits}"
 
-nohup bash -c "sleep ${DELAY}; \
-  [ -f automation/STOP ] && exit 0; \
-  CLAUDE_PERMISSION_FLAGS='${FLAGS}' claude --model ${MODEL} ${FLAGS} -p \"\$(cat ${PROMPT})\" >> '${LOG}' 2>&1" \
+# setsid: own session and process group, so the queued session cannot be taken
+# down by whatever exits upstream of it (gotcha #45's other half).
+setsid nohup bash -c "sleep ${DELAY}; \
+  if [ -f automation/STOP ]; then rm -f '${PENDING}'; exit 0; fi; \
+  rm -f '${PENDING}'; \
+  echo \"\$\$ ${ROLE} \$(date -u +%FT%TZ)\" > automation/logs/running_session; \
+  CLAUDE_PERMISSION_FLAGS='${FLAGS}' claude --model ${MODEL} ${FLAGS} -p \"\$(cat ${PROMPT})\" >> '${LOG}' 2>&1; \
+  rm -f automation/logs/running_session" \
   >/dev/null 2>&1 &
 
 echo "[chain] scheduled ${ROLE} (+${DELAY}s, model=${MODEL}, flags=${FLAGS}, session #$((COUNT+1)) today) → ${LOG}"

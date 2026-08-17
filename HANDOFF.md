@@ -1,5 +1,129 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (af) — the chain died waiting for something it had killed
+
+### State
+**RECOVERY session, run by the PO's own Claude on the Windows side against the
+WSL repo — NOT a chain session, no role block, no story executed.** It exists
+because the chain was dead and could not restart itself. Branch
+`story/m3-s3-artisan-feature-set-v2`, two commits, **PR not opened — M3-S3 is
+NOT done.** The full-scale confirmation is re-running detached; the chain will
+resume by itself when it lands.
+
+### What happened, with the receipts
+The M3-S3 executor (log `automation/logs/20260817_125839_executor.log`) ended
+its turn with **"I'll pick this up when the confirmation run reports."** In
+`claude -p` there is no later: ending the turn is process exit. Three failures
+stacked, now gotcha **#45**:
+
+1. **It killed the run by ending.** The confirmation was a Claude Code
+   *background task* — a child of the session process. Its output file ends
+   `[killed]` at **13:50:07Z**, mid-`mlflow` model-logging, and the three
+   polling tasks carry the same kill timestamp to the second. One arm of four
+   had finished: `artisan-v1`, full-scale, **val MAE 3.4760**, FINISHED
+   13:40:05Z. That row is real and is still in MLflow `m3-artisan`.
+2. **The exit ritual was never reached**, so `next_session.sh` was never
+   called. The ritual had four endings and none of them covered "an async job
+   is in flight", so a fifth was invented. Counter still read 14, no successor,
+   no error.
+3. **Nothing watched.** Chain liveness was entirely "each session schedules the
+   next". It stayed dead **38 minutes**, until a human read a status pane.
+
+Damage was time only, by luck: 23 files — four feature modules, the ablation,
+the leakage red-team, 33 tests — were sitting **uncommitted** the whole time.
+
+### Done (each leg with the command and what came back)
+- **The work is in git.** `467afa9` — checkpoint commit of all 23 paths, taken
+  by this session, explicitly NOT a claim that the story is done.
+- **`automation/run_detached.sh`** — long jobs via `setsid`, own process group,
+  `automation/runs/<name>.{log,status}`, and `--then-schedule <role>` so **the
+  job** hands the chain forward rather than a session sitting and waiting.
+  Proven before it was trusted: a smoke job printed `LATE-OUTPUT-AFTER-
+  LAUNCHER-DIED` and went `DONE 0` twelve seconds after every process that
+  launched it was gone.
+- **The confirmation is re-running under it**, all four arms for one
+  self-consistent table: `automation/runs/m3s3-confirmation` → `--full-scale
+  --sets v1,v1_g1,v1_g2,v2 --log-model --out docs/ablation_m3_confirmation.json`.
+  On completion it schedules an executor by itself.
+- **`automation/watchdog.sh`** + `automation/crontab.watchdog`, installed and
+  live (`crontab -l`), every 10 minutes. **It may restart an ACCIDENT and never
+  a DECISION**: a chain parked on a fork writes AWAITING_PO.md, and that diff is
+  how it tells the two apart. RED conditions (fork parked · detached run FAILED
+  or KILLED · daily cap · 3 failed restarts in 15 min) ring and do not restart.
+- **The alarm reuses the PO's own notifier** (`~/.claude/toast.ps1`, the one the
+  Notification hooks already drive), tag `ChainWatchdog`, alarm sound, urgent,
+  stays until dismissed. Verified end to end from a cron-like `env -i` shell:
+  `~/.claude/toast.log` records `ChainWatchdog | shown | held=1`.
+- **`next_session.sh` now leaves liveness visible from outside**:
+  `pending_successor` and `running_session` markers, `setsid` on the queued
+  session, and a refusal to queue a second successor. Existing
+  `tests/unit/test_chain_script.py` still **4 passed** — pinned behaviour intact.
+- **`tests/unit/test_watchdog.py` — 11 passed**, sandbox chain, fake `claude`,
+  recording toast. Includes the one that matters most: *a fork is never
+  auto-resumed*.
+- Exit ritual **(e)** added to all three prompts, plus the lifecycle law
+  outright: ending a turn kills your children, so never end one intending to
+  resume. `automation/README.md` at v3.1.
+
+### Decisions (craft-level, undo verified, taken without the PO)
+- **The confirmation re-runs all four arms rather than the three outstanding
+  ones.** The script does one narrow read and shares the fitted tables across
+  experiments, so an internally consistent table is worth ~9 minutes of re-fit.
+  **Cost, stated because it is a real one:** MLflow `m3-artisan` now holds
+  **two full-scale `artisan-v1` rows** — the orphan at 13:40:05Z from the killed
+  run, and this run's. Whoever writes the table must cite which run produced it.
+- **Confirmation rows go to `docs/ablation_m3_confirmation.json`**, not
+  `docs/ablation_m3.json` — that file holds the 15% SAMPLE rows and §4's table
+  is built from them. Overwriting it would have destroyed recorded evidence.
+  If the successor prefers the doc's original naming, that is a rename, not a
+  re-run.
+- **Harness changes sit on the story branch**, not on main. The chain executes
+  whatever branch is checked out, so the fix had to be reachable now. They must
+  survive the M3-S3 merge.
+
+### Defects/Surprises
+- **A hand-rolled toast reported success and was never shown.** The first
+  notifier used the `{1AC14E77-…}\WindowsPowerShell` AUMID, which is no longer
+  registered on this machine: Windows accepts the call and silently drops it.
+  It returned `TOAST_OK`. The PO's own `toast.ps1` documents this trap and
+  solves it by sending under the Claude Desktop AUMID — which is the argument
+  for reusing an existing notifier rather than writing a second one.
+  `automation/toast.sh` now reads `held=` back out of `toast.log` instead of
+  trusting its own exit code.
+- **The first `test_watchdog.py` primed its fixture by running the watchdog
+  once** — which healed the sandbox chain and left a queued successor, so seven
+  tests reported GREEN without ever reaching the condition they named. They
+  passed vacuously. The hash is now written directly; the reason is in the
+  fixture docstring.
+- Gotchas **#43 and #44 were already taken** by the dying session's own field
+  notes, which were in the uncommitted tree. This one is **#45**.
+- `docs/ablation_m3.md` still carries its `<!-- CONFIRMATION TABLE -->`
+  placeholder, and §5's trend table still reads "see the table below".
+
+### Next
+**The chain resumes itself** — `automation/runs/m3s3-confirmation` schedules an
+executor when it finishes (started 14:42:31Z, ~9 min/arm, expect ~15:20Z).
+Nothing to do by hand unless it rings.
+
+The next executor should, in order:
+1. `cat automation/runs/m3s3-confirmation.status` — **DONE** means the numbers
+   are yours in `docs/ablation_m3_confirmation.json`; **FAILED/KILLED** means
+   read the `.log` and re-detach, do not foreground it.
+2. Fill `<!-- CONFIRMATION TABLE -->` and §5's last row in `docs/ablation_m3.md`
+   from those rows, **naming the run id** the table came from (two full-scale
+   v1 rows exist — see Decisions).
+3. Re-check the keep verdicts at full scale. §7 already warns g2's +0.63% sample
+   margin sits close to the 0.50% bar and that a substitute-for-missing-data
+   feature is worth *less* as rows arrive — so **g2 flipping to a drop is a
+   live outcome, not a failure**, and v2's membership follows the full-scale
+   numbers rather than the sample's.
+4. `make verify-m2` before the PR; open it with `role:MLE`; keep the harness
+   commit in the merge.
+
+Cluster was 3/3 Ready, 17/17 Running throughout; nothing was promoted;
+`@champion` is version 1. `automation/STOP` absent. 14 sessions used today —
+the counter did not move during this recovery, because no chain session ran.
+
 ## Session 2026-08-17 (ae) — M3-S1: the gate learned what it was being compared to
 
 ### State

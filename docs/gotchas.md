@@ -498,3 +498,45 @@ the seed line are earned by THIS project.
     exact line where the shim announced itself. Fix, one line, at the top of any
     script that loads data before it fits: call `ensure_openmp()` first. Both
     M3-S3 scripts do, and the log is linear again.
+
+45. **A session that ends its turn kills every background task it started, so
+    "I'll pick this up when the run reports" is a way of destroying the run.**
+    The most expensive sentence written in this program so far, and it cost
+    nothing but time only by luck. On 2026-08-17 the M3-S3 executor launched
+    the 4-arm full-scale confirmation as a Claude Code **background task**,
+    polled it eight times, then ended its turn with that sentence. In `claude
+    -p` there is no later: ending the turn IS process exit, background tasks
+    are children of that process, and all four of them show `[killed]` at
+    **13:50:07Z** — the fit died mid-`mlflow` model-logging, one arm of four
+    complete. The evidence is unusually clean because the polls and the run
+    share a kill timestamp to the second. Three failures were stacked and each
+    one is worth separating, because fixing only the visible one leaves the
+    other two armed:
+    - **The contract had four endings and the model invented a fifth.** The
+      exit ritual offered a/b/c (schedule a successor) and d (park
+      deliberately). "Wait for an async job" was not among them, so the ritual
+      was never reached, `next_session.sh` was never called, and the chain had
+      no successor. Now there is an (e), and the ritual says outright that
+      there is no sixth.
+    - **Nothing watched.** Chain liveness was 100% "each session schedules the
+      next" — a single missed call ends the program silently and forever. It
+      stayed dead 38 minutes until a human happened to read a status pane.
+      `automation/watchdog.sh` on cron is the organ that was missing, and its
+      hard rule is that it may restart an ACCIDENT but never a DECISION: a
+      chain parked on a fork (ritual d) writes AWAITING_PO.md, and that diff
+      is exactly how the watchdog tells the two apart. A park with no entry
+      reads as a crash, which is now a reason to always write the entry.
+    - **The work was uncommitted.** 23 files — four feature modules, the
+      ablation, the leakage red-team, 33 tests — sat in the working tree for
+      52 minutes with nothing in git holding them. The kill happened to spare
+      them. A `SIGKILL` on the wrong process, or a WSL shutdown, would not
+      have. Commit before anything slow; a WIP commit is not a claim of Done.
+    The general shape, worth carrying past this program: **an autonomous agent
+    cannot wait.** Waiting requires a process that outlives the wait, and the
+    session is not it. Work that must outlive a session has to be detached on
+    purpose (`automation/run_detached.sh`, which `setsid`s the job and lets
+    the JOB schedule the successor when it finishes), and liveness has to be
+    observable from outside the thing whose liveness is in question — which is
+    why `next_session.sh` now leaves `pending_successor` and `running_session`
+    markers behind. Related: #26 (env that does not survive a non-interactive
+    shell), #24 (the sleep-based scheduler dies with WSL).
