@@ -3,12 +3,42 @@
 ## Session 2026-08-17 (ag) — M3-S3 finished: v2 confirmed at full scale, and the test suite disagreed with the story first
 
 ### State
-on-track — **EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped
-fresh session, role:MLE (charter read; EXCLUSIONS + the registry refusal in
-play).** Executed the REMAINDER of **M3-S3**, the story session (af) recovered
-from. Merged as **PR #17**. `make verify-m2` **GREEN 54/54** after the feature
-registry refactor and the borough fix. **Nothing was promoted: `@champion` is
-version 1, run `3adee05a…`, before and after** — checked live at both ends.
+**BLOCKED ON GITHUB, not on the work** — **EXECUTOR, Opus 5 (`claude-opus-5`,
+stated first line), story-scoped fresh session, role:MLE (charter read;
+EXCLUSIONS + the registry refusal in play).** Executed the REMAINDER of
+**M3-S3**, the story session (af) recovered from. The story is **complete and
+verified locally**; `make verify-m2` **GREEN 54/54** after the feature registry
+refactor and the borough fix; **nothing was promoted — `@champion` is version 1,
+run `3adee05a…`, before and after**, checked live at both ends.
+
+**What did NOT happen: the PR.** Every commit is pushed
+(`origin/story/m3-s3-artisan-feature-set-v2`, level with local at `55b83cf`), but
+GitHub is refusing writes — see the wall below. **No PR exists, nothing is
+merged, `main` is untouched.** The first job of the next session is to open and
+merge it; the branch needs no further work.
+
+### WALL — `wall: open the M3-S3 PR, attempts: 3`
+`gh pr create` twice → `HTTP 503 ... api.github.com/graphql`; then the same
+request through the REST path (`gh api .../pulls -f head=… -f base=main`) →
+`HTTP 503`. **Reads are fine throughout** — `gh api repos/…` returns the repo,
+`gh auth status` is green (Phu-Hong-Duong, scopes gist/read:org/repo/workflow),
+and `git push` succeeded. So this is GitHub's write path, not our credentials,
+not our branch, and not the allowlist. Per the standing rule I stopped attacking
+it after three attempts rather than looping.
+
+**What the next session should do, in this order:**
+1. `gh api repos/Phu-Hong-Duong/NYC-taxi-production-with-k8-flavor/pulls --jq 'length'`
+   — a read, and it currently returns `0`.
+2. Open the PR (`gh pr create --fill --label role:MLE`, or the REST form above if
+   GraphQL is still down), then `gh pr checks --watch`, then
+   `gh pr merge --merge --delete-branch`, then `git branch -r --contains 55b83cf`
+   → expect `origin/main` (gotcha #20). The PR body is this HANDOFF entry; every
+   number in it is already in `docs/ablation_m3.md`.
+3. **If GitHub is still 503, do NOT burn the chain retrying.** Write it up in
+   AWAITING_PO.md and take exit ritual (d) — a park with an entry is a decision
+   the watchdog leaves alone; a park without one reads as a crash (gotcha #45).
+   M3-S4 must not start on top of an unmerged story branch: one story per branch
+   is what makes the PR boundary the lineage (protocol §7).
 
 ### Staleness check of (af)'s Next — reality matched exactly, and I read it in the order (af) asked
 `automation/runs/m3s3-confirmation.status` FIRST (the new boot step 3):
@@ -136,7 +166,11 @@ WAIT for a live `running_session` instead of launching on top of it.
   detached job and watches the watchdog ring. Named for ARCH's boundary triage.
 
 ### Next
-**M3-S4** — the automation track (FLAML scout × Optuna sniper, run twice, the
+**First: land this story** — open and merge the PR per the wall section above.
+It is minutes of work when GitHub answers, and until it does, **M3-S4 is
+blocked** by the one-story-per-branch rule rather than by anything technical.
+
+**Then M3-S4** — the automation track (FLAML scout × Optuna sniper, run twice, the
 `optuna` database via D-002's recipe, kill-and-resume, ≥1 pruned trial). It is
 the next unstarted, unblocked story; S3 leaves it everything it needs: v2 exists
 and is measured, `configs/features.yaml` resolves both sets, and DR-03 keeps the
