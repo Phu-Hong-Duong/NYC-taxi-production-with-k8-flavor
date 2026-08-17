@@ -44,6 +44,15 @@ baselines:
   # the published floor; if a later story wants it, it is a NEW baseline with a
   # new name, never an edit to this one.
   group_keys: ["hour", "dayofweek", "PULocationID", "DOLocationID"]
+  # M3-S1 took that option, under a new name and without touching the line above
+  # (F-010). `baseline-group-median-od-fallback` answers a row whose full key
+  # train never saw with the median of its (PU, DO) pair, and only then with the
+  # global median. It is still a `GROUP BY` — no new column, no new model, the
+  # same train rows — which is exactly why it is the harder bar: it asks what a
+  # booster buys over the BEST simple predictor rather than over the first one.
+  # Must be a strict subset of group_keys; a backoff level that is not a
+  # coarsening is a different lookup wearing the same name.
+  od_fallback_keys: ["PULocationID", "DOLocationID"]
 
 # ---------------------------------------------------------------- evaluate ---
 evaluate:
@@ -101,15 +110,38 @@ gate:
   # and never will be: against it, v1's 3.2608 reads as a 57% triumph, which is
   # the number a demo quotes and a rider never feels. Passing that baseline in
   # here raises rather than flatters.
-  floor: baseline-group-median
-  # WHY 2.00%. The measured gap between LightGBM v1 and this floor on test is
-  # 7.07% (M2-S2: 3.2608 vs 3.5090), so this is a bar with headroom rather than
-  # a rubber stamp cut to fit the model we have. It is NOT a statistical bar —
+  #
+  # M3-S1 CHANGED THIS LINE, and the change is a TIGHTENING (F-010, Design
+  # Review DR-06 §3 — the two halves of this decision are findable from each
+  # other, per AI-4). It was `baseline-group-median` through M2. That floor
+  # answers a trip whose (hour, dow, PU, DO) cell train never saw with the
+  # GLOBAL median — 11.15 minutes for everyone, from Midtown-to-Midtown to
+  # JFK-to-Brooklyn — and 1.479% of test rows land there. M2-S4's memo measured
+  # what that is worth: 75.4% of the champion's entire advantage over the floor
+  # is bought on those 1.48% of rows. Give the same lookup one more backoff
+  # level and 98.9% of them resolve to a real (PU, DO) cell; the floor's test
+  # MAE falls 3.5090 -> 3.3518 and v1's margin collapses 7.07% -> 2.71%.
+  # So the honest reading is that most of M2's headroom was the floor's
+  # fallback being bad, not the booster being good. The gate now asks the
+  # question it was always meant to ask: what does this model buy over the BEST
+  # simple predictor? Adopting it costs M3's contenders 0.16 minutes of bar and
+  # leaves the milestone 0.71 points of headroom instead of 5.07 — which is the
+  # honest number to build a bake-off against, and the expensive one.
+  floor: baseline-group-median-od-fallback
+  # WHY 2.00%, RE-ARGUED against the floor above (it is the same number, and
+  # that is a conclusion rather than an omission). It is NOT a statistical bar —
   # over 5.95M test rows even 0.5% is significant. It is a MAINTENANCE-COST bar:
-  # 2% of the floor is ~4 seconds of mean error, and a model whose whole
-  # advantage over a `GROUP BY` is four seconds does not earn a booster to serve,
-  # a registry entry to version, and a rollback path to rehearse. Below this
-  # line, ship the lookup table.
+  # 2% of 3.3518 min is ~4.0 seconds of mean error, and a model whose whole
+  # advantage over a two-level `GROUP BY` is four seconds does not earn a
+  # booster to serve, a registry entry to version, and a rollback path to
+  # rehearse. Below this line, ship the lookup table. The absolute cost of
+  # ownership did not change when the floor got stronger, so the percentage
+  # that expresses it did not either — what changed is the headroom, which is
+  # now +2.71% observed against a 2.00% bar (1.35x, not 3.5x). DR-06 §2 forbids
+  # quoting +7.07% as headroom anywhere in M3; that number described a
+  # comparison against a floor the program has since improved on.
+  # LOWERING this is a PO fork. Raising it is the MLE's to argue — and would
+  # today disqualify the model that is serving, which is an argument in itself.
   min_improvement_pct: 2.0
   # The second condition, and it can refuse a model the margin would admit:
   # KPI-09 is a mean over ~6M rows, KPI-10 is what one rider experiences. A
@@ -117,6 +149,15 @@ gate:
   # optimised what we report and degraded what we promise — and only the second
   # of those is on M5's SLO.
   require_no_kpi10_regression: true
+  # THE INCUMBENT CONDITION (M3-S1, F-011) has no knob and never will. The floor
+  # asks "is a booster worth serving at all"; only the model that IS serving can
+  # answer "is this one better than what riders already get", and a challenger
+  # 4% worse than the champion can clear a floor bar the champion cleared by 7%.
+  # It is unconditional rather than configurable for the same reason the feature
+  # EXCLUSIONS live in code: a switch that can break an invariant is a trapdoor,
+  # not a knob. When the alias is unset there is simply no incumbent to consult,
+  # and `registry.promote` refuses to move an alias whose current version the
+  # decision did not read — so "no incumbent" cannot be arranged by omission.
 
 # ---------------------------------------------------------------- registry ---
 registry:

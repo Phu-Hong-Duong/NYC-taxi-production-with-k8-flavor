@@ -23,6 +23,15 @@ Three rules live here, all of them refusals:
 - **Nothing here deletes.** Superseded versions stay; the alias moves. Destroying
   is `make destroy`'s job — the same asymmetry `scripts/postgres_databases.sh`
   keeps. A champion that was replaced is exactly what a rollback needs to find.
+
+- **An alias may only be moved by a decision that SAW what it points at** (F-011,
+  M3-S1). `promote()` takes `incumbent_version` — the version the gate consulted —
+  reads the live alias itself, and refuses when they differ. `gate.decide` takes
+  its incumbent optionally, because the first promotion has none and because M2's
+  recorded verdicts must still replay; this is what stops "optional" from meaning
+  "skippable". It also closes the race: two runs that both passed against the same
+  incumbent cannot both move the alias, because the second one's ack is stale by
+  the time it gets here.
 """
 
 from __future__ import annotations
@@ -111,12 +120,25 @@ def promote(
     model_name: str,
     alias: str,
     run_id: str,
+    incumbent_version: str | None,
     artifact_path: str = "model",
     description: str | None = None,
     version_tags: dict[str, str] | None = None,
     model_info: Callable[[str], Any] = _default_model_info,
 ) -> Promotion:
-    """Register this run's model (once) and point `alias` at it (once). Idempotent."""
+    """Register this run's model (once) and point `alias` at it (once). Idempotent.
+
+    `incumbent_version` is REQUIRED and has no default: it is the version the
+    gate's decision was taken against (`Decision.incumbent`, or None when the
+    alias was unset). A caller that did not consult the incumbent cannot supply
+    it truthfully, and a caller that consulted a stale one is refused below — see
+    the module docstring's fourth rule.
+    """
+    # The incumbent check comes FIRST, before the artifact is even read: it is the
+    # one refusal here that protects something already serving, and a guard that
+    # runs after two round trips is a guard that can be starved by a slow one.
+    _assert_incumbent_acknowledged(client, model_name, alias, incumbent_version)
+
     source = f"runs:/{run_id}/{artifact_path}"
     assert_servable(source, model_info=model_info)
 
@@ -145,6 +167,35 @@ def promote(
         version_created=version_created,
         alias_moved=alias_moved,
         previous_version=previous,
+    )
+
+
+def _assert_incumbent_acknowledged(
+    client: Any, model_name: str, alias: str, incumbent_version: str | None
+) -> None:
+    """The alias may only be moved by a decision that read the version it holds.
+
+    Read through `get_model_version_by_alias` and never off `search_model_versions`:
+    on MLflow server 3.15.1 the latter hands back versions whose `aliases` field is
+    EMPTY (M2-S3's finding), so an incumbent found that way would be found by
+    guessing — and this check exists precisely to stop a promotion from guessing.
+    """
+    live = _alias_version(client, model_name, alias)
+    stated = None if incumbent_version is None else str(incumbent_version)
+    if live == stated:
+        return
+    if live is None:
+        raise PromotionError(
+            f"the decision was taken against incumbent version {stated}, but "
+            f"@{alias} is not set on {model_name} any more. Something moved the "
+            "alias underneath this run; re-gate against the registry as it is now."
+        )
+    raise PromotionError(
+        f"@{alias} points at version {live} and this promotion was decided against "
+        f"incumbent {stated if stated is not None else 'NOTHING (alias unset)'}. A "
+        "challenger may only replace a champion the gate actually compared it to "
+        "(F-011): otherwise a model worse than the one serving takes the alias and "
+        "nothing notices. Re-run the gate against the current champion."
     )
 
 

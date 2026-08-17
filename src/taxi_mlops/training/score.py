@@ -23,6 +23,16 @@ its quote too. That costs the six train months of I/O and is the reason this
 command takes minutes rather than seconds — and it is what lets the error memo
 ask where the booster earns its keep over a `GROUP BY`, per segment, instead of
 only in the aggregate the gate saw.
+
+M3-S1 closed F-012, which was about that second half being unchecked. The floor
+is now (a) the floor the CHAMPION's own gate verdict was argued against — read
+off the version's `gate_floor` tag, not off whatever `configs/train.yaml` names
+today — and (b) checked against that version's `gate_floor_mae` tag on exactly
+the same terms as the challenger, i.e. as a refusal to write rather than a note.
+Both halves of the published comparison are now tied to the registry. The failure
+that motivated it has no other symptom: re-fit the floor on a different window
+and every `KPI-13` in the mart, the memo and the board shifts while the champion
+still re-scores at its promoted number and `verify-m2` stays green.
 """
 
 from __future__ import annotations
@@ -154,6 +164,45 @@ def _as_trained(champion: Champion) -> model_mod.TrainedModel:
     )
 
 
+def _check_floor_against_registry(champion: Champion, metrics: list[Metrics], holdout: str) -> None:
+    """The other half of the gate's argument, checked on the same terms (F-012).
+
+    `_check_against_registry` below has always refused to publish rows whose model
+    re-scores differently from the number it was promoted at. This is the same
+    refusal for the floor: `floor_predicted_minutes` is written on all 12.1M
+    published rows and every KPI-13 the mart, the memo and the board quote is a
+    comparison against it. Until M3-S1 nothing tied it back to the floor the gate
+    actually used, so a re-fit over a different window — M7's retrain, or an
+    F-008-style month override — would have shifted every one of those numbers
+    silently while the champion's own check kept passing.
+    """
+    claimed = champion.tags.get("gate_floor_mae")
+    if claimed is None:
+        raise ChampionError(
+            f"champion version {champion.version} carries no `gate_floor_mae` tag, so "
+            "the floor these rows would be compared against cannot be checked against "
+            "the one its gate used. Refusing to write: an unfalsifiable half of a "
+            "published comparison is what F-012 was about."
+        )
+    measured = next(m for m in metrics if m.split == holdout).mae
+    print(
+        f"[score] registry says version {champion.version} was gated against floor "
+        f"{champion.tags.get('gate_floor')!r} at KPI-09 {claimed} on {holdout}; "
+        f"re-fitting that floor now measures {measured:.4f}"
+    )
+    if f"{measured:.4f}" != claimed:
+        raise ChampionError(
+            f"the floor re-fits to {measured:.4f} on {holdout}, but the champion's own "
+            f"registry tag says it was gated against {claimed}. The rows this command "
+            "would publish would compare the champion against a DIFFERENT bar from the "
+            "one it passed — every KPI-13 in the mart, the memo and the board would "
+            "move and nothing else would notice. Refusing to write them. (If the "
+            "training window really has moved, the champion needs re-gating, not the "
+            "predictions re-publishing.)"
+        )
+    print("[score] MATCH — the published floor is the floor the gate argued against.")
+
+
 def _check_against_registry(champion: Champion, metrics: list[Metrics], holdout: str) -> None:
     """The champion's own tags say what it was promoted on. Check we reproduce it.
 
@@ -190,6 +239,7 @@ def score(
     *,
     train_config: str = "configs/train.yaml",
     write: bool = True,
+    floor_train_months: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """Load the champion, score val + test through `evaluate`, publish the rows."""
     train_cfg = load_train_config(train_config)
@@ -213,12 +263,32 @@ def score(
 
     # The floor first, because fitting it is what needs the six train months in
     # memory — and they are released before the booster starts predicting.
-    train = load_split("train", data_cfg, features_cfg, target)
+    #
+    # WHICH floor is not a choice this command gets to make: it is the one the
+    # champion's gate verdict was argued against, read off the version's own tags
+    # (F-012). `configs/train.yaml: gate.floor` names the floor the NEXT promotion
+    # will face, and after M3-S1 the two legitimately differ — v1 was gated
+    # against `baseline-group-median` and M3's contenders face
+    # `baseline-group-median-od-fallback`. Publishing rows that compare v1 against
+    # a bar it never faced would make every KPI-13 a comparison nobody made.
+    floor_name = champion.tags.get("gate_floor")
+    if not floor_name:
+        raise ChampionError(
+            f"champion version {champion.version} carries no `gate_floor` tag, so the "
+            "floor its rows should be compared against is unknown. Guessing from the "
+            "config would publish a comparison the gate never made."
+        )
+    train = load_split("train", data_cfg, features_cfg, target, months=floor_train_months)
     print(f"[data] train {len(train):>12,} rows  months={','.join(train.months)}")
+    if floor_train_months:
+        print(
+            "[score] RED TEAM: the floor is being fitted on an overridden month set. "
+            "The check below is expected to REFUSE the write."
+        )
     keys = train_cfg["baselines"]["group_keys"]
-    floor = baselines.GroupMedian.fit(train.features, train.y, keys)
+    floor = baselines.fit_floor(floor_name, train.features, train.y, train_cfg["baselines"])
     print(
-        f"[baseline] group median over ({', '.join(keys)}): {floor.groups:,} groups, "
+        f"[baseline] {floor.name} over ({', '.join(keys)}): {floor.groups:,} groups, "
         f"fallback {floor.fallback:.4f} min"
     )
     train_months = train.months
@@ -261,8 +331,10 @@ def score(
 
     print("\n[evaluate] every number below came from taxi_mlops.training.evaluate\n")
     print(results_table(metrics))
-    _check_against_registry(champion, [m for m in metrics if m.contender == model.name],
-                            train_cfg["gate"]["holdout_split"])
+    holdout = train_cfg["gate"]["holdout_split"]
+    _check_against_registry(champion, [m for m in metrics if m.contender == model.name], holdout)
+    _check_floor_against_registry(champion, [m for m in metrics if m.contender == floor.name],
+                                  holdout)
 
     payload = predictions_mod.manifest(
         model=champion.as_manifest(),
@@ -272,6 +344,21 @@ def score(
             "groups": floor.groups,
             "fallback_minutes": round(floor.fallback, 6),
             "train_months": list(train_months),
+            # Recorded when the champion's floor has a backoff level, absent when
+            # it has not — the manifest describes the floor that was fitted, not a
+            # union of every floor the program knows how to fit.
+            **(
+                {
+                    "od_fallback_keys": list(floor.fallback_keys),
+                    "fallback_groups": floor.fallback_groups,
+                }
+                if isinstance(floor, baselines.GroupMedianODFallback)
+                else {}
+            ),
+            # F-012: what the version says this floor scored at promotion time.
+            # The manifest recorded the refit's shape before and nothing read it
+            # back; now the number beside it is one the write was refused on.
+            "gate_floor_mae": champion.tags.get("gate_floor_mae"),
         },
         tolerance_minutes=float(eval_cfg["tolerance_minutes"]),
         metrics=metrics,

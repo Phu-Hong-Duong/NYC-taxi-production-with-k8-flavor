@@ -9,6 +9,11 @@ M2-S3 added the second half: the same invocation now submits the model to the
 promotion gate (`gate.py`) and, only on a verdict that passed, promotes it
 (`registry.py`). The decision is printed with both numbers either way, and a
 refusal leaves the registry exactly as it found it.
+
+M3-S1 added the third: the run resolves the SERVING champion before it judges
+anything and hands it to the gate (F-011). That is the impure half of the
+comparison — a registry read — so it lives here and not in `gate.py`, and it
+travels as `gate.Incumbent` with its own provenance string attached.
 """
 
 from __future__ import annotations
@@ -43,11 +48,17 @@ class Contender:
 
 @dataclass
 class RunResult:
-    """What one `make train` produced: the contenders, the verdict, the promotion."""
+    """What one `make train` produced: the contenders, the verdict, the promotion.
+
+    `decision` is None for exactly one kind of run: a sampled one asked for with
+    --no-gate, which prints its table and is issued NO verdict (F-008). Nothing
+    else may leave it unset — a run that fitted a full-data challenger and did not
+    face the gate would be a result with no bar attached to it.
+    """
 
     contenders: list[Contender]
     challenger: Contender
-    decision: gate.Decision
+    decision: gate.Decision | None
     promotion: registry_mod.Promotion | None = None
 
 
@@ -93,6 +104,9 @@ def run(
     log_to_mlflow: bool = True,
     promote: bool = True,
     hobble: str | None = None,
+    judge: bool = True,
+    experiment: str | None = None,
+    story: str | None = None,
     train_config: str = "configs/train.yaml",
 ) -> RunResult:
     """Fit, score, gate, and (only on a pass) promote. One command, one verdict."""
@@ -100,6 +114,27 @@ def run(
     data_cfg = load_config(train_config=train_config)
     features_cfg = train_cfg["features"]
     eval_cfg = train_cfg["evaluate"]
+
+    # F-008, BEFORE a row is read: a sampled run gets no verdict, and finding that
+    # out should cost seconds rather than a training run. `--no-gate` is the
+    # sample-first smoke path and is legal ONLY here, on a run that has already
+    # disqualified itself — so it can never be the flag that skips a gate a
+    # promotable run would have faced.
+    configured_months = list(train_cfg["data"]["train_months"])
+    sampled = train_months is not None and list(train_months) != configured_months
+    if not judge:
+        if not sampled:
+            raise gate.GateError(
+                "--no-gate is only legal for a SAMPLED run (--train-months). On the "
+                "configured months the gate is the point of the command: a full-data "
+                "fit that skipped its verdict is a result with no bar attached."
+            )
+        print(
+            "[gate] NO VERDICT will be issued: --no-gate on a sampled run (F-008). "
+            "Nothing here can promote."
+        )
+    elif train_months is not None:
+        gate.assert_full_train_months(train_months, configured_months)
 
     names = quote_time.feature_names(features_cfg)
     categorical = quote_time.categorical_names(features_cfg)
@@ -143,8 +178,38 @@ def run(
         )
     )
 
-    # ---- the model. The challenger is contenders[2] whether or not it is hobbled:
-    # the red team submits a broken model through THIS path, not a shortcut past it.
+    # ---- floor 3 (M3-S1, F-010): the same lookup with one more backoff level.
+    # A NEW name and not an edit to floor 2, per configs/train.yaml: baselines —
+    # M2's verdicts were argued against floor 2 and must stay reproducible.
+    od_keys = train_cfg["baselines"]["od_fallback_keys"]
+    backoff = baselines.GroupMedianODFallback.fit(
+        splits["train"].features, splits["train"].y, keys, od_keys
+    )
+    print(
+        f"[baseline] group median with ({', '.join(od_keys)}) backoff: "
+        f"{backoff.groups:,} groups + {backoff.fallback_groups:,} backoff cells, "
+        f"fallback {backoff.fallback:.4f} min"
+    )
+    contenders.append(
+        Contender(
+            name=backoff.name,
+            params={
+                "group_keys": ",".join(keys),
+                "od_fallback_keys": ",".join(od_keys),
+                "groups": backoff.groups,
+                "fallback_groups": backoff.fallback_groups,
+                "fallback_minutes": round(backoff.fallback, 6),
+            },
+            predict=backoff.predict,
+            metrics=_score(backoff.name, backoff.predict, splits, eval_cfg),
+        )
+    )
+
+    # ---- the model. The challenger is this contender whether or not it is
+    # hobbled: the red team submits a broken model through THIS path, not a
+    # shortcut past it. It is found BY NAME below and never by list position —
+    # M3-S1 added a third floor in front of it, and an index would have made that
+    # addition silently promote a baseline.
     challenger_name = train_cfg["model"]["name"]
     if hobble:
         challenger_name = f"{challenger_name}-hobbled-{hobble}"
@@ -211,7 +276,7 @@ def run(
     print("[evaluate] (gotcha #15: nothing else in this program may report one)\n")
     print(results_table([m for c in contenders for m in c.metrics]))
 
-    challenger = contenders[2]
+    challenger = next(c for c in contenders if c.name == challenger_name)
     floor = next(c for c in contenders if c.name == train_cfg["gate"]["floor"])
     floor_val, model_val = floor.metric("val").mae, challenger.metric("val").mae
     verdict = "BEATS" if model_val < floor_val else "DOES NOT BEAT"
@@ -225,24 +290,52 @@ def run(
     # ---- the gate. Both numbers, either way.
     gate_cfg = train_cfg["gate"]
     holdout = gate_cfg["holdout_split"]
-    decision = gate.decide(challenger.metric(holdout), floor.metric(holdout), gate_cfg)
-    flattering = next(c for c in contenders if c.name == "baseline-constant-median")
-    print("\n" + "=" * 78)
-    print("[gate] PROMOTION GATE — configs/train.yaml: gate (loosening it is a PO fork)")
-    print(gate.verdict_lines(decision))
-    print(
-        f"[gate] context   : the FLATTERING floor (baseline-constant-median) is "
-        f"{flattering.metric(holdout).mae:.4f} min on {holdout} and is NOT the bar — "
-        f"against it this would read as "
-        f"{gate.improvement_pct(decision.challenger_mae, flattering.metric(holdout).mae):+.2f}%."
-    )
-    print("=" * 78)
+    decision = None
+    if judge:
+        incumbent = _resolve_incumbent(train_cfg, holdout) if log_to_mlflow else None
+        if incumbent is None and log_to_mlflow:
+            print("[gate] incumbent : the champion alias is unset — nothing is serving yet")
+        elif incumbent is None:
+            print(
+                "[gate] incumbent : NOT CONSULTED — --no-mlflow leaves no registry to "
+                "read. This verdict cannot promote (F-011)."
+            )
+        decision = gate.decide(
+            challenger.metric(holdout), floor.metric(holdout), gate_cfg, incumbent=incumbent
+        )
+        flattering = next(c for c in contenders if c.name == "baseline-constant-median").metric(
+            holdout
+        )
+        print("\n" + "=" * 78)
+        print("[gate] PROMOTION GATE — configs/train.yaml: gate (loosening it is a PO fork)")
+        print(gate.verdict_lines(decision))
+        print(
+            f"[gate] context   : the FLATTERING floor (baseline-constant-median) is "
+            f"{flattering.mae:.4f} min on {holdout} and is NOT the bar — against it "
+            f"this would read as "
+            f"{gate.improvement_pct(decision.challenger_mae, flattering.mae):+.2f}%."
+        )
+        print("=" * 78)
 
     if log_to_mlflow:
-        _log(contenders, train_cfg, splits, decision, challenger)
+        _log(
+            contenders,
+            train_cfg,
+            splits,
+            decision,
+            challenger,
+            experiment=experiment,
+            story=story,
+            sampled=sampled,
+        )
 
     promotion = None
-    if not decision.passed:
+    if decision is None:
+        print(
+            "\n[promote] SKIPPED — no verdict was issued (sampled run, F-008). A run "
+            "the gate declined to judge cannot promote, with or without --no-promote."
+        )
+    elif not decision.passed:
         print("\n[promote] SKIPPED — the gate refused. Nothing registered, no alias moved.")
     elif not promote:
         print("\n[promote] SKIPPED — --no-promote. The verdict above stands unrecorded.")
@@ -253,6 +346,68 @@ def run(
 
     return RunResult(
         contenders=contenders, challenger=challenger, decision=decision, promotion=promotion
+    )
+
+
+def _resolve_incumbent(train_cfg: dict[str, Any], holdout: str) -> gate.Incumbent | None:
+    """Read what is SERVING off the registry, so the gate can be told about it.
+
+    The impure half of F-011's comparison, kept out of `gate.py` on purpose. Two
+    details are load-bearing:
+
+    - The alias is read through `get_model_version_by_alias`, never off
+      `search_model_versions` — that call returns versions whose `aliases` field
+      is EMPTY on server 3.15.1 (M2-S3), so an incumbent found that way is found
+      by guessing.
+    - KPI-10 comes from the version's tags when they carry it, and from the
+      version's RUN when they do not. Versions promoted before M3-S1 were tagged
+      with the challenger's KPI-09 only, and champion v1 is one of them; its
+      KPI-10 has been on its run as `gate_challenger_within_rate` since M2-S3.
+      Backfilling the tag would be a registry write outside `registry.py`, which
+      is the one rule this module does not get to break — so the number is read
+      where it already exists and its provenance is printed.
+    """
+    import mlflow
+
+    from . import tracking
+
+    tracking.configure(train_cfg["mlflow"])
+    cfg = train_cfg["registry"]
+    model_name, alias = cfg["model_name"], cfg["champion_alias"]
+    client = mlflow.MlflowClient()
+    try:
+        version = client.get_model_version_by_alias(model_name, alias)
+    except Exception:  # noqa: BLE001 — an unset alias is the first-promotion path
+        return None
+
+    tags = dict(version.tags or {})
+    mae = tags.get("gate_challenger_mae")
+    if mae is None:
+        raise gate.GateError(
+            f"models:/{model_name}@{alias} resolves to version {version.version}, but "
+            "that version carries no `gate_challenger_mae` tag, so there is no number "
+            "to compare a challenger against. A champion nobody can quote cannot be "
+            "defended (F-011) — re-promote it through the gate or investigate how it "
+            "was aliased."
+        )
+    tagged_split = tags.get("gate_holdout_split", holdout)
+    within, source = tags.get("gate_challenger_within_rate"), "version tags"
+    if within is None:
+        run = client.get_run(version.run_id)
+        within = run.data.metrics.get("gate_challenger_within_rate")
+        source = f"version tags + run {version.run_id[:12]}…"
+    if within is None:
+        raise gate.GateError(
+            f"version {version.version} records KPI-09 but no KPI-10 anywhere — "
+            "neither on the version nor on its run. The gate refuses to compare half "
+            "a champion: a mean can improve while more riders are quoted wrongly."
+        )
+    return gate.Incumbent(
+        version=str(version.version),
+        mae=float(mae),
+        within_tolerance_rate=float(within),
+        split=str(tagged_split),
+        source=source,
     )
 
 
@@ -275,6 +430,9 @@ def _promote(
         model_name=cfg["model_name"],
         alias=cfg["champion_alias"],
         run_id=challenger.run_id,
+        # What the gate compared this challenger to. `registry.promote` re-reads
+        # the live alias and refuses if it has moved since (F-011).
+        incumbent_version=None if decision.incumbent is None else decision.incumbent.version,
         description=(
             "Quote-time ETA for NYC yellow taxi. Versions are contenders promoted "
             "through taxi_mlops.training.gate on the untouched test month."
@@ -284,9 +442,17 @@ def _promote(
             "gate_floor": decision.floor,
             "gate_floor_mae": f"{decision.floor_mae:.4f}",
             "gate_challenger_mae": f"{decision.challenger_mae:.4f}",
+            # KPI-10 on the VERSION from M3-S1 on. Champion v1 carries it only on
+            # its run, which is why `_resolve_incumbent` still looks there — a
+            # successor should not have to.
+            "gate_challenger_within_rate": f"{decision.challenger_within:.3f}",
+            "gate_floor_within_rate": f"{decision.floor_within:.3f}",
             "gate_observed_pct": f"{decision.observed_pct:.2f}",
             "gate_required_pct": f"{decision.required_pct:.2f}",
             "gate_holdout_split": decision.split,
+            "gate_incumbent_version": (
+                "none" if decision.incumbent is None else decision.incumbent.version
+            ),
             "feature_set": train_cfg["features"]["version"],
             "metric_source": "taxi_mlops.training.evaluate",
         },
@@ -303,8 +469,12 @@ def _log(
     contenders: list[Contender],
     train_cfg: dict[str, Any],
     splits: dict[str, Split],
-    decision: gate.Decision,
+    decision: gate.Decision | None,
     challenger: Contender,
+    *,
+    experiment: str | None = None,
+    story: str | None = None,
+    sampled: bool = False,
 ) -> None:
     """One MLflow run per contender — baselines included, because a floor nobody
     can look up is a floor that gets rounded in the retelling.
@@ -312,6 +482,10 @@ def _log(
     The gate's verdict is logged ON the challenger's run rather than only printed:
     a number that reaches a slide should be traceable to the run that produced it
     and to the decision that was taken about it, without asking whoever ran it.
+
+    `story` is passed in rather than hardcoded from M3-S1 on: the constant that
+    said "M2-S3" was true for one story and would have quietly mislabelled every
+    run after it. A run with no story stated says so instead of claiming one.
     """
     import mlflow
     from mlflow.models import infer_signature
@@ -319,7 +493,7 @@ def _log(
     from . import tracking
 
     tracking.configure(train_cfg["mlflow"])
-    experiment = train_cfg["mlflow"]["experiment"]
+    experiment = experiment or train_cfg["mlflow"]["experiment"]
     mlflow.set_experiment(experiment)
     print(f"[mlflow] experiment: {experiment}")
 
@@ -328,8 +502,8 @@ def _log(
         with mlflow.start_run(run_name=contender.name) as active:
             mlflow.set_tags(
                 {
-                    "milestone": "M2",
-                    "story": "M2-S3",
+                    "story": story or "unstated",
+                    "milestone": (story or "unstated").split("-")[0],
                     "role": "MLE",
                     "feature_set": train_cfg["features"]["version"],
                     "metric_source": "taxi_mlops.training.evaluate",
@@ -342,13 +516,27 @@ def _log(
             for metrics in contender.metrics:
                 mlflow.log_metrics(metrics.as_mlflow_metrics())
 
-            if contender is challenger:
+            if sampled:
+                # F-008 option (b), carried alongside option (a): even though this
+                # run was refused a verdict, its metrics exist and somebody will
+                # find them later. They say on their face what they are.
+                mlflow.set_tags(
+                    {
+                        "sample_run": "yes",
+                        "gate_verdict": "NONE — sampled run, the gate issued no verdict",
+                        "do_not_promote": "yes — trained on a subset of the configured months",
+                    }
+                )
+            if contender is challenger and decision is not None:
                 mlflow.log_metrics(decision.as_mlflow())
                 mlflow.set_tags(
                     {
                         "gate_verdict": decision.verdict,
                         "gate_floor": decision.floor,
                         "gate_holdout_split": decision.split,
+                        "gate_incumbent_version": (
+                            "none" if decision.incumbent is None else decision.incumbent.version
+                        ),
                     }
                 )
             if contender.trained is not None and contender.trained.hobble:
@@ -358,7 +546,7 @@ def _log(
                 # refusal cannot be checked by anyone who was not watching.
                 mlflow.set_tags(
                     {
-                        "red_team": "M2-S3",
+                        "red_team": story or "M2-S3",
                         "hobbled": contender.trained.hobble,
                         "do_not_promote": "yes — fitted to permuted train labels on purpose",
                     }
