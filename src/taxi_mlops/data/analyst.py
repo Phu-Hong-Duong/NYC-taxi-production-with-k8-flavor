@@ -52,6 +52,14 @@ VIEWS = (
     "unknown_domain_values",
 )
 
+#: Views that exist only once something upstream of the DATA path has run. The
+#: catalogue must build without them: `make data`, `make rebuild-proof` and the
+#: whole M1 gate run on a repo where no model has ever been fitted, and a data
+#: layer that refuses to build until someone trains a model would make the data
+#: path depend on the modelling path — exactly backwards. When the files are
+#: absent the view is skipped OUT LOUD, never silently.
+OPTIONAL_VIEWS = ("predictions", "prediction_runs")
+
 
 def database_path(cfg: DataConfig) -> Path:
     """Where the catalogue lives (configs/data.yaml:analyst.database_path)."""
@@ -101,6 +109,84 @@ def _trips_rejected_sql(cfg: DataConfig) -> str:
         for month in cfg.splits.months
     ]
     return "CREATE OR REPLACE VIEW trips_rejected AS\n" + "\nUNION ALL\n".join(branches)
+
+
+def predicted_months(cfg: DataConfig) -> list[str]:
+    """The held-out months a model has actually been scored on (M2-S4).
+
+    Train months are deliberately not looked for: publishing a model's
+    predictions on the data it was fitted to would put a number on a board that
+    describes memorisation. Only val and test are ever scored.
+    """
+    return [
+        month
+        for month in cfg.splits.val + cfg.splits.test
+        if cfg.predictions_path(month).exists()
+    ]
+
+
+def _predictions_sql(cfg: DataConfig, months: list[str]) -> str:
+    """Row-level model output, one row per held-out trip (M2-S4).
+
+    `split` and `month` come from the parquet here rather than from a config
+    literal — the opposite of every other view in this file, and for a reason
+    that is the same law read from the other side. The trip views label rows the
+    ingest produced, so config is the authority. THESE rows were labelled by
+    `taxi_mlops.training.score` at the moment the model was scored, and the label
+    is part of the model's claim: if the file says `test` and the config says
+    `val`, the honest answer is that they disagree — which the reconciliation
+    below reports — not that the config wins and the disagreement disappears.
+
+    Derived columns are computed HERE, once, so that every card, mart and memo
+    query means the same thing by "error": `abs_error_minutes` is
+    `ABS(predicted - actual)` in one place and the model's floor gets the
+    identical treatment (`predictions.py: DERIVED_IN_SQL`).
+    """
+    branches = [
+        f"SELECT * FROM read_parquet({_sql_str(cfg.predictions_path(month))})"
+        for month in months
+    ]
+    return (
+        "CREATE OR REPLACE VIEW predictions AS\nSELECT *,\n"
+        "       predicted_minutes - actual_minutes                  AS signed_error_minutes,\n"
+        "       ABS(predicted_minutes - actual_minutes)             AS abs_error_minutes,\n"
+        "       ABS(floor_predicted_minutes - actual_minutes)       AS floor_abs_error_minutes\n"
+        "FROM (\n" + "\nUNION ALL\n".join(branches) + "\n)"
+    )
+
+
+def _prediction_runs_sql(cfg: DataConfig) -> str:
+    """The evaluator's OWN numbers, read back from the manifest it wrote (M2-S4).
+
+    The sibling of ``raw_manifest``, and it exists for the same reason: provenance
+    is metadata, and a question like "which champion produced these rows, and what
+    did the evaluator measure for it?" has to be answerable in SQL or it gets
+    answered from a transcript.
+
+    This view is the ONLY place `kpi_09`/`kpi_10` appear in the analyst layer, and
+    it does not compute them — it reports what
+    ``taxi_mlops.training.evaluate`` measured, verbatim, from the JSON that code
+    wrote (gotcha #15 forbids a second producer, not a reader). It is deliberately
+    NOT published to Postgres: nothing a board can reach may carry those two ids,
+    so the only consumer is the dbt test that checks ``error_segments``' whole-split
+    row against them.
+    """
+    path = _sql_str(cfg.predictions_manifest_path())
+    return f"""CREATE OR REPLACE VIEW prediction_runs AS
+SELECT json_extract_string(model, '$.name')                            AS model_name,
+       json_extract_string(model, '$.version')                         AS model_version,
+       json_extract_string(model, '$.alias')                           AS model_alias,
+       json_extract_string(model, '$.run_id')                          AS run_id,
+       CAST(tolerance_minutes AS DOUBLE)                               AS tolerance_minutes,
+       json_extract_string(s, '$.contender')                           AS contender,
+       json_extract_string(s, '$.split')                               AS split,
+       CAST(json_extract(s, '$.rows') AS BIGINT)                       AS rows,
+       CAST(json_extract(s, '$.kpi_09_mae_minutes') AS DOUBLE)         AS kpi_09_mae_minutes,
+       CAST(json_extract(s, '$.kpi_10_within_tolerance_pct') AS DOUBLE)
+                                                                       AS kpi_10_within_pct
+FROM (SELECT model, tolerance_minutes, unnest(json_extract(splits, '$[*]')) AS s
+      FROM read_json({path}, columns={{'model': 'JSON', 'floor': 'JSON',
+                                       'tolerance_minutes': 'DOUBLE', 'splits': 'JSON'}}))"""
 
 
 def _rejections_sql(cfg: DataConfig) -> str:
@@ -172,7 +258,7 @@ def _unknown_domains_sql(cfg: DataConfig) -> str:
 
 def build_sql(cfg: DataConfig) -> list[str]:
     """Every statement the layer is made of, in order. Pure — runs no query."""
-    return [
+    statements = [
         _trips_clean_sql(cfg),
         "CREATE OR REPLACE VIEW trips_train AS SELECT * FROM trips_clean WHERE split = 'train'",
         "CREATE OR REPLACE VIEW trips_val   AS SELECT * FROM trips_clean WHERE split = 'val'",
@@ -192,6 +278,12 @@ FROM ingest_months m JOIN raw_manifest r USING (month)""",
         # health board that costs a 56M-row scan every refresh gets turned off.
         _unknown_domains_sql(cfg),
     ]
+    months = predicted_months(cfg)
+    if months:
+        statements.append(_predictions_sql(cfg, months))
+    if cfg.predictions_manifest_path().exists():
+        statements.append(_prediction_runs_sql(cfg))
+    return statements
 
 
 def connect(cfg: DataConfig, *, read_only: bool = False) -> duckdb.DuckDBPyConnection:
@@ -293,8 +385,46 @@ def rejection_reconciliation(cfg: DataConfig) -> list[tuple[str, str, str, int, 
     ]
 
 
+def prediction_reconciliation(cfg: DataConfig) -> list[tuple[str, str, int, int, bool]]:
+    """Every held-out row got exactly one prediction, or `make duckdb` exits 1.
+
+    The third reconciliation this layer runs, and the one that guards a specific
+    lie: a model scored on 5.9M of 6.2M val rows produces a perfectly plausible
+    MAE. Nothing about the number looks wrong — it is simply an average over a
+    subset nobody chose. So the count is checked against the SAME authority the
+    trip views are checked against, the ingest report's `rows_out`.
+
+    FULL OUTER JOIN, like the rejected-row check, and here it earns its keep
+    twice: a (split, month) present only in the predictions is what a mislabelled
+    holdout looks like, and a month present only in `ingest_months` is a split
+    the predictions never covered.
+    """
+    con = connect(cfg, read_only=True)
+    try:
+        rows = con.execute(
+            """
+            SELECT COALESCE(p.split, m.split) AS split,
+                   COALESCE(p.month, m.month) AS month,
+                   COALESCE(p.observed, 0)    AS observed,
+                   COALESCE(m.rows_out, 0)    AS expected
+            FROM (SELECT split, month, COUNT(*) AS observed
+                  FROM predictions GROUP BY 1, 2) p
+            FULL OUTER JOIN (SELECT split, month, rows_out
+                             FROM ingest_months
+                             WHERE split IN ('val', 'test')) m USING (split, month)
+            ORDER BY month
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        (split, month, observed, expected, observed == expected)
+        for split, month, observed, expected in rows
+    ]
+
+
 def report(cfg: DataConfig | None = None) -> bool:
-    """Build, then print both reconciliations. Returns True when everything agrees."""
+    """Build, then print every reconciliation. Returns True when everything agrees."""
     cfg = cfg or load_config()
     names = build(cfg)
     print(f"[duckdb] {database_path(cfg)}")
@@ -337,7 +467,33 @@ def report(cfg: DataConfig | None = None) -> bool:
         f"{len(disagreed)} disagreement(s)"
     )
 
-    ok = agreed and rejected_agreed
+    # ---- the third reconciliation: one prediction per held-out row (M2-S4).
+    predicted_agreed = True
+    months = predicted_months(cfg)
+    print("\n[duckdb] published predictions vs the held-out rows they claim to cover")
+    if not months:
+        print(
+            "  none — no model output under "
+            f"{cfg.predictions_dir}/ yet. Run `make predictions` (M2-S4); the data "
+            "path does not depend on it."
+        )
+    else:
+        predicted = prediction_reconciliation(cfg)
+        print("  split  month    prediction rows      rows_out    agree")
+        print("  -----  -------  ---------------  ------------  -----")
+        for split, month, observed, expected, row_ok in predicted:
+            print(
+                f"  {split:<5}  {month}  {observed:>15,}  {expected:>12,}  "
+                f"{'yes' if row_ok else 'NO':>5}"
+            )
+        predicted_agreed = all(r[4] for r in predicted)
+        print(
+            f"  {'ALL':<5}  {'':<7}  {sum(r[2] for r in predicted):>15,}"
+            f"  {sum(r[3] for r in predicted):>12,}  "
+            f"{'yes' if predicted_agreed else 'NO':>5}"
+        )
+
+    ok = agreed and rejected_agreed and predicted_agreed
     print(
         f"[duckdb] {'GREEN' if ok else 'RED'} — {len(rows)} month(s), "
         f"every count reconciled: {ok}"

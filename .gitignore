@@ -9,6 +9,13 @@ __pycache__/
 # The DuckDB catalogue is regenerable: `make duckdb`.
 data/analyst.duckdb
 data/analyst.duckdb.wal
+# Row-level model predictions (M2-S4). Ignored HERE and not by DVC, on purpose:
+# they are MODEL OUTPUT, regenerable by `make predictions` in ~4 minutes from
+# DVC-pinned inputs plus a registry version. A .dvc pin would have to be
+# refreshed every time the champion moves (M3's bake-off, M7's retrains) — a pin
+# that is stale by design is worse than no pin, because it looks like provenance.
+# The real provenance is data/predictions/predictions.json plus the registry.
+data/predictions/
 mlruns/
 .dvc/cache/
 .pytest_cache/

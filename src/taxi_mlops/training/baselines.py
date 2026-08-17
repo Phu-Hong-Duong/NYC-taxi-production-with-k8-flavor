@@ -25,6 +25,13 @@ class Prediction:
 
     values: np.ndarray
     unseen: int
+    #: WHICH rows were guessed at, not just how many. Carried since M2-S4, where
+    #: the published predictions file records the flag per row: a fallback rate
+    #: is a summary, and the question "are the unseen groups the ones we get
+    #: wrong?" cannot be asked of a summary. Derived from the same computation as
+    #: `unseen`, so the count and the flags cannot disagree — a second pass to
+    #: re-derive the mask would be a second definition of "unseen".
+    unseen_mask: np.ndarray | None = None
 
     @property
     def unseen_rate(self) -> float:
@@ -95,4 +102,4 @@ class GroupMedian:
         # fallback that starts firing on 40% of rows is visible rather than merely
         # survivable.
         values[unseen_mask] = self.fallback
-        return Prediction(values, unseen=int(unseen_mask.sum()))
+        return Prediction(values, unseen=int(unseen_mask.sum()), unseen_mask=unseen_mask)

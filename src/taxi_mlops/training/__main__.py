@@ -58,6 +58,18 @@ def main(argv: list[str] | None = None) -> int:
         "gate. Expect exit 1. scripts/train_redteam.sh wraps this and inverts it",
     )
 
+    predict = sub.add_parser(
+        "predict",
+        help="score the REGISTERED champion on val+test through the same evaluator and "
+        "publish the row-level predictions under configs/train.yaml: "
+        "evaluate.predictions_dir (M2-S4, the DA error memo's evidence)",
+    )
+    predict.add_argument(
+        "--no-write",
+        action="store_true",
+        help="print the numbers, publish nothing — for checking the champion resolves",
+    )
+
     # A training run redirected to a log file is block-buffered by default, so a
     # 40-minute fit prints nothing until it ends and reads exactly like a hang.
     # Observed on this story's first full run.
@@ -85,6 +97,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         # The verdict IS the exit code. See the module docstring.
         return 0 if result.decision.passed else 1
+
+    if args.command == "predict":
+        # Same reason as `train`: the shim may re-exec, and re-execing after
+        # loading the six train months would do that work twice.
+        from .openmp import ensure_openmp
+
+        print(f"[openmp] {ensure_openmp()}")
+
+        from .score import ChampionError, score
+
+        try:
+            score(write=not args.no_write)
+        except ChampionError as exc:
+            print(f"[score] FAIL: {exc}", file=sys.stderr)
+            return 2
+        return 0
     return 2
 
 

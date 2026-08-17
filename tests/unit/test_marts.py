@@ -116,12 +116,16 @@ def test_dbt_sources_are_analyst_views_that_exist():
     Prevents: dbt growing a SECOND definition of `split` and `month` via
     read_parquet(), which is exactly how two row counts start disagreeing.
     """
-    from taxi_mlops.data.analyst import VIEWS
+    # OPTIONAL_VIEWS counts: `predictions` and `prediction_runs` exist only after
+    # a champion has been scored (M2-S4), and `error_segments` sources them. What
+    # this test is actually protecting is that every name in sources.yml is a view
+    # the analyst layer KNOWS ABOUT — a typo'd or deleted view still fails.
+    from taxi_mlops.data.analyst import OPTIONAL_VIEWS, VIEWS
 
     sources = yaml.safe_load(read(MODELS.parent / "sources.yml"))["sources"]
     (analyst,) = [s for s in sources if s["name"] == "analyst"]
     named = {t["name"] for t in analyst["tables"]}
-    missing = named - set(VIEWS)
+    missing = named - set(VIEWS) - set(OPTIONAL_VIEWS)
     assert not missing, f"sources.yml names views the analyst layer does not build: {missing}"
 
     for model in MODELS.glob("*.sql"):

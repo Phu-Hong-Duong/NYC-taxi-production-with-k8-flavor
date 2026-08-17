@@ -201,6 +201,76 @@ rows** unless the entry says otherwise.
 
 ---
 
+## Segment KPIs (added M2-S4 — the error memo's ids)
+
+**Read rule 4 again before reading these three.** KPI-09 and KPI-10 may be
+produced by `taxi_mlops.training.evaluate` and by nothing else, and that has not
+changed. The ids below are computed in SQL — over **that evaluator's own
+published rows**, one per held-out trip (`data/predictions/`, written by
+`taxi_mlops.training.score`, catalogued as the `predictions` view). No prediction
+is recomputed and no model is re-scored; SQL groups rows it was handed. They are
+NEW ids rather than segmented KPI-09/KPI-10 because **their window is a segment,
+not a split** — rule 5, applied rather than argued around.
+
+The check that makes this legitimate rather than merely plausible: aggregated
+over a whole split, KPI-11 **is** KPI-09 and KPI-12 **is** KPI-10, to four
+decimals, and a dbt test (`assert_error_segments_reconcile`) fails the build if
+they ever differ. A segment number that cannot roll up to the evaluator's number
+is not a segmentation of it.
+
+### KPI-11 — Segment ETA absolute error (MAE)
+- **Formula:** `AVG(ABS(predicted_minutes − actual_minutes))` over one
+  (split, segment, segment_value)
+- **Source:** `error_segments` mart, column `kpi_11_mae_min` ← the `predictions`
+  view ← `taxi_mlops.training.evaluate`'s published rows
+- **Window:** one segment of one held-out split (val = 2019-07, test = 2019-08)
+- **Owner:** DA (reports) · MLE (consulted on interpretation)
+- **Observed (2026-08-17, champion version 1, test split):** whole split
+  **3.2608** (= KPI-09, by test) · best hour 02:00 **2.2814** · worst hour 15:00
+  **3.8453** · duration band 5–10 min **2.0213** · duration band 100–120 min
+  **59.9933** · pickup zone 132 (JFK) **5.8840** · unseen-group rows **5.9066**
+- **Read it as:** a mean over a segment, so it inherits KPI-09's blind spot at
+  segment scale — pair it with KPI-12 always. A segment below ~5,000 trips moves
+  on a handful of rows; `trips` and `share_of_split_pct` ride on every row of the
+  mart so a card can never render the error without the population.
+
+### KPI-12 — Segment ETA within-tolerance rate
+- **Formula:** `P(ABS(predicted_minutes − actual_minutes) ≤ tolerance)` over one
+  (split, segment, segment_value), as a percentage
+- **Source:** `error_segments` mart, column `kpi_12_within_tol_pct`
+- **Window:** one segment of one held-out split; **tolerance from
+  `configs/train.yaml: evaluate.tolerance_minutes` (5.0)** and published on every
+  row as `tolerance_minutes`, so the rate cannot be read without its tolerance
+- **Owner:** DA (reports) · SRE (consumes for the M5 SLO, per segment)
+- **Observed (2026-08-17, test):** whole split **81.480%** (= KPI-10, by test) ·
+  5–10 min trips **93.683%** · 20–30 min **64.610%** · 45–60 min **37.969%** ·
+  **100–120 min: 0.000%** — not one of those 970 trips is quoted within five
+  minutes · JFK pickups **59.865%** · zone 264 ("unknown", not a place) **51.778%**
+- **Read it as:** the SLO-shaped number, per segment. It is where a
+  respectable average visibly stops being a promise: the fleet is at 81.5% and
+  the trips over 45 minutes are at 38%.
+
+### KPI-13 — Segment margin over the honest floor
+- **Formula:** `100 × (floor_MAE − model_MAE) / floor_MAE` over one
+  (split, segment, segment_value), where the floor is the train-fitted
+  `GROUP BY (hour, dayofweek, PU, DO)` median — the same predictor the promotion
+  gate is argued against (`configs/train.yaml: gate.floor`)
+- **Source:** `error_segments` mart, column `kpi_13_margin_vs_floor_pct`
+- **Window:** one segment of one held-out split
+- **Owner:** DA (reports) · MLE (acts on it)
+- **Outlier treatment:** none, and **no bound** — a bounded margin would be a
+  bounded finding. Negative values are real and load-bearing: they are the
+  segments where the `GROUP BY` beats the booster.
+- **Observed (2026-08-17, test):** whole split **+7.07%** (the gate's number) ·
+  rows where the floor has a real group median (98.521%) **+1.88%** · rows where
+  it falls back (1.479%) **+68.19%** · 1–5 minute trips **−0.88%** ·
+  30–45 minute trips **+18.88%**
+- **Read it as:** what the booster is *buying* here, not how good it is here.
+  KPI-11 says a segment is hard; KPI-13 says whether a model is the right answer
+  to it. The two disagree often — see `docs/error_memo_m2.md`.
+
+---
+
 ## Segment dimensions every board should support
 
 Named once here so each board does not reinvent them, and so M2's error memo and
@@ -234,6 +304,9 @@ define.
 | KPI-08 | `monthly_kpis` | `kpi_08_mean_fare_windowed` **with** `kpi_08_excluded_rows` — the two travel together, by rule |
 | KPI-09 | — | **not a column anywhere, on purpose** (gotcha #15) |
 | KPI-10 | — | **not a column anywhere, on purpose** (gotcha #15) |
+| KPI-11 | `error_segments` | `kpi_11_mae_min`, with `trips` and `share_of_split_pct` on the same row |
+| KPI-12 | `error_segments` | `kpi_12_within_tol_pct` **with** `tolerance_minutes` — the two travel together, by rule |
+| KPI-13 | `error_segments` | `kpi_13_margin_vs_floor_pct`, with `floor_mae_min` beside it |
 
 Three notes the boards must honour:
 
@@ -247,13 +320,26 @@ Three notes the boards must honour:
    with zeros. Filtering them off a card would mean nobody sees the day one
    starts firing.
 3. `taxi_mlops.training.evaluate` writing KPI-09/KPI-10 into a **predictions
-   mart** is M2/M7's work, not a SQL column added here.
+   mart** is M2/M7's work, not a SQL column added here. **Landed at M2-S4 and it
+   did not become those two ids:** the evaluator publishes row-level predictions,
+   the `error_segments` mart aggregates them, and the segment numbers are
+   KPI-11/KPI-12/KPI-13 (new window, new ids). KPI-09 and KPI-10 remain columns
+   in no mart and appear on no card; the `prediction_runs` analyst view carries
+   the evaluator's own values for the reconciliation test and is deliberately
+   never published to Postgres, so nothing a board can reach can render them.
 
 ## What is deliberately NOT a KPI yet
 
 - **Anything requiring the rejected rows** (e.g. "share of trips over 2 hours").
-  Blocked on **F-005**: the rejected rows exist only as counts. Naming a KPI we
-  cannot compute would be a promise the data cannot keep.
+  ~~Blocked on **F-005**: the rejected rows exist only as counts.~~
+  **UNBLOCKED 2026-08-17 (M2-S1 closed F-005** — `trips_rejected` and
+  `rejections_by_rule` are queryable, and `docs/rejected_rows_appendix.md`
+  characterises the 159,300 over-120-minute trips**).** Still not a KPI, and now
+  for an honest reason rather than an impossible one: nobody has needed the
+  number yet, and this document does not mint ids speculatively. The first
+  candidate is named so it is not invented twice — *share of requests whose true
+  duration exceeds the contract's 120-minute bound* — and M2-S4's memo shows why
+  it will matter (KPI-12 is **0.000%** in the last band the model can see).
 - **Cost / revenue per zone.** Needs `total_amount` windowed (KPI-08b) *and* a
   zone dimension table; M1-S4's marts are the right home, not this document.
 - **Freshness / lag.** Meaningless on a fixed 2019 archive. It becomes real when

@@ -1,0 +1,157 @@
+{
+  "name": "Error segments (M2)",
+  "description": "Where the ETA champion (models:/nyc-taxi-eta@champion, registry version 1) is wrong, and where it earns anything over the honest GROUP BY floor. Reads marts.error_segments, which aggregates the row-level predictions taxi_mlops.training.evaluate published - it recomputes no prediction and re-scores no model. Segment numbers are KPI-11 (segment MAE), KPI-12 (segment within-5-min rate) and KPI-13 (segment margin over the floor); they are new ids because their window is a segment, not a split. The two split-level model KPIs appear on NO card here and are columns in NO mart, on purpose. Companion document: docs/error_memo_m2.md.",
+  "cards": [
+    {
+      "name": "KPI-11 · the champion on each held-out split (equals the evaluator's value)",
+      "kpi": "KPI-11",
+      "display": "table",
+      "row": 0,
+      "col": 0,
+      "size_x": 12,
+      "size_y": 4,
+      "sql": "SELECT split, trips, ROUND(kpi_11_mae_min::numeric, 4) AS mae_minutes, ROUND(kpi_12_within_tol_pct::numeric, 3) AS within_tolerance_pct, tolerance_minutes, ROUND(floor_mae_min::numeric, 4) AS honest_floor_mae, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_over_floor_pct FROM marts.error_segments WHERE segment = 'overall' ORDER BY split",
+      "visualization_settings": {
+        "card.description": "Rolled up over a whole split these are, by construction and by dbt test (assert_error_segments_reconcile), the same numbers taxi_mlops.training.evaluate measured for the champion - which is the only thing in this program allowed to measure them (gotcha #15). They are shown under their segment ids because that is what this mart publishes. The floor is the train-fitted GROUP BY (hour, dayofweek, PU, DO) median: the same predictor the promotion gate argued against."
+      }
+    },
+    {
+      "name": "KPI-13 · the margin is bought on the rows the GROUP BY cannot answer",
+      "kpi": "KPI-13",
+      "display": "table",
+      "row": 0,
+      "col": 12,
+      "size_x": 12,
+      "size_y": 4,
+      "sql": "SELECT split, CASE WHEN segment_value = 'true' THEN 'floor falls back (unseen hour/day/PU/DO)' ELSE 'floor has a real group median' END AS coverage, trips, ROUND(share_of_split_pct::numeric, 3) AS share_of_split_pct, ROUND(kpi_11_mae_min::numeric, 4) AS model_mae, ROUND(floor_mae_min::numeric, 4) AS floor_mae, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_pct FROM marts.error_segments WHERE segment = 'unseen_group' ORDER BY split, coverage",
+      "visualization_settings": {
+        "card.description": "The single most load-bearing card on this board. On test, 98.521% of rows sit where the floor has an answer and the booster buys +1.88% there; on the other 1.479% it buys +68.19%. Decomposed, 75.4% of the champion's whole advantage over a SQL query comes from 1.48% of the rows. Read alongside F-008: anything that changes how often the floor falls back moves the gate's bar more than it moves the model."
+      }
+    },
+    {
+      "name": "KPI-12 · within-5-min rate by true trip duration (test)",
+      "kpi": "KPI-12",
+      "display": "bar",
+      "row": 4,
+      "col": 0,
+      "size_x": 12,
+      "size_y": 6,
+      "sql": "SELECT segment_value AS duration_band, ROUND(kpi_12_within_tol_pct::numeric, 3) AS within_tolerance_pct, trips FROM marts.error_segments WHERE segment = 'duration_band' AND split = 'test' ORDER BY segment_sort",
+      "visualization_settings": {
+        "graph.dimensions": ["duration_band"],
+        "graph.metrics": ["within_tolerance_pct"],
+        "card.description": "Tolerance is 5 minutes and travels on every row of the mart (tolerance_minutes), from configs/train.yaml. The last band is the finding: of the 970 test trips running 100-120 minutes, ZERO are quoted within five minutes. The band is bounded at 120 because that is where the contract's duration_above_max rule starts rejecting rows - what sits past it is characterised in docs/rejected_rows_appendix.md, not here."
+      }
+    },
+    {
+      "name": "KPI-11 / KPI-13 · error and margin by true trip duration (test)",
+      "kpi": "KPI-11",
+      "display": "table",
+      "row": 4,
+      "col": 12,
+      "size_x": 12,
+      "size_y": 6,
+      "sql": "SELECT segment_value AS duration_band, trips, ROUND(share_of_split_pct::numeric, 3) AS share_pct, ROUND(kpi_11_mae_min::numeric, 4) AS mae_minutes, ROUND(floor_mae_min::numeric, 4) AS floor_mae, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_pct, ROUND(model_bias_min::numeric, 3) AS bias_minutes, ROUND(mean_actual_min::numeric, 2) AS mean_actual_min, ROUND(mean_predicted_min::numeric, 2) AS mean_quoted_min FROM marts.error_segments WHERE segment = 'duration_band' AND split = 'test' ORDER BY segment_sort",
+      "visualization_settings": {
+        "card.description": "bias_minutes is the SIGNED mean error (quoted minus actual), and it is not a rounding of the MAE: the model over-quotes the shortest trips by +2.17 min and under-quotes the 100-120 min band by 59.99. margin_pct is NEGATIVE on 1-5 minute trips (-0.88%) - the only segment above 5,000 trips, on either split, where the GROUP BY beats the booster."
+      }
+    },
+    {
+      "name": "KPI-11 · error by hour of day (test)",
+      "kpi": "KPI-11",
+      "display": "line",
+      "row": 10,
+      "col": 0,
+      "size_x": 12,
+      "size_y": 6,
+      "sql": "SELECT segment_sort AS hour_of_day, ROUND(kpi_11_mae_min::numeric, 4) AS model_mae, ROUND(floor_mae_min::numeric, 4) AS floor_mae FROM marts.error_segments WHERE segment = 'hour' AND split = 'test' ORDER BY segment_sort",
+      "visualization_settings": {
+        "graph.dimensions": ["hour_of_day"],
+        "graph.metrics": ["model_mae", "floor_mae"],
+        "card.description": "Both curves, because the shape is shared: the error profile follows the traffic (best 02:00 at 2.2814, worst 15:00 at 3.8453) and so does the floor's. What differs is the GAP, which is widest in the small hours - see the KPI-13 card beside this one."
+      }
+    },
+    {
+      "name": "KPI-13 · what the booster buys, by hour of day (test)",
+      "kpi": "KPI-13",
+      "display": "line",
+      "row": 10,
+      "col": 12,
+      "size_x": 12,
+      "size_y": 6,
+      "sql": "SELECT segment_sort AS hour_of_day, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_pct FROM marts.error_segments WHERE segment = 'hour' AND split = 'test' ORDER BY segment_sort",
+      "visualization_settings": {
+        "graph.dimensions": ["hour_of_day"],
+        "graph.metrics": ["margin_pct"],
+        "card.description": "The mirror image of the error curve: the margin runs from +16.03% at 04:00 down to +5.13% at 19:00. The booster earns most where the lookup table has the least data and least where it has plenty - the same finding as the coverage card, at a different grain."
+      }
+    },
+    {
+      "name": "KPI-11 · worst pickup zones (test, >= 20,000 trips)",
+      "kpi": "KPI-11",
+      "display": "table",
+      "row": 16,
+      "col": 0,
+      "size_x": 12,
+      "size_y": 6,
+      "sql": "SELECT segment_value AS pickup_zone, trips, ROUND(kpi_11_mae_min::numeric, 4) AS mae_minutes, ROUND(kpi_12_within_tol_pct::numeric, 3) AS within_tolerance_pct, ROUND(floor_mae_min::numeric, 4) AS floor_mae, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_pct, ROUND(mean_actual_min::numeric, 2) AS mean_actual_min FROM marts.error_segments WHERE segment = 'pickup_zone' AND split = 'test' AND trips >= 20000 ORDER BY kpi_11_mae_min DESC LIMIT 15",
+      "visualization_settings": {
+        "card.description": "Thresholded at 20,000 trips and the threshold is shown, because a segment of 40 trips tops any error ranking by luck. Zone 132 is JFK and 138 is LaGuardia (docs/eda_report.md 10); 264 is the TLC's 'unknown' code and is NOT a place - it is also the worst-served pickup 'zone' in the city, at 51.778% within tolerance."
+      }
+    },
+    {
+      "name": "KPI-11 · worst drop-off zones (test, >= 20,000 trips)",
+      "kpi": "KPI-11",
+      "display": "table",
+      "row": 16,
+      "col": 12,
+      "size_x": 12,
+      "size_y": 6,
+      "sql": "SELECT segment_value AS dropoff_zone, trips, ROUND(kpi_11_mae_min::numeric, 4) AS mae_minutes, ROUND(kpi_12_within_tol_pct::numeric, 3) AS within_tolerance_pct, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_pct, ROUND(model_bias_min::numeric, 3) AS bias_minutes, ROUND(mean_actual_min::numeric, 2) AS mean_actual_min FROM marts.error_segments WHERE segment = 'dropoff_zone' AND split = 'test' AND trips >= 20000 ORDER BY kpi_11_mae_min DESC LIMIT 15",
+      "visualization_settings": {
+        "card.description": "The destination side of the same story: airports and the unknown code. A dispatch system knows the requested drop-off zone at quote time, which is why an airport flag derived from the OD pair is a legitimate M3 feature candidate where RatecodeID is not (taxi_mlops.features.quote_time.EXCLUSIONS)."
+      }
+    },
+    {
+      "name": "KPI-12 · within-tolerance rate by day of week (test)",
+      "kpi": "KPI-12",
+      "display": "bar",
+      "row": 22,
+      "col": 0,
+      "size_x": 8,
+      "size_y": 5,
+      "sql": "SELECT CASE segment_value WHEN '0' THEN '0 Mon' WHEN '1' THEN '1 Tue' WHEN '2' THEN '2 Wed' WHEN '3' THEN '3 Thu' WHEN '4' THEN '4 Fri' WHEN '5' THEN '5 Sat' ELSE '6 Sun' END AS day_of_week, ROUND(kpi_12_within_tol_pct::numeric, 3) AS within_tolerance_pct, trips FROM marts.error_segments WHERE segment = 'dayofweek' AND split = 'test' ORDER BY segment_sort",
+      "visualization_settings": {
+        "graph.dimensions": ["day_of_week"],
+        "graph.metrics": ["within_tolerance_pct"],
+        "card.description": "Thursday is both the busiest day (1,077,039 test trips) and the worst served (78.968%), which the EDA already recorded as slowest-and-busiest (docs/eda_report.md 5). The model is inheriting the city here, not misbehaving."
+      }
+    },
+    {
+      "name": "KPI-11 · error by stated party size (test)",
+      "kpi": "KPI-11",
+      "display": "table",
+      "row": 22,
+      "col": 8,
+      "size_x": 8,
+      "size_y": 5,
+      "sql": "SELECT segment_value AS passenger_count, trips, ROUND(share_of_split_pct::numeric, 3) AS share_pct, ROUND(kpi_11_mae_min::numeric, 4) AS mae_minutes, ROUND(kpi_12_within_tol_pct::numeric, 3) AS within_tolerance_pct, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_pct FROM marts.error_segments WHERE segment = 'passenger_count' AND split = 'test' ORDER BY trips DESC",
+      "visualization_settings": {
+        "card.description": "'(not stated)' is a real population, not a gap: 33,014 test trips whose party size is null, at MAE 6.0719 against 3.2608 fleet-wide, mean true duration 34.4 minutes, and 40.7% of them also unseen-group rows. The mart labels it rather than leaving it NULL, because a blank row on a board reads as a rendering fault instead of a segment."
+      }
+    },
+    {
+      "name": "KPI-13 · every segment where the GROUP BY beats the booster (test)",
+      "kpi": "KPI-13",
+      "display": "table",
+      "row": 22,
+      "col": 16,
+      "size_x": 8,
+      "size_y": 5,
+      "sql": "SELECT segment, segment_value, trips, ROUND(kpi_11_mae_min::numeric, 4) AS model_mae, ROUND(floor_mae_min::numeric, 4) AS floor_mae, ROUND(kpi_13_margin_vs_floor_pct::numeric, 2) AS margin_pct FROM marts.error_segments WHERE split = 'test' AND kpi_13_margin_vs_floor_pct < 0 ORDER BY trips DESC",
+      "visualization_settings": {
+        "card.description": "Unfiltered and unthresholded on purpose - this is the card the memo's argument could be wrong on, so it shows every row. One segment matters (1-5 minute trips, 824,986 of them, -0.88%, and it reproduces on val at -0.79%); the other twelve are single zones covering 487 trips between them, which is noise and is shown so nobody rediscovers it as a pattern."
+      }
+    }
+  ]
+}

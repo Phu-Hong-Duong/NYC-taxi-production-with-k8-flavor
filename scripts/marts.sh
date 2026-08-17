@@ -52,17 +52,27 @@ export DBT_PROFILES_DIR="$DBT_DIR"
 # The tables the publish moves, in dependency-free order (each is standalone in
 # Postgres). `trips_clean` is first because it is the expensive one — if the
 # pipe is going to fail, fail before the cheap ones have been swapped.
-MARTS=(trips_clean zone_hourly_stats monthly_kpis rejections_by_rule)
+MARTS=(trips_clean zone_hourly_stats monthly_kpis rejections_by_rule error_segments)
 
 # ---- 1. known_domains: ONE definition, passed in, never copied into SQL ------
 # monthly_kpis computes KPI-04 against the documented TLC domains. Those live in
 # configs/data.yaml:analyst.known_domains and are read from there — a copy
 # pasted into a .sql file would be the twins failure the port family and the
 # split months already taught this repo (CLAUDE.md).
-DBT_VARS="$(python3 - "$REPO_ROOT/configs/data.yaml" <<'PY'
+#
+# M2-S4 adds a second one on the same terms: `tolerance_minutes` is KPI-12's
+# tolerance and it lives in configs/train.yaml (evaluate.tolerance_minutes),
+# where KPI-10 already reads it. A `5.0` typed into error_segments.sql would be a
+# rate whose definition disagrees with the model's the day the DA and the SRE
+# argue about the SLO — which is the M5 conversation this number exists for.
+DBT_VARS="$(python3 - "$REPO_ROOT/configs/data.yaml" "$REPO_ROOT/configs/train.yaml" <<'PY'
 import json, sys, yaml
 cfg = yaml.safe_load(open(sys.argv[1]))
-print(json.dumps({"known_domains": cfg["analyst"]["known_domains"]}))
+train = yaml.safe_load(open(sys.argv[2]))
+print(json.dumps({
+    "known_domains": cfg["analyst"]["known_domains"],
+    "tolerance_minutes": float(train["evaluate"]["tolerance_minutes"]),
+}))
 PY
 )"
 GREEN_VARS="$DBT_VARS"
@@ -71,6 +81,27 @@ if [[ "$RED_TEAM" == "1" ]]; then
 import json,sys
 v = json.loads(sys.argv[1]); v['red_team'] = True; print(json.dumps(v))" "$DBT_VARS")"
   echo "== RED TEAM: the out-of-contract fixture is UNIONED IN — this build MUST fail =="
+fi
+
+# ---- 1b. the one upstream this build cannot fabricate ------------------------
+# `error_segments` sources the analyst layer's `predictions` view, which exists
+# only after a champion has been scored (`make predictions`, M2-S4). dbt's own
+# failure for a missing source is a DuckDB "table does not exist" three frames
+# deep in a compiled model — true, and useless. Say the sentence instead.
+if [[ ! -f "$REPO_ROOT/data/analyst.duckdb" ]]; then
+  echo "[marts] FAIL: no data/analyst.duckdb — run \`make data\` first." >&2
+  exit 1
+fi
+if ! uv run python -c "
+import duckdb, sys
+con = duckdb.connect('$REPO_ROOT/data/analyst.duckdb', read_only=True)
+names = {r[0] for r in con.execute('SHOW TABLES').fetchall()}
+sys.exit(0 if {'predictions', 'prediction_runs'} <= names else 1)
+"; then
+  echo "[marts] FAIL: the analyst layer has no 'predictions' view." >&2
+  echo "[marts] The error_segments mart aggregates the champion's published rows." >&2
+  echo "[marts] Run:  make predictions  &&  make duckdb" >&2
+  exit 1
 fi
 
 # ---- 2. dbt build (models + tests, interleaved) ------------------------------

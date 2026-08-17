@@ -97,5 +97,10 @@ def data_cfg(tmp_path) -> DataConfig:
         cfg,
         source=source,
         rejected=rejected,
+        # Same reason as `rejected` above, one tree further along: with the real
+        # `data/predictions` in place a test that builds the analyst layer would
+        # otherwise pick up the REAL published predictions and reconcile them
+        # against three seeded months.
+        predictions_dir=str(tmp_path / "predictions"),
         splits=Splits(train=("2019-01",), val=("2019-02",), test=("2019-03",)),
     )
