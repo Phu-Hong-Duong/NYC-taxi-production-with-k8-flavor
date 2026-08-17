@@ -227,6 +227,18 @@ the seed line are earned by THIS project.
     defaults are not exemptions. Siblings worth checking the same way as they
     arrive: dbt (`send_anonymous_usage_stats`), Metabase (anonymous tracking),
     and anything with a `--telemetry` flag.
+    **Both named siblings have now arrived, and both were opt-out.** dbt at
+    M1-S4, which also dragged `snowplow-tracker` into the dependency graph.
+    Metabase at M1-S5 — and it phones home TWO ways, not one: anonymous usage
+    tracking (`MB_ANON_TRACKING_ENABLED`) and a version check against
+    metabase.com (`MB_CHECK_FOR_UPDATES`). Both are off in
+    `infra/manifests/metabase.yaml`, where the decision is greppable and survives
+    a `make destroy`. The half that nearly escaped: `POST /api/setup` writes its
+    OWN `allow_tracking` preference at first login, so an instance whose manifest
+    says "false" turns tracking back on the moment it is set up, unless the setup
+    call says so too (`scripts/metabase_boards.py`, pinned by a test). Two
+    switches for one behaviour, in two layers, and only one of them is in the
+    file you would think to read.
 
 33. **A rebuild proof that refreshes the pin it is judged against.** The
     byte-identical gate is "wipe `data/processed/`, rebuild, sha256 must match".
@@ -243,3 +255,29 @@ the seed line are earned by THIS project.
     `dvc status data/processed.dvc`, computed by different code from different
     metadata. General form: a verification step must never write to the artifact
     it verifies against, and one witness agreeing with itself is not evidence.
+
+34. **`kubectl: command not found` — and the cluster was never the problem.**
+    A chained session opened, ran its staleness check, and bash answered
+    `kubectl: command not found` for a binary CLAUDE.md records as pre-existing
+    and four previous sessions used. It had not been uninstalled:
+    `/usr/local/bin/kubectl` is a SYMLINK into
+    `/mnt/wsl/docker-desktop/cli-tools/usr/local/bin/kubectl`, a path that only
+    exists while Docker Desktop is running. The host had restarted overnight and
+    Docker Desktop had not come back with it, so `/mnt/wsl` held nothing but
+    `resolv.conf`, the symlink dangled, and PATH lookup skipped it — producing
+    the one error message that sends you looking at your PATH, your toolchain
+    install and your kubeconfig, none of which are broken. `docker` was
+    similarly absent, because the `docker` on PATH is the Windows shim under
+    `/mnt/c/...` whose entire job is to print "could not be found in this WSL 2
+    distro". Tuition paid 2026-08-17 (M1-S5, ~5 minutes). Check, in this order,
+    BEFORE touching anything: `ls /mnt/wsl` (docker-desktop mounts present?) and
+    `tasklist.exe /FI "IMAGENAME eq Docker Desktop.exe"` — no task means the
+    whole answer is "the daemon is off", not "the toolchain is broken". Recovery
+    is one launch (`cmd.exe /c start "" "C:\Program Files\Docker\Docker\Docker
+    Desktop.exe"`) and ~15 seconds; the kind node containers restart themselves
+    and the platform comes back with them (observed: all 16 pods Running, then
+    `make verify-m0` GREEN 18/18, nothing re-deployed). General form: a tool that
+    vanishes without being uninstalled is a symlink into somebody else's
+    lifecycle — resolve the link before you debug the tool. Sibling of #24: the
+    chain's environment has moving parts that outlive no reboot, and the
+    staleness check exists precisely to find them before the work does.

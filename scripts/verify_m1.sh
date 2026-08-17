@@ -18,10 +18,17 @@
 # gate fails if the corrupt-file refusal stops refusing, or if the dbt tests stop
 # being able to go red. A green suite that cannot go red is not evidence.
 #
-# THIS IS SLOW ON PURPOSE (~15-25 min): leg 1 deletes and rebuilds ~1 GB of
-# processed parquet, because the byte-identity claim is worthless when checked
-# against data that was never re-derived. There is no fast mode. A gate with a
-# skip flag is a gate that gets skipped.
+# Leg 1 deletes and rebuilds ~1 GB of processed parquet, because the
+# byte-identity claim is worthless when checked against data that was never
+# re-derived. There is no fast mode and no skip flag: a gate with one is a gate
+# that runs with it.
+#
+# MEASURED 2026-08-17 (M1-S5), because a guess would have been wrong: the whole
+# gate is **~98 s** green end to end on this machine (the estimate written while
+# building it was "15-25 minutes" — off by an order of magnitude, which is worth
+# recording, since the fear of a slow gate is exactly what tempts people to add
+# the skip flag). A failing run costs ~115 s: leg 7 spends up to 60 s waiting for
+# a Metabase that is supposed to already be up.
 #
 # Prints one line per sub-check and exits nonzero if ANY fails — it keeps going
 # rather than stopping at the first, so one run tells you everything broken.
@@ -48,13 +55,24 @@ trap cleanup EXIT
 # ------------------------------------------------- 1. byte-identical rebuild --
 section "1. data: byte-identical rebuild from DVC-pinned raw (v1's M1 gate)"
 note "deleting and rebuilding data/processed/ — this is the slow leg, by design"
+# Every assertion below is anchored on a string rebuild_proof.sh actually prints.
+# The first draft of this leg grepped for 'YES' (the script prints lowercase
+# 'yes') and for 'dvc status' (it prints "second witness — DVC's own view"), so
+# it reported "0 output(s) byte-identical" and PASSED. A check that parses
+# nothing and passes is worse than one that fails: it is a green light wired to
+# no sensor. Hence the explicit count > 0 below.
 if rebuild_log="$(bash scripts/rebuild_proof.sh 2>&1)"; then
-  identical="$(printf '%s\n' "$rebuild_log" | grep -c 'YES')"
-  pass "rebuild-proof GREEN — $identical output(s) byte-identical after a full re-derive"
+  identical="$(printf '%s\n' "$rebuild_log" | grep -cE '  yes$')"
+  if [[ "$identical" -gt 0 ]] && printf '%s\n' "$rebuild_log" | grep -q 'all byte-identical: True'; then
+    pass "rebuild-proof GREEN — $identical output(s) byte-identical after a full re-derive"
+  else
+    fail "rebuild-proof exited 0 but its table shows $identical identical output(s)"
+    note "$(printf '%s\n' "$rebuild_log" | tail -12)"
+  fi
   # The second witness, computed by different code from different metadata. If
   # rebuild_proof.sh ever stops asking DVC, this line stops finding the answer.
-  if printf '%s\n' "$rebuild_log" | grep -qi 'dvc status'; then
-    pass "the proof carried its SECOND witness (dvc status), not just our own hashes"
+  if printf '%s\n' "$rebuild_log" | grep -q "second witness"; then
+    pass "the proof carried its SECOND witness (DVC's own view), not just our own hashes"
   else
     fail "rebuild-proof no longer consults DVC — one witness agreeing with itself is not evidence"
   fi
@@ -76,6 +94,12 @@ else
   fail "$missing_reports of $months processed month(s) have no rejection report"
 fi
 
+# The report's shape, read from a real file rather than assumed: `rules` is a
+# LIST of {name, rejected_by, matched, params}. `rejected_by` attributes each
+# dropped row to exactly ONE rule (so it sums to the drop count); `matched`
+# counts every rule a row tripped (so it sums higher). Confusing the two is the
+# easy mistake, and it makes the reconciliation fail for a reason that looks like
+# data corruption.
 rej_summary="$(uv run python - <<'PY' 2>&1
 import json, pathlib
 rows_in = rows_out = 0
@@ -83,11 +107,12 @@ rules = {}
 for p in sorted(pathlib.Path("data/processed").rglob("*.rejections.json")):
     r = json.loads(p.read_text())
     rows_in += r["rows_in"]; rows_out += r["rows_out"]
-    for rule, n in r["rejected_by"].items():
-        rules[rule] = rules.get(rule, 0) + n
+    for rule in r["rules"]:
+        rules[rule["name"]] = rules.get(rule["name"], 0) + rule["rejected_by"]
 attributed = sum(rules.values())
 dropped = rows_in - rows_out
-print(f"rows_in={rows_in} rows_out={rows_out} dropped={dropped} attributed={attributed} rules={len(rules)}")
+print(f"rows_in={rows_in:,} rows_out={rows_out:,} dropped={dropped:,} "
+      f"attributed={attributed:,} rules={len(rules)}")
 print("OK" if dropped == attributed else "MISMATCH")
 PY
 )"
@@ -143,8 +168,17 @@ fi
 # --------------------------------------------------- 4. dbt build + tests -----
 section "4. marts: dbt build green INCLUDING its tests"
 if dbt_log="$(SKIP_PUBLISH=1 bash scripts/marts.sh 2>&1)"; then
-  summary="$(printf '%s\n' "$dbt_log" | grep -E '^Done\.' | tail -1)"
-  pass "dbt build PASS — ${summary:-no summary line}"
+  # dbt prefixes every line with a timestamp and ANSI colour, so the summary is
+  # never at column 0 — anchoring on '^Done\.' silently matched nothing and this
+  # branch printed "dbt build PASS — no summary line" while passing.
+  summary="$(printf '%s\n' "$dbt_log" | grep -oE 'Done\. PASS=[0-9]+ WARN=[0-9]+ ERROR=[0-9]+ SKIP=[0-9]+.*' | tail -1)"
+  if [[ -z "$summary" ]]; then
+    fail "dbt build exited 0 but printed no 'Done. PASS=…' summary — nothing was parsed"
+  elif [[ "$summary" == *"ERROR=0"* ]]; then
+    pass "dbt build PASS — $summary"
+  else
+    fail "dbt build summary reports errors: $summary"
+  fi
   ntests="$(printf '%s\n' "$dbt_log" | grep -cE 'PASS (test|not_null|unique|accepted)')"
   if [[ "$ntests" -ge 1 ]]; then
     pass "the build ran data tests interleaved with the models ($ntests test line(s))"

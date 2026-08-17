@@ -44,8 +44,22 @@ echo "== [4/5] Metabase =="
 # The route a human will open, asked as the thing rather than a proxy for it
 # (verify_m0.sh's design rule). A ready Deployment behind a Service whose
 # selector matches nothing looks identical to a working one from the outside.
+#
+# WHY THIS RETRIES INSTEAD OF ASKING ONCE. Observed the first time this ran:
+# `rollout status` returned, and a single 20s curl came back `000`. The route was
+# fine — `rollout status` succeeds the instant the readinessProbe flips, and
+# Metabase's FIRST request through the node port, on a JVM that has just finished
+# migrating its app-db, is slower than any one-shot timeout worth setting. A
+# check that races the thing it checks reports a broken deploy roughly at random,
+# which is worse than no check at all: it teaches you to re-run and shrug.
 echo "== [5/5] host route =="
-code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$METABASE_URL/api/health" || true)"
+code=000
+for attempt in $(seq 1 30); do
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$METABASE_URL/api/health" || true)"
+  [[ "$code" == "200" ]] && break
+  [[ "$attempt" == "1" ]] && echo "[metabase] waiting for the first response through hostPort 3030 …"
+  sleep 10
+done
 if [[ "$code" != "200" ]]; then
   echo "[metabase] FAIL: $METABASE_URL/api/health returned '$code' (expected 200)" >&2
   echo "[metabase]       hostPort 3030 is published at cluster-CREATE time only —" >&2

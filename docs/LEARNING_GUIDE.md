@@ -9,6 +9,97 @@ months from now.
 
 ## M1
 
+### M1-S5 — a port you cannot add to a running cluster, boards that live in git, and a tool that vanished without being uninstalled (2026-08-17, role:MLOps deploy + DA boards)
+
+**What was built.** The BI seat and the M1 gate. `infra/manifests/metabase.yaml`
+(one container, image pinned by tag AND digest, app-db in the one Postgres),
+`scripts/deploy_metabase.sh`, `scripts/metabase_boards.py` (boards converged from
+checked-in JSON through the Metabase API), two boards under
+`analytics/metabase/boards/` totalling 17 cards, and `scripts/verify_m1.sh` — the
+gate, red-teamed once. Plus the deliberate cluster rebuild the whole story hangs
+on, and 28 new unit tests.
+
+**Why this way.**
+
+*The rebuild was planned, not discovered.* kind publishes host ports at cluster
+**CREATE** time only. There is no `kubectl` that adds one to a running cluster,
+no live path, no clever patch — adding `3030 → 30300` means `cluster-down` +
+`cluster-up`, and everything on the PVCs dies. The M1 kickoff found this at draft
+time by reading the kind config rather than by hitting it at 3am, wrote "M1-S5
+carries a deliberate cluster rebuild" into the preconditions table, and the story
+budgeted for it. The interesting part is what that turned a teardown into: a free
+re-proof. The marts came back from `make marts` alone with counts identical to
+M1-S4's to the row, and the empty Postgres volume exercised the one D-002 path
+M1-S4 could not — the fresh one. A destroy you planned is an experiment; a
+destroy you didn't is an incident.
+
+*Boards are files, not clicks.* This is the entire reason the BI layer took a
+script instead of twenty minutes in a browser. A dashboard built by clicking
+exists in exactly one app-db: it cannot be reviewed in a pull request, cannot be
+rebuilt after `make destroy`, and when a number moves nobody can say what
+changed. `docs/prior_art.md` had already recorded this as an ADOPT; M1-S5 is
+where it landed. The cost is real and worth naming — edits made in the UI to a
+card this repo owns are overwritten by the next `make boards`, and that is the
+point, not a bug.
+
+*The app-db is a real database, because H2 would have worked.* Metabase's default
+app-db is an H2 file inside the container holding the dashboards, the cards, the
+connections and the users — i.e. everything the M1 gate calls "the boards". It
+would have worked perfectly through every test in this session and died at the
+first rollout. Losing a container filesystem is the *normal* behaviour of a
+Deployment, not a durability edge case. So `metabase` became D-002's third
+database, which cost exactly what M1-S4 predicted it would: one line in
+`scripts/postgres_databases.sh` and one `ADDITIVE` entry in
+`scripts/platform_secrets.sh`. A test now makes that prediction falsifiable
+rather than a comment.
+
+**The concept underneath: a check that races the thing it checks.** The first
+`make deploy-metabase` failed at its own last step. `kubectl rollout status`
+returned "successfully rolled out", and the single 20-second `curl` that followed
+came back `000`. Nothing was broken — `rollout status` succeeds the *instant* the
+readinessProbe flips, and Metabase's first request through a node port, on a JVM
+that has just finished migrating its app-db, is slower than any one-shot timeout
+worth setting. This is gotcha #29's cousin. There, a readiness check passed on
+zero replicas; here, a liveness check failed on a live service. Both are the same
+mistake in different directions: **asking a question at a moment you did not
+choose.** The fix is not a longer timeout, it is a bounded retry — because a
+check that reports a broken deploy roughly at random is worse than no check, as
+it teaches you to re-run and shrug, and the day it is right you will shrug then
+too.
+
+**And a tool that vanished without being uninstalled.** The session opened with
+`kubectl: command not found` — for a binary CLAUDE.md records as pre-existing and
+four earlier sessions used. It had not been removed: `/usr/local/bin/kubectl` is
+a symlink into `/mnt/wsl/docker-desktop/cli-tools/`, a path that exists only
+while Docker Desktop is running, and the host had restarted overnight without it.
+The error message sends you to your PATH, your toolchain install and your
+kubeconfig — none of which were broken. Two commands ended it: `ls /mnt/wsl`
+(only `resolv.conf`) and `tasklist.exe` (no Docker Desktop process). Now gotcha
+#34, and the general form is worth carrying: **a tool that disappears without
+being uninstalled is a symlink into somebody else's lifecycle — resolve the link
+before you debug the tool.** This is what the boot ritual's staleness check is
+*for*; the handoff's "Next" claimed a live cluster, and reality had moved.
+
+**What to look at.** `infra/kind/kind-config.yaml` and
+`infra/manifests/metabase.yaml` — one number written in two files, and
+`tests/unit/test_platform_scripts.py` fails if they drift · the "What the tests
+refuse, and why" table in `analytics/metabase/README.md`, which is the honest
+summary of what a board is not allowed to do · `scripts/verify_m1.sh` §3, where
+the corrupt-parquet red-team writes its fixture into a throwaway `raw_dir` under
+a throwaway config, so a gate never puts a corrupt byte near `data/raw`
+(gotcha #33's neighbour: a proof must not damage the artifact it protects).
+
+**What to try yourself.** Open http://localhost:3030 and change a card's SQL in
+the browser, then run `make boards` and watch it revert — that is the trade this
+design makes, felt rather than described. Then delete a card from
+`analytics/metabase/boards/kpi_board.json` and run `make boards` again: it does
+**not** disappear from Metabase, because the script adds and updates but never
+archives. Decide for yourself whether that asymmetry is right. (It is the same
+one `postgres_databases.sh` follows, for the same reason: destroying is `make
+destroy`'s job, out loud.) Finally, run `make verify-m1` and time it — then try
+to talk yourself into adding a `FAST=1` flag, and read
+`test_verify_m1_has_no_skip_flag_for_the_expensive_rebuild_leg` before you do.
+
 ### M1-S4 — the number that agreed, and a `configured` that finally said `unchanged` (2026-08-16, role:DA + MLOps hat)
 
 **What was built.** A dbt project under `analytics/dbt/` building four marts —

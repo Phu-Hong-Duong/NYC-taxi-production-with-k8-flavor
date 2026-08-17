@@ -10,7 +10,7 @@ boards live in `analytics/metabase/boards/*.json`, this script converges Metabas
 onto them, and the same script re-reads the live instance to check the result.
 
 WHY THE STDLIB AND NOT `requests`. This is a $0, every-version-pinned program;
-adding an HTTP dependency to the runtime graph to POST eleven JSON documents
+adding an HTTP dependency to the runtime graph to POST seventeen JSON documents
 would be a dependency we then have to pin, scan and upgrade forever.
 
 IDEMPOTENCE IS BY NAME. Cards and dashboards are matched on their `name`, then
@@ -103,6 +103,16 @@ class Client:
             raise MetabaseError(f"{method} {path} -> HTTP {exc.code}: {detail}") from None
         except urllib.error.URLError as exc:
             raise MetabaseError(f"{method} {path} -> unreachable: {exc.reason}") from None
+        except OSError as exc:
+            # ConnectionResetError and friends are NOT URLError — they come
+            # straight up from the socket. Found by red-teaming verify-m1 with
+            # `kubectl scale deployment/metabase --replicas=0`: the node port
+            # still accepts and then resets, and this script answered with a
+            # 30-line Python traceback instead of a sentence. Worse, the raw
+            # exception blew past wait_for_health's retry loop, so a service that
+            # was merely restarting failed instantly instead of being waited for.
+            # A refusal that is not typed is a refusal nobody can act on.
+            raise MetabaseError(f"{method} {path} -> connection failed: {exc}") from None
         if not expect_json or not raw:
             return None
         return json.loads(raw)
@@ -118,6 +128,15 @@ class Client:
 
 
 def wait_for_health(client: Client, timeout_s: int = 600) -> None:
+    """Wait for the instance to answer — patiently when deploying, briefly when checking.
+
+    These are two different questions and they deserve two different budgets.
+    While CONVERGING (after a deploy), Metabase may still be migrating its app-db
+    and ten minutes of patience is correct. While VERIFYING, the service is
+    supposed to be up already: a gate that takes ten minutes to report a dead
+    service is a gate nobody waits for, and "it might come back" is not a thing a
+    gate is allowed to assume.
+    """
     deadline = time.time() + timeout_s
     last = ""
     while time.time() < deadline:
@@ -400,7 +419,7 @@ def main() -> int:
     try:
         env = load_env()
         client = Client(BASE_URL)
-        wait_for_health(client)
+        wait_for_health(client, timeout_s=60 if args.verify else 600)
         authenticate(client, env)
         if args.verify:
             return 1 if verify(client) else 0
