@@ -1,5 +1,196 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (aa) — M2-S5: the gate that checks the gate, watched failing four different ways
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), **role:MLOps**,
+one story. **M2-S5 COMPLETE — and with it, M2's last story.** `make verify-m2` is
+real (49 sub-checks, 9 sections, ~30 s, exit 0), `make verify-m2-redteam` proves
+it can go RED and come back, and the ◆ ritual fires: **Next: a FRESH REV session**
+(`automation/next_session.sh rev 120`), artifacts only, mandatory finding,
+re-derives ≥1 metric from raw predictions — which exist precisely so it can.
+
+### Staleness check of (z)'s Next — reality MATCHED, nothing to reconcile
+(z) claimed: cluster up 3/3 · MLflow holding `nyc-taxi-eta` v1 aliased
+`@champion` · `data/predictions/` with 12,140,456 rows + `predictions.json` ·
+analyst layer at 12 views, three reconciliations green · Postgres holding 5 marts
+incl. `error_segments` (1,151 rows) · Metabase 3 dashboards / 28 cards · tree
+clean on `main`. Every one held: `kubectl get nodes` → 3/3 Ready v1.36.1 (5h24m) ·
+`curl localhost:5000/health` → 200 · `localhost:3030/api/health` → 200 ·
+`get_model_version_by_alias` → version 1, run `3adee05a…` · `git status
+--short --branch` → `## main...origin/main` clean at `9d4af38`. Docker Desktop was
+running, so gotcha #34 did not fire — checked before anything relied on it.
+
+### Done (every leg with the command and what came back)
+
+- **`make verify-m2` is real and GREEN**: 9 sections, **49 sub-checks, 0 FAIL,
+  exit 0**, measured ~30 s. Sections: registry (8) · the gate replayed (9) ·
+  MLflow runs (7) · KPI-09/10 provenance (3) · predictions reconciliation (6) ·
+  the `error_segments` rollup (5) · the board (4) · the memo and its twin (5) ·
+  boundary law + root strays (2). Closing line verbatim:
+  `[verify-m2] GREEN — every M2 sub-check passed.`
+
+- **The refusal is checked by REPLAY, not by grep — and that is the story's best
+  idea.** The kickoff leg reads "the gate refusal transcript exists with both
+  numbers". A `grep -q REFUSE` satisfies that sentence and stays green forever
+  after somebody edits the bar. So §2 parses M2-S3's pasted transcripts out of
+  `docs/promotion_gate_m2.md` and feeds their numbers back through `gate.decide()`
+  **as it exists on disk now**:
+
+  ```
+  ok   replayed lightgbm-v1-hobbled-shuffled-target: 7.6667 vs 3.5090 min -> REFUSE (-118.49%), as the transcript records
+  ok   replayed lightgbm-v1: 3.2608 vs 3.5090 min -> PROMOTE (+7.07%), as the transcript records
+  ok   the gate REFUSES to judge on val (early stopping read it) — GateError, not a warning
+  ok   the gate REFUSES the flattering constant-median floor as the bar
+  ```
+
+  **Proved it bites, by doing it**: `min_improvement_pct: 2.0 → 0.5` in
+  `configs/train.yaml`, no other change → `[verify-m2] RED — 1 sub-check(s)
+  failed`, naming `the margin bar has been LOOSENED to 0.5% — that is a PO fork,
+  not an edit`, the other 48 still green. Reverted; `git diff configs/train.yaml`
+  empty; re-run GREEN. A config edit that touches no code, no model and no data
+  now turns the milestone gate red.
+
+  A detail worth keeping: while §2 burned, §1 kept printing `required >= 2.00%`,
+  because that number comes off the **version's own tag** — the bar as it stood at
+  promotion time. The registry remembers what the model was judged against after
+  the config has forgotten.
+
+- **`make verify-m2-redteam` — RED naming the leg, 38 others still counted, then
+  GREEN again.** It deletes the `@champion` alias (instant, exactly reversible,
+  invisible to anything not genuinely reading the registry), never a version, a
+  run or an artifact:
+
+  ```
+  models:/nyc-taxi-eta@champion -> version 1
+  alias @champion deleted — it no longer resolves
+    FAIL models:/nyc-taxi-eta@champion does not resolve (RestException) — nothing is champion
+    FAIL the registry check emitted 1 verdict(s), expected at least 7 — the check did not run
+    FAIL the predictions provenance check itself raised RestException: … alias champion not found.
+    FAIL the predictions provenance check emitted 2 verdict(s), expected at least 4 — the check did not run
+  [verify-m2] RED — 4 sub-check(s) failed.
+    ok   the gate exited 1 — RED, as it must be with no champion
+    ok   it NAMES the broken thing: models:/…@champion does not resolve
+    ok   38 sub-check(s) still ran and passed — the gate reports everything, not the first thing
+    ok   unaffected leg still green: error_segments is queryable
+    ok   unaffected leg still green: RAN against the marts warehouse
+    ok   unaffected leg still green: reproduced the memo's headline
+    ok   unaffected leg still green: is EMPTY — marts read model output
+  models:/nyc-taxi-eta@champion -> version 1 (restored)
+    ok   the gate is GREEN again (49 sub-checks, exit 0) — the drill left nothing behind
+  [verify-m2-redteam] PASSED
+  ```
+
+  The third assertion is the one people skip and the one that matters: a gate
+  that collapses to a single failure when one thing breaks has told you nothing
+  about the rest of the system. Restore is on an EXIT trap and is verified by
+  re-reading the registry, not assumed from the write.
+
+- **`expect_verdicts` earned itself on its first drill.** Each Python leg must
+  emit a minimum number of verdicts or the shortfall is itself a FAIL — M1's
+  "green light wired to no sensor" lesson applied one level up, to the checker.
+  With the alias gone the registry leg raised on check 1 and emitted 1 of the 7
+  verdicts it owes; the guard is what said so out loud. Sibling rule, smaller and
+  nastier: `consume` is always called through process substitution, never
+  `| consume`, which would run the counter in a subshell and discard every
+  failure it counted at the closing brace — red FAIL lines on screen, exit 0.
+  Pinned by `test_consume_is_never_called_through_a_pipe`.
+
+- **The gate re-fits NOTHING, by test.** No `make train`, no `make predictions`,
+  no registry mutator appears in the comment-stripped script
+  (`test_the_gate_never_refits_or_promotes_anything`,
+  `test_the_gate_mutates_no_registry_state`). Both scripts talk about those
+  commands constantly in prose, so the assertions match the INVOCATION and not
+  the word — gotcha #35's lesson, applied by default now.
+
+- **The cross-system checks, which are the ones worth having.** The mart's
+  whole-split row reproduces the evaluator to 4 dp with Postgres on one side and
+  `predictions.json` on the other (`test 3.2608 min / 81.480% over 5,950,708
+  rows` · `val 3.4760 / 79.693% over 6,189,748`) · the published rows are stamped
+  with the version that IS champion right now · re-scoring returns the champion's
+  own `gate_challenger_mae` · the memo's headline (`68.19%`) is the number
+  `scripts/error_memo_numbers.py` computes live, not one typed once.
+
+- **The root-stray leg is wider than the filename that prompted it.** The kickoff
+  asked for "no stray `_handoff_entry.md`"; (z) left an empty `marts.duckdb`
+  there, which was the fingerprint of gotcha #38 and would have been *hidden* by
+  a `.gitignore` entry. The check diffs the root against `git ls-files` plus a
+  named list of what a working clone really has, and names whatever is left. (It
+  also changed how this entry was written: the fragment file went nowhere near
+  the repo root.)
+
+- **Tests + lint.** `uv run pytest tests/unit -q` → **286 passed** (was 272 at
+  M2-S4; +14, all in the new `tests/unit/test_verify_m2.py`).
+  `ruff check src tests scripts pipelines` → `All checks passed!`. Two of the new
+  tests were watched FAILING on real content before they were fixed (a substring
+  collision that banned the drill from its own `delete_registered_model_alias`,
+  and a section anchor that matched the print format instead of the source), and
+  `test_every_python_leg_is_guarded_by_a_minimum_verdict_count` was red-teamed by
+  deleting one `expect_verdicts` line → `6 Python leg(s) but only 5 guard(s)`,
+  then restored.
+
+### Defects / Surprises
+- **gotcha #39 (new) — F-009 has an impostor, and the impostor is more common.**
+  The first draft of §1 reached MLflow with a bare `set_tracking_uri` and got
+  `Failed to download artifacts from path 'MLmodel'` — near enough to F-009's
+  message that the obvious conclusion was "F-009 also breaks `get_model_info`".
+  It does not. Our server does not proxy artifacts (gotcha #5), so a client
+  without the MinIO endpoint and credentials cannot read ANY artifact, and the
+  first one a model read touches is `MLmodel`. **Discriminator, one call:** under
+  F-009 `get_model_info` SUCCEEDS on the uri `load_model` fails on; without
+  credentials both fail, and so does any unrelated artifact of any unrelated run.
+  The rule: never talk to this MLflow with a bare `set_tracking_uri` — go through
+  `taxi_mlops.training.tracking.configure()`, which is also the only thing that
+  reads `.env`. **F-009's ledger row now carries the narrowing** (row NOT closed,
+  landing unchanged at M5) — the cost of getting this wrong is not a broken
+  script, it is M5 inheriting a workaround for a fault it does not have.
+- **The drill's RED output includes one raw exception line** (`the predictions
+  provenance check itself raised RestException: … alias champion not found`).
+  That is the leg's outer catch doing its job — the alias is genuinely gone and
+  the message names why — and the `expect_verdicts` guard adds the leg's name
+  beside it. Left as is: a cleaner message would mean special-casing the fault
+  the drill injects, which is how a gate learns to be reassuring.
+- **AWAITING_PO 2026-08-17-1 still unanswered**, Option B in effect by default:
+  `libgomp1` is not installed and the OpenMP shim re-execs on every training
+  invocation. Non-blocking and untouched by this story — `verify-m2` never
+  imports LightGBM, because it never fits anything.
+
+### Craft calls made inside scope (recorded, per the protocol)
+1. **A committed red-team SCRIPT rather than a pasted one-off transcript.** The
+   kickoff said "red-team it once ... both pasted". A script is the same evidence
+   plus a twin anyone can re-run, matching `marts-redteam` and `train-redteam`.
+   Verified undo: it is one file and one Makefile line.
+2. **The drill deletes the alias, not a version or a run.** A destructive
+   red-team is not a braver red-team; it is one you can only perform once.
+3. **Replaying the transcript through `decide()` instead of grepping it.** Costs
+   milliseconds, and it is the only version of the leg that notices a loosened
+   bar. Watched going red on a real edit (above).
+4. **The root-stray check computes strays instead of hunting one filename** —
+   `git ls-files` plus a small expected list. A filename-specific check would
+   have missed (z)'s `marts.duckdb`, and a `.gitignore` entry would have hidden
+   the bug it was a symptom of.
+5. **KPI-09/KPI-10 provenance is checked in the WAREHOUSE too**, not only via the
+   doc-contract tests the kickoff points at: the tests police documents, and the
+   place a well-meaning `avg(abs(...))` column would actually appear is Postgres.
+
+### Next (for the session after this one)
+**REV — the ◆ review of M2, in a FRESH session** (`automation/next_session.sh rev
+120`, fired by this story). Reality it will inherit, stated so it can be
+staleness-checked: cluster up 3/3 Ready · `models:/nyc-taxi-eta@champion` →
+version 1, run `3adee05a…`, signature + input example, gate tags intact (the
+red-team drill restored the alias and `make verify-m2` re-confirmed it GREEN
+afterwards) · `m2-modeling` holding 10 FINISHED runs including the marked hobbled
+one · `data/predictions/` with 12,140,456 rows + `predictions.json` · analyst
+layer 12 views, three reconciliations green · Postgres holding 5 marts ·
+Metabase 3 dashboards / 28 cards · **286 unit tests** · `make verify-m2` GREEN
+49/49 and `make verify-m2-redteam` PASSED · tree clean on `main` after this PR
+merges. REV's charter: artifacts only, no builder narrative before drafting
+findings, mandatory finding (a zero-finding review is itself a defect), and it
+**re-derives ≥1 metric from raw predictions** — `data/predictions/{val,test}/*.parquet`
+plus `predictions.json` exist for exactly that, and `marts.error_segments` gives
+it a second, independent path to the same numbers. REV exits to
+`automation/next_session.sh architect 120` for the M2 boundary.
+
 ## Session 2026-08-17 (z) — M2-S4: the error memo, its board, and a build broken by where somebody once stood
 
 ### State

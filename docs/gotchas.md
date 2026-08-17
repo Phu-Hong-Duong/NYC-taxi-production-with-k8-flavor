@@ -375,3 +375,27 @@ the seed line are earned by THIS project.
     the cache before the code — and prefer deleting the cache to teaching every
     caller to stand in the right place. Sibling of gotcha #33's order law: both
     are cases where a step's correctness depends on something outside the step.
+
+39. **Two completely different faults print the same MLflow error, and one of
+    them has a famous name.** Building M2-S5's registry leg, a first draft did
+    `mlflow.set_tracking_uri("http://localhost:5000")` and then
+    `mlflow.models.get_model_info("models:/nyc-taxi-eta@champion")`. It failed
+    with `Failed to download artifacts from path 'MLmodel'` — which is the same
+    shape as **F-009**, the known MLflow 3 defect where a registry-uri load looks
+    under the run's artifact prefix and finds nothing. The obvious conclusion was
+    that F-009 is worse than recorded and also breaks `get_model_info`. It does
+    not. The real cause was that our MLflow server does **not proxy artifacts**
+    (`proxiedArtifactStorage: false`, gotcha #5): the CLIENT fetches from MinIO
+    itself, so without the S3 endpoint and credentials that
+    `taxi_mlops.training.tracking.configure()` sets from `.env`, every artifact
+    read fails — and the FIRST artifact any model read touches is `MLmodel`. Same
+    message, different disease: F-009 is "looked in the wrong place", this is
+    "not allowed to look anywhere". The tell is which calls fail: under F-009
+    `get_model_info` SUCCEEDS while `load_model` fails on the same uri; with
+    missing credentials both fail, and so does reading any other artifact of any
+    other run. The rule that falls out: **never talk to this MLflow with a bare
+    `set_tracking_uri` — go through `tracking.configure()`**, which is also the
+    only thing that reads the credentials out of the gitignored `.env`. The cost
+    of getting this wrong is not a broken script; it is a session "confirming" a
+    finding that is not there, and M5 inherits a workaround for a fault it does
+    not have.

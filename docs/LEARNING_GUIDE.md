@@ -9,6 +9,112 @@ months from now.
 
 ## M2
 
+### M2-S5 — the gate that checks the gate, and the four sub-checks that had to be watched failing (2026-08-17, role:MLOps)
+
+**What was built.** `make verify-m2` — 49 sub-checks across 9 sections, ~30
+seconds, exit 0 — plus `make verify-m2-redteam`, which breaks it on purpose and
+watches the light change. Together they are the M2 milestone's answer to "did
+this actually happen?", and they are the last artifact of the milestone: the
+◆ exit hands the program to a fresh REV session next.
+
+Nine sections: the champion resolves through its alias and carries a signature,
+an input example and the verdict it was promoted on · M2-S3's transcripts still
+produce the same verdicts through today's gate code · the MLflow experiment
+holds every contender including the refused one · KPI-09/KPI-10 exist nowhere
+but the evaluator · the predictions reconcile row for row and re-score to the
+champion's own promotion tag · the `error_segments` mart's whole-split row
+reproduces the evaluator to four decimals · the board renders and a card RUNS ·
+the memo links the board and its twin script reproduces the headline live · the
+boundary-law grep is empty and the repo root holds no stray.
+
+**Why this way.** Three decisions carried the story, and each is a refusal.
+
+*The gate re-fits nothing.* The obvious way to check "the model was promoted
+honestly" is to run `make train` again. That would mint MLflow runs on every
+verification and judge a model the registry has never heard of — a gate with
+side effects on the thing it is checking. The champion is a registered
+artifact; this gate reads it. Pinned by a test that greps the comment-stripped
+script for the *invocation*, not the words (the script talks about `make train`
+constantly in its prose).
+
+*The refusal is checked by replay, not by grep.* The kickoff's leg reads "the
+gate refusal transcript exists with both numbers". A `grep -q REFUSE` satisfies
+that sentence exactly — and stays green forever after somebody edits
+`min_improvement_pct: 2.0` down to `0.5`, which is the one change the
+constitution reserves for a PO fork. So the leg parses the pasted transcripts
+out of `docs/promotion_gate_m2.md` and feeds their numbers back through
+`gate.decide()` as it exists on disk *now*. 7.6667 against 3.5090 must still
+come back REFUSE; 3.2608 against 3.5090 must still come back PROMOTE; and the
+gate must still *raise* when handed val metrics or the flattering
+constant-median floor. The document is evidence about a past run; the replay is
+evidence about today's bar. Only the second one notices that the bar moved.
+
+*Every leg must prove it ran.* M1's gate shipped with a leg that grepped for a
+string the script never printed, reported "0 output(s) byte-identical" and
+passed — a green light wired to no sensor. M2 applies that lesson one level up:
+each Python leg must emit a minimum number of verdicts, or the shortfall is
+itself a failure. This is not theoretical. In the red-team drill the registry
+leg lost its alias, raised on the first check and emitted 1 verdict of the 7 it
+owes — the guard is the thing that said so. The sibling rule is smaller and
+nastier: `consume` is invoked through process substitution and never through a
+pipe, because `… | consume` runs the counter in a subshell and discards every
+failure it counted at the closing brace. A gate that prints red FAIL lines and
+exits 0 is worse than no gate.
+
+**The concept underneath.** *A verification is a claim, and claims are only
+worth the falsification you have watched.* The red-team drill is the whole
+point of this story, not a garnish on it. It deletes the `@champion` alias —
+instant, exactly reversible, and invisible to anything that is not genuinely
+reading the registry — then asserts three things at once: the gate goes RED,
+it *names* the alias, and **38 other sub-checks still run and pass**. That
+third assertion is the one people skip, and it is the one that distinguishes a
+suite from a tripwire: a gate that collapses to a single failure when one thing
+breaks has told you nothing about the rest of the system. Then it restores from
+an EXIT trap and demands GREEN 49/49, because a drill that leaves damage is a
+drill nobody runs twice.
+
+The same instinct made the drill delete the *pointer* rather than the model.
+Version 1, its run, its signature and its artifacts are untouched from start to
+finish. A destructive red-team is not a braver red-team; it is one you can only
+perform once.
+
+**One near-miss worth more than the code.** The first draft of the registry leg
+reached MLflow with a bare `set_tracking_uri` and got
+`Failed to download artifacts from path 'MLmodel'` — which is very nearly
+F-009's error message, the known MLflow 3 defect M2-S4 had just documented. The
+obvious conclusion was that F-009 is worse than recorded. It is not: our server
+does not proxy artifacts, so a client without MinIO credentials cannot read any
+artifact at all, and the first one a model read touches happens to be `MLmodel`.
+Two diseases, one symptom, and the famous one is the wrong answer. The
+discriminator costs one call — under F-009 `get_model_info` *succeeds* on the
+uri that `load_model` fails on; without credentials both fail. Now gotcha #39,
+and the F-009 ledger row carries the narrowing, because the cost of getting this
+wrong is not a broken script: it is M5 inheriting a workaround for a fault it
+does not have.
+
+**What to look at.** `scripts/verify_m2.sh` §2 — the replay leg, the densest
+thirty lines in the story · `scripts/verify_m2_redteam.sh`'s `trap restore EXIT`
+and the "unaffected leg still green" assertions · `tests/unit/test_verify_m2.py`,
+which is the answer to "who checks the checker" · gotcha #39 next to F-009's
+ledger row, read as a pair.
+
+**What to try yourself.** Open `configs/train.yaml`, change
+`min_improvement_pct` from `2.0` to `0.5`, and run `make verify-m2`. Watch
+section 2 go red on a config edit that touched no code, no model and no data —
+that is the difference between checking a document and checking a bar. (This
+was run, not imagined: `RED — 1 sub-check(s) failed`, the other 48 still green.
+Notice what section 1 does while section 2 burns: it keeps printing
+`required >= 2.00%`, because that number comes off the champion **version's own
+tag** — the bar as it stood at promotion time. The registry remembers what the
+model was judged against even after the config forgets, which is exactly why
+the verdict travels on the version.) Put it
+back, then run `make verify-m2-redteam` and read the RED transcript from the
+top: notice which sections stayed green, and ask yourself for each one whether
+it stayed green because it is genuinely independent of the registry, or because
+it is not really looking.
+
+---
+
 ### M2-S4 — a segment number is only worth the rollup that checks it (2026-08-17, role:DA)
 
 **What was built.** The model stopped being a pair of headline numbers. `make

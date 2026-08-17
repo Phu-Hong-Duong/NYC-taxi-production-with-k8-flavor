@@ -446,6 +446,51 @@ can never disagree (the port-family twins lesson, applied before it bit).
   last run, so one hand-run from the repo root breaks every later build with an
   error naming a file that plainly exists. Costs nothing here (5 models).
 
+## The M2 gate (M2-S5) — what it asks, and the two things it refuses to do
+- **`make verify-m2` is 49 sub-checks in 9 sections, ~30s, and it re-fits
+  NOTHING.** No `make train`, no `make predictions`, no registry write — pinned
+  by `tests/unit/test_verify_m2.py`. The champion is a REGISTERED artifact; the
+  gate's job is to check what was promoted, not to promote again. A gate with
+  side effects on the registry it checks is not a gate. There is also **no skip
+  flag** (M1's rule, inherited): a gate with a fast mode is a gate that runs in
+  fast mode.
+- **The refusal is checked by REPLAY, not by grep.** "The transcript contains
+  the word REFUSE" stays green after somebody loosens `configs/train.yaml: gate`
+  — the exact change the constitution reserves for a PO fork. So the gate parses
+  M2-S3's pasted transcripts out of `docs/promotion_gate_m2.md` and feeds their
+  numbers back through `gate.decide()` **as it exists on disk right now**:
+  7.6667 vs 3.5090 must still come back REFUSE (−118.49%), 3.2608 vs 3.5090
+  must still come back PROMOTE (+7.07%), and the gate must still raise on val
+  metrics and on the flattering constant-median floor. A loosened bar is a RED
+  gate, not a diff nobody read.
+- **Every leg must prove it RAN.** M1 taught that a check wired to no sensor is
+  a green light; M2 applies that one level up — each Python leg is required to
+  emit a minimum number of verdicts (`expect_verdicts`), so a leg that dies on
+  import FAILS instead of contributing zero silent passes. It earned itself in
+  the red-team drill: with the alias gone the registry leg managed 1 verdict of
+  the 7 it owes, and the guard is what said so. `consume` is called through
+  process substitution and never a pipe — `| consume` would count the failures
+  in a subshell and throw them away at the closing brace.
+- **The cross-system checks are the ones worth having**: the mart's whole-split
+  `overall` row must reproduce the evaluator's KPI-09/KPI-10 to 4 dp (Postgres
+  on one side, `predictions.json` on the other) · the published rows must be
+  stamped with the version that IS champion right now · re-scoring must return
+  the champion's own `gate_challenger_mae` tag · the memo's headline number must
+  equal what `scripts/error_memo_numbers.py` computes live.
+- **`make verify-m2-redteam` breaks the POINTER, never the model.** It deletes
+  the `@champion` alias (instant, exactly reversible, invisible to anything not
+  actually reading the registry), asserts the gate goes RED **naming** it while
+  38 other sub-checks still pass, then restores from an EXIT trap and asserts
+  GREEN 49/49. Version 1, its run, its signature and its artifacts are untouched
+  throughout. This is the only place in the repo that deletes registry state;
+  `registry.py`'s no-delete property is intact.
+- **The root-stray leg is wider than the filename that prompted it.** The
+  kickoff asked for "no stray `_handoff_entry.md` at the repo root"; session (z)
+  then left an empty `marts.duckdb` there, which was the FINGERPRINT of gotcha
+  #38 and would have been hidden by a `.gitignore` entry. The check diffs the
+  root against `git ls-files` plus a named list of what a working clone really
+  has, and names whatever is left.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -490,7 +535,9 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Score the champion, publish rows (M2-S4) | `make predictions` (`python -m taxi_mlops.training predict`; `--no-write` prints the numbers and publishes nothing) | VERIFIED 2026-08-17 (M2-S4): resolved `models:/nyc-taxi-eta@champion` → version 1, run `3adee05a…`, 500 trees, features matched the config; re-scored **3.2608** on test against the version's own `gate_challenger_mae` tag → `MATCH — the published rows describe the model the gate promoted`; wrote 6,189,748 + 5,950,708 rows + `predictions.json`. Registry untouched (it registers nothing). Needs the F-009 resolution step to load at all |
 | Reprint every number in the error memo | `uv run python scripts/error_memo_numbers.py [section…]` | VERIFIED 2026-08-17 (M2-S4): all 7 sections reproduce `docs/error_memo_m2.md` from `marts.error_segments` + the `predictions` view — and caught 4 last-digit rounding slips on its first run, which were fixed in the memo |
 | Error-segment board (M2-S4) | `make boards` (same path as M1-S5; `--verify` is the read-only twin) | VERIFIED 2026-08-17 (M2-S4): `Error segments (M2)` created with **11 cards**, every card citing a KPI id and querying the `marts` warehouse; `--verify` green on all 3 dashboards incl. `card 'KPI-13 · what the booster buys, by hour of day (test)' RAN and returned 24 row(s)` and `no card claims KPI-09/KPI-10` |
-| Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
+| Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5): 9 sections, **49 sub-checks GREEN, exit 0, ~30s**. It re-reads and re-reconciles, it NEVER re-fits: no `make train`, no `make predictions`, no registry write (pinned by tests) — a gate with side effects on the registry it checks is not a gate |
+| Prove the M2 gate can go RED | `make verify-m2-redteam` (`bash scripts/verify_m2_redteam.sh`) | VERIFIED 2026-08-17 (M2-S5): deletes the `@champion` alias → **RED, exit 1, 4 FAILs**, the first naming `models:/nyc-taxi-eta@champion does not resolve`, **38 sub-checks still ran and passed**; alias restored by EXIT trap → **GREEN 49/49**. Deletes only the POINTER — no version, no run, no artifact |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2 live; M3+ pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |
 | Chain kill switch | `touch automation/STOP` | VERIFIED 2026-08-16 (M0-S4 drill): scheduler refuses, exit 0, daily counter unmoved, no log created, no residue after `rm`. The harder half — STOP written AFTER a session is scheduled, and the daily cap — is covered by `tests/unit/test_chain_script.py` against a sandboxed scheduler with a fake `claude` |
@@ -529,4 +576,7 @@ machine: repo-in-WSL2-fs (#1), .wslconfig memory (#2), Kaspersky TLS (#9).
 New-in-v2: AutoML leaderboard (#15), dependency quarantine (#16), Optuna study
 namespaces (#17), REV freshness (#18). Newest: Docker Desktop owns `kubectl`'s
 symlink (#34), a test that parses a shell array truncated it at the first `)` in
-a COMMENT and the survivors ran as commands (#35).
+a COMMENT and the survivors ran as commands (#35), dbt's partial-parse cache
+makes a build a function of where somebody once stood (#38), and two different
+MLflow faults print the same `MLmodel` error — one is F-009, the other is a
+client without MinIO credentials (#39).
