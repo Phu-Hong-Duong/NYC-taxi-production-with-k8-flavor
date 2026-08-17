@@ -1,5 +1,110 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (ab) — M2 REVIEW: every number re-derived, and a bar with less room than it says
+
+### State
+on-track — **REV (Staff ML Reviewer), Opus 5 (`claude-opus-5`, stated first line),
+FRESH session, zero builder context.** Reviewed **M2** (learned WHICH milestone
+from HANDOFF (aa)'s first lines, then stopped reading it). Artifacts first, in
+this order: `configs/train.yaml` → `gate.py` / `evaluate.py` / `baselines.py` /
+`registry.py` / `run.py` / `model.py` / `datasets.py` / `score.py` /
+`predictions.py` / `quote_time.py` → `verify_m2.sh` → `error_segments.sql` → the
+live registry → the published prediction rows. The builder's narrative
+(`docs/promotion_gate_m2.md`, `docs/error_memo_m2.md`, HANDOFF (aa)) was read
+**last, after the findings were drafted** — anti-anchoring, per charter.
+**Verdict: APPROVE WITH CONDITIONS.** Findings **F-010 (S2) · F-011 (S2) ·
+F-012 (S3)**. **No S1 → no AWAITING_PO entry, no path parks, the chain continues.**
+
+### Re-derivation (charter obligation): the claims were recomputed from the rows, not read from the transcript
+Every figure below came out of `data/predictions/*/*.parquet` in DuckDB, in this
+session, with no `taxi_mlops` code in the path — a second instrument on the same
+evidence. Claimed → measured:
+
+```
+test   KPI-09  3.2608  ->  3.260828400795591   (run metric 3.260828400795599)
+test   KPI-10 81.480%  ->  81.47966594899296%
+floor  KPI-09  3.5090  ->  3.5089986379210787  (run metric 3.5089986379211795)
+floor  KPI-10 80.322%  ->  80.32166928708315%
+margin  +7.07%  ->  +7.072394797865103%
+unseen  1.4786% -> 1.4786307780519563%   ·  max prediction 92.155 -> 92.15540763336347
+```
+
+The memo's segment claims reproduce the same way: coverage split **98.521% /
+1.479%**, margins **+1.883% / +68.193%**, fallback floor MAE **18.5704**, and
+**75.45%** of the champion's total error reduction bought on the 1.48% —
+independently confirming the memo's headline. Also reproduced: the 100–120 min
+band (**970** trips, **0.000%** KPI-12, mean quote **47.93** vs mean truth
+**107.92**), the 1–5 min band as the one big segment where the floor wins
+(**−0.885%** test, **−0.789%** val), and airports (**8.817%** of trips,
+**59.988%** KPI-12, **1.90×** the non-airport MAE 3.0217 → 5.734).
+`uv run python scripts/error_memo_numbers.py` over **all** sections: green.
+`make verify-m2`, re-run by the approver: **GREEN, 49/49, exit 0** — including
+`re-scoring the champion on test reproduced its promotion number exactly (3.2608
+min KPI-09)` and both whole-split rollups to 4 dp.
+**Nothing was found overstated. The M2 numbers are what M2 says they are.**
+
+### The finding that took work — F-010, and it is a measurement, not an opinion
+The gate document argues the 2.00% bar has headroom because the observed margin
+is 7.07%. M2-S4's own memo established that **75.4% of that margin is bought on
+the 1.48% of rows where the floor gives up and guesses 11.15 minutes** — so the
+obvious question is what the bar looks like against a floor that gives up less.
+Measured: take the SAME floor and add one backoff level — the train median of
+the row's (PU, DO) — fitted on the same 43,987,422 train rows, 46,938 OD cells,
+no new feature, no new model, no serving change. **98.9% of the unseen rows
+(87,008 of 87,989) resolve to a real OD cell.** On test:
+
+```
+floor  3.5090 -> 3.3518 min      floor KPI-10  80.322% -> 80.733%
+margin  +7.07% -> +2.71%         against a bar of 2.00%
+```
+
+The headroom is **1.35×**, not 3.5×. v1 still clears the bar, so **nothing is
+rolled back and this is not fork-class** — but "a bar and not a rubber stamp" is
+a claim about the distance to the bar, and the distance is a quarter of what the
+document says once the floor is as good as a second `GROUP BY` makes it. M3's
+tuned challenger is judged against that same bar. `configs/train.yaml: baselines`
+anticipated the mechanism and argued it as EDA comparability; the consequence for
+the GATE was never measured.
+
+### The other two, in one line each
+- **F-011 (S2)** — `gate.decide()` reads the challenger and the floor and never
+  the registry, and `registry.promote()` moves `@champion` on any pass. The
+  condition named "KPI-10 does not regress" measures against the **floor**
+  (gate.py:163), not against what is serving. In M3's units: a challenger at
+  **3.40** min (worse than v1's 3.2608) observes **+3.11%** over the floor and
+  passes; at 80.5% KPI-10 it clears the floor's 80.322% and passes — the alias
+  moves and ~58,000 more test-month riders are quoted wrongly than before. M3 is
+  the first milestone with an incumbent; M5 deploys the alias; M7 retrains into it.
+- **F-012 (S3)** — `score.py` refuses to publish rows whose champion MAE does not
+  match `gate_challenger_mae`, and never checks the re-fitted floor against
+  `gate_floor_mae` sitting beside it. Every `kpi_13_margin_vs_floor_pct` in the
+  mart, on the board and in the memo rests on that unchecked half. Currently
+  consistent (3.5089986 vs the tag's 3.5090) — a latent gap, not a live defect.
+
+### What the review found SOUND, said plainly (a review that only lists faults is not a review)
+`gate.decide` is pure and raises rather than warns on the two comparisons that
+would be meaningless (val metrics, the flattering floor) — verified by reading,
+and both raises are replayed live by `verify-m2` §2 against the code on disk.
+The registry module has no delete path. The champion's version carries its
+verdict, and the numbers on it re-derive. `verify_m2.sh`'s `expect_verdicts`
+guard and its `consume < <(...)` process substitution are both correct and both
+pinned by tests — a leg that dies on import fails rather than contributing zero
+silent passes. `EXCLUSIONS` refuses at the config end AND the matrix end. The
+`error_segments` mart aggregates the evaluator's own published rows and reconciles
+its whole-split row back to the evaluator, which is what licenses it to hold
+model-error numbers at all. **The published claims and the artifacts agree
+everywhere I could check, to more digits than anyone quoted.**
+
+### Next (for the session after this one)
+**ARCH boundary session, scheduled: `automation/next_session.sh architect 120`.**
+Three findings await disposition, none closed by REV (charter: REV closes
+nothing). All three land M3 and all three touch M3's kickoff directly: F-010 the
+bar the bake-off is judged against, F-011 the alias move that first has something
+to demote, F-012 the floor half of the published margins. None is closable by
+prose — this register's own F-008 states the precedent. Also still open at the
+M2 boundary and not REV's to disposition: F-001 (PO's hands), F-007(b), F-008,
+F-009, D-001/D-003/D-004.
+
 ## Session 2026-08-17 (aa) — M2-S5: the gate that checks the gate, watched failing four different ways
 
 ### State

@@ -9,6 +9,56 @@ months from now.
 
 ## M2
 
+### M2 review — the number nobody computed was the distance to the bar (2026-08-17, role:REV)
+
+**What was built.** No code — a review. A fresh session with no builder context
+re-derived M2's published numbers from the committed rows in a second engine, then
+filed three findings (F-010 S2, F-011 S2, F-012 S3) and an
+approve-with-conditions sign-off.
+
+**Why this way.** The charter's order is load-bearing and it feels wrong while you
+obey it: read the code, the configs and the data BEFORE the memo that explains
+them. The memos here are unusually good, and that is exactly the hazard — an
+explanation you have already read is a hypothesis you will spend the session
+confirming. Reading `gate.py` cold is what surfaced that the condition named "does
+not regress" is measured against the floor rather than against the model that is
+serving (F-011); reading the memo first, where the condition is described in prose
+that sounds right, probably would not have.
+
+**The concept underneath.** *Verifying a claim is not the same as challenging it,
+and the second is the one that pays.* Every number M2 published re-derived
+exactly — KPI-09 to thirteen significant figures, the memo's seven sections, the
+segment tables. Zero defects. If verification were the job, the review would have
+ended there and found nothing, which the charter correctly calls a defect in the
+review. The finding that mattered came from asking a question the artifacts did not
+answer: the gate says its 2.00% bar has headroom because the margin is 7.07%, and
+the memo says three quarters of that 7.07% is bought on the 1.48% of rows where the
+floor gives up and guesses the global median. Those two facts sit in different
+documents and are individually true. Put together, they ask: what is the margin
+against a floor that gives up less? One extra backoff level — the (PU, DO) median,
+same train rows, no new feature — resolves 98.9% of the abandoned rows and takes
+the floor from 3.5090 to 3.3518, and the margin from **+7.07% to +2.71%** against a
+bar of 2.00%. Nothing was wrong. The distance to the bar was just four times
+smaller than the argument for the bar assumed, and no artifact was capable of
+saying so, because no artifact compared the floor to a better floor. *A baseline is
+the load-bearing number in a promotion gate, and it is the one thing nobody
+red-teams — the red team is always pointed at the model.*
+
+**What to look at.** `src/taxi_mlops/training/gate.py:163` — read the condition's
+name and then its arithmetic, in that order · `configs/train.yaml: baselines`,
+which anticipates the deeper hierarchy and argues it as an EDA-comparability
+question, never as a gate question · `docs/error_memo_m2.md` §1 next to
+`docs/promotion_gate_m2.md` §2 — two true documents whose product is a third thing
+· `ledgers/findings.md` F-010, whose closing conditions deliberately allow the
+current floor to WIN, provided the bar is re-argued against 2.71%.
+
+**What to try yourself.** Take any gate in any system and re-run its verdict
+against a bar made one increment stronger by the cheapest honest means available —
+not a better model, a better baseline. Then ask which side of that number your
+project has been quoting. Second exercise, thirty seconds: read
+`registry.promote()` and answer "what stops this from replacing a good champion
+with a worse one?" before grepping for the answer. The grep is empty.
+
 ### M2-S5 — the gate that checks the gate, and the four sub-checks that had to be watched failing (2026-08-17, role:MLOps)
 
 **What was built.** `make verify-m2` — 49 sub-checks across 9 sections, ~30
