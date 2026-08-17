@@ -58,7 +58,7 @@ verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, exp
 	@bash scripts/verify_m2_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
-.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune verify-m3
+.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune tune-resume-drill automl-refit verify-m3
 zones: ## derive the 263 TLC zone centroids from the sha256-pinned shapefile (M3-S2; --refresh re-downloads)
 	@uv run python scripts/derive_zone_centroids.py $(ZONES_ARGS)
 ablation: ## artisan track: one feature GROUP per experiment on a 15% sample, val only, runs in m3-artisan (M3-S3)
@@ -69,10 +69,14 @@ gate-redteam: ## prove the gate refuses a challenger that beats the FLOOR and is
 	@uv run python scripts/gate_redteam_incumbent.py
 predictions-redteam: ## prove a floor fitted on the wrong window cannot be published (M3-S1, F-012)
 	@bash scripts/predictions_redteam.sh
-automl: ## FLAML scout under configs/automl.yaml time budget -> scout report
-	@echo "TODO(M3): python -m taxi_mlops.tuning scout"
-tune: ## Optuna study (Postgres-backed, resumable) centered on scout winner
-	@echo "TODO(M3): python -m taxi_mlops.tuning study"
+automl: ## FLAML scout under configs/automl.yaml time budget -> scout verdict (family + starting params); every number scout-internal
+	@uv run python scripts/automl_scout.py $(AUTOML_ARGS)
+tune: ## Optuna sniper: TPE + MedianPruner, study in the one Postgres, namespaced m3, resumable (M3-S4)
+	@uv run python scripts/optuna_sniper.py $(TUNE_ARGS)
+tune-resume-drill: ## prove the study outlives its process: kill -9 mid-run, re-run the same command, trial count continues
+	@uv run python scripts/sniper_resume_drill.py $(DRILL_ARGS)
+automl-refit: ## refit the sniper's winner on the FULL train months through the one evaluator (DR-05; nothing promotes)
+	@uv run python scripts/automl_refit.py $(REFIT_ARGS)
 verify-m3: ## dossier+ablation+leakage red-team; kill/resume; >=1 pruned trial; 5 gate verdicts from our evaluator
 	@echo "TODO(M3)"
 

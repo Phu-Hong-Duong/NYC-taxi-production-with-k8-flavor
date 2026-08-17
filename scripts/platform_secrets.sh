@@ -81,7 +81,8 @@ fi
 # key gets the login-safe generator instead — see gen_login_password).
 ADDITIVE=(MARTS_DB_USER=marts MARTS_DB_PASSWORD=
           METABASE_DB_USER=metabase METABASE_DB_PASSWORD=
-          METABASE_ADMIN_EMAIL=mlops@crosstown.local METABASE_ADMIN_PASSWORD=)
+          METABASE_ADMIN_EMAIL=mlops@crosstown.local METABASE_ADMIN_PASSWORD=
+          OPTUNA_DB_USER=optuna OPTUNA_DB_PASSWORD=)
 for spec in "${ADDITIVE[@]}"; do
   key="${spec%%=*}"; literal="${spec#*=}"
   if ! grep -q "^${key}=" "$ENV_FILE"; then
@@ -107,7 +108,8 @@ REQUIRED=(MINIO_ROOT_USER MINIO_ROOT_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCES
           POSTGRES_PASSWORD MLFLOW_DB_USER MLFLOW_DB_PASSWORD
           MARTS_DB_USER MARTS_DB_PASSWORD
           METABASE_DB_USER METABASE_DB_PASSWORD
-          METABASE_ADMIN_EMAIL METABASE_ADMIN_PASSWORD)
+          METABASE_ADMIN_EMAIL METABASE_ADMIN_PASSWORD
+          OPTUNA_DB_USER OPTUNA_DB_PASSWORD)
 missing=()
 for k in "${REQUIRED[@]}"; do
   [[ -n "${!k:-}" ]] || missing+=("$k")
