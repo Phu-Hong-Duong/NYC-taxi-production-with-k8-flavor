@@ -399,3 +399,46 @@ the seed line are earned by THIS project.
     of getting this wrong is not a broken script; it is a session "confirming" a
     finding that is not there, and M5 inherits a workaround for a fault it does
     not have.
+
+40. **A test that greps source code cannot tell code from the comment warning
+    about that code — and it will fail on its own documentation first.** M3-S2
+    wrote a guard that the zone-centroid script must never hardcode the
+    projection: `assert "2263" not in SCRIPT.read_text()`. It went red
+    immediately, on the script's own header, which spends three lines arguing
+    that hardcoding `EPSG:2263` would be a second definition of the projection
+    one directory from the first. The guard was right about the danger and wrong
+    about where to look: the CRS genuinely IS read from the `.prj` inside the
+    zip, and the only occurrence of the forbidden string was the sentence
+    explaining why. Tempting bad fixes, both of which make the repo worse:
+    delete the explanation, or weaken the assertion to a pattern the prose
+    happens to dodge. The right fix is to look at CODE — `ast.parse`, collect
+    the docstring nodes by identity, then check the remaining `ast.Constant`
+    values for the string and the integer. Sibling of #35 (a test that parsed a
+    shell array truncated it at the first `)` in a COMMENT): both are the same
+    error, which is treating a source file as text when the claim is about
+    semantics. General form: **if a check is about what the program DOES, read
+    the program, not the file.** A check that reads documentation as a violation
+    teaches the next person to stop documenting, which costs more than the check
+    was ever worth.
+
+41. **A sha256 pin and `.gitattributes: * text=auto eol=lf` are enemies, and
+    the pin loses silently on somebody else's machine.** M3-S2 committed two
+    externally-published TLC artifacts and pinned their digests. `git add`
+    printed one warning — *"CRLF will be replaced by LF the next time Git
+    touches it"* — which is easy to read as cosmetic. It is not: TLC serves
+    `taxi_zone_lookup.csv` with CRLF, this repo's `.gitattributes` normalises
+    every text file to LF, so the blob git actually stored was **12,065 bytes,
+    sha256 `5e8f5ff1…`** while the manifest pinned the bytes on disk —
+    **12,331, `1a99e105…`**. Nothing fails locally, because the working copy is
+    still the file that was downloaded. It fails on the FIRST fresh clone —
+    i.e. in CI, or for the next person — where the pin check compares against a
+    file git rewrote. The tell before you push:
+    `git cat-file -p :<path> | sha256sum` compares the *stored blob* against the
+    pin, which is the thing a clone will actually get; `sha256sum <path>` does
+    not and will happily agree with itself. Fix is one line —
+    `data/reference/** -text` — and the general form is: **anything whose bytes
+    are the point must be marked binary, whatever its file extension says.** A
+    `.csv` that is really a pinned artifact is not text to git's purposes.
+    Sibling of #11 (the CRLF trap class) and of #33: a verification step must
+    compare against what the consumer will receive, not against the copy the
+    verifier happens to be holding.

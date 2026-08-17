@@ -96,6 +96,8 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | scikit-learn | 1.9.0 | 2026-08-17 | `uv add scikit-learn` (M2-S2). Not used by v1's model; it is a declared dep because its wheel vendors the `libgomp` the OpenMP shim borrows (gotcha #37) — an accidental dependency made explicit |
 | boto3 / botocore | 1.43.72 | 2026-08-17 | `uv add boto3` (M2-S2). Required because the tracking server does NOT proxy artifacts (`proxiedArtifactStorage: false`): the CLIENT writes to MinIO itself — gotcha #5 |
 | scipy | 1.18.0 | 2026-08-17 | transitive via scikit-learn (M2-S2) |
+| pyshp | **3.1.6** | 2026-08-17 | `uv add pyshp` (M3-S2). Pure-Python shapefile reader — zero transitive deps, which is why it beat geopandas for one lookup table |
+| pyproj | **3.7.2** | 2026-08-17 | `uv add pyproj` (M3-S2). Does the ESRI-WKT → WGS84 transform for the zone centroids. **Checked at add time: pandas stayed 3.0.5 and numpy 2.5.2** — gotcha #36's silent-downgrade shape did NOT occur (3 packages touched, one of them the project itself) |
 | (FLAML/Optuna rows land at their milestones) | | | |
 
 ## The data contract (M1-S1) — where the rules actually live
@@ -491,6 +493,63 @@ can never disagree (the port-family twins lesson, applied before it bit).
   root against `git ls-files` plus a named list of what a working clone really
   has, and names whatever is left.
 
+## The dossier, the zone centroids and the Design Review (M3-S2) — what M3 gets to build from
+- **`make zones` is the whole path**: sha256-pinned TLC shapefile → 263 area-weighted
+  centroids → `data/reference/taxi_zone_centroids.csv` (committed, 263 rows). It is
+  what makes any *quote-time* distance possible: 2019 TLC files carry zone ids, not
+  coordinates, so every community distance/bearing idea is untransferable without it.
+- **The CRS is READ from the .prj inside the zip, never hardcoded** — pinned by a test
+  that parses the AST so the file's own prose about not hardcoding `EPSG:2263` does not
+  trip it. Centroids are area-weighted in the projected plane (feet) and transformed
+  after; a centroid taken in degrees is distorted by the cos(latitude) scaling.
+  `Shape_Area`/`Shape_Leng` in the shipped `.dbf` are IGNORED — read live they carry
+  `0.00078` for a zone whose own coordinates are in feet, i.e. computed in some other CRS.
+- **Zones 264/265 get NO row, deliberately.** They are TLC's "Unknown" — not places —
+  and 264→264 is the largest single OD "route" in the data. Measured share with no
+  geometry: train **1.2462%** · val **1.0113%** · test **1.0753%**. Every spatial feature
+  owes them a named, tested fallback (DR-04 condition 1), because the ~1.48% fallback
+  rows are where 75.4% of the champion's advantage already lives.
+- **F-007(b) CLOSED by measurement, not by assumption** (Design Review **DR-04**):
+  `trip_distance` stays excluded; the **zone-centroid haversine is the quote-time
+  substitute**. Over 43,439,267 train rows the meter's driven distance correlates with
+  the target at **0.8068** (reproducing the EDA's independent 0.8066) and the centroid
+  straight line at **0.7873** — the legal feature keeps **97.6%** of the forbidden one's
+  power. Centroid vs meter distance `r` = **0.9661**; straight-line ≤ driven on 81.662%;
+  median circuity **1.2952**. Circuity itself is REFUSED as a feature — its numerator is
+  the excluded column.
+- **The dossier holds 21 candidates** (`docs/feature_dossier.md`), harvested live via
+  `curl` + `gh api` (F-001: WebFetch is still off the allowlist). Two carry verdicts
+  already, both because a number exists: the community's **#1 lesson — the `log1p`
+  target — was MEASURED AND REJECTED at M2-S2** (worse on both splits; our gate is MAE
+  in minutes and `l1` minimises exactly that, whereas the competition's metric was
+  RMSLE), and row 7 carries this session's measurement. **PCA rotation and KMeans
+  place-clusters are refused with a reason**: TLC zones already ARE the clusters, drawn
+  by people who know the city and stable across years.
+- **The harvest's best find is a worked leakage example, read precisely.** The top-6%
+  source concatenates train+test and then takes group means of the target. The test
+  *labels* do NOT leak (they are NaN, so `.mean()` skips them); what leaks is (a) no
+  point-in-time constraint — a January trip gets a mean computed with June in it — and
+  (b) the *count* features, which need no label and genuinely use the test period. **The
+  same line of code is correct in a competition and disqualifying in production, and the
+  difference is the split, not the code.**
+- **Two live-drift facts worth keeping**: the Kaggle competition page is a JS shell
+  (HTTP 200, 5,632 bytes, zero occurrences of `RMSLE` or any leaderboard number), so the
+  playbook's §0 competition record is carried as ARCH's 2026-08-12 reading and **nothing
+  in M3 depends on it**; and the OSRM companion dataset the playbook calls "the single
+  biggest edge" is **404** at the URL the sources cite — which makes our own 263×263
+  matrix the only reachable route, and it stays the M9 stretch.
+- **Design Review decisions bind M3-S3/S4/S5** (`docs/rituals/2026-08-17_design-review-m3.md`):
+  DR-01 equal budgets measured in *fitting wall-clock seconds*, artisan **9,000 s**, both
+  tracks print actuals · DR-02 keep-threshold **≥0.50% relative val MAE**, re-argued as a
+  maintenance-cost bar, with **KPI-10 reported per group** and every group listed
+  including drops · DR-03 **disjoint search axes** — artisan searches FEATURES holding v1's
+  hyperparameters, automation searches HYPERPARAMETERS on feature sets it does not invent,
+  which is the only thing that lets the 2×2 answer "features or tuning?" · DR-05 all five
+  contenders are **full-data, TRAIN-ONLY** fits and the playbook §3.7 train+val refit is
+  explicitly NOT used at M3 · DR-06 **+2.71% is M3's working headroom and +7.07% may not
+  be quoted as headroom**; the bar's number is S1's to set in `configs/train.yaml`, and
+  S5 quotes the config, never the minutes.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -535,6 +594,7 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Score the champion, publish rows (M2-S4) | `make predictions` (`python -m taxi_mlops.training predict`; `--no-write` prints the numbers and publishes nothing) | VERIFIED 2026-08-17 (M2-S4): resolved `models:/nyc-taxi-eta@champion` → version 1, run `3adee05a…`, 500 trees, features matched the config; re-scored **3.2608** on test against the version's own `gate_challenger_mae` tag → `MATCH — the published rows describe the model the gate promoted`; wrote 6,189,748 + 5,950,708 rows + `predictions.json`. Registry untouched (it registers nothing). Needs the F-009 resolution step to load at all |
 | Reprint every number in the error memo | `uv run python scripts/error_memo_numbers.py [section…]` | VERIFIED 2026-08-17 (M2-S4): all 7 sections reproduce `docs/error_memo_m2.md` from `marts.error_segments` + the `predictions` view — and caught 4 last-digit rounding slips on its first run, which were fixed in the memo |
 | Error-segment board (M2-S4) | `make boards` (same path as M1-S5; `--verify` is the read-only twin) | VERIFIED 2026-08-17 (M2-S4): `Error segments (M2)` created with **11 cards**, every card citing a KPI id and querying the `marts` warehouse; `--verify` green on all 3 dashboards incl. `card 'KPI-13 · what the booster buys, by hour of day (test)' RAN and returned 24 row(s)` and `no card claims KPI-09/KPI-10` |
+| Zone centroids (M3-S2) | `make zones` (`uv run python scripts/derive_zone_centroids.py`; `ZONES_ARGS=--refresh` re-downloads) | VERIFIED 2026-08-17 (M3-S2): 263 zones from the sha256-pinned TLC shapefile, CRS **read from the .prj** (`NAD83 / New York Long Island (ftUS)`), landmarks JFK **0.63 km** · LGA **0.11 km** · EWR **0.26 km** from their published points, `.dbf` and `taxi_zone_lookup.csv` agree on borough+zone for all 263, every centroid inside the NYC bbox. Idempotent: re-run gives sha256 `37910367…` unchanged. RED-TEAMED by a **111 m** edit to one of 263 rows → the sha256-pin leg AND the byte-identity re-derivation leg both fail while all 11 semantic checks still pass (the landmark tolerance is 3 km), restore → 13/13 |
 | Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5): 9 sections, **49 sub-checks GREEN, exit 0, ~30s**. It re-reads and re-reconciles, it NEVER re-fits: no `make train`, no `make predictions`, no registry write (pinned by tests) — a gate with side effects on the registry it checks is not a gate |
 | Prove the M2 gate can go RED | `make verify-m2-redteam` (`bash scripts/verify_m2_redteam.sh`) | VERIFIED 2026-08-17 (M2-S5): deletes the `@champion` alias → **RED, exit 1, 4 FAILs**, the first naming `models:/nyc-taxi-eta@champion does not resolve`, **38 sub-checks still ran and passed**; alias restored by EXIT trap → **GREEN 49/49**. Deletes only the POINTER — no version, no run, no artifact |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2 live; M3+ pending each milestone |

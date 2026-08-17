@@ -58,7 +58,9 @@ verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, exp
 	@bash scripts/verify_m2_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
-.PHONY: automl tune verify-m3
+.PHONY: zones automl tune verify-m3
+zones: ## derive the 263 TLC zone centroids from the sha256-pinned shapefile (M3-S2; --refresh re-downloads)
+	@uv run python scripts/derive_zone_centroids.py $(ZONES_ARGS)
 automl: ## FLAML scout under configs/automl.yaml time budget -> scout report
 	@echo "TODO(M3): python -m taxi_mlops.tuning scout"
 tune: ## Optuna study (Postgres-backed, resumable) centered on scout winner

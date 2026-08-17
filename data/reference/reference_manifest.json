@@ -1,0 +1,26 @@
+{
+  "_note": "sha256 pins for the TLC taxi-zone geometry and the table derived from it. Timestamp-free by design (raw_manifest.json's rule): a diff here means the bytes moved. Regenerate with `make zones`.",
+  "crs": "NAD83 / New York Long Island (ftUS)",
+  "files": {
+    "taxi_zone_centroids.csv": {
+      "bytes": 16079,
+      "derived_by": "scripts/derive_zone_centroids.py",
+      "derived_from": [
+        "taxi_zones.zip",
+        "taxi_zone_lookup.csv"
+      ],
+      "sha256": "37910367c359be3546bd3ed87cd89e84a220bf327e0ab1bfcab91795b01e3ac2"
+    },
+    "taxi_zone_lookup.csv": {
+      "bytes": 12331,
+      "sha256": "1a99e105092230f8620f301edcca7f80d3080642ff404d28ed957d3fa222c8ed",
+      "url": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+    },
+    "taxi_zones.zip": {
+      "bytes": 1022574,
+      "sha256": "f6d711917bb4340f8f644d5366c51665489eb2d426dd1a4a55677721ae5adf17",
+      "url": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zones.zip"
+    }
+  },
+  "zones": 263
+}

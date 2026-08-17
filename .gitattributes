@@ -1,3 +1,12 @@
 * text=auto eol=lf
 *.png binary
 *.parquet binary
+
+# Externally-published artifacts that are pinned by sha256 in
+# data/reference/reference_manifest.json. Git must NOT normalise these.
+# TLC serves taxi_zone_lookup.csv with CRLF line endings; under the `* text=auto
+# eol=lf` rule above, git rewrites it on commit (observed 2026-08-17: 12,331
+# bytes -> 12,065, sha256 1a99e105... -> 5e8f5ff1...), so a fresh clone's bytes
+# would no longer match the pin the tests check. A pin and a normaliser are
+# enemies; the pin wins, because it is the thing that says the upstream moved.
+data/reference/** -text
