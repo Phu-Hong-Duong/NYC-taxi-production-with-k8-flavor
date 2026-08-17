@@ -29,6 +29,8 @@ nodes:
         hostPort: 9000            # MinIO S3 API
       - containerPort: 30901      # Service minio-console (chart: consoleService.nodePort)
         hostPort: 9001            # MinIO console
+      - containerPort: 30300      # Service metabase (infra/manifests/metabase.yaml)
+        hostPort: 3030            # Metabase — the M1 gate's "Show:" artifact
   - role: worker
     image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
   - role: worker

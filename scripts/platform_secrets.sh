@@ -30,6 +30,16 @@ gen_secret() {
   openssl rand -hex 16
 }
 
+gen_login_password() {
+  # Same entropy, but for a credential a HUMAN-facing app validates. Metabase
+  # rejects a password its complexity rule dislikes (`normal` = length plus at
+  # least one digit; `strong` also wants a capital), and 32 random hex chars can
+  # legitimately contain neither a digit nor an uppercase letter. The suffix
+  # guarantees both without touching entropy, and stays inside the character set
+  # the comment above promises: no quoting hazard in YAML, psql or a URL.
+  printf '%sAa1\n' "$(openssl rand -hex 16)"
+}
+
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "[secrets] no $ENV_FILE — generating one (values are random, and local to this machine)"
   cat > "$ENV_FILE" <<EOF
@@ -67,12 +77,21 @@ fi
 # from REQUIRED below: a value here is NOT yet inside any volume, so generating
 # it is creation, not rotation. The moment a key's value has been written into a
 # data directory it graduates to REQUIRED and must never be regenerated.
-# Format: NAME=literal  (no value => generate a random secret)
-ADDITIVE=(MARTS_DB_USER=marts MARTS_DB_PASSWORD=)
+# Format: NAME=literal  (no value => generate a random secret; a *_ADMIN_PASSWORD
+# key gets the login-safe generator instead — see gen_login_password).
+ADDITIVE=(MARTS_DB_USER=marts MARTS_DB_PASSWORD=
+          METABASE_DB_USER=metabase METABASE_DB_PASSWORD=
+          METABASE_ADMIN_EMAIL=mlops@crosstown.local METABASE_ADMIN_PASSWORD=)
 for spec in "${ADDITIVE[@]}"; do
   key="${spec%%=*}"; literal="${spec#*=}"
   if ! grep -q "^${key}=" "$ENV_FILE"; then
-    value="${literal:-$(gen_secret)}"
+    if [[ -n "$literal" ]]; then
+      value="$literal"
+    elif [[ "$key" == *_ADMIN_PASSWORD ]]; then
+      value="$(gen_login_password)"
+    else
+      value="$(gen_secret)"
+    fi
     printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
     echo "[secrets] added $key to $ENV_FILE (new consumer; no existing volume holds it)"
   fi
@@ -86,7 +105,9 @@ set -a; source "$ENV_FILE"; set +a
 # instead of applying a Secret with an empty value that fails hours later.
 REQUIRED=(MINIO_ROOT_USER MINIO_ROOT_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
           POSTGRES_PASSWORD MLFLOW_DB_USER MLFLOW_DB_PASSWORD
-          MARTS_DB_USER MARTS_DB_PASSWORD)
+          MARTS_DB_USER MARTS_DB_PASSWORD
+          METABASE_DB_USER METABASE_DB_PASSWORD
+          METABASE_ADMIN_EMAIL METABASE_ADMIN_PASSWORD)
 missing=()
 for k in "${REQUIRED[@]}"; do
   [[ -n "${!k:-}" ]] || missing+=("$k")
@@ -139,5 +160,17 @@ apply_secret mlflow mlflow-db \
   "username=$MLFLOW_DB_USER" "password=$MLFLOW_DB_PASSWORD"
 apply_secret mlflow mlflow-s3 \
   "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
+# Metabase's app-db credential (M1-S5). Its own namespace, because Secrets do not
+# cross namespaces; the value is the same one postgres_databases.sh converges the
+# role to, and .env is the single source of truth for both.
+apply_secret metabase metabase-db \
+  "username=$METABASE_DB_USER" "password=$METABASE_DB_PASSWORD"
+# The marts credential Metabase queries the warehouse WITH — a second, distinct
+# database user. Metabase connects to `marts` as `marts`, never as the superuser:
+# a BI seat that can DROP the warehouse it reads is a BI seat one misclick from a
+# restore. (`marts` owns the marts database, so it can still write; narrowing it
+# to read-only is M2's job, when a second writer exists to narrow against.)
+apply_secret metabase metabase-marts-db \
+  "username=$MARTS_DB_USER" "password=$MARTS_DB_PASSWORD"
 
-echo "[secrets] 6 secrets converged from $ENV_FILE (no values printed, by design)"
+echo "[secrets] 8 secrets converged from $ENV_FILE (no values printed, by design)"

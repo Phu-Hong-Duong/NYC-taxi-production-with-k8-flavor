@@ -1,0 +1,76 @@
+{
+  "name": "KPI board",
+  "description": "The program's operating numbers by id (docs/kpi_definitions.md). KPI-09 (ETA MAE) and KPI-10 (within-5-min rate) appear on NO card here and are columns in NO mart, on purpose: they are measured only by taxi_mlops.training.evaluate on held-out data (gotcha #15). A BI card computing a model metric from a warehouse table is a leaderboard pretending to be a result.",
+  "cards": [
+    {
+      "name": "KPI-06 · median trip duration, all months",
+      "kpi": "KPI-06",
+      "display": "scalar",
+      "row": 0, "col": 0, "size_x": 6, "size_y": 3,
+      "sql": "SELECT ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY kpi_06_median_duration_min)::numeric, 4) AS median_of_monthly_medians FROM marts.monthly_kpis",
+      "visualization_settings": {"card.description": "KPI-06, minutes. Window is part of the definition: durations are already bounded to 1-120 min by the cleaning rules. The Zoomcamp benchmark uses 1-60, so our numbers are NOT comparable to theirs (docs/prior_art.md)."}
+    },
+    {
+      "name": "KPI-07 · P90 trip duration, all months",
+      "kpi": "KPI-07",
+      "display": "scalar",
+      "row": 0, "col": 6, "size_x": 6, "size_y": 3,
+      "sql": "SELECT ROUND(MAX(kpi_07_p90_duration_min)::numeric, 4) AS worst_monthly_p90 FROM marts.monthly_kpis",
+      "visualization_settings": {"card.description": "KPI-07, minutes — the worst month's P90, not an average of P90s (averaging percentiles is not a percentile)."}
+    },
+    {
+      "name": "KPI-08 · mean fare (windowed) WITH its excluded-row count",
+      "kpi": "KPI-08",
+      "display": "table",
+      "row": 0, "col": 12, "size_x": 12, "size_y": 3,
+      "sql": "SELECT ROUND((SUM(kpi_08_mean_fare_windowed * trips_in_mart) / NULLIF(SUM(trips_in_mart), 0))::numeric, 4) AS mean_fare_usd_windowed, SUM(kpi_08_excluded_rows) AS rows_excluded_by_window, '0 <= fare_amount <= 200' AS window_applied FROM marts.monthly_kpis",
+      "visualization_settings": {"card.description": "KPI-08 is a MONEY KPI, so its window and its excluded-row count render on the SAME card, by rule (AI-2). Why it matters: CORR(fare, duration) is 0.0735 over all 56,127,878 rows and 0.8708 inside this window - 3,131 excluded rows (0.0056%) move it 11.8x while moving the mean 0.36%. A value without its exclusion count is not a number, it is a claim."}
+    },
+
+    {
+      "name": "KPI-06 / KPI-07 · duration by month",
+      "kpi": "KPI-06",
+      "display": "line",
+      "row": 3, "col": 0, "size_x": 12, "size_y": 6,
+      "sql": "SELECT month, kpi_06_median_duration_min AS median_min, kpi_07_p90_duration_min AS p90_min FROM marts.monthly_kpis ORDER BY month",
+      "visualization_settings": {
+        "graph.dimensions": ["month"],
+        "graph.metrics": ["median_min", "p90_min"],
+        "card.description": "KPI-06 and KPI-07 together. The target mean rises 17.3% Jan->Jun then falls - which is why `month` is a REPORTING dimension here and never a model feature (docs/eda_report.md §4)."
+      }
+    },
+    {
+      "name": "KPI-08 · mean fare (windowed) by month, with exclusions",
+      "kpi": "KPI-08",
+      "display": "line",
+      "row": 3, "col": 12, "size_x": 12, "size_y": 6,
+      "sql": "SELECT month, kpi_08_mean_fare_windowed AS mean_fare_usd, kpi_08_excluded_rows AS rows_excluded FROM marts.monthly_kpis ORDER BY month",
+      "visualization_settings": {
+        "graph.dimensions": ["month"],
+        "graph.metrics": ["mean_fare_usd"],
+        "card.description": "KPI-08 by month. `rows_excluded` travels in the same result set so the exclusion can never be read without the value (the monthly exclusions sum to 3,131 - the EDA's figure to the row)."
+      }
+    },
+
+    {
+      "name": "KPI-06 · median duration by pickup hour (the segmented view)",
+      "kpi": "KPI-06",
+      "display": "bar",
+      "row": 9, "col": 0, "size_x": 12, "size_y": 6,
+      "sql": "SELECT pickup_hour, ROUND((SUM(median_duration_min * trips) / NULLIF(SUM(trips), 0))::numeric, 4) AS trip_weighted_median_min, SUM(trips) AS trips FROM marts.zone_hourly_stats GROUP BY pickup_hour ORDER BY pickup_hour",
+      "visualization_settings": {
+        "graph.dimensions": ["pickup_hour"],
+        "graph.metrics": ["trip_weighted_median_min"],
+        "card.description": "KPI-06 segmented by hour of day - the dimension the EDA found strongest (speed varies 2.16x across the day, 23.70 -> 10.97 mph). Trip-weighted, because an unweighted mean of zone medians lets a 3-trip zone shout as loud as a 300,000-trip one."
+      }
+    },
+    {
+      "name": "KPI-01 · busiest pickup zones (264/265 are 'unknown', not places)",
+      "kpi": "KPI-01",
+      "display": "table",
+      "row": 9, "col": 12, "size_x": 12, "size_y": 6,
+      "sql": "SELECT pickup_zone, pickup_zone_is_unknown, SUM(trips) AS trips, ROUND((SUM(median_duration_min * trips) / NULLIF(SUM(trips), 0))::numeric, 3) AS trip_weighted_median_min, ROUND((SUM(mean_speed_mph * trips) / NULLIF(SUM(trips), 0))::numeric, 3) AS trip_weighted_mean_speed_mph FROM marts.zone_hourly_stats GROUP BY pickup_zone, pickup_zone_is_unknown ORDER BY trips DESC LIMIT 25",
+      "visualization_settings": {"card.description": "KPI-01 segmented by pickup zone. `pickup_zone_is_unknown` is rendered next to the count on purpose: zones 264 and 265 are the TLC's 'unknown' codes, not neighbourhoods, and 264->264 is the largest OD 'route' in the data (409,128 trips). A board that ranks them as places lies quietly."}
+    }
+  ]
+}

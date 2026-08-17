@@ -1,0 +1,106 @@
+{
+  "name": "Data health",
+  "description": "Does the pipeline still deliver what the contract promises? Every card cites a KPI id from docs/kpi_definitions.md. Source: the gold marts in the one Postgres (database 'marts', schema 'marts').",
+  "cards": [
+    {
+      "name": "KPI-01 · trips ingested, all months",
+      "kpi": "KPI-01",
+      "display": "scalar",
+      "row": 0, "col": 0, "size_x": 6, "size_y": 3,
+      "sql": "SELECT SUM(kpi_01_trips_ingested) AS trips_ingested FROM marts.monthly_kpis",
+      "visualization_settings": {"card.description": "KPI-01 summed over every ingested month — the row count AFTER the contract, not before."}
+    },
+    {
+      "name": "KPI-01 · months in the mart",
+      "kpi": "KPI-01",
+      "display": "scalar",
+      "row": 0, "col": 6, "size_x": 5, "size_y": 3,
+      "sql": "SELECT COUNT(*) AS months_ingested FROM marts.monthly_kpis",
+      "visualization_settings": {"card.description": "Freshness, asked as coverage: a catalogue pointing at five months of eight answers every query happily, just smaller."}
+    },
+    {
+      "name": "KPI-01 · newest month ingested",
+      "kpi": "KPI-01",
+      "display": "scalar",
+      "row": 0, "col": 11, "size_x": 5, "size_y": 3,
+      "sql": "SELECT MAX(month) AS newest_month FROM marts.monthly_kpis",
+      "visualization_settings": {"card.description": "Freshness. A board that cannot say how old its newest data is cannot be seen to go stale."}
+    },
+    {
+      "name": "KPI-02 · overall rejection rate",
+      "kpi": "KPI-02",
+      "display": "scalar",
+      "row": 0, "col": 16, "size_x": 8, "size_y": 3,
+      "sql": "SELECT ROUND((100.0 * SUM(rows_rejected) / NULLIF(SUM(rows_in), 0))::numeric, 4) AS rejection_rate_pct FROM marts.monthly_kpis",
+      "visualization_settings": {"card.description": "KPI-02 over all months. The single number is the headline; the series beside it is the story (it rises monotonically)."}
+    },
+
+    {
+      "name": "KPI-01 · trips ingested per month",
+      "kpi": "KPI-01",
+      "display": "bar",
+      "row": 3, "col": 0, "size_x": 12, "size_y": 6,
+      "sql": "SELECT month, split, kpi_01_trips_ingested AS trips_ingested FROM marts.monthly_kpis ORDER BY month",
+      "visualization_settings": {
+        "graph.dimensions": ["month"],
+        "graph.metrics": ["trips_ingested"],
+        "card.description": "KPI-01 by month. Read with KPI-02: a fall here with a flat rejection rate is a quieter month; a fall with a rising rate is a quality problem."
+      }
+    },
+    {
+      "name": "KPI-02 · rejection rate SERIES, by month",
+      "kpi": "KPI-02",
+      "display": "line",
+      "row": 3, "col": 12, "size_x": 12, "size_y": 6,
+      "sql": "SELECT month, kpi_02_rejection_rate_pct AS rejection_rate_pct, rows_in, rows_rejected FROM marts.monthly_kpis ORDER BY month",
+      "visualization_settings": {
+        "graph.dimensions": ["month"],
+        "graph.metrics": ["rejection_rate_pct"],
+        "card.description": "A SERIES, not a number, on purpose: the observed 2019 rate rises monotonically 1.428% -> 2.020%, and the ingest guard (10% refusal) sees none of that. A single average would hide the trend that matters."
+      }
+    },
+
+    {
+      "name": "KPI-03 · rejections attributed per rule (every rule, including the zeroes)",
+      "kpi": "KPI-03",
+      "display": "table",
+      "row": 9, "col": 0, "size_x": 12, "size_y": 7,
+      "sql": "SELECT rule, SUM(rejected_by) AS rejected_by, SUM(matched) AS matched, COUNT(*) AS months_present FROM marts.rejections_by_rule GROUP BY rule ORDER BY rejected_by DESC, rule",
+      "visualization_settings": {"card.description": "KPI-03. The permanently-zero rules are rendered deliberately: a rule you cannot see cannot be seen to START firing. 'rejected_by' attributes each dropped row to exactly one rule; 'matched' counts every rule a row tripped."}
+    },
+    {
+      "name": "KPI-03 · rejections per rule, by month",
+      "kpi": "KPI-03",
+      "display": "bar",
+      "row": 9, "col": 12, "size_x": 12, "size_y": 7,
+      "sql": "SELECT month, rule, rejected_by FROM marts.rejections_by_rule ORDER BY month, rule",
+      "visualization_settings": {
+        "graph.dimensions": ["month", "rule"],
+        "graph.metrics": ["rejected_by"],
+        "stackable.stack_type": "stacked",
+        "card.description": "KPI-03 over time — which rule is driving KPI-02's rise."
+      }
+    },
+
+    {
+      "name": "KPI-04 · undocumented-value rate (drift by VALUE)",
+      "kpi": "KPI-04",
+      "display": "line",
+      "row": 16, "col": 0, "size_x": 12, "size_y": 6,
+      "sql": "SELECT month, kpi_04_undocumented_pct AS undocumented_pct, kpi_04_undocumented_rows AS undocumented_rows FROM marts.monthly_kpis ORDER BY month",
+      "visualization_settings": {
+        "graph.dimensions": ["month"],
+        "graph.metrics": ["undocumented_pct"],
+        "card.description": "KPI-04: rows carrying a value the TLC dictionary does not describe (VendorID 4/5, payment_type 0, RatecodeID 99). Drift by VALUE is the quieter sibling of drift by column (gotcha #31). Observed 2019: falls monotonically 1.3778% -> 0.5616% while KPI-02 rises."
+      }
+    },
+    {
+      "name": "KPI-05 · raw-byte provenance (sha256 per month)",
+      "kpi": "KPI-05",
+      "display": "table",
+      "row": 16, "col": 12, "size_x": 12, "size_y": 6,
+      "sql": "SELECT month, split, raw_file, raw_bytes, kpi_05_raw_sha256 AS raw_sha256 FROM marts.monthly_kpis ORDER BY month",
+      "visualization_settings": {"card.description": "KPI-05. The manifest is timestamp-free by design: a diff here means the BYTES moved, not that a file was touched. TLC backfills (gotcha #6), so this is the card that notices."}
+    }
+  ]
+}

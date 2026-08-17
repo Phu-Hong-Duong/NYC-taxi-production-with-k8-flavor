@@ -49,10 +49,12 @@ KUBECTL=(kubectl --context "${KUBE_CONTEXT:-kind-mlops-taxi}")
 DRY_RUN="${DRY_RUN:-0}"
 
 # The desired state of the server: one line per database, "db:role:passwordkey".
-# A new consumer (M1-S5's Metabase app-db) adds a line here and nothing else.
+# A new consumer adds a line here and nothing else — M1-S5 added `metabase` and
+# that claim held: one line here, one ADDITIVE entry in platform_secrets.sh.
 DATABASES=(
   "mlflow:${MLFLOW_DB_USER:-mlflow}:MLFLOW_DB_PASSWORD"
   "marts:${MARTS_DB_USER:-marts}:MARTS_DB_PASSWORD"
+  "metabase:${METABASE_DB_USER:-metabase}:METABASE_DB_PASSWORD"
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -66,6 +68,7 @@ set -a; source "$ENV_FILE"; set +a
 DATABASES=(
   "mlflow:${MLFLOW_DB_USER:-mlflow}:MLFLOW_DB_PASSWORD"
   "marts:${MARTS_DB_USER:-marts}:MARTS_DB_PASSWORD"
+  "metabase:${METABASE_DB_USER:-metabase}:METABASE_DB_PASSWORD"
 )
 
 psql_admin() {

@@ -27,6 +27,7 @@ CHARTERS = REPO / "scripts" / "check_charters.sh"
 SECRETS = REPO / "scripts" / "platform_secrets.sh"
 KIND_CONFIG = REPO / "infra" / "kind" / "kind-config.yaml"
 MLFLOW_NODEPORT = REPO / "infra" / "manifests" / "mlflow-nodeport.yaml"
+METABASE_MANIFEST = REPO / "infra" / "manifests" / "metabase.yaml"
 MINIO_VALUES = REPO / "infra" / "helm" / "minio" / "values.yaml"
 
 NEEDS_OPENSSL = pytest.mark.skipif(
@@ -219,7 +220,22 @@ def kind_port_map() -> dict[int, int]:
 
 
 def test_kind_maps_the_documented_host_ports_to_the_service_node_ports():
-    assert kind_port_map() == {80: 8081, 443: 8443, 30500: 5000, 30900: 9000, 30901: 9001}
+    assert kind_port_map() == {
+        80: 8081,
+        443: 8443,
+        30500: 5000,
+        30900: 9000,
+        30901: 9001,
+        30300: 3030,
+    }
+
+
+def test_metabase_node_port_is_the_one_kind_publishes_on_3030():
+    """M1-S5's twin. kind publishes host ports at cluster-CREATE time only, so a
+    drift here is not a config bug you fix with `kubectl apply` — it is a cluster
+    rebuild. That is exactly why the pair is asserted rather than trusted."""
+    node_port = int(re.search(r"nodePort:\s*(\d+)", METABASE_MANIFEST.read_text()).group(1))
+    assert kind_port_map()[node_port] == 3030
 
 
 def test_mlflow_node_port_is_the_one_kind_publishes_on_5000():
