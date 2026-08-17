@@ -91,6 +91,11 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | dbt-duckdb | **1.11.0** | 2026-08-16 | `uv run dbt --version` (M1-S4). A runtime dep, not dev: `make marts` invokes it |
 | Metabase | **v0.63.13**, image pinned by TAG AND DIGEST `metabase/metabase:v0.63.13@sha256:6e188e7068c6e9cf7b24480ada80f335bca9135765764ee827245f44ffa9eace` | 2026-08-17 | `docker pull` (M1-S5). Newest stable at pin time (Docker Hub tag list read live; `v0.58-lts` was the conservative alternative and stays the 3-attempt-wall fallback). Plain manifest, not the chart — `infra/manifests/metabase.yaml` header says why |
 | TLC yellow parquet (2019-01…08) | 8 files, sha256-pinned in `data/raw_manifest.json` | 2026-08-16 | `make ingest`; e.g. 2019-01 = `3ad95f39…26d`, 110,439,634 bytes. Manifest is timestamp-free by design: a diff = the bytes moved |
+| lightgbm | **4.7.0** | 2026-08-17 | `uv add lightgbm` (M2-S2). Needs an OpenMP runtime this host does not ship — see gotcha #37 and debt D-004 |
+| mlflow-skinny (CLIENT) | **3.15.1** — an EXACT match to the deployed server | 2026-08-17 | `uv add "mlflow-skinny>=3.15,<4"` (M2-S2). **NOT `mlflow`**: the full package pins `pandas<3` against our `pandas>=3.0.5`, and an unbounded `uv add mlflow` silently resolved to **1.27.0**, two majors behind the server (gotcha #36). We run the server in-cluster and only ever needed the client |
+| scikit-learn | 1.9.0 | 2026-08-17 | `uv add scikit-learn` (M2-S2). Not used by v1's model; it is a declared dep because its wheel vendors the `libgomp` the OpenMP shim borrows (gotcha #37) — an accidental dependency made explicit |
+| boto3 / botocore | 1.43.72 | 2026-08-17 | `uv add boto3` (M2-S2). Required because the tracking server does NOT proxy artifacts (`proxiedArtifactStorage: false`): the CLIENT writes to MinIO itself — gotcha #5 |
+| scipy | 1.18.0 | 2026-08-17 | transitive via scikit-learn (M2-S2) |
 | (FLAML/Optuna rows land at their milestones) | | | |
 
 ## The data contract (M1-S1) — where the rules actually live

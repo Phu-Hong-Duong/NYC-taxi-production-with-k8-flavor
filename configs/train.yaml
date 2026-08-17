@@ -4,4 +4,98 @@ data:
   val_month: "2019-07"
   test_month: "2019-08"
 target: trip_duration_minutes
-model: {}      # LightGBM params at M2
+
+# ---------------------------------------------------------------- features ---
+# Feature set v1 (M2-S2, role:MLE) — QUOTE-TIME PURE: every column here is
+# knowable at the moment a rider asks "how long will this take?".
+#
+# The INCLUDE list is a knob. The EXCLUDE list is NOT, and is not here: it lives
+# in `taxi_mlops.features.quote_time.EXCLUSIONS` with a reason per column, and a
+# guard refuses any feature matrix that contains one. The asymmetry is
+# deliberate and is the same argument M2-S1 made about first-match attribution:
+# a switch that can break an invariant is a trapdoor, not a knob. Adding a
+# column below that the registry excludes fails loudly (FeatureLeakageError),
+# so this file cannot quietly re-admit leakage.
+features:
+  version: v1
+  # Derived from tpep_pickup_datetime — the ONE timestamp a quote request has.
+  # `month` is absent BY LAW (CLAUDE.md): the target mean rises 17.3% Jan->Jun,
+  # so month is a reporting dimension and a model that learns it learns the
+  # calendar, not the city.
+  temporal: ["hour", "dayofweek"]
+  # Carried straight through from the contract's blessed columns.
+  passthrough: ["PULocationID", "DOLocationID", "passenger_count"]
+  # Declared to LightGBM as categorical. Zone ids are labels, not magnitudes:
+  # zone 264 is not "two more than 262", and 264/265 are "unknown", not places
+  # (eda_report.md §9). dayofweek joins them because Saturday is not 6/7ths of
+  # Sunday; `hour` stays ordered on purpose — range splits (the morning peak,
+  # the evening peak) are exactly what a tree should be allowed to make.
+  categorical: ["PULocationID", "DOLocationID", "dayofweek"]
+
+# --------------------------------------------------------------- baselines ---
+# The honest reference floor, RE-DERIVED here through the model's own evaluator
+# rather than quoted from the EDA's SQL (gotcha #15: a reported number comes
+# from taxi_mlops.training.evaluate and nowhere else).
+baselines:
+  # Fitted on train only. Unseen groups fall back to the constant train median —
+  # the SAME single-level fallback eda_report.md §11 used, so its 3.7170 val MAE
+  # is a number this code path can be checked against. A deeper hierarchy
+  # (PU,DO -> hour,dow -> global) would predict better and would no longer be
+  # the published floor; if a later story wants it, it is a NEW baseline with a
+  # new name, never an edit to this one.
+  group_keys: ["hour", "dayofweek", "PULocationID", "DOLocationID"]
+
+# ---------------------------------------------------------------- evaluate ---
+evaluate:
+  # KPI-10's tolerance. A DA proposal, not a settled SLO (kpi_definitions.md);
+  # M5 owns the SLO and moving this number is a PO fork, not an edit.
+  tolerance_minutes: 5.0
+  # Row-level predictions for the DA error memo land here at M2-S4. Declared now
+  # so the path has one owner; S2 writes no predictions.
+  predictions_dir: "data/predictions"
+
+# ------------------------------------------------------------------- model ---
+model:
+  name: lightgbm-v1
+  # TARGET TRANSFORM — the craft call E-1 asked M2 to PROVE, not assume.
+  # `none` for v1: KPI-09 is MAE in MINUTES, and objective `l1` minimises
+  # exactly that on exactly that scale. Training on log1p and exponentiating
+  # back optimises the median of a different loss and is only a win if the
+  # metric is relative. The `log1p` setting exists and is run as a labelled
+  # ablation (--ablation) so the claim is a measurement, not an opinion.
+  target_transform: none      # none | log1p
+  lightgbm:
+    objective: l1             # == the reported metric; see above
+    metric: l1
+    learning_rate: 0.05
+    num_leaves: 255
+    min_data_in_leaf: 500     # 42M rows: small leaves would memorise OD pairs
+    feature_fraction: 1.0     # only five features — sampling them is noise
+    bagging_fraction: 0.8
+    bagging_freq: 1
+    max_cat_threshold: 64
+    cat_smooth: 20.0
+    num_threads: 16           # 20 cores observed; 4 left for the rest of WSL
+    seed: 20260817
+    deterministic: true       # a re-run must reproduce the number it reported
+    verbose: -1
+  num_boost_round: 500
+  # Early stopping reads VAL. That is what val is for; TEST is never touched by
+  # training or selection — it is the month M2-S3's promotion gate judges on.
+  early_stopping_rounds: 30
+  log_period: 50
+
+# ------------------------------------------------------------------ mlflow ---
+mlflow:
+  # The tracking server's host route (CLAUDE.md port family: 5000 <- 30500).
+  # .env's MLFLOW_TRACKING_URI wins when present; this is the checked-in default
+  # so a fresh clone has a working value that is not a secret.
+  tracking_uri: "http://localhost:5000"
+  # Clients talk to MinIO DIRECTLY (infra/helm/mlflow/values.yaml:
+  # proxiedArtifactStorage false), so the CLIENT needs the S3 endpoint too —
+  # gotcha #5, which is a 404-on-artifacts and not a login error. In-cluster
+  # callers (M4's Flyte tasks) override this with the cluster DNS name.
+  s3_endpoint_url: "http://localhost:9000"
+  # Namespaced from the first run so gotcha #17 (study/experiment collisions)
+  # never has a chance to bite.
+  experiment: "m2-modeling"
