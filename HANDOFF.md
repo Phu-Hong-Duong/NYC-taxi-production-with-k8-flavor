@@ -1,5 +1,171 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (x) — M2-S2: the evaluator reproduced the EDA's floors to four decimals, and the model beat them by 6.48%
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), **role:MLE**,
+one story. **M2-S2 COMPLETE.** F-006 **CLOSED**; F-007 condition (a)
+**DISCHARGED** ((b) stays M3's). **Next: EXECUTOR runs M2-S3** (the promotion
+gate, red-teamed with a hobbled model), scheduled by ritual (a).
+
+### Staleness check of (w)'s Next — reality MATCHED, nothing to reconcile
+(w) claimed cluster up, platform + Metabase healthy, MLflow holding only
+`Default`, tree clean on `main`. All held: `kubectl get nodes` → 3/3 Ready
+v1.36.1 (85m) · `kubectl get pods -A --field-selector=status.phase!=Running` →
+`No resources found` · `curl localhost:5000/health` → `200` · experiments search
+→ exactly `[('0','Default')]` · `git status --short --branch` → `##
+main...origin/main` clean, HEAD `198f734` (the handoff commit that landed after
+(w) wrote its Next) · `data/processed/{train,val,test}` and
+`data/analyst.duckdb` present · 947G free, 47Gi RAM. Docker Desktop was running,
+so gotcha #34 did not fire — but it was checked before anything relied on it.
+
+### Done (every leg with the command and what came back)
+
+- **The evaluator was checked against an answer we already knew, and that is this
+  story's strongest result.** `python -m taxi_mlops.training train --ablation`
+  re-derived both EDA floors from different code on a different engine:
+
+  ```
+    contender                    split       rows      KPI-09      KPI-10     RMSE   medAE   p90AE
+    baseline-constant-median     val      6,189,748      7.8866     47.505%  12.201   5.283  17.850
+    baseline-constant-median     test     5,950,708      7.6667     48.372%  11.844   5.183  17.133
+    baseline-group-median        val      6,189,748      3.7170     78.693%   6.222   2.342   7.933
+    baseline-group-median        test     5,950,708      3.5090     80.322%   5.811   2.292   7.317
+    lightgbm-v1                  val      6,189,748      3.4760     79.693%   5.481   2.315   7.474
+    lightgbm-v1                  test     5,950,708      3.2608     81.480%   5.047   2.263   6.862
+    lightgbm-v1-log1p-ablation   val      6,189,748      3.4803     79.648%   5.490   2.312   7.500
+    lightgbm-v1-log1p-ablation   test     5,950,708      3.2688     81.383%   5.061   2.261   6.900
+  ```
+
+  `eda_report.md` §11 said **7.8866**, **3.7170**, **3.5090** and **78.693%**.
+  Those are the same numbers to four decimals, and the unseen-group fallback
+  fired on **1.5252% val / 1.4786% test** against the EDA's 1.53% / 1.48%.
+  Nothing was tuned to match — the kickoff said in advance that a large
+  disagreement would be a bug in `evaluate`, so the agreement is an instrument
+  passing a check it could have failed.
+
+- **KPI-09 and KPI-10 have their first measured values.** `docs/kpi_definitions.md`
+  updated ("not yet measured" gone, MLflow run id cited, pinned by two new
+  doc-contract tests): **3.4760 min val / 3.2608 min test** and **79.693% /
+  81.480%** for `lightgbm-v1`. Against the honest floor that is **+6.48%** and
+  **one point** of within-5-minutes. Against the flattering floor it would read
+  as a 56% triumph — which is exactly why `ConstantMedian`'s own docstring calls
+  it the flattering one, and why v1 has **no distance feature** to inflate it.
+
+- **One command, four contenders, one evaluator.** 43,987,422 train rows,
+  1,610,050 groups in the group-median table, `[model] best_iteration=500`, then
+  the table above. `make train` is deliberately still the S3 stub — the GATE
+  verdict is what makes that target what it claims — and **this story registers
+  nothing**: `search_registered_models()` → `[]`, pinned by
+  `test_this_story_registers_nothing`, which bans the registry API surface (not
+  the word "champion", which the docstrings use to record the boundary).
+
+- **MLflow holds the runs, read back through the API rather than asserted.**
+  Experiment `m2-modeling` (id 2), 4 runs FINISHED:
+  `baseline-constant-median a0b6a7f5…` · `baseline-group-median 05451c31…` ·
+  `lightgbm-v1 598044f5…` · `lightgbm-v1-log1p-ablation 80f2d52f…`. `lightgbm-v1`
+  carries **signature + input example** and 7 artifacts in MinIO (`model/MLmodel`,
+  `model.lgb`, `input_example.json`, `serving_input_example.json`, …); its
+  signature reads `['hour': integer, 'dayofweek': integer, 'PULocationID':
+  integer, 'DOLocationID': integer, 'passenger_count': float] ->
+  Tensor('float64', (-1,))`. The throwaway experiment used to de-risk the
+  artifact upload before committing an hour to the full run was **deleted**
+  afterwards: `search_experiments()` → `[('2','m2-modeling'), ('0','Default')]`.
+
+- **F-006 CLOSED and F-007(a) DISCHARGED — by a registry, not by a promise.**
+  `taxi_mlops.features.quote_time.EXCLUSIONS` names **18 refused columns**, each
+  with its reason and its ledger row, and `FeatureLeakageError` refuses a matrix
+  OR a config that re-admits one. Red-teamed through the real CLI: `fare_amount`
+  added to `features.passthrough` → refused **before reading a row**, quoting
+  `r = 0.8708` and `[F-007(a)]` back at the caller; config restored with
+  `git checkout`. The registry deliberately excludes **three money columns F-007
+  did not list** (`extra`, `mta_tax`, `improvement_surcharge`) — same meter, same
+  moment, and a registry that agreed with the finding rather than with the world
+  would be the next trap. F-006's alternative (train from 2019-02 onward) was
+  considered and refused IN WRITING on the exclusion itself: one surcharge is not
+  worth 9.3M rows.
+
+- **E-1 answered by measurement, not opinion.** The `log1p` ablation is its own
+  MLflow run and came in **worse on both splits** (3.4803 / 3.2688 vs 3.4760 /
+  3.2608). v1 keeps `target_transform: none`, because KPI-09 is MAE in minutes
+  and objective `l1` minimises exactly that on exactly that scale. The ablation
+  logs **metrics only** and says so in a run tag: a log-space booster needs a
+  pyfunc wrapper to be servable, and shipping one for an ablation would put a
+  wrapper nobody uses in the registry.
+
+- **Tests + lint.** `uv run pytest tests/unit -q` → **232 passed** (was 160),
+  cluster-free. `uv run ruff check src tests scripts pipelines` → `All checks
+  passed!`. Boundary law holds: `grep -rn analytics src/taxi_mlops/` → empty.
+  `import lightgbm` appears in exactly one place in the package.
+
+### Defects / Surprises
+- **`uv add mlflow` silently installed a client two MAJORS behind the server —
+  now gotcha #36.** The server is 3.15.1; the unbounded add resolved **1.27.0**,
+  exit 0, no warning, because MLflow 3.x pins `pandas<3` and we pin
+  `pandas>=3.0.5`. The only tell was `databricks-cli` appearing in the install
+  list. Asking for the bound explicitly (`uv add "mlflow>=3.15,<4"`) turned the
+  silence into the real message. Fixed with **`mlflow-skinny`** — the same client
+  code with the tracking SERVER's dependencies (pandas pin included) removed —
+  which resolved to **3.15.1 exactly**. We never needed the server package: the
+  server runs in the cluster. Downgrading pandas was never on the table (gotcha
+  #16's law; M1's byte-identity proof rests on the pinned pandas/pyarrow pair).
+  **Rule: when adding a client for a service you already run, state the version
+  bound and read the refusal — an unbounded add cannot fail, and a resolution
+  that cannot fail cannot warn you.**
+- **This host has no OpenMP, so LightGBM could not import at all — now gotcha #37
+  + debt D-004.** `find /usr /lib /opt -name "libgomp.so*"` empty, `dpkg -l |
+  grep gomp` empty. The obvious fix (preload the copy scikit-learn's wheel
+  vendors) **fails identically to doing nothing**, because auditwheel rewrites
+  the vendored SONAME and glibc matches `dlopen("libgomp.so.1")` on SONAMEs, not
+  on the path you loaded. The working shim symlinks it under the needed name,
+  sets `LD_LIBRARY_PATH` and re-execs once, announced on stdout. Two edges paid
+  for on the way: `sys.argv` does not round-trip a `python -m` invocation (the
+  replay died on *attempted relative import with no known parent package* —
+  rebuilt from `__main__.__spec__.name`), and the re-exec must happen **before**
+  any expensive work; the first version sat inside `model.fit` and threw away a
+  full data load. The honest fix is `sudo apt install libgomp1` —
+  **AWAITING_PO 2026-08-17-1**, non-blocking — and **D-004** owes M4's image the
+  real package regardless, because a shim should not be what makes a container
+  work.
+- **pandas 3.x hands back READ-ONLY arrays from `to_numpy()`.** The group-median
+  fallback assignment raised `ValueError: assignment destination is read-only` on
+  the first real run. One-line fix (`copy=True`) with the reason in a comment —
+  worth knowing before the next `to_numpy()` in this codebase.
+- **A 20-minute run redirected to a log file printed nothing and read exactly
+  like a hang.** Python block-buffers stdout to a file. Fixed with
+  `sys.stdout.reconfigure(line_buffering=True)` at the CLI entry, so M2-S3's
+  gate transcript streams rather than arrives.
+- **v1 never early-stopped** — 500/500 rounds with val still improving. Recorded
+  out loud because 3.4760 is a floor for LightGBM on these five features, not its
+  ceiling, and reading it as "tuned" would misprice M3.
+
+### Next
+1. **EXECUTOR: M2-S3** per `docs/milestones/M2_KICKOFF.md` — `make train` becomes
+   real, the promotion gate must beat the **group-median floor on the untouched
+   TEST month** by a margin the MLE chooses with a reason in `configs/train.yaml`,
+   a hobbled model is refused with both numbers pasted, and the real v1 promotes
+   with the `champion` alias.
+   **Starting state:** cluster UP (3/3, all pods Running), MLflow experiment
+   `m2-modeling` holding 4 runs with `lightgbm-v1` logged WITH signature + input
+   example, **registry EMPTY** (S3 sets the first alias ever), tree clean on
+   `main`, `data/` untouched by this story (no ingest, no DVC change).
+2. **Numbers S3 needs, all from `evaluate`:** the floor to beat on TEST is the
+   group-median **3.5090 min** (val 3.7170); v1 measured **3.2608 test / 3.4760
+   val**. The honest test margin is therefore **7.07%** — pick the config margin
+   knowing the real gap is that size, not the 57% the constant-median floor would
+   suggest. Within-5-minutes: v1 81.480% vs floor 80.322%.
+3. **Carry-in for S3, not silent:** the training path re-execs itself once on
+   this host (gotcha #37), so a gate transcript will open with an `[openmp]`
+   line before anything else. Expected, not a defect.
+4. **For S4:** `evaluate` is the extension point for row-level predictions.
+   `configs/train.yaml: evaluate.predictions_dir` is declared and deliberately
+   unused — S2 wrote no predictions.
+5. **For the whole milestone:** M2 carries ◆ — S5 exits to REV, never to ARCH.
+6. Standing, PO's hands, both non-blocking: **AWAITING_PO 2026-08-16-2**
+   (allowlist) and **2026-08-17-1** (`libgomp1`, raised this session).
+
+---
+
 ## Session 2026-08-17 (w) — M2-S1: the rows we threw away had a signature, and 85% of them were the same fault
 
 ### State

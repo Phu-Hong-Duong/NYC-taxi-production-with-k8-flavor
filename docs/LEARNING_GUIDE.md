@@ -9,6 +9,111 @@ months from now.
 
 ## M2
 
+### M2-S2 — the floor a `GROUP BY` already knew, reproduced to four decimals (2026-08-17, role:MLE)
+
+**What was built.** The first model, and the machinery that makes its number
+mean something. `taxi_mlops.features` defines quote-time feature set v1 — five
+columns: `hour`, `dayofweek`, `PULocationID`, `DOLocationID`, `passenger_count`
+— plus a registry of **18 refused columns**, each carrying its reason and its
+ledger row in code. `taxi_mlops.training.evaluate` became THE metric source:
+KPI-09 (MAE) and KPI-10 (within-5-minutes) have their first measured values and
+no other origin in this program. Both baselines and LightGBM v1 go through that
+one function, in one invocation, printing one table.
+
+**Why this way.** Four choices worth naming.
+
+*(1) The include list is a knob; the exclude list is law.* Feature sets are meant
+to be revised — that is what M3's dossier does — so `configs/train.yaml` owns
+which columns go in. But `fare_amount` must never go in, and the failure it
+causes is invisible: a model built on post-trip money scores *beautifully* on
+every held-out split and cannot be served at all. So the exclusions live in code
+with reasons, and `FeatureLeakageError` refuses a matrix **or a config** that
+re-admits one. This is M2-S1's trapdoor argument applied to a different
+invariant: a switch that can break one is not a knob.
+
+*(2) The registry disagrees with the finding that created it, deliberately.*
+F-007 named six post-trip columns. The registry excludes **nine** — `extra`,
+`mta_tax` and `improvement_surcharge` are recorded on the same meter at the same
+moment and fail the identical test. A registry that agreed with the finding
+rather than with the world would just be the next trap, filed under a different
+name.
+
+*(3) The baselines are scored by the model's evaluator, not by SQL.* This looks
+like duplicated work — the EDA already computed both floors in DuckDB. It is the
+opposite. If the floors came from SQL and only the model came through
+`evaluate`, the comparison would be between two measuring instruments as much as
+between two predictors, and the model's instrument would be the one nobody had
+checked. Running both through one function makes the comparison a comparison —
+and it turned the EDA's numbers into a **test of the evaluator**.
+
+*(4) The unseen-group fallback is counted, not merely handled.* About 1.5% of
+val rows carry a `(hour, dow, PU, DO)` combination train never saw. A lookup that
+raises on them is not a baseline with a rough edge; it is the exact shape of a
+500 at M5's serving boundary, arriving on the day a new zone opens. So the
+fallback is explicit, its rate is an MLflow metric, and `evaluate` **refuses** a
+NaN prediction outright — because `np.mean` of a NaN renders as a blank cell,
+and a blank cell reads as "not run yet" rather than "the predictor has a hole".
+
+**The concept underneath: an instrument you have not checked is not a
+measurement.** The strongest result of this story is not the model. It is that
+`evaluate`, running different code on a different engine over the same months,
+reproduced the EDA's SQL floors *exactly*:
+
+| | EDA (SQL, M1-S3) | `evaluate` (M2-S2) |
+|---|---|---|
+| constant-median val MAE | 7.8866 | **7.8866** |
+| group-median val MAE | 3.7170 | **3.7170** |
+| group-median test MAE | 3.5090 | **3.5090** |
+| group-median val within-5-min | 78.693% | **78.693%** |
+| unseen-group rate, val / test | 1.53% / 1.48% | **1.5252% / 1.4786%** |
+
+Nothing was tuned to make those agree; a disagreement would have been a bug in
+`evaluate`, as the kickoff predicted in advance. That is what gotcha #15 is
+protecting — not a bureaucratic rule about which module prints numbers, but the
+principle that a metric is only as trustworthy as the instrument, and the
+cheapest way to check an instrument is to point it at something whose answer you
+already know.
+
+**And the honest result.** `lightgbm-v1` measured **3.4760 min val / 3.2608 min
+test** MAE and **79.693% / 81.480%** within five minutes. Against the honest
+floor that is **6.48%** better and **one point** more trips inside the tolerance.
+Against the *flattering* floor (constant median, 7.8866) it looks like a 56%
+triumph — which is exactly why that baseline is named "the flattering one" in the
+code and why CLAUDE.md forbids quoting it. A modest win is the truthful shape
+here: v1 has **no distance feature**, because the only distance in the data is
+the meter's driven distance, which a quote-time request does not have (F-007(b),
+M3's problem). The model also never early-stopped — 500/500 rounds, val still
+improving — so 3.4760 is a floor for LightGBM on these five features, not its
+ceiling.
+
+**E-1, answered by measurement.** The EDA asked M2 to *prove* the log-target
+idea, not assume it. The `log1p` ablation is its own run and came in at **3.4803
+val / 3.2688 test** — consistently *worse*. The reason is not mysterious: KPI-09
+is MAE in minutes, and objective `l1` minimises exactly that on exactly that
+scale, whereas training on logs and exponentiating back optimises the median of a
+different loss. That is a win when the metric is relative. Ours is absolute.
+
+**What to look at.** `src/taxi_mlops/features/quote_time.py` — read `EXCLUSIONS`
+top to bottom; it is the most useful 100 lines in the story.
+`src/taxi_mlops/training/evaluate.py` for the instrument, and
+`tests/unit/test_training_evaluate.py` for assertions you can verify by hand
+(deliberately: a test that checks an implementation against itself would be worse
+than no test). `src/taxi_mlops/training/openmp.py` for a workaround written out
+loud, with gotcha #37 as its footnote and debt D-004 as its expiry date.
+
+**What to try yourself.** Add `fare_amount` to `features.passthrough` in
+`configs/train.yaml` and run `python -m taxi_mlops.training train
+--train-months 2019-01 --no-mlflow`. It refuses before reading a row, and the
+refusal quotes the r = 0.8708 correlation at you. Then comment out the
+`assert_quote_time_pure` call in `feature_names`, run it again, and watch the
+val MAE collapse — that is what a leaked model looks like from the inside, and
+it is why no offline check would have saved you. Second experiment: change
+`baselines.group_keys` to `["PULocationID", "DOLocationID"]` and watch the floor
+rise; the four-key floor is hard to beat precisely because time-of-day carries
+most of what a tree would learn.
+
+---
+
 ### M2-S1 — the rows we threw away had a signature, and 85% of them were the same fault (2026-08-17, role:DE)
 
 **What was built.** The other half of the rejection story. Ingest already
