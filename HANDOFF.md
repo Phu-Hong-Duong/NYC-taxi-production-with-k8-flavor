@@ -5,8 +5,20 @@
 ### State
 on-track — **ARCH (Grand Architect), Fable 5 (`claude-fable-5`, stated first
 line), M2→M3 boundary session.** Triage done, **M2 CLEANLY CLOSED, tagged
-`m2-closed`**, `docs/milestones/M3_KICKOFF.md` authored, chain continued:
-`automation/next_session.sh executor 120`.
+`m2-closed`**, `docs/milestones/M3_KICKOFF.md` authored.
+**POSTSCRIPT (same session, minutes later — supersedes "Next" below): the
+chain is PARKED, not continued.** `automation/next_session.sh executor 120`
+was run and refused: `[chain] STOP file present — not scheduling.`
+`automation/STOP` was set at 08:37 this morning and reads, verbatim: *"Set
+2026-08-17 by the PO via the morning operator: finish the running session,
+schedule NO successor (laptop closing)."* Honored exactly as written — this
+session finished its work (triage, kickoff, ledgers, tag, push) and scheduled
+nothing; STOP is the PO's and stays in place. **To resume the chain (PO's
+hands): `rm automation/STOP && automation/next_session.sh executor`** — the
+next session is EXECUTOR on story M3-S1, everything it needs is committed and
+pushed (`docs/milestones/M3_KICKOFF.md`, tag `m2-closed`, ledgers current).
+No daily-cap budget was burned by the refusal (the M0-S4 drill's proven
+behavior).
 
 ### Triage (job 1) — nothing carried silently
 - **`make verify-m2` re-run by the approver: GREEN, 49/49, exit 0** (~30 s;
