@@ -21,10 +21,13 @@ from taxi_mlops.training.evaluate import Metrics
 TRAIN_CFG = load_yaml("configs/train.yaml")
 GATE_CFG = TRAIN_CFG["gate"]
 
-# The measured M2-S2 numbers, so a change to the shipped config is checked
-# against the model that exists rather than against a number invented for a test.
-V1_TEST_MAE, FLOOR_TEST_MAE = 3.2608, 3.5090
-V1_TEST_WITHIN, FLOOR_TEST_WITHIN = 81.480, 80.322
+# The measured numbers, so a change to the shipped config is checked against the
+# models that exist rather than against numbers invented for a test.
+#   M2-S2/S3: v1 and the single-level floor it was gated against.
+#   M3-S1   : the two-level floor the gate judges against from now on (F-010).
+V1_TEST_MAE, V1_TEST_WITHIN = 3.2608, 81.480
+M2_FLOOR_TEST_MAE, M2_FLOOR_TEST_WITHIN = 3.5090, 80.322
+FLOOR_TEST_MAE, FLOOR_TEST_WITHIN = 3.3518, 80.733
 
 
 def metrics(
@@ -54,22 +57,67 @@ def floor(mae: float = FLOOR_TEST_MAE, within: float = FLOOR_TEST_WITHIN, **kw) 
 
 
 # ------------------------------------------------------------- the shipped config ---
-def test_the_shipped_margin_admits_v1_and_the_headroom_is_stated():
-    """The bar must not be one cut to fit the model we happen to have."""
+def test_the_shipped_margin_still_admits_the_model_that_is_serving():
+    """A bar the incumbent could not clear would be a rollback dressed as a gate.
+
+    The headroom is now 1.35x (+2.71% observed against a 2.00% bar) and not the
+    3.5x M2 claimed, because F-010's floor is 0.157 min stronger. That is the
+    number DR-06 §2 adopted as M3's working headroom, and it is asserted here so
+    the config and the milestone's story cannot drift apart.
+    """
     decision = gate.decide(
         metrics("lightgbm-v1", mae=V1_TEST_MAE, within=V1_TEST_WITHIN), floor(), GATE_CFG
     )
     assert decision.passed
-    assert decision.observed_pct == pytest.approx(7.07, abs=0.01)
-    assert decision.required_pct < decision.observed_pct / 3, (
-        "the configured margin is within a third of the measured gap — that is a "
-        "rubber stamp shaped like a gate"
+    assert decision.observed_pct == pytest.approx(2.71, abs=0.01)
+    assert decision.required_pct < decision.observed_pct, (
+        "the model that is SERVING would be refused by the shipped bar — tightening "
+        "past the incumbent is a rollback, and it is not what F-010 asked for"
     )
 
 
+def test_the_floor_only_ever_got_harder_and_the_old_margin_is_not_the_new_one():
+    """F-010 in one assertion: the same challenger, two floors, 2.6x the margin.
+
+    The M2 number is kept here on purpose. It is not wrong — it is what v1 was
+    promoted at, and `verify-m2` replays it — but it describes a comparison
+    against a floor the program has since improved on, and DR-06 §2 forbids
+    quoting it as headroom.
+    """
+    assert FLOOR_TEST_MAE < M2_FLOOR_TEST_MAE, "the gate's floor got easier, not harder"
+    old = gate.improvement_pct(V1_TEST_MAE, M2_FLOOR_TEST_MAE)
+    new = gate.improvement_pct(V1_TEST_MAE, FLOOR_TEST_MAE)
+    assert old == pytest.approx(7.07, abs=0.01)
+    assert new == pytest.approx(2.71, abs=0.01)
+
+
 def test_the_bar_is_the_honest_floor_and_the_flattering_one_is_not_configurable_into_it():
-    assert GATE_CFG["floor"] == "baseline-group-median"
+    assert GATE_CFG["floor"] == "baseline-group-median-od-fallback"
     assert GATE_CFG["holdout_split"] == "test"
+    assert float(GATE_CFG["min_improvement_pct"]) >= 2.0
+    assert GATE_CFG["require_no_kpi10_regression"] is True
+
+
+def test_the_configured_floor_is_one_the_program_can_actually_fit():
+    """A floor named in the gate that `fit_floor` cannot build is a bar that
+    exists only in a config file — and it would fail at the one moment it
+    matters, in the middle of a training run that has already been paid for."""
+    import pandas as pd
+
+    from taxi_mlops.training import baselines
+
+    frame = pd.DataFrame(
+        {
+            "hour": [1, 1, 2],
+            "dayofweek": [0, 0, 0],
+            "PULocationID": [10, 10, 11],
+            "DOLocationID": [20, 20, 21],
+        }
+    )
+    fitted = baselines.fit_floor(
+        GATE_CFG["floor"], frame, pd.Series([4.0, 6.0, 8.0]), TRAIN_CFG["baselines"]
+    )
+    assert fitted.name == GATE_CFG["floor"]
 
 
 # ---------------------------------------------------------------- the refusals ---
@@ -80,10 +128,18 @@ def test_a_challenger_that_merely_ties_the_floor_is_refused():
 
 
 def test_a_challenger_just_under_the_margin_is_refused_and_just_over_it_passes():
-    """The boundary is `>=`, and it is tested from both sides so it cannot drift."""
+    """The boundary is `>=`, and it is tested from both sides so it cannot drift.
+
+    Both sides are nudged by a millisecond of MAE rather than sitting exactly ON
+    the boundary: `floor * (1 - 2/100)` does not round-trip to exactly 2.00% in
+    binary, so a test written on the knife edge asserts the behaviour of IEEE 754
+    rather than the behaviour of the gate. It found that out by going red when
+    the floor changed — the same arithmetic, a different last bit.
+    """
     required = float(GATE_CFG["min_improvement_pct"])
     exact = FLOOR_TEST_MAE * (1 - required / 100)
-    assert gate.decide(metrics("exact", mae=exact, within=99.0), floor(), GATE_CFG).passed
+    just_over = metrics("just-over", mae=exact - 1e-6, within=99.0)
+    assert gate.decide(just_over, floor(), GATE_CFG).passed
     just_under = metrics("just-under", mae=exact * 1.0001, within=99.0)
     assert not gate.decide(just_under, floor(), GATE_CFG).passed
 
@@ -105,6 +161,164 @@ def test_a_hobbled_model_is_refused_by_a_wide_margin():
     assert not decision.passed
     assert decision.observed_pct < 0
     assert all(not check.passed for check in decision.checks)
+
+
+# --------------------------------------------- the incumbent condition (F-011) ---
+def incumbent(mae: float = V1_TEST_MAE, within: float = V1_TEST_WITHIN, **kw) -> gate.Incumbent:
+    return gate.Incumbent(
+        version=kw.pop("version", "1"),
+        mae=mae,
+        within_tolerance_rate=within,
+        split=kw.pop("split", "test"),
+        source="version tags",
+    )
+
+
+def test_a_challenger_that_clears_the_floor_but_is_worse_than_the_champion_is_refused():
+    """F-011's failure, in the units the finding was filed in.
+
+    The finding's own example was 3.40 min — worse than champion v1's 3.2608 and
+    comfortably clear of the M2 floor's bar. Against F-010's stronger floor that
+    challenger is now refused by the MARGIN, which is a fair thing to notice: a
+    better bar shrinks the window where F-011 bites. It does not close it. 3.2800
+    clears the floor bar by +2.14% and is still 0.0192 min worse than the model
+    that is serving, and that window is exactly where a tuned M3 contender lands.
+    """
+    challenger = metrics("tuned-but-worse", mae=3.2800, within=81.5)
+    against_floor_only = gate.decide(challenger, floor(), GATE_CFG)
+    assert against_floor_only.passed, "the premise of the finding: the floor bar admits it"
+
+    decision = gate.decide(challenger, floor(), GATE_CFG, incumbent=incumbent())
+    assert not decision.passed
+    failed = [c for c in decision.checks if not c.passed]
+    assert len(failed) == 1 and "serving champion" in failed[0].name
+    assert "3.2800" in failed[0].detail and "3.2608" in failed[0].detail
+
+
+def test_a_challenger_better_on_the_mean_and_worse_for_riders_is_refused_against_the_champion():
+    """KPI-09 improves against the incumbent, KPI-10 does not. One mean, six
+    million riders: the second condition is the one they feel."""
+    sneaky = metrics("mean-chaser", mae=V1_TEST_MAE - 0.05, within=V1_TEST_WITHIN - 0.2)
+    decision = gate.decide(sneaky, floor(), GATE_CFG, incumbent=incumbent())
+    assert not decision.passed
+    failed = [c for c in decision.checks if not c.passed]
+    assert len(failed) == 1 and "KPI-10" in failed[0].name and "serving champion" in failed[0].name
+
+
+def test_a_genuinely_better_challenger_still_passes_with_an_incumbent_present():
+    better = metrics("v2", mae=V1_TEST_MAE - 0.1, within=V1_TEST_WITHIN + 0.5)
+    decision = gate.decide(better, floor(), GATE_CFG, incumbent=incumbent())
+    assert decision.passed
+    assert len(decision.checks) == 4, (
+        "floor margin, floor KPI-10, incumbent KPI-09, incumbent KPI-10"
+    )
+
+
+def test_a_tie_with_the_incumbent_is_not_a_regression():
+    """Re-gating the champion's own numbers must not refuse it: `make train` is
+    idempotent by run, and a re-run that cannot reach its own verdict again would
+    make every promotion a one-way door."""
+    same = metrics("lightgbm-v1", mae=V1_TEST_MAE, within=V1_TEST_WITHIN)
+    assert gate.decide(same, floor(), GATE_CFG, incumbent=incumbent()).passed
+
+
+def test_the_champion_re_fitted_is_not_a_regression_against_its_own_rounded_tag():
+    """The defect the first real run found, pinned so it cannot come back.
+
+    `registry.promote` records the incumbent's KPI-09 at four decimals. A
+    deterministic re-fit of that same champion measures 3.2608234…, and
+    `3.2608234 <= 3.2608` is False — so the gate refused the model that is
+    serving, against itself, on 23 microseconds of arithmetic. Numbers are
+    compared at the resolution the registry recorded them at; this test uses the
+    unrounded measurement on purpose, because the rounded one could never fail.
+    """
+    refit = metrics("lightgbm-v1", mae=3.2608234567, within=81.4801234)
+    decision = gate.decide(refit, floor(), GATE_CFG, incumbent=incumbent())
+    assert decision.passed, [c.detail for c in decision.checks if not c.passed]
+
+
+def test_a_regression_bigger_than_the_recorded_resolution_is_still_caught():
+    """The other side of the same line: rounding must not become a free pass.
+    One ten-thousandth of a minute is the smallest difference the registry can
+    represent, and it is refused."""
+    worse = metrics("v2", mae=V1_TEST_MAE + 0.0001, within=V1_TEST_WITHIN)
+    assert not gate.decide(worse, floor(), GATE_CFG, incumbent=incumbent()).passed
+
+
+def test_the_rounding_constants_are_twins_of_the_tags_the_registry_writes():
+    """gate.py rounds to the precision run._promote formats with. Two files, one
+    number — the port-family lesson applied to a decimal place."""
+    import pathlib
+
+    source = pathlib.Path("src/taxi_mlops/training/run.py").read_text()
+    mae_tag = (
+        '"gate_challenger_mae": f"{decision.challenger_mae:.'
+        f'{gate.INCUMBENT_MAE_DECIMALS}f}}"'
+    )
+    assert mae_tag in source
+    assert (
+        f'"gate_challenger_within_rate": f"{{decision.challenger_within:.'
+        f'{gate.INCUMBENT_WITHIN_DECIMALS}f}}"' in source
+    )
+
+
+def test_the_gate_refuses_an_incumbent_measured_on_another_split():
+    with pytest.raises(gate.GateError, match="not a comparison"):
+        gate.decide(
+            metrics("v2", mae=3.0), floor(), GATE_CFG, incumbent=incumbent(split="val")
+        )
+
+
+def test_the_incumbent_travels_on_the_decision_and_into_the_run():
+    decision = gate.decide(
+        metrics("v2", mae=3.0, within=99.0), floor(), GATE_CFG, incumbent=incumbent()
+    )
+    assert decision.incumbent is not None and decision.incumbent.version == "1"
+    assert decision.as_mlflow()["gate_incumbent_mae"] == V1_TEST_MAE
+    text = gate.verdict_lines(decision)
+    assert "incumbent : version 1" in text and "3.2608" in text and "81.480" in text
+
+
+def test_a_verdict_without_an_incumbent_says_so_out_loud():
+    """The first promotion has no incumbent, and M2's replayed verdicts carry
+    none. Silence would be indistinguishable from a comparison nobody made."""
+    decision = gate.decide(metrics("v1", mae=V1_TEST_MAE, within=99.0), floor(), GATE_CFG)
+    assert decision.incumbent is None
+    assert "incumbent : none" in gate.verdict_lines(decision)
+    assert "gate_incumbent_mae" not in decision.as_mlflow()
+
+
+# ------------------------------------------ the sampled-run refusal (F-008) ---
+def test_the_gate_issues_no_verdict_for_a_sampled_training_run():
+    configured = list(TRAIN_CFG["data"]["train_months"])
+    gate.assert_full_train_months(configured, configured)  # the full set is fine
+    with pytest.raises(gate.GateError, match="SAMPLED"):
+        gate.assert_full_train_months(configured[:1], configured)
+
+
+def test_the_sampled_refusal_names_both_month_sets_and_the_direction_of_the_error():
+    configured = list(TRAIN_CFG["data"]["train_months"])
+    with pytest.raises(gate.GateError) as exc:
+        gate.assert_full_train_months(["2019-01"], configured)
+    message = str(exc.value)
+    assert "2019-01" in message and configured[-1] in message
+    # The trap is that a sample makes the transcript look BETTER. If the message
+    # does not say so, the next reader assumes the refusal is bureaucracy.
+    assert "16.85%" in message and "FLOOR" in message
+
+
+def test_the_same_months_in_a_different_order_are_refused_and_that_is_deliberate():
+    """A reordered month list is not the same fit, so it does not get the same
+    verdict. `bagging_fraction: 0.8` with `bagging_freq: 1` samples rows by
+    position, so feeding January last changes which rows each tree sees — the
+    model differs in the last decimals. Comparing lists rather than sets keeps
+    "this verdict describes that fit" true; the cost is that somebody who types
+    the six months out of order gets a refusal, which is the safe direction.
+    """
+    configured = list(TRAIN_CFG["data"]["train_months"])
+    gate.assert_full_train_months(configured, configured)
+    with pytest.raises(gate.GateError):
+        gate.assert_full_train_months(list(reversed(configured)), configured)
 
 
 # ------------------------------------------------- refusing to judge at all ---
@@ -204,6 +418,10 @@ class FakeInfo:
 
 
 def promote(client, run_id="run-1", info=None, **kw):
+    # `incumbent_version` defaults to whatever the fake's alias actually holds:
+    # the honest caller states what the gate compared against, and the tests that
+    # are ABOUT the bypass pass it explicitly.
+    kw.setdefault("incumbent_version", client.alias_at)
     return registry.promote(
         client,
         model_name="nyc-taxi-eta",
@@ -256,8 +474,50 @@ def test_an_artifact_that_cannot_be_read_back_points_at_gotcha_5():
 
     with pytest.raises(registry.PromotionError, match="gotcha #5"):
         registry.promote(
-            FakeClient(), model_name="m", alias="champion", run_id="r", model_info=boom
+            FakeClient(),
+            model_name="m",
+            alias="champion",
+            run_id="r",
+            incumbent_version=None,
+            model_info=boom,
         )
+
+
+# -------------------------------- the alias may not be moved by a decision that
+# -------------------------------- never read what it points at (F-011, part 2) ---
+def test_a_promotion_that_never_consulted_the_incumbent_cannot_move_the_alias():
+    """`gate.decide` takes its incumbent OPTIONALLY — the first promotion has
+    none, and M2's replayed verdicts carry none. This is what stops "optional"
+    from meaning "skippable": the mutating half re-reads the alias itself."""
+    client = FakeClient(versions=[FakeVersion(1, "run-1")], alias_at="1")
+    with pytest.raises(registry.PromotionError, match="F-011"):
+        promote(client, run_id="run-2", incumbent_version=None)
+    assert client.alias_at == "1", "the alias moved despite the refusal"
+    assert "set_registered_model_alias" not in client.calls
+
+
+def test_a_promotion_decided_against_a_stale_champion_is_refused():
+    """Two runs that both passed against version 1 cannot both replace it: the
+    second one's acknowledgement is stale by the time it reaches the registry."""
+    client = FakeClient(versions=[FakeVersion(1, "a"), FakeVersion(2, "b")], alias_at="2")
+    with pytest.raises(registry.PromotionError, match="points at version 2"):
+        promote(client, run_id="run-3", incumbent_version="1")
+    assert client.alias_at == "2"
+
+
+def test_a_first_promotion_states_that_there_was_no_incumbent():
+    client = FakeClient(model_exists=False)
+    result = promote(client, incumbent_version=None)
+    assert result.alias_moved and client.alias_at == "1"
+
+
+def test_a_promotion_claiming_an_incumbent_that_is_gone_is_refused():
+    """The alias was deleted underneath the run (the verify-m2 red team does
+    exactly this). Promoting anyway would hide that something moved it."""
+    client = FakeClient(versions=[FakeVersion(1, "run-1")], alias_at=None)
+    with pytest.raises(registry.PromotionError, match="not set"):
+        promote(client, run_id="run-2", incumbent_version="1")
+    assert client.alias_at is None
 
 
 def test_the_results_table_stays_aligned_when_a_contender_has_a_long_name():

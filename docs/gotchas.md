@@ -442,3 +442,25 @@ the seed line are earned by THIS project.
     Sibling of #11 (the CRLF trap class) and of #33: a verification step must
     compare against what the consumer will receive, not against the copy the
     verifier happens to be holding.
+
+42. **A number that has been through a format string exists only at that
+    precision, and comparing a fresh measurement against it at full precision
+    compares against rounding noise.** M3-S1 taught the promotion gate to refuse
+    a challenger that regresses against the SERVING champion (F-011). The
+    incumbent's numbers come off the registry version's tags, which
+    `registry.promote` writes as `f"{...:.4f}"`. The first full run of the
+    hardened gate then **refused the champion against itself**: a deterministic
+    re-fit of version 1 measures `3.2608234…`, its own tag says `3.2608`, and
+    `3.2608234 <= 3.2608` is False. Every unit test passed beforehand, because a
+    test writes the same literal on both sides of the comparison — the two
+    numbers only diverge once one of them has crossed a serialisation boundary.
+    The fix is to compare at the COARSER of the two precisions and to say which
+    one and why (`gate.INCUMBENT_MAE_DECIMALS`, pinned by a test as a twin of the
+    format string that writes the tag). The general form: whenever a comparison
+    crosses a tag, a CSV, a JSON manifest or a database column with a scale, the
+    serialised side sets the resolution — and a difference below it is not
+    evidence either way. Sibling of the port-family twins rule: two files, one
+    number. It is also the clearest argument in this program for running the real
+    thing once before believing a green suite; this defect was invisible to every
+    synthetic `Metrics` object and would have fired for the first time at M3-S5,
+    on the bake-off, against a live champion.

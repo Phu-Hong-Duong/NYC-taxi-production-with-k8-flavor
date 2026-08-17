@@ -550,6 +550,50 @@ can never disagree (the port-family twins lesson, applied before it bit).
   be quoted as headroom**; the bar's number is S1's to set in `configs/train.yaml`, and
   S5 quotes the config, never the minutes.
 
+## The hardened gate (M3-S1) — four refusals it could not make before, and what they cost
+- **The floor is now `baseline-group-median-od-fallback`** (F-010, Design Review
+  DR-06 §3): the same lookup with one more backoff level — `(hour, dow, PU, DO)`
+  → `(PU, DO)` → global. A NEW name, never an edit (the config legislated that in
+  M2), so M2's verdicts stay reproducible. Measured through the one evaluator:
+  **3.5515 val · 3.3518 test** (vs the old floor's 3.7170 / 3.5090), 1,610,050
+  groups + **46,938 backoff cells**. It reproduced REV's independent
+  re-derivation to four decimals — two instruments, one number.
+- **The headroom is +2.71%, and +7.07% may not be quoted as headroom** (DR-06
+  §2). 75.4% of the champion's advantage was bought on the 1.48% of rows where
+  the OLD floor guessed 11.15 min for everyone; give those rows a real answer and
+  most of M2's "headroom" was the floor's fallback, not the booster. **The 2.00%
+  bar is unchanged and that is a conclusion**: it is a maintenance-cost bar (~4.0
+  s of mean error), and owning a booster did not get cheaper when the floor got
+  better. Honest cost, stated: M3's bake-off must now land **≤3.2848** on test.
+- **The gate consults the INCUMBENT** (F-011), on KPI-09 AND KPI-10, and it has
+  **no knob** — when the alias is unset there is simply nothing to consult. The
+  registry read lives in `run._resolve_incumbent` so `gate.decide` stays pure and
+  cluster-free; `registry.promote` then refuses to move an alias whose current
+  version the decision did not read (`incumbent_version` is required, the live
+  alias is re-read at promotion time). Either half alone can be walked around.
+- **A recorded number exists only at the precision it was recorded at.** The
+  first full run of the new gate REFUSED the champion against its own tag: the
+  registry says `3.2608`, a deterministic re-fit measures `3.260823…`. Fixed by
+  `gate.INCUMBENT_MAE_DECIMALS` / `INCUMBENT_WITHIN_DECIMALS`, pinned as twins of
+  the `%.4f`/`%.3f` in `run._promote`. Invisible to every unit test, because a
+  test writes the same literal on both sides.
+- **`make predictions` now checks the FLOOR half too** (F-012), as a refusal to
+  write: the floor it fits is the one the CHAMPION's verdict was argued against
+  (read off the version's `gate_floor` tag, NOT the current config — after this
+  story they legitimately differ), and its re-scored MAE must equal
+  `gate_floor_mae` or nothing is published.
+- **A sampled run gets NO verdict** (F-008), refused before a row is read.
+  `--no-gate` is the sample-first smoke path, legal ONLY with `--train-months`,
+  promotes nothing, tags its runs `sample_run`/`do_not_promote`, and exits **3** —
+  its own code, because "not judged" and "judged and satisfied" must never be
+  confused by a pipeline.
+- **The gate has ONE home** (F-013, gate half): `configs/promotion.yaml` and its
+  contradictory `gate_ratio: 0.85` are deleted, and a test fails if any file under
+  `configs/` other than `train.yaml` names a gate KNOB (knobs, not filenames — the
+  next stub will be called something else). The features half is M3-S3's.
+- **Nothing was promoted.** `@champion` is version 1 before and after; the full
+  run used `--no-promote` and its runs live in experiment `m3-gate`.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -589,14 +633,16 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
 | Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1. **WIDENED + RE-VERIFIED 2026-08-17 (M2-S1): 16/16** — it now wipes and re-derives `data/rejected/` too and asks DVC about BOTH `.dvc` files (`data/processed.dvc: up to date` · `data/rejected.dvc: up to date`). A proof that re-derives half a command's output proves half a command |
 | Baselines + LightGBM v1 (M2-S2) | `python -m taxi_mlops.training train` (`--ablation` adds the log1p variant; `--train-months` is the sample-first override; `--no-mlflow` is a smoke test, never a result) | VERIFIED 2026-08-17 (M2-S2): 43,987,422 train rows, 4 MLflow runs in `m2-modeling`, `lightgbm-v1` logged WITH signature + input example (7 artifacts in MinIO). The two floors came back **7.8866** and **3.7170** val MAE — the EDA's SQL numbers to four decimals, from different code. Registry left EMPTY on purpose (S3's) |
-| Train + gate + promote (M2-S3) | `make train` (`--no-promote` prints the verdict only; `--hobble shuffled-target` is the red team; **exit 1 = the gate refused**) | VERIFIED 2026-08-17 (M2-S3): 43,987,422 train rows, 500/500 rounds, verdict **PROMOTE** at +7.07% over the honest floor (3.2608 vs 3.5090 test) and +1.158 KPI-10 points, `nyc-taxi-eta` version 1 aliased `@champion` with signature + input example, exit 0. Every number in the table reproduced M2-S2's to four decimals. Re-promoting the same run is a NO-OP (`noop? True`, versions still `[1]`) |
+| Train + gate + promote (M2-S3, hardened M3-S1) | `make train` (`--no-promote` prints the verdict only; `--hobble shuffled-target` is the red team; `--train-months` is GATE-DISQUALIFYING and `--no-gate` is the sampled smoke path; `--experiment`/`--story` label the runs; **exit 1 = refused · exit 2 = no verdict possible · exit 3 = no verdict issued**) | VERIFIED 2026-08-17 (M3-S1): full data 43,987,422 rows, 500/500 rounds, all four contenders through one evaluator, gate now judged against `baseline-group-median-od-fallback` (**3.3518** test) with the **incumbent** consulted (version 1, 3.2608 / 81.480%) → **PROMOTE +2.71%**, exit 0, `--no-promote` so nothing moved. Re-measured M2's numbers exactly (7.8866 · 3.5090 · 3.2608 · 81.480%). Sampled run refused in seconds, exit 2; `--no-gate` sample printed its table and exited 3 |
 | Prove the gate can REFUSE | `make train-redteam` (`bash scripts/train_redteam.sh`) | VERIFIED 2026-08-17 (M2-S3): a challenger fitted on permuted train labels went through the SAME gate with promotion ENABLED → **REFUSE on both conditions** (−118.49% KPI-09, −32.018 points KPI-10), CLI exit 1, script inverted it to 0. Registry snapshot identical across the run (`versions=[] · alias @champion -> UNSET` before AND after). Hobbled run kept and tagged `red_team`/`hobbled`/`do_not_promote`; it is not a registry version |
-| Score the champion, publish rows (M2-S4) | `make predictions` (`python -m taxi_mlops.training predict`; `--no-write` prints the numbers and publishes nothing) | VERIFIED 2026-08-17 (M2-S4): resolved `models:/nyc-taxi-eta@champion` → version 1, run `3adee05a…`, 500 trees, features matched the config; re-scored **3.2608** on test against the version's own `gate_challenger_mae` tag → `MATCH — the published rows describe the model the gate promoted`; wrote 6,189,748 + 5,950,708 rows + `predictions.json`. Registry untouched (it registers nothing). Needs the F-009 resolution step to load at all |
+| Score the champion, publish rows (M2-S4, floor-checked M3-S1) | `make predictions` (`python -m taxi_mlops.training predict`; `--no-write` prints the numbers and publishes nothing; `--floor-train-months` is the F-012 red team's lever) | VERIFIED 2026-08-17 (M2-S4) and re-verified under the new check (M3-S1): it now fits the floor the CHAMPION was gated against — read off the version's `gate_floor` tag, observed `baseline-group-median`, NOT the config's new floor — and refuses to write unless that floor re-scores to the version's `gate_floor_mae` |
 | Reprint every number in the error memo | `uv run python scripts/error_memo_numbers.py [section…]` | VERIFIED 2026-08-17 (M2-S4): all 7 sections reproduce `docs/error_memo_m2.md` from `marts.error_segments` + the `predictions` view — and caught 4 last-digit rounding slips on its first run, which were fixed in the memo |
 | Error-segment board (M2-S4) | `make boards` (same path as M1-S5; `--verify` is the read-only twin) | VERIFIED 2026-08-17 (M2-S4): `Error segments (M2)` created with **11 cards**, every card citing a KPI id and querying the `marts` warehouse; `--verify` green on all 3 dashboards incl. `card 'KPI-13 · what the booster buys, by hour of day (test)' RAN and returned 24 row(s)` and `no card claims KPI-09/KPI-10` |
 | Zone centroids (M3-S2) | `make zones` (`uv run python scripts/derive_zone_centroids.py`; `ZONES_ARGS=--refresh` re-downloads) | VERIFIED 2026-08-17 (M3-S2): 263 zones from the sha256-pinned TLC shapefile, CRS **read from the .prj** (`NAD83 / New York Long Island (ftUS)`), landmarks JFK **0.63 km** · LGA **0.11 km** · EWR **0.26 km** from their published points, `.dbf` and `taxi_zone_lookup.csv` agree on borough+zone for all 263, every centroid inside the NYC bbox. Idempotent: re-run gives sha256 `37910367…` unchanged. RED-TEAMED by a **111 m** edit to one of 263 rows → the sha256-pin leg AND the byte-identity re-derivation leg both fail while all 11 semantic checks still pass (the landmark tolerance is 3 km), restore → 13/13 |
-| Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5): 9 sections, **49 sub-checks GREEN, exit 0, ~30s**. It re-reads and re-reconciles, it NEVER re-fits: no `make train`, no `make predictions`, no registry write (pinned by tests) — a gate with side effects on the registry it checks is not a gate |
-| Prove the M2 gate can go RED | `make verify-m2-redteam` (`bash scripts/verify_m2_redteam.sh`) | VERIFIED 2026-08-17 (M2-S5): deletes the `@champion` alias → **RED, exit 1, 4 FAILs**, the first naming `models:/nyc-taxi-eta@champion does not resolve`, **38 sub-checks still ran and passed**; alias restored by EXIT trap → **GREEN 49/49**. Deletes only the POINTER — no version, no run, no artifact |
+| Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5), **RE-VERIFIED and WIDENED 2026-08-17 (M3-S1): GREEN 54/54** (was 49 — five sub-checks added to §2, none removed). §2 now replays M3's transcripts too, WITH the incumbent each one records; pins the floor by name; and measures the DIRECTION of the floor change from two committed transcripts (`3.5090 -> 3.3518 on the same 5,950,708 rows`), because a floor swap is only not-a-loosening if the new floor is harder. It re-reads and re-reconciles, it NEVER re-fits |
+| Prove the M2 gate can go RED | `make verify-m2-redteam` (`bash scripts/verify_m2_redteam.sh`) | VERIFIED 2026-08-17 (M2-S5): deletes the `@champion` alias → **RED, exit 1, 4 FAILs**, the first naming `models:/nyc-taxi-eta@champion does not resolve`, **38 sub-checks still ran and passed**; alias restored by EXIT trap → **GREEN**. Deletes only the POINTER — no version, no run, no artifact |  **RE-RUN 2026-08-17 (M3-S1): PASSED, restored run GREEN at 54 sub-checks**
+| Prove the gate refuses a WORSE-THAN-CHAMPION challenger (M3-S1) | `make gate-redteam` (`uv run python scripts/gate_redteam_incumbent.py`) | VERIFIED 2026-08-17 (M3-S1): a challenger built as the champion **+0.06 min** on every quote scored **3.2667 / 81.423%**, cleared the floor bar at **+2.54%**, and was **REFUSED on both incumbent conditions** against version 1's 3.2608 / 81.480% while the floor conditions still passed. The bypass (`incumbent_version=None`) was refused by `registry.promote`. Registry identical before and after (alias 1, versions [1]). ~6 min; it is a .py and not a heredoc because the OpenMP shim re-execs and stdin cannot be replayed (gotcha #37) |
+| Prove a wrong-window floor cannot be published (M3-S1) | `make predictions-redteam` (`bash scripts/predictions_redteam.sh`) | VERIFIED 2026-08-17 (M3-S1): floor fitted on 2019-01 instead of six months → re-fit measured **4.1138** against the version's `gate_floor_mae` **3.5090** → **write REFUSED, exit 2**, and all three published files **byte-identical by sha256** before and after |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2 live; M3+ pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |
@@ -637,6 +683,8 @@ New-in-v2: AutoML leaderboard (#15), dependency quarantine (#16), Optuna study
 namespaces (#17), REV freshness (#18). Newest: Docker Desktop owns `kubectl`'s
 symlink (#34), a test that parses a shell array truncated it at the first `)` in
 a COMMENT and the survivors ran as commands (#35), dbt's partial-parse cache
-makes a build a function of where somebody once stood (#38), and two different
+makes a build a function of where somebody once stood (#38), two different
 MLflow faults print the same `MLmodel` error — one is F-009, the other is a
-client without MinIO credentials (#39).
+client without MinIO credentials (#39), and **a number that has been through a
+`%.4f` exists only at that precision, so comparing a fresh measurement against it
+compares against rounding noise (#42 — it refused the champion against itself)**.

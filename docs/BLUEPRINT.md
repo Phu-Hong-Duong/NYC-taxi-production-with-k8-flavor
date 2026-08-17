@@ -202,7 +202,9 @@ same database discipline as everything else); every trial an MLflow nested run
 under one parent; best trial → challenger.
 
 **The gate is the impartial judge.** Scout, sniper, and the M2 hand-built model all
-pass through the SAME promotion gate (`configs/promotion.yaml`) — champion moves
+pass through the SAME promotion gate (`configs/train.yaml: gate` — the path was
+`configs/promotion.yaml` in this spec until M3-S1 deleted that bootstrap stub,
+which carried a second, contradictory bar; F-013) — champion moves
 only on held-out-month evidence. Nobody, including AutoML, gets a side door. The
 complementarity the principal asked to see is exactly this: breadth-first scout →
 depth-first tuner → impartial registry gate, each doing what the other cannot.

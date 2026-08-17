@@ -190,9 +190,10 @@ def ok(m): print(f"PASS|{m}")
 def no(m): print(f"FAIL|{m}")
 
 DOC = "docs/promotion_gate_m2.md"
+DOC_M3 = "docs/promotion_gate_m3.md"
 try:
     from taxi_mlops.training.evaluate import Metrics
-    from taxi_mlops.training.gate import GateError, decide
+    from taxi_mlops.training.gate import GateError, Incumbent, decide
     from taxi_mlops.training.run import load_train_config
 
     cfg = load_train_config("configs/train.yaml")["gate"]
@@ -208,29 +209,51 @@ try:
         ok("the KPI-10 no-regression condition is still armed (it can refuse what the margin admits)")
     else:
         no("require_no_kpi10_regression is off — the rider-facing condition was switched off")
-    if cfg["floor"] == "baseline-group-median" and cfg["holdout_split"] == "test":
-        ok("the bar is still the HONEST floor on the untouched holdout (baseline-group-median, test)")
+    # M3-S1 (F-010) changed this floor, and the change is a TIGHTENING: the same
+    # lookup with one more backoff level, measured lower on the same month. The
+    # pin below moved with it in the same PR — never weakened, and the sub-check
+    # after the replays proves the DIRECTION from two committed transcripts, so
+    # swapping in an easier floor is red rather than a diff nobody read.
+    if cfg["floor"] == "baseline-group-median-od-fallback" and cfg["holdout_split"] == "test":
+        ok(f"the bar is still an HONEST floor on the untouched holdout ({cfg['floor']}, test)")
     else:
         no(f"the gate now judges against {cfg['floor']!r} on {cfg['holdout_split']!r} — "
-           "the flattering floor or a touched month")
+           "the flattering floor, a touched month, or a floor nobody argued for")
 
     # Parse M2-S3's pasted transcripts and replay them. A transcript is evidence
     # about a past run; replaying its numbers through today's decision function
     # is evidence about today's gate. Both are wanted, and only the second can
     # notice that the bar moved after the transcript was written.
-    text = open(DOC, encoding="utf-8").read()
-    rows = int(re.search(r"holdout\s+: \w+ — ([\d,]+) rows", text).group(1).replace(",", ""))
-    blocks, current = [], {}
     line_re = re.compile(
         r"\[gate\] (challenger|floor)\s*: (\S+)\s+KPI-09 ([\d.]+) min\s+·\s+KPI-10 ([\d.]+)%")
-    for line in text.splitlines():
-        m = line_re.match(line)
-        if m:
-            current[m.group(1)] = (m.group(2), float(m.group(3)), float(m.group(4)))
-        elif line.startswith("[gate] VERDICT"):
-            current["verdict"] = line.split(":", 1)[1].strip()
-            blocks.append(current)
-            current = {}
+    # A transcript that records an incumbent must be replayed WITH it, or the
+    # replay is asking a different question from the one the verdict answered —
+    # M3-S1's watched refusal is a REFUSE only because of the incumbent, and a
+    # replay that dropped it would have reported PROMOTE and called the doc wrong.
+    inc_re = re.compile(
+        r"\[gate\] incumbent\s*: version (\S+)\s+KPI-09 ([\d.]+) min\s+·\s+KPI-10 ([\d.]+)%")
+
+    def transcripts(path):
+        text = open(path, encoding="utf-8").read()
+        rows = int(re.search(r"holdout\s+: \w+ — ([\d,]+) rows", text).group(1).replace(",", ""))
+        blocks, current = [], {}
+        for line in text.splitlines():
+            m = line_re.match(line)
+            i = inc_re.match(line)
+            if i:
+                current["incumbent"] = (i.group(1), float(i.group(2)), float(i.group(3)))
+            elif m:
+                current[m.group(1)] = (m.group(2), float(m.group(3)), float(m.group(4)))
+            elif line.startswith("[gate] VERDICT"):
+                current["verdict"] = line.split(":", 1)[1].strip()
+                current["doc"] = path
+                blocks.append(current)
+                current = {}
+        return rows, blocks
+
+    rows, blocks = transcripts(DOC)
+    rows_m3, blocks_m3 = transcripts(DOC_M3)
+    blocks += blocks_m3
 
     def metrics(triple, split):
         name, mae, within = triple
@@ -243,10 +266,23 @@ try:
     replayed = {"REFUSE": 0, "PROMOTE": 0}
     for b in blocks:
         if not {"challenger", "floor", "verdict"} <= b.keys():
-            no(f"a transcript block in {DOC} is missing one of its two numbers")
+            no(f"a transcript block in {b.get('doc', DOC)} is missing one of its two numbers")
             continue
         holdout = cfg["holdout_split"]
-        d = decide(metrics(b["challenger"], holdout), metrics(b["floor"], holdout), cfg)
+        # The floor NAME comes from the block, not from the config: a verdict is
+        # replayed against the bar it was actually taken against, or it is not a
+        # replay. Since M3-S1 the two legitimately differ — M2's verdicts were
+        # argued against `baseline-group-median` and the live gate judges against
+        # the stronger `baseline-group-median-od-fallback`. The floor's IDENTITY
+        # is guarded separately and unweakened: the pinned name above, the
+        # flattering-floor refusal below, and the direction check after this loop.
+        block_cfg = {**cfg, "floor": b["floor"][0]}
+        version, mae, within = b.get("incumbent", (None, 0.0, 0.0))
+        inc = None if version is None else Incumbent(
+            version=version, mae=mae, within_tolerance_rate=within, split=holdout,
+            source=f"the transcript in {b['doc']}")
+        d = decide(metrics(b["challenger"], holdout), metrics(b["floor"], holdout), block_cfg,
+                   incumbent=inc)
         if d.verdict == b["verdict"]:
             replayed[d.verdict] = replayed.get(d.verdict, 0) + 1
             ok(f"replayed {b['challenger'][0]}: {b['challenger'][1]:.4f} vs "
@@ -262,6 +298,43 @@ try:
         ok(f"the promotion transcript exists with both numbers and still promotes ({replayed['PROMOTE']} block(s))")
     else:
         no("no transcript in the doc replays to PROMOTE")
+
+    # A floor swap is only NOT a loosening if the new floor is harder, so the
+    # direction is measured rather than asserted — from two committed transcripts,
+    # each carrying a floor measured by the evaluator on the same holdout month.
+    m2_floor = min(b["floor"][1] for b in blocks if b["doc"] == DOC)
+    m3_floor = min(b["floor"][1] for b in blocks_m3)
+    if m3_floor < m2_floor:
+        ok(f"the gate's floor only ever got HARDER: {m2_floor:.4f} min (M2) -> "
+           f"{m3_floor:.4f} min ({cfg['floor']}) on the same holdout month")
+    else:
+        no(f"the configured floor scores {m3_floor:.4f} min against M2's {m2_floor:.4f} — a "
+           "floor that predicts WORSE is a looser gate wearing a new name (F-010)")
+    if rows_m3 == rows:
+        ok(f"both floors were measured over the same {rows:,} holdout rows")
+    else:
+        no(f"the M3 transcript scored {rows_m3:,} rows and M2's {rows:,} — not a comparison")
+
+    # The incumbent condition, live on disk (F-011). It defends M2's champion
+    # directly: without it a challenger worse than version 1 takes the alias.
+    # The PROMOTE block, not the last one: the M3 document also carries the
+    # red team's REFUSE transcript, whose challenger is a deliberately degraded
+    # model. Building "0.02 worse than that" would fail the MARGIN condition and
+    # this sub-check would pass while testing something else entirely.
+    promoted = next(b for b in blocks_m3 if b["verdict"] == "PROMOTE")
+    inc_floor = promoted["floor"]
+    champ = promoted["challenger"]
+    worse = (champ[0] + "-but-worse", champ[1] + 0.02, champ[2] - 0.05)
+    holdout = cfg["holdout_split"]
+    inc = Incumbent(version="1", mae=champ[1], within_tolerance_rate=champ[2],
+                    split=holdout, source="the transcript being replayed")
+    d_worse = decide(metrics(worse, holdout), metrics(inc_floor, holdout),
+                     {**cfg, "floor": inc_floor[0]}, incumbent=inc)
+    if not d_worse.passed and any("serving champion" in c.name for c in d_worse.checks if not c.passed):
+        ok("the incumbent condition is ARMED: a challenger 0.02 min worse than the champion "
+           "is refused by name, even when it clears the floor bar")
+    else:
+        no("a challenger worse than the serving champion still PASSES — F-011 is open again")
 
     # The two comparisons the gate must DECLINE to make at all.
     good = blocks[-1]
@@ -281,7 +354,7 @@ except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the gate replay itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 9 "the gate replay"
+expect_verdicts 13 "the gate replay"
 
 # -------------------------------------- 3. MLflow holds the runs behind it all --
 section "3. MLflow: experiment 'm2-modeling' holds the runs, including the refused one"

@@ -125,13 +125,27 @@ def test_the_gate_replays_the_transcript_through_the_live_decision_function():
     doc's own numbers are fed back through `decide()` as it exists on disk now.
     """
     body = without_comments(VERIFY_M2)
-    assert "from taxi_mlops.training.gate import GateError, decide" in body
+    assert "from taxi_mlops.training.gate import GateError, Incumbent, decide" in body
     assert "decide(metrics(" in body
     assert "min_improvement_pct" in body and ">= 2.0" in body
     assert "require_no_kpi10_regression" in body
     # and the two comparisons the gate must decline to make at all
     assert 'metrics(good["challenger"], "val")' in body
     assert "baseline-constant-median" in body
+
+
+def test_the_replay_leg_checks_that_the_floor_only_ever_got_harder():
+    """M3-S1 changed the gate's floor (F-010), which the replay leg has to allow
+    or every historical verdict becomes unreproducible — and must not allow
+    blindly, or "swap in an easier floor" becomes the way to loosen a gate
+    without touching a threshold. The direction is measured from the two
+    committed transcripts, both scored by the evaluator on the same month.
+    """
+    body = without_comments(VERIFY_M2)
+    assert "docs/promotion_gate_m3.md" in body
+    assert "m3_floor < m2_floor" in body
+    # ...and the incumbent condition is proven armed rather than assumed
+    assert "incumbent=inc" in body and "serving champion" in body
 
 
 def test_the_gate_reads_the_champion_through_the_alias_not_through_a_search():

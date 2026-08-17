@@ -9,6 +9,78 @@ months from now.
 
 ## M3
 
+### M3-S1 — the gate learned what it was being compared to (2026-08-17, role:MLE)
+
+**What was built.** Four refusals the gate could not make before. It now judges
+against a **stronger floor** (`baseline-group-median-od-fallback` — the same
+lookup with one more backoff level, 3.3518 vs 3.5090 test MAE), against the
+**model that is actually serving** (F-011), refuses to publish predictions whose
+**floor** was fitted over a window the champion's verdict never saw (F-012), and
+refuses to issue a verdict at all for a **sampled** training run (F-008). The
+second gate that lived in `configs/promotion.yaml` was deleted (F-013, gate
+half). Two new drills watch two of those refusals happen: `make gate-redteam`
+and `make predictions-redteam`.
+
+**Why this way.** The finding that drove the story (F-010) is subtle and worth
+sitting with. M2's gate looked generous: the champion beat its floor by 7.07%
+against a 2.00% bar. But the floor answered every trip whose exact
+`(hour, dow, PU, DO)` cell it had never seen with the **global median — 11.15
+minutes for everyone** — and 1.48% of test rows land there. M2-S4's error memo
+had already measured that **75.4% of the model's entire advantage was bought on
+those 1.48% of rows**. So most of the "headroom" was not the booster being good;
+it was the floor's fallback being bad. Give the same `GROUP BY` one more backoff
+level — no new column, no new model, the same train rows — and 98.9% of those
+rows get a real answer, the floor drops to 3.3518, and the margin collapses to
+**+2.71%**. The cheap response was to keep the old floor and add a paragraph
+admitting this. The expensive one, taken, was to adopt the harder floor: M3's
+bake-off now has to land at ≤3.2848 instead of ≤3.4388, which is 0.157 minutes
+of bar that nobody would have missed.
+
+The design question underneath F-011 is the interesting one: how do you add an
+incumbent check to a gate whose whole virtue is being a **pure function**? The
+answer that keeps both properties is to make the impure half somebody else's
+job. `run._resolve_incumbent` reads the registry and hands `gate.decide` an
+`Incumbent` dataclass with its provenance attached; `decide` stays testable
+without a cluster, and every one of M2's recorded verdicts still replays because
+the argument is optional. That optionality is a hole, so `registry.promote`
+closes it from the other side: `incumbent_version` is required, the live alias
+is re-read at promotion time, and a mismatch refuses. Neither half alone is
+enough — one can be skipped, the other cannot see the numbers.
+
+**The concept underneath.** *A recorded number exists only at the precision it
+was recorded at, and comparing a measurement against it at any finer precision
+is comparing against rounding noise.* The first full run of the hardened gate
+**refused the champion against itself**. The registry tag says `3.2608`; a
+deterministic re-fit of the same model measures `3.260823…`; `3.260823 <= 3.2608`
+is False. Every unit test passed, because a test writes the same literal on both
+sides — the two numbers only differ once one of them has been through a `%.4f`.
+The fix is small (round the challenger to the resolution the tag has) and the
+lesson is not: whenever a comparison crosses a serialisation boundary — a tag, a
+CSV, a JSON manifest, a database column with a scale — the comparison has to
+happen at the *coarser* of the two precisions, and the code should say which one
+and why. It is also the clearest argument in this milestone for running the real
+thing: this defect is invisible to a synthetic `Metrics` object and would have
+fired for the first time at S5, on the bake-off, against a champion.
+
+**What to look at.** `src/taxi_mlops/training/gate.py` — the docstring's six
+numbered properties, then `INCUMBENT_MAE_DECIMALS` and the comment that explains
+what it cost · `registry._assert_incumbent_acknowledged`, which is nine lines
+and closes a race · `scripts/gate_redteam_incumbent.sh`'s header, on why the
+challenger there is **built rather than fitted** (F-011's window is 0.02 minutes
+wide; no hobbled fit lands in it on purpose) · `configs/train.yaml: gate`, where
+the floor decision is argued beside the value · `docs/promotion_gate_m3.md` §1
+and §7.
+
+**What to try yourself.** Run `make train --train-months 2019-01` — watch it
+refuse in seconds, before a single row is read, and read what the message says
+about the *direction* of the error. Then add `--no-gate` and watch the same
+sample produce a full table, no verdict, and exit 3. Finally, open
+`configs/train.yaml` and try to think of a way to make the gate accept a model
+worse than the champion **without** editing a threshold: the answer is supposed
+to be "delete a check", and if you find a third way, that is a finding.
+
+---
+
 ### M3-S2 — the forbidden feature was replaceable, and measuring it took one query (2026-08-17, role:DA + MLE hat)
 
 **What was built.** Three things and one refusal. `make zones` derives 263

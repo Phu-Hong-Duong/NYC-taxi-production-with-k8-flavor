@@ -22,7 +22,12 @@ import pytest
 
 from taxi_mlops.training import predictions as predictions_mod
 from taxi_mlops.training.evaluate import Metrics
-from taxi_mlops.training.score import Champion, ChampionError, _check_against_registry
+from taxi_mlops.training.score import (
+    Champion,
+    ChampionError,
+    _check_against_registry,
+    _check_floor_against_registry,
+)
 
 
 def features(rows: int = 6) -> pd.DataFrame:
@@ -152,7 +157,7 @@ def test_the_manifest_carries_no_timestamp(tmp_path):
     assert json.loads(text)["metric_source"] == "taxi_mlops.training.evaluate"
 
 
-def champion(tag_mae: str | None) -> Champion:
+def champion(tag_mae: str | None, **tags: str) -> Champion:
     return Champion(
         model_name="nyc-taxi-eta",
         alias="champion",
@@ -162,7 +167,7 @@ def champion(tag_mae: str | None) -> Champion:
         target_transform="none",
         feature_names=list(features().columns),
         trees=500,
-        tags={} if tag_mae is None else {"gate_challenger_mae": tag_mae},
+        tags={**({} if tag_mae is None else {"gate_challenger_mae": tag_mae}), **tags},
         booster=None,
     )
 
@@ -185,3 +190,37 @@ def test_an_untagged_champion_says_so_rather_than_pretending_to_check(capsys):
     nothing would look identical to checking and passing."""
     _check_against_registry(champion(None), [_metrics(3.2608)], "test")
     assert "nothing to check" in capsys.readouterr().out
+
+
+# ---------------------------------- the FLOOR half of the same argument (F-012) ---
+def floor_champion(**tags: str) -> Champion:
+    return champion("3.2608", gate_floor="baseline-group-median", **tags)
+
+
+def test_a_floor_refit_that_disagrees_with_the_version_refuses_the_WRITE(capsys):
+    """F-012's concrete failure: the floor is re-fitted over a different window
+    (M7's retrain, or an --train-months invocation), the champion still re-scores
+    at its promoted number so the old check passes, and every published KPI-13
+    silently starts comparing against a bar nobody set."""
+    with pytest.raises(ChampionError, match="Refusing to write"):
+        _check_floor_against_registry(
+            floor_champion(gate_floor_mae="3.5090"), [_metrics(3.3518)], "test"
+        )
+
+
+def test_a_floor_refit_that_reproduces_the_version_is_published(capsys):
+    _check_floor_against_registry(
+        floor_champion(gate_floor_mae="3.5090"), [_metrics(3.5089986)], "test"
+    )
+    assert "the published floor is the floor the gate argued against" in capsys.readouterr().out
+
+
+def test_an_untagged_floor_is_a_refusal_and_not_a_note():
+    """Deliberately asymmetric with the challenger check above, which prints a
+    note for an untagged version. That asymmetry is the finding: the challenger
+    half was allowed to be unfalsifiable for one legacy version, and F-012 is
+    what an unfalsifiable half of a published comparison costs. No version can
+    reach this path untagged any more — `promote` has written the tag since
+    M2-S3 — so a missing one means something wrote a version around the gate."""
+    with pytest.raises(ChampionError, match="gate_floor_mae"):
+        _check_floor_against_registry(floor_champion(), [_metrics(3.5090)], "test")

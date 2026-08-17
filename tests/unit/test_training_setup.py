@@ -160,9 +160,53 @@ def test_the_registry_is_touched_from_exactly_one_module():
 
 def test_the_gate_decision_carries_no_side_effects_into_the_pure_module():
     """`gate.py` decides and `registry.py` acts. A decision that could register
-    something would make the interesting logic untestable without a cluster."""
+    something would make the interesting logic untestable without a cluster.
+
+    M3-S1 taught the gate about the incumbent WITHOUT breaking this: the registry
+    read happens in `run._resolve_incumbent` and arrives as a `gate.Incumbent`
+    with its provenance attached. The temptation was to let `decide()` resolve
+    the alias itself, which would have made every gate unit test need a cluster.
+    """
     import pathlib
 
     source = pathlib.Path("src/taxi_mlops/training/gate.py").read_text()
     for forbidden in ("import mlflow", "MlflowClient", "open(", "Path("):
         assert forbidden not in source, f"gate.py acquired a side effect: {forbidden!r}"
+
+
+# ------------------------------------------- the gate has exactly one home (F-013) ---
+def test_no_second_config_file_defines_a_gate():
+    """F-013: `configs/promotion.yaml` carried `gate_ratio: 0.85` — a bar that
+    agreed with nothing and that a session grepping for "promotion" would find
+    first. The port-family twins lesson: two definitions one directory apart, one
+    of them stale, is how a model gets judged against a bar nobody set.
+
+    The check is on the KNOBS, not on the filename, because the next stub will
+    have a different name.
+    """
+    import pathlib
+
+    knobs = (
+        "gate_ratio",
+        "min_improvement_pct",
+        "require_no_kpi10_regression",
+        "holdout_split",
+        "champion_alias",
+    )
+    for path in sorted(pathlib.Path("configs").glob("*.yaml")):
+        if path.name == "train.yaml":
+            continue
+        text = path.read_text()
+        found = [knob for knob in knobs if knob in text]
+        assert not found, (
+            f"{path} names gate knob(s) {found}. The gate has ONE home, "
+            "configs/train.yaml: gate — a second definition is F-013 all over again."
+        )
+
+
+def test_the_gate_knobs_the_program_defends_are_all_in_the_one_home():
+    """The other direction of the same law: a knob that moved OUT of train.yaml
+    would leave this test's list pointing at nothing and still pass above."""
+    text = (__import__("pathlib").Path("configs/train.yaml")).read_text()
+    for knob in ("min_improvement_pct", "require_no_kpi10_regression", "holdout_split", "floor:"):
+        assert knob in text, f"configs/train.yaml no longer defines {knob}"
