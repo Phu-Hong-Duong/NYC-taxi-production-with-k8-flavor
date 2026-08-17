@@ -113,3 +113,35 @@ def test_daily_cap_halts_the_chain_and_says_so_where_the_PO_looks(tmp_path):
     assert "chain cap" in (tmp_path / "AWAITING_PO.md").read_text()
     time.sleep(int(DELAY) + 2)
     assert not marker.exists(), "the cap did not actually stop the session"
+
+
+# --------------------------------------------------------------------------
+# One session in the tree at a time.
+# --------------------------------------------------------------------------
+def test_a_queued_session_waits_for_the_tree_to_go_idle(tmp_path):
+    """Two executors in one working tree edit each other's files.
+
+    Written from a near-miss on 2026-08-17: a detached job was due to schedule
+    a successor at ~15:20 while a hand-started session was still mid-story in
+    the same tree. Nothing had ever stopped two sessions from overlapping —
+    the chain simply never happened to try.
+    """
+    script, marker, env = _sandbox(tmp_path)
+    logs = tmp_path / "automation" / "logs"
+    # os.getpid(): a session that is definitely alive for the whole test.
+    (logs / "running_session").write_text(f"{os.getpid()} executor 2026-08-17T14:49:13Z\n")
+    env = {**env, "CHAIN_IDLE_POLL": "1", "CHAIN_IDLE_WAIT": "120"}
+
+    proc = subprocess.run(
+        [str(script), "executor", "1"], cwd=tmp_path, env=env,
+        capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    # It was scheduled, so it is queued — but it must not have LAUNCHED.
+    time.sleep(6)
+    assert not marker.exists(), "a second session launched on top of a live one"
+
+    # The tree goes idle; the queued session may now take it.
+    (logs / "running_session").unlink()
+    assert _wait_for(marker), "the queued session never launched after the tree freed up"

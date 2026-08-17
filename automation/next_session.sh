@@ -72,9 +72,22 @@ echo "${ROLE} queued $(date -u +%FT%TZ) for +${DELAY}s" > "${PENDING}"
 # shells (gotcha #26).
 FLAGS="${CLAUDE_PERMISSION_FLAGS:---permission-mode acceptEdits}"
 
+# ONE SESSION IN THE TREE AT A TIME. Two executors sharing a working tree edit
+# each other's files and commit over each other. This is not hypothetical: on
+# 2026-08-17 a detached job was due to schedule a successor while a
+# hand-started session was still mid-story. The queued session therefore waits
+# for the tree to go idle rather than launching on top of whoever holds it.
+IDLE_WAIT="${CHAIN_IDLE_WAIT:-1800}"
+IDLE_POLL="${CHAIN_IDLE_POLL:-30}"   # knob so the guard can be tested in seconds
+
 # setsid: own session and process group, so the queued session cannot be taken
 # down by whatever exits upstream of it (gotcha #45's other half).
 setsid nohup bash -c "sleep ${DELAY}; \
+  if [ -f automation/STOP ]; then rm -f '${PENDING}'; exit 0; fi; \
+  waited=0; \
+  while [ -f automation/logs/running_session ] \
+     && kill -0 \$(awk '{print \$1}' automation/logs/running_session 2>/dev/null) 2>/dev/null \
+     && [ \$waited -lt ${IDLE_WAIT} ]; do sleep ${IDLE_POLL}; waited=\$((waited + ${IDLE_POLL})); done; \
   if [ -f automation/STOP ]; then rm -f '${PENDING}'; exit 0; fi; \
   rm -f '${PENDING}'; \
   echo \"\$\$ ${ROLE} \$(date -u +%FT%TZ)\" > automation/logs/running_session; \
