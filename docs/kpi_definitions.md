@@ -154,7 +154,12 @@ rows** unless the entry says otherwise.
   view; not an AutoML leaderboard; not a scout-internal number.
 - **Window:** one evaluation split (val = 2019-07, test = 2019-08), whole split
 - **Owner:** MLE (produces) · DA (reports) · REV (audits)
-- **Observed:** **not yet measured — M2 owns the first value.**
+- **Observed (FIRST MEASURED 2026-08-17, M2-S2):** **3.4760 min on val (2019-07)**
+  and **3.2608 min on test (2019-08)** for `lightgbm-v1` on quote-time feature set
+  v1, MLflow run `598044f586524a82b385a6cf27f9a31b` (experiment `m2-modeling`).
+  Produced by `taxi_mlops.training.evaluate` and by nothing else. For context on
+  the same run and through the same evaluator: the group-median floor measured
+  **3.7170 / 3.5090** and the constant-median floor **7.8866 / 7.6667**.
 - **Reference floor (EDA statistic, NOT a KPI-09 value):** a train-fitted
   `GROUP BY (hour, day-of-week, PU, DO)` median achieves 3.7170 min on val
   (eda_report.md §11). **A model above that number has learned nothing a SQL
@@ -167,7 +172,11 @@ rows** unless the entry says otherwise.
 - **Source:** **`taxi_mlops.training.evaluate` only** (gotcha #15)
 - **Window:** one evaluation split; tolerance fixed at **5 minutes**
 - **Owner:** MLE (produces) · DA (reports) · SRE (consumes for the M5 SLO)
-- **Observed:** **not yet measured — M2 owns the first value.**
+- **Observed (FIRST MEASURED 2026-08-17, M2-S2):** **79.693% on val (2019-07)**
+  and **81.480% on test (2019-08)** for `lightgbm-v1`, same run, same evaluator.
+  The group-median floor measured **78.693% / 80.322%** through the same code
+  path — i.e. v1 buys one point of within-5-minutes over a `GROUP BY`, which is
+  the honest shape of a quote-time model with no distance feature.
 - **Reference floor (EDA statistic):** the same group-median predictor lands
   within 5 minutes on **78.693%** of val trips (44.117% within 2 minutes).
 - **Why this exists next to KPI-09:** MAE is dominated by the median trip and can

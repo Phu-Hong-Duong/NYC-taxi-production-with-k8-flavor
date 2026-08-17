@@ -8,6 +8,51 @@ then resume the chain (`automation/next_session.sh executor` — or `architect`
 if the answer changes the plan). Direction decisions WAIT here; nothing
 auto-proceeds on a recommendation (ADR-010).
 
+## 2026-08-17-1 · raised by EXEC/Opus (M2-S2) · NON-BLOCKING: one apt package would delete a workaround from the training path
+
+**Not a direction fork — a friction report with a fix only your hands can apply**
+(same class as 2026-08-16-2 below, and equally non-blocking: M2-S2 shipped, the
+model trained, nothing is parked).
+
+**What happened.** LightGBM needs the OpenMP runtime `libgomp.so.1`. This WSL
+Ubuntu does not have it — `find /usr /lib /opt -name "libgomp.so*"` is empty and
+`dpkg -l | grep gomp` is empty — so `import lightgbm` dies with
+`OSError: libgomp.so.1: cannot open shared object file`. The honest fix is
+`sudo apt install libgomp1`, and sudo is yours by constitution (gotcha #23: the
+host is the PO's, not an unattended session's). Rather than park the chain
+overnight on one package, M2-S2 borrowed the copy scikit-learn's wheel already
+vendors: `taxi_mlops.training.openmp` symlinks it under the SONAME the loader
+wants, sets `LD_LIBRARY_PATH`, and re-execs once, announcing itself on stdout.
+It works and is tested — but it is a shim, and gotcha #37 records the two sharp
+edges it cost to get right.
+
+**Option A (Recommended) — run the one-liner below (~20 seconds).** After it,
+`openmp.ensure_openmp()` returns `openmp: system libgomp.so.1` on its first line
+and the shim never executes on this machine again. Honest cost: it installs a
+system package on your host — small, but it is a change to your machine, which
+is exactly why an unattended session did not make it. It does NOT remove the
+shim from the code, and should not: **debt D-004** still owes M4's container
+image a real `libgomp1`, and the shim stays as the laptop path for a fresh
+clone on a fresh machine.
+
+**Option B — do nothing.** Everything keeps working; the shim runs on every
+training invocation and prints one line when it does. Honest cost: a re-exec is
+real machinery in the training path, so anything that breaks it (a scikit-learn
+release that stops vendoring libgomp, a venv rebuilt without it) turns into a
+training failure whose message is about a shared object rather than about the
+model. Cheap today, and the failure it buys is an obscure one.
+
+**What is parked:** nothing. **What continues meanwhile:** the full chain
+(M2-S3 next).
+
+```bash
+sudo apt update && sudo apt install -y libgomp1
+```
+
+*(Verify with: `cd ~/NYC-taxi-production-with-k8-flavor && uv run python -c "from taxi_mlops.training.openmp import openmp_status; print(openmp_status())"` — Option A makes it print `(True, 'system libgomp.so.1')`.)*
+
+---
+
 ## 2026-08-16-2 · raised by EXEC/Opus (M0-S1) · NON-BLOCKING: the permission allowlist is starter-sized — one paste makes unattended sessions stop tripping
 *(ARCH note 2026-08-16: attempted to apply Option A under the PO's in-chat
 delegation — the harness classifier refused the settings write for ARCH too.

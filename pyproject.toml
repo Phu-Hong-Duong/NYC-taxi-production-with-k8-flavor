@@ -6,13 +6,17 @@ requires-python = ">=3.12"
 # Dependencies are added AT M0 with versions observed from live sources that day,
 # recorded in CLAUDE.md's pin table. Do not pre-pin here from memory.
 dependencies = [
+    "boto3>=1.43.72",
     "dbt-duckdb>=1.11.0",
     "duckdb>=1.5.5",
     "dvc>=3.67.1",
+    "lightgbm>=4.7.0",
+    "mlflow-skinny>=3.15,<4",
     "pandas>=3.0.5",
     "pandera>=0.32.1",
     "pyarrow>=25.0.1",
     "pyyaml>=6.0.3",
+    "scikit-learn>=1.9.0",
 ]
 
 [dependency-groups]

@@ -91,6 +91,11 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | dbt-duckdb | **1.11.0** | 2026-08-16 | `uv run dbt --version` (M1-S4). A runtime dep, not dev: `make marts` invokes it |
 | Metabase | **v0.63.13**, image pinned by TAG AND DIGEST `metabase/metabase:v0.63.13@sha256:6e188e7068c6e9cf7b24480ada80f335bca9135765764ee827245f44ffa9eace` | 2026-08-17 | `docker pull` (M1-S5). Newest stable at pin time (Docker Hub tag list read live; `v0.58-lts` was the conservative alternative and stays the 3-attempt-wall fallback). Plain manifest, not the chart — `infra/manifests/metabase.yaml` header says why |
 | TLC yellow parquet (2019-01…08) | 8 files, sha256-pinned in `data/raw_manifest.json` | 2026-08-16 | `make ingest`; e.g. 2019-01 = `3ad95f39…26d`, 110,439,634 bytes. Manifest is timestamp-free by design: a diff = the bytes moved |
+| lightgbm | **4.7.0** | 2026-08-17 | `uv add lightgbm` (M2-S2). Needs an OpenMP runtime this host does not ship — see gotcha #37 and debt D-004 |
+| mlflow-skinny (CLIENT) | **3.15.1** — an EXACT match to the deployed server | 2026-08-17 | `uv add "mlflow-skinny>=3.15,<4"` (M2-S2). **NOT `mlflow`**: the full package pins `pandas<3` against our `pandas>=3.0.5`, and an unbounded `uv add mlflow` silently resolved to **1.27.0**, two majors behind the server (gotcha #36). We run the server in-cluster and only ever needed the client |
+| scikit-learn | 1.9.0 | 2026-08-17 | `uv add scikit-learn` (M2-S2). Not used by v1's model; it is a declared dep because its wheel vendors the `libgomp` the OpenMP shim borrows (gotcha #37) — an accidental dependency made explicit |
+| boto3 / botocore | 1.43.72 | 2026-08-17 | `uv add boto3` (M2-S2). Required because the tracking server does NOT proxy artifacts (`proxiedArtifactStorage: false`): the CLIENT writes to MinIO itself — gotcha #5 |
+| scipy | 1.18.0 | 2026-08-17 | transitive via scikit-learn (M2-S2) |
 | (FLAML/Optuna rows land at their milestones) | | | |
 
 ## The data contract (M1-S1) — where the rules actually live
@@ -302,6 +307,53 @@ can never disagree (the port-family twins lesson, applied before it bit).
   manifest, plus `allow_tracking: false` in the `/api/setup` call — the setup
   writes its own preference and would otherwise re-enable tracking at first login.
 
+## Feature set v1, the two floors, and LightGBM v1 (M2-S2) — the first measured numbers
+- **`python -m taxi_mlops.training train` is the whole path** (both floors + the
+  model, one evaluator, one table). `make train` is deliberately still a stub:
+  M2-S3 owns it, because the GATE verdict is what makes that target what it
+  claims. **This story registers nothing** — `search_registered_models()` returns
+  `[]`, and a test forbids the registry API in `src/taxi_mlops/training/`.
+- **The include list is a knob, the exclude list is LAW.** `configs/train.yaml:
+  features` names the five v1 columns (hour, dayofweek, PU, DO, passenger_count);
+  `taxi_mlops.features.quote_time.EXCLUSIONS` names **18 refused columns**, each
+  with its reason and ledger row, and `FeatureLeakageError` refuses a matrix OR a
+  config that re-admits one. Same argument as M2-S1's first-match rule: a switch
+  that can break an invariant is a trapdoor, not a knob. **F-006 CLOSED**
+  (`congestion_surcharge` excluded citing the 2019-01-21 cliff, `airport_fee` at
+  100% null); **F-007(a) DISCHARGED** — and the registry adds the three money
+  columns F-007 did *not* list (`extra`, `mta_tax`, `improvement_surcharge`),
+  because a registry that agreed with the finding rather than with the world
+  would be the next trap. **F-007(b) is untouched and stays M3's.**
+- **The evaluator re-derived the EDA's SQL floors to four decimals, and that is
+  this story's best evidence.** `evaluate` measured the constant-median floor at
+  **7.8866** val / 7.6667 test and the group-median floor at **3.7170** val /
+  3.5090 test with **78.693%** within 5 min — the EDA's numbers exactly, computed
+  by different code on a different engine. Unseen-group fallback fired on
+  **1.5252%** of val and **1.4786%** of test rows (EDA said 1.53% / 1.48%).
+  Nothing was tuned to match; a disagreement would have been a bug in `evaluate`.
+- **KPI-09 / KPI-10 have their first measured values** (`docs/kpi_definitions.md`,
+  run `598044f586524a82b385a6cf27f9a31b`): **3.4760 min val · 3.2608 min test**
+  and **79.693% · 81.480%**. v1 beats the honest floor by **6.48%** on val and
+  buys **one point** of within-5-minutes — the honest shape of a quote-time model
+  with **no distance feature**. Quoting the constant-median floor would have made
+  it look like a 56% win; that floor is named "the flattering one" in code.
+- **E-1 answered by measurement, not opinion.** The `log1p` target ablation
+  (`--ablation`, its own MLflow run) came in at **3.4803 val / 3.2688 test** —
+  consistently *worse* than the raw target. v1 keeps `target_transform: none`
+  because KPI-09 is MAE in minutes and objective `l1` minimises exactly that on
+  exactly that scale. The ablation logs **metrics only**: a log-space booster
+  needs a pyfunc wrapper to be servable, and shipping one for an ablation would
+  put a wrapper nobody uses in the registry.
+- **v1 never early-stopped** — 500/500 rounds with val still improving. The
+  number is a floor for LightGBM on these five features, not its ceiling, and
+  M3's scout/sniper is where that gets spent. Said out loud so nobody reads
+  3.4760 as "tuned".
+- **This host has no OpenMP.** `import lightgbm` dies without `libgomp.so.1`;
+  `taxi_mlops.training.openmp` borrows the copy scikit-learn's wheel vendors
+  (gotcha #37 for why nothing simpler works). Debt **D-004** puts the real
+  package in M4's image; AWAITING_PO 2026-08-17-1 offers the PO a one-line fix
+  for this laptop. Both non-blocking.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -340,6 +392,7 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Gate check M1 | `make verify-m1` | RE-VERIFIED 2026-08-17 (M2-S1, after the ingest change): **37 `ok` sub-checks, 0 FAIL, exit 0** — leg 1 now reports `16 output(s) byte-identical`, and that number is finally the number the proof HASHED (it used to `grep -c` every line ending in `yes` across the whole log, so it printed 16 for 8 files; pinned by a test). VERIFIED 2026-08-17 (M1-S5): 9 sections, **30 sub-checks GREEN, exit 0, measured 98s**; RED-TEAMED by `kubectl -n metabase scale --replicas=0` → exit 2 naming exactly the 2 BI checks, other 28 still green, then restored → GREEN again. **No fast mode, no skip flag** — leg 1 deletes and rebuilds ~1 GB of processed parquet, because byte-identity checked against data that was never re-derived is not a check |
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
 | Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1. **WIDENED + RE-VERIFIED 2026-08-17 (M2-S1): 16/16** — it now wipes and re-derives `data/rejected/` too and asks DVC about BOTH `.dvc` files (`data/processed.dvc: up to date` · `data/rejected.dvc: up to date`). A proof that re-derives half a command's output proves half a command |
+| Baselines + LightGBM v1 (M2-S2) | `python -m taxi_mlops.training train` (`--ablation` adds the log1p variant; `--train-months` is the sample-first override; `--no-mlflow` is a smoke test, never a result) | VERIFIED 2026-08-17 (M2-S2): 43,987,422 train rows, 4 MLflow runs in `m2-modeling`, `lightgbm-v1` logged WITH signature + input example (7 artifacts in MinIO). The two floors came back **7.8866** and **3.7170** val MAE — the EDA's SQL numbers to four decimals, from different code. Registry left EMPTY on purpose (S3's) |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |

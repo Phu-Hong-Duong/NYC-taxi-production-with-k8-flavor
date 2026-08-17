@@ -156,6 +156,29 @@ def test_model_quality_kpis_are_not_measured_by_sql(caplog):
         assert "gotcha #15" in body, f"{kpi} does not cite the rule it is obeying"
 
 
+def test_the_model_quality_kpis_carry_a_measured_value_and_say_where_it_came_from():
+    """M2-S2 measured KPI-09/KPI-10 for the first time. A KPI whose observed value
+    is a number with no run behind it is indistinguishable from a number someone
+    remembered — so the doc must name the MLflow run that produced it."""
+    sections = _kpi_sections(_read(KPI_DOC))
+    for kpi in ("KPI-09", "KPI-10"):
+        body = sections[kpi]
+        assert "not yet measured" not in body, f"{kpi} still claims to be unmeasured"
+        assert "M2-S2" in body, f"{kpi} does not say which story measured it"
+    # The run id lives on KPI-09 and is referenced from KPI-10 as "same run".
+    assert "598044f586524a82b385a6cf27f9a31b" in sections["KPI-09"]
+
+
+def test_the_measured_values_are_not_the_sql_reference_floors():
+    """The trap this guards: pasting eda_report.md §11's 3.7170 in as the model's
+    value. It is the FLOOR, and a floor reported as a result is a lie that would
+    survive forever (gotcha #15)."""
+    sections = _kpi_sections(_read(KPI_DOC))
+    observed = [ln for ln in sections["KPI-09"].splitlines() if "Observed" in ln]
+    assert observed, "KPI-09 has no Observed line"
+    assert "3.7170" not in observed[0]
+
+
 # ---------------------------------------------------------------------- prior art
 
 

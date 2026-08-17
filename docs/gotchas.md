@@ -304,3 +304,44 @@ the seed line are earned by THIS project.
     the first. Sibling of the twins lesson (CLAUDE.md port family): two places
     that must agree, and only one of them was taught.
 
+
+36. **`uv add mlflow` silently installed a client two MAJORS behind the server.**
+    The MLflow server this program runs is **3.15.1**. `uv add mlflow` resolved
+    to **1.27.0** — no warning, no conflict, exit 0 — because MLflow 3.x depends
+    on `pandas<3` and this project pins `pandas>=3.0.5` (M1-S1). The resolver did
+    exactly what it is designed to do: backtrack until something fits. What
+    "fits" was a 2022 client, and the only tell was a `databricks-cli` package
+    appearing in the install list. Asking for the bound EXPLICITLY
+    (`uv add "mlflow>=3.15,<4"`) is what turned silence into the real message:
+    *"Because mlflow>=3.15.0 depends on pandas<3 and your project depends on
+    pandas>=3.0.5, your project's requirements are unsatisfiable."*
+    Fix (M2-S2): **`mlflow-skinny`** — the same client code with the tracking
+    SERVER's dependencies removed, pandas pin included — which resolved to
+    **3.15.1 exactly**, matching the deployed server. We never needed the server
+    package: the server runs in the cluster. Downgrading pandas was never on the
+    table (gotcha #16's law, and M1's byte-identity proof rests on the pinned
+    pandas/pyarrow pair). Rule: when adding a client for a service you already
+    run, **state the version bound you require and read the refusal** — an
+    unbounded add cannot fail, and a resolution that cannot fail cannot warn you.
+
+37. **A vendored `.so` cannot be preloaded under the name you need.** This WSL
+    host ships no `libgomp.so.1`, so `import lightgbm` dies. scikit-learn's wheel
+    vendors one, and the obvious fix —
+    `ctypes.CDLL(".../scikit_learn.libs/libgomp-e985bcbb.so.1.0.0", RTLD_GLOBAL)`
+    before importing lightgbm — **does not work, and fails identically to doing
+    nothing**. Reason: auditwheel rewrites the vendored library's **SONAME** to
+    the hashed filename, and glibc matches a later `dlopen("libgomp.so.1")`
+    against SONAMEs, not against whatever path you happened to load. The only
+    thing that satisfies the lookup is a FILE named `libgomp.so.1` on the
+    loader's search path — and `LD_LIBRARY_PATH` is read once, at process start,
+    so setting it from inside Python is too late. Fix
+    (`taxi_mlops.training.openmp`): symlink the vendored library under the needed
+    name, set the variable, and `execv` once, guarded by an env flag so a
+    still-broken host fails instead of forking forever. Two sharp edges found by
+    doing it: `sys.argv` does not round-trip a `python -m package` invocation
+    (argv[0] is `__main__.py`, so the replay dies on *attempted relative import
+    with no known parent package* — rebuild from `__main__.__spec__.name`), and
+    the re-exec must happen BEFORE any expensive work or it throws that work away
+    and does it twice. The honest fix is `sudo apt install libgomp1`, which is
+    the PO's hands; debt **D-004** puts it in M4's image, because a shim should
+    not be what makes a container work.
