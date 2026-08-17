@@ -44,7 +44,19 @@ def test_the_proof_checks_its_input_is_the_pinned_bytes():
 def test_the_proof_has_a_second_independent_witness():
     """Our sha256 table and DVC's own hashes are different code over different
     metadata. One witness agreeing with itself proves nothing."""
-    assert "dvc status data/processed.dvc" in PROOF
+    assert "data/processed.dvc data/rejected.dvc" in PROOF
+    assert "dvc status" in PROOF
+
+
+def test_the_proof_covers_both_derived_trees_not_just_the_clean_one():
+    """M2-S1: the rejected sidecar is derived by the same pass from the same
+    bytes. A proof that re-derives half a command's output proves half a
+    command — and the half it skips is the one nobody looks at."""
+    assert 'rm -rf "${REPO_ROOT:?}/data/processed" "${REPO_ROOT:?}/data/rejected"' in PROOF
+    # the hash function walks both trees, and keeps the tree name in the key so
+    # two same-named months in two trees cannot collide into one checked row
+    assert 'for tree in ("processed", "rejected")' in PROOF
+    assert 'p.relative_to(root)' in PROOF and 'root = pathlib.Path("data")' in PROOF
 
 
 def test_the_proof_previews_before_it_deletes():
@@ -56,7 +68,7 @@ def test_the_proof_previews_before_it_deletes():
 def test_dvc_runs_after_the_steps_whose_output_it_pins():
     ingest = PIPELINE.index("m taxi_mlops.data ingest")
     duck = PIPELINE.index("m taxi_mlops.data duckdb")
-    add = PIPELINE.index("dvc add data/raw data/processed")
+    add = PIPELINE.index("dvc add data/raw data/processed data/rejected")
     push = PIPELINE.index("dvc push")
     assert ingest < duck < add < push
 
@@ -121,10 +133,26 @@ def test_dvc_owns_the_data_gitignore_entries():
     """One place says 'these bytes are not git's'. A second copy in the root
     .gitignore would keep hiding the data even if DVC tracking were lost."""
     dvc_owned = (REPO / "data" / ".gitignore").read_text()
-    assert "/raw" in dvc_owned and "/processed" in dvc_owned
+    assert "/raw" in dvc_owned and "/processed" in dvc_owned and "/rejected" in dvc_owned
     root = (REPO / ".gitignore").read_text()
     for line in root.splitlines():
         stripped = line.strip()
         if stripped.startswith("#"):
             continue
-        assert stripped not in {"data/raw/", "data/processed/", "data/raw", "data/processed"}
+        assert stripped not in {
+            "data/raw/",
+            "data/processed/",
+            "data/rejected/",
+            "data/raw",
+            "data/processed",
+            "data/rejected",
+        }
+
+
+def test_destroy_treats_the_sidecar_as_regenerable_like_the_processed_tree():
+    """`make rebuild-proof` proves data/rejected is a pure function of pinned raw
+    plus this repo — the same claim that makes data/processed deletable. Leaving
+    it off the list would make destroy quietly asymmetric about one derived tree."""
+    regenerable = CLUSTER.split("REGENERABLE=(")[1].split("\n)")[0]
+    deny = CLUSTER.split("DENY=(")[1].split("\n)")[0]
+    assert "data/rejected" in regenerable and "data/rejected" not in deny

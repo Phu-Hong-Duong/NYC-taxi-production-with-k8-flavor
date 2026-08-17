@@ -2,8 +2,10 @@
 # `make data` — the whole data path, one command, idempotent (M1-S2, role:DE).
 #
 #   ingest   download -> contract -> clean -> split, counted rejections  (M1-S1)
-#   duckdb   (re)build the analyst views and reconcile their row counts
-#   dvc      re-hash data/raw + data/processed, then push to the remote
+#            ...and the retained rejected rows under data/rejected/  (M2-S1)
+#   duckdb   (re)build the analyst views and reconcile their row counts —
+#            both the clean months AND the sidecar's per-rule counts (F-005)
+#   dvc      re-hash data/raw + data/processed + data/rejected, push to remote
 #
 # ORDER MATTERS AND IS NOT ALPHABETICAL. DVC runs LAST because it pins what the
 # earlier steps produced; running it first would push the previous run's bytes
@@ -40,7 +42,10 @@ echo "[data] 3/3 dvc add + push"
 # `dvc add` on an already-tracked dir re-hashes and rewrites the .dvc file only
 # if the bytes moved; unchanged data makes this a no-op (that is the whole point
 # of running it every time rather than remembering to).
-uv run dvc add data/raw data/processed
+# data/rejected is its OWN target, not a subdirectory of an existing one: it is
+# a separate dataset with a separate schema, and folding it into the processed
+# pin would make one hash cover two things that can move independently.
+uv run dvc add data/raw data/processed data/rejected
 uv run dvc push
 
 echo

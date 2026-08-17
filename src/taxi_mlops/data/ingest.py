@@ -33,7 +33,11 @@ def read_raw(path: Path) -> pd.DataFrame:
 
 
 def write_processed(df: pd.DataFrame, dest: Path, cfg: DataConfig) -> None:
-    """Atomic, option-pinned write (S2 proves byte-identity against these options)."""
+    """Atomic, option-pinned write (S2 proves byte-identity against these options).
+
+    Used for the rejected sidecar too (M2-S1): ONE writer contract, so the
+    sidecar is re-derivable on exactly the same terms as the output it explains.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     table = pa.Table.from_pandas(df, preserve_index=False)
@@ -66,7 +70,7 @@ def ingest_month(
         print("  dtypes after THE cast (contract.cast, the only cast in the codebase):")
         print(dtypes_table(df))
 
-    kept, report = clean(df, month, cfg)
+    kept, rejected, report = clean(df, month, cfg)
     print("  rejections (first-violated rule attributed; matched = independent hits):")
     print(report.table())
 
@@ -76,8 +80,18 @@ def ingest_month(
     dest = cfg.processed_path(month)
     write_processed(kept, dest, cfg)
     report.write(cfg.rejections_path(month))
+    # The sidecar is written LAST and only once the month has survived every
+    # refusal above it: a month that is refused leaves nothing behind at all,
+    # and that includes its rejects (F-005's own condition, configs/data.yaml).
+    # Sorted by the same pinned keys as the output so it is re-derivable too;
+    # rows whose timestamps are missing sort last, deterministically.
+    rejected = sort_deterministically(rejected, cfg)
+    write_processed(rejected, cfg.rejected_path(month), cfg)
     print(f"  wrote {dest.relative_to(cfg.path_for('processed_dir').parent.parent)}")
     print(f"  wrote {cfg.rejections_path(month).name}")
+    print(f"  wrote {cfg.rejected_path(month).parent.parent.name}/"
+          f"{cfg.rejected_path(month).parent.name}/{cfg.rejected_path(month).name} "
+          f"({len(rejected):,} rejected row(s) retained)")
     return report
 
 

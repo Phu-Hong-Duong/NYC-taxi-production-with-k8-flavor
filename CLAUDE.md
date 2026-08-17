@@ -144,6 +144,41 @@ can never disagree (the port-family twins lesson, applied before it bit).
   longer names `data/raw` or `data/processed`; two copies would be twins, and a
   stale root entry would keep hiding the data if DVC tracking were ever lost.
 
+## The rejected-row sidecar (M2-S1) — the half the counts could not describe
+- **`make ingest` now RETAINS what it drops**: `data/rejected/<split>/` mirrors
+  `data/processed/`, same writer pins, 16 files / 27 MB for 914,459 rows. Every
+  contract column plus the derived target survives — the point of keeping rows
+  is answering questions nobody has asked yet.
+- **`rejection_rule` is FIRST-MATCH and that is law, not a knob** (`configs/
+  data.yaml:rejected` argues its own case). It equals the report's `rejected_by`
+  exactly, which is what makes the sidecar checkable; an `all_match` switch would
+  double-count and break the reconciliation. All-match rides alongside as
+  `rejection_rules` (comma-separated, filing rule always first).
+- **A REFUSED month writes no sidecar.** Refusals are structural and leave
+  nothing behind; sidecars are for rows that were COUNTED.
+- **`make duckdb` now runs TWO reconciliations** and exits 1 on either. The new
+  one is per **(month, rule)**, never per month: a sidecar that files every row
+  under the wrong rule has a perfect monthly total and is useless. Observed
+  2026-08-17: 914,459 == 914,459, 80 pairs, 0 disagreements.
+- **`trips_rejected` is a VIEW and is deliberately NOT unioned into
+  `trips_clean`** — one careless `SELECT *` must not train on rows the output
+  contract refused. Separate tree for the same reason: every proof and view
+  globs `data/processed`.
+- **`make rebuild-proof` covers BOTH derived trees** (16/16 byte-identical, DVC
+  asked about `data/processed.dvc` AND `data/rejected.dvc`). A proof that
+  re-derives half a command's output proves half a command.
+- **F-005's answer, and it is not "either"** (`docs/rejected_rows_appendix.md`):
+  of `duration_above_max`'s 159,300 trips, **85.035% are a 23–24 h clock
+  artefact** — median 2.19 mi, $12.00 fare, 98.97% dropped off the NEXT DAY,
+  62.64% in the same clock hour — an ordinary short trip whose session closed a
+  day late, and *the money was never wrong*. **3.516% (5,601) are real long-haul**
+  in the 120–180 min band: 52.78% touch an airport, 32.87% carry an out-of-city
+  rate code vs **2.7497%** of clean data. Both, 24:1. Also: the rising rejection
+  rate (1.428→2.020%) is **not** this rule — its share is flat 0.273–0.299%.
+- **Three of the ten rules have never fired** (missing_timestamp,
+  location_out_of_range, passenger_count_out_of_range: `rejected_by = matched =
+  0` over 8 months). Not shadowed — absent. Each is provoked by a unit test.
+
 ## EDA, KPIs and prior art (M1-S3) — the numbers other milestones must cite
 - **`docs/kpi_definitions.md` owns every number's id.** KPI-01…KPI-10, each with
   formula, source VIEW, window, owner. M1-S5's board cards cite ids; M2's error
@@ -295,16 +330,16 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Platform | `make deploy-platform` | VERIFIED 2026-08-16 (M0-S3): MinIO + Postgres + MLflow up; re-run on the live stack = clean upgrade (helm rev 3, namespaces/service/configmap `unchanged`) and it REPAIRED a hand-inflicted `scale --replicas=0` |
 | Gate check M0 | `make verify-m0` | VERIFIED 2026-08-16 (M0-S3): 18 sub-checks GREEN, exit 0; RED-TEAMED by scaling MLflow to 0 → exit 1 naming 5 failures. Secrets come from `.env` (gitignored) via `scripts/platform_secrets.sh` — never printed, never committed |
 | Ingest (M1-S1) | `make ingest` (`python -m taxi_mlops.data ingest [--month YYYY-MM]`) | VERIFIED 2026-08-16 (M1-S1): 8 months, 57,042,337 → 56,127,878 rows (1.603% rejected, per-rule table printed); re-run = all 8 outputs byte-identical + manifest unchanged. RED-TEAMED twice: seeded corrupt parquet → `CorruptSourceError` naming the file, exit 1, `processed/` never created; truncated pinned raw → `ChecksumDriftError`, exit 1, output sha256 and manifest pin both untouched |
-| Data path, whole (M1-S2) | `make data` (ingest → duckdb → dvc add+push; `SKIP_DVC=1` stops before the pin) | VERIFIED 2026-08-16 (M1-S2): composed run green end to end; DVC leg runs LAST because it pins what the earlier legs produced |
-| Analyst layer (M1-S2) | `make duckdb` (`python -m taxi_mlops.data duckdb`) | VERIFIED 2026-08-16 (M1-S2): 9 views, and the row count of every one of the 8 months equals the `rows_out` its ingest report claimed (56,127,878 total). Exits 1 when they disagree — RED-TEAMED in unit form by truncating a month's parquet and by inflating a report's `rows_out` |
+| Data path, whole (M1-S2) | `make data` (ingest → duckdb → dvc add+push; `SKIP_DVC=1` stops before the pin) | VERIFIED 2026-08-16 (M1-S2): composed run green end to end; DVC leg runs LAST because it pins what the earlier legs produced. **RE-VERIFIED 2026-08-17 (M2-S1)** with the retaining ingest: 8 months, same 56,127,878 rows out, `data/rejected` now pinned as its own third target (`9 files pushed`, remote in sync) — and `data/processed.dvc` came back **unmodified in git**, i.e. a CHANGED ingest reproduced the M1 bytes exactly |
+| Analyst layer (M1-S2, extended M2-S1) | `make duckdb` (`python -m taxi_mlops.data duckdb`) | VERIFIED 2026-08-16 (M1-S2): 9 views, and the row count of every one of the 8 months equals the `rows_out` its ingest report claimed (56,127,878 total). Exits 1 when they disagree — RED-TEAMED in unit form by truncating a month's parquet and by inflating a report's `rows_out`. **RE-VERIFIED 2026-08-17 (M2-S1): 10 views** (`trips_rejected` added) and a SECOND reconciliation, per (month, rule): **914,459 sidecar rows == 914,459 counted, 80 pairs, 0 disagreements**. Exits 1 on either — RED-TEAMED in unit form three ways: rows removed, rows RELABELLED under the wrong rule (monthly total untouched, so a per-month check would pass), sidecar deleted |
 | Gold marts, whole (M1-S4) | `make marts` (dbt build incl. 34 tests → publish to Postgres; `SKIP_PUBLISH=1` stops at DuckDB) | VERIFIED 2026-08-16 (M1-S4): `dbt build` PASS=39 (4 models, 34 data tests, 1 seed) in 3.24s; publish printed `COPY 56127878` for `trips_clean` — exactly the ingest total — plus 44,792 · 8 · 80 for the aggregates. Re-run is a full refresh into `<name>__staging` swapped in inside ONE transaction, so a reader never sees a half-loaded mart (watched live: the old `trips_clean` still served 56,127,878 rows while `trips_clean__staging` filled) |
 | Prove the mart tests can FAIL | `make marts-redteam` | VERIFIED 2026-08-16 (M1-S4) — see the story's transcript. Unions `seeds/redteam/` (999.5-min and 0.2-min trips) and **inverts the exit code**: a GREEN build with impossible trips in it means the tests are not testing, and the script fails saying so. Never publishes |
 | Databases in the one Postgres (D-002) | `scripts/postgres_databases.sh` (step [5/7] of `make deploy-platform`; `DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S4) on the EXISTING volume (PGDATA initialised 15:47, `marts` created 17:44): run 1 `before = role absent, database absent` → `ok marts owner=marts`; run 2 `before = role present, database present`, nothing changed; `mlflow` no-op on both |
 | BI seat, whole (M1-S5) | `make deploy-metabase` (namespace → secrets → app-db via D-002 → Deployment → host-route check → boards; `SKIP_BOARDS=1` deploys only) | VERIFIED 2026-08-17 (M1-S5) — see the commands' Done rows in HANDOFF (u) |
 | Boards only (M1-S5) | `make boards` (`python scripts/metabase_boards.py`; `--verify` is the read-only twin `verify-m1` uses) | VERIFIED 2026-08-17 (M1-S5): converges 17 cards + 2 dashboards from `analytics/metabase/boards/*.json`; idempotent BY NAME (second run updates in place, ids unchanged) |
-| Gate check M1 | `make verify-m1` | VERIFIED 2026-08-17 (M1-S5): 9 sections, **30 sub-checks GREEN, exit 0, measured 98s**; RED-TEAMED by `kubectl -n metabase scale --replicas=0` → exit 2 naming exactly the 2 BI checks, other 28 still green, then restored → GREEN again. **No fast mode, no skip flag** — leg 1 deletes and rebuilds ~1 GB of processed parquet, because byte-identity checked against data that was never re-derived is not a check |
+| Gate check M1 | `make verify-m1` | RE-VERIFIED 2026-08-17 (M2-S1, after the ingest change): **37 `ok` sub-checks, 0 FAIL, exit 0** — leg 1 now reports `16 output(s) byte-identical`, and that number is finally the number the proof HASHED (it used to `grep -c` every line ending in `yes` across the whole log, so it printed 16 for 8 files; pinned by a test). VERIFIED 2026-08-17 (M1-S5): 9 sections, **30 sub-checks GREEN, exit 0, measured 98s**; RED-TEAMED by `kubectl -n metabase scale --replicas=0` → exit 2 naming exactly the 2 BI checks, other 28 still green, then restored → GREEN again. **No fast mode, no skip flag** — leg 1 deletes and rebuilds ~1 GB of processed parquet, because byte-identity checked against data that was never re-derived is not a check |
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
-| Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1 |
+| Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1. **WIDENED + RE-VERIFIED 2026-08-17 (M2-S1): 16/16** — it now wipes and re-derives `data/rejected/` too and asks DVC about BOTH `.dvc` files (`data/processed.dvc: up to date` · `data/rejected.dvc: up to date`). A proof that re-derives half a command's output proves half a command |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |
@@ -342,4 +377,6 @@ rebuild was PLANNED for exactly this reason, not discovered.
 Read docs/gotchas.md BEFORE first kubectl of any session. Top three for this
 machine: repo-in-WSL2-fs (#1), .wslconfig memory (#2), Kaspersky TLS (#9).
 New-in-v2: AutoML leaderboard (#15), dependency quarantine (#16), Optuna study
-namespaces (#17), REV freshness (#18).
+namespaces (#17), REV freshness (#18). Newest: Docker Desktop owns `kubectl`'s
+symlink (#34), a test that parses a shell array truncated it at the first `)` in
+a COMMENT and the survivors ran as commands (#35).

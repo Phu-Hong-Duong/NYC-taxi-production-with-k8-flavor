@@ -26,6 +26,7 @@ fi
 # make target; if you cannot name the command that rebuilds it, it does not belong.
 REGENERABLE=(
   "data/processed"    # rebuilt by `make data`
+  "data/rejected"     # the F-005 sidecar — same pass, same command, same guarantee (`make rebuild-proof` proves it)
   "data/interim"      # rebuilt by `make data`
   "data/analyst.duckdb"  # the DuckDB catalogue: views over data/processed, rebuilt by `make duckdb`
   "mlruns"            # local MLflow store; the cluster's store is in Postgres/MinIO

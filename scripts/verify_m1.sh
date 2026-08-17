@@ -62,8 +62,16 @@ note "deleting and rebuilding data/processed/ — this is the slow leg, by desig
 # nothing and passes is worse than one that fails: it is a green light wired to
 # no sensor. Hence the explicit count > 0 below.
 if rebuild_log="$(bash scripts/rebuild_proof.sh 2>&1)"; then
-  identical="$(printf '%s\n' "$rebuild_log" | grep -cE '  yes$')"
-  if [[ "$identical" -gt 0 ]] && printf '%s\n' "$rebuild_log" | grep -q 'all byte-identical: True'; then
+  # Anchored on the proof's OWN count, not on a grep for lines ending in 'yes'.
+  # The first version counted every such line in the whole log and so also
+  # counted the duckdb reconciliation's per-month rows — it printed "16" for 8
+  # outputs, and M2-S1's second derived tree plus its second reconciliation
+  # would have pushed it to 25. Right for the wrong reason is still a sensor
+  # pointing somewhere else; the number quoted below is now the number the
+  # proof hashed.
+  identical="$(printf '%s\n' "$rebuild_log" \
+    | sed -n 's/^\[rebuild-proof\] \([0-9]\+\) output(s), all byte-identical: True$/\1/p')"
+  if [[ -n "$identical" && "$identical" -gt 0 ]]; then
     pass "rebuild-proof GREEN — $identical output(s) byte-identical after a full re-derive"
   else
     fail "rebuild-proof exited 0 but its table shows $identical identical output(s)"

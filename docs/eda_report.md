@@ -10,6 +10,10 @@ Views cited: `trips_clean`, `trips_train`, `trips_val`, `trips_test`,
 `data_health`, `ingest_months`, `ingest_rejections`, `unknown_domain_values`.
 Rebuild them with `make duckdb` (seconds; they are views, they copy nothing).
 
+**Appendix R** (`docs/rejected_rows_appendix.md`, M2-S1) describes the 1.603%
+this report does not: the rejected rows, retained since M2-S1 and published as
+`trips_rejected`. It answers E-11 / F-005.
+
 ---
 
 ## 0. The window this report describes — stated first, because it is not the whole data
@@ -102,6 +106,17 @@ long-haul population. §5 shows that trips of 60–120 minutes are 0.88% of the
 data and are overwhelmingly airport-rate trips; whether the >120 tail is the
 same population continued, or a different phenomenon entirely, **this report
 cannot answer and does not guess.**
+
+> **ANSWERED 2026-08-17 by M2-S1 — see `docs/rejected_rows_appendix.md`.** The
+> rejected rows are now retained (`data/rejected/`, DVC-pinned) and queryable as
+> the `trips_rejected` view, and the answer is *both, in a ratio of 24 to 1*:
+> **85.0%** of the 159,300 are a normal short trip (median 2.19 mi, $12.00)
+> whose clock ran 23–24 hours and stopped the next day at the same time of day —
+> a session artefact, correctly rejected. **3.5% (5,601 trips)** in the 120–180
+> minute band are genuine long-haul: 52.8% touch an airport, 66.0% run ≥ 10
+> miles, and 32.87% carry an out-of-city rate code against 2.7497% of the clean
+> data. The paragraph above stands as written — it was the honest thing to say
+> with the artifacts that existed then; this note is what changed.
 
 ## 3. The target: `trip_duration_minutes`
 
@@ -491,7 +506,7 @@ the shape the M5 SLO should be argued from.
 | E-8 | M2 | The null batch (261,781 rows, `payment_type = 0`) has 2.6× the mean duration. Indicator, not imputation (§7a). |
 | E-9 | M1-S5 (board) | Rejection rate rises monotonically 1.428% → 2.020% across the window. Plot it as a series; a 10% threshold sees nothing (§1). |
 | E-10 | M7 | The Jan→Jun target trend (+17.3%) is real drift already present in training data — a free realism check for the detector before synthetic drift (§4). |
-| E-11 | open, F-005 | Everything here describes the surviving 98.397%. `duration_above_max` removed 159,300 trips and this report cannot say what they were (§0, §2). |
+| E-11 | **ANSWERED 2026-08-17 (M2-S1, F-005 closed)** | Everything here still describes the surviving 98.397%; the complement is now described too, in `docs/rejected_rows_appendix.md` from the `trips_rejected` view. `duration_above_max`'s 159,300 trips are **85.0% a 23–24 h clock artefact** and **3.5% genuine JFK-shaped long-haul** (§0, §2). |
 
 ## 13. Reproducing every number here
 

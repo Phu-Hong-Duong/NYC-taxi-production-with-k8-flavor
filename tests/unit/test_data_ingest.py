@@ -16,7 +16,11 @@ from conftest import raw_frame
 
 from taxi_mlops.data import __main__ as cli
 from taxi_mlops.data.download import ensure_month, load_manifest, save_manifest, sha256_file
-from taxi_mlops.data.errors import ChecksumDriftError, CorruptSourceError
+from taxi_mlops.data.errors import (
+    ChecksumDriftError,
+    CorruptSourceError,
+    RejectionThresholdError,
+)
 from taxi_mlops.data.ingest import ingest, read_raw
 
 MONTH = "2019-01"
@@ -40,6 +44,26 @@ def test_ingest_writes_output_and_rejection_report(data_cfg):
     ]
 
 
+def test_ingest_writes_the_rejected_sidecar_beside_the_counts(data_cfg):
+    """M2-S1 (F-005): the dropped rows land on disk, under their split, with the
+    rule that dropped them — and their count matches the report's, file to file."""
+    seed_raw(data_cfg, rows=40)
+    df = raw_frame(MONTH, rows=40)
+    df.loc[0, "trip_distance"] = 0.0
+    df.loc[1, "fare_amount"] = -5.0
+    pq.write_table(pa.Table.from_pandas(df, preserve_index=False), data_cfg.raw_path(MONTH))
+
+    [report] = ingest([MONTH], data_cfg)
+    sidecar = data_cfg.rejected_path(MONTH)
+    assert sidecar.exists() and sidecar.parent.name == "train"  # split visible on disk
+    assert sidecar.parent.parent != data_cfg.processed_path(MONTH).parent.parent
+
+    rows = pq.read_table(sidecar).to_pandas()
+    assert len(rows) == report.rows_rejected == 2
+    counted = {r["name"]: r["rejected_by"] for r in report.rules if r["rejected_by"]}
+    assert rows["rejection_rule"].value_counts().to_dict() == counted
+
+
 def test_corrupt_parquet_is_refused_and_nothing_is_written(data_cfg):
     """The red-team in unit form: garbage bytes must never become a processed month."""
     path = data_cfg.raw_path(MONTH)
@@ -49,6 +73,22 @@ def test_corrupt_parquet_is_refused_and_nothing_is_written(data_cfg):
         ingest([MONTH], data_cfg)
     assert not data_cfg.processed_path(MONTH).exists()
     assert not data_cfg.rejections_path(MONTH).exists()
+    assert not data_cfg.rejected_path(MONTH).exists()
+
+
+def test_a_month_over_the_ceiling_leaves_no_sidecar_either(data_cfg):
+    """A refused month leaves NOTHING behind, and 'nothing' now has one more
+    file in it. A sidecar written for a month whose output was refused would be
+    rejects belonging to a month that does not exist downstream."""
+    df = raw_frame(MONTH, rows=10)
+    df.loc[0:1, "trip_distance"] = 0.0  # 20% > the shipped 10% ceiling
+    path = data_cfg.raw_path(MONTH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pandas(df, preserve_index=False), path)
+    with pytest.raises(RejectionThresholdError, match="broken input"):
+        ingest([MONTH], data_cfg)
+    assert not data_cfg.processed_path(MONTH).exists()
+    assert not data_cfg.rejected_path(MONTH).exists()
 
 
 def test_truncated_parquet_is_refused(data_cfg):

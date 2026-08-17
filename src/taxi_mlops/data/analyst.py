@@ -33,6 +33,7 @@ from pathlib import Path
 
 import duckdb
 
+from .clean import RULE_COLUMN
 from .config import DataConfig, load_config
 
 # Every view this layer publishes, in creation order. The DA cites these names;
@@ -43,6 +44,7 @@ VIEWS = (
     "trips_train",
     "trips_val",
     "trips_test",
+    "trips_rejected",
     "raw_manifest",
     "ingest_months",
     "ingest_rejections",
@@ -77,6 +79,28 @@ def _trips_clean_sql(cfg: DataConfig) -> str:
         for month in cfg.splits.months
     ]
     return "CREATE OR REPLACE VIEW trips_clean AS\n" + "\nUNION ALL\n".join(branches)
+
+
+def _trips_rejected_sql(cfg: DataConfig) -> str:
+    """The rows the contract threw away (M2-S1, F-005) — the counts' missing half.
+
+    Same shape as ``trips_clean`` and for the same reasons: ``*`` because the
+    sidecar's schema was already decided at ingest, and ``split``/``month`` as
+    config literals so a renamed file cannot relabel data. What it adds is
+    ``rejection_rule`` (the rule that filed the row, matching the report's
+    ``rejected_by``) and ``rejection_rules`` (every rule it violates).
+
+    Deliberately NOT unioned into ``trips_clean``. These rows failed the output
+    contract on purpose; one careless ``SELECT * FROM trips`` must never be able
+    to train on them.
+    """
+    branches = [
+        f"SELECT {_sql_str(cfg.splits.split_of(month))} AS split, "
+        f"{_sql_str(month)} AS month, * "
+        f"FROM read_parquet({_sql_str(cfg.rejected_path(month))})"
+        for month in cfg.splits.months
+    ]
+    return "CREATE OR REPLACE VIEW trips_rejected AS\n" + "\nUNION ALL\n".join(branches)
 
 
 def _rejections_sql(cfg: DataConfig) -> str:
@@ -153,6 +177,7 @@ def build_sql(cfg: DataConfig) -> list[str]:
         "CREATE OR REPLACE VIEW trips_train AS SELECT * FROM trips_clean WHERE split = 'train'",
         "CREATE OR REPLACE VIEW trips_val   AS SELECT * FROM trips_clean WHERE split = 'val'",
         "CREATE OR REPLACE VIEW trips_test  AS SELECT * FROM trips_clean WHERE split = 'test'",
+        _trips_rejected_sql(cfg),
         _manifest_sql(cfg),
         _months_sql(cfg),
         _rejections_sql(cfg),
@@ -179,8 +204,14 @@ def connect(cfg: DataConfig, *, read_only: bool = False) -> duckdb.DuckDBPyConne
 def build(cfg: DataConfig | None = None) -> list[str]:
     """(Re)create every view. Idempotent by construction — CREATE OR REPLACE."""
     cfg = cfg or load_config()
+    # Both trees are checked, because both are viewed. A missing sidecar would
+    # otherwise surface as a DuckDB error deep inside someone's query rather
+    # than as "run `make ingest`" here.
     missing = [
-        str(cfg.processed_path(m)) for m in cfg.splits.months if not cfg.processed_path(m).exists()
+        str(path)
+        for month in cfg.splits.months
+        for path in (cfg.processed_path(month), cfg.rejected_path(month))
+        if not path.exists()
     ]
     if missing:
         raise FileNotFoundError(
@@ -224,8 +255,46 @@ def reconciliation(cfg: DataConfig) -> list[tuple[str, str, int, int, bool]]:
     ]
 
 
+def rejection_reconciliation(cfg: DataConfig) -> list[tuple[str, str, str, int, int, bool]]:
+    """Count the SIDECAR rows per (month, rule) against what the report counted.
+
+    The same law as `reconciliation`, applied to the half of the data F-005 made
+    queryable, and it has to be per RULE rather than per month: a sidecar that
+    files every row under the wrong rule has a perfect monthly total and is
+    useless for the one question it exists to answer.
+
+    FULL OUTER JOIN on purpose. A rule that the report knows and the sidecar
+    lacks is caught by a LEFT join; a rule name appearing only in the sidecar —
+    what a renamed rule would look like mid-change — is caught only by a FULL
+    one, and it is the rows-with-no-home case.
+    """
+    con = connect(cfg, read_only=True)
+    try:
+        rows = con.execute(
+            f"""
+            SELECT COALESCE(r.split, s.split)   AS split,
+                   COALESCE(r.month, s.month)   AS month,
+                   COALESCE(r.rule,  s.rule)    AS rule,
+                   COALESCE(s.observed, 0)      AS observed,
+                   COALESCE(r.rejected_by, 0)   AS expected
+            FROM ingest_rejections r
+            FULL OUTER JOIN (
+                SELECT split, month, {RULE_COLUMN} AS rule, COUNT(*) AS observed
+                FROM trips_rejected GROUP BY 1, 2, 3
+            ) s USING (split, month, rule)
+            ORDER BY month, rule
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        (split, month, rule, observed, expected, observed == expected)
+        for split, month, rule, observed, expected in rows
+    ]
+
+
 def report(cfg: DataConfig | None = None) -> bool:
-    """Build, then print the reconciliation. Returns True when every month agrees."""
+    """Build, then print both reconciliations. Returns True when everything agrees."""
     cfg = cfg or load_config()
     names = build(cfg)
     print(f"[duckdb] {database_path(cfg)}")
@@ -241,8 +310,36 @@ def report(cfg: DataConfig | None = None) -> bool:
     total = sum(r[2] for r in rows)
     agreed = all(r[4] for r in rows)
     print(f"  {'ALL':<5}  {'':<7}  {total:>12,}")
+
+    rejected_rows = rejection_reconciliation(cfg)
+    disagreed = [r for r in rejected_rows if not r[5]]
+    width = max([len(r[2]) for r in rejected_rows] + [len("rule")])
+    print("\n[duckdb] retained rejected rows vs the per-rule counts (F-005)")
+    print(f"  split  month    {'rule'.ljust(width)}    sidecar   rejected_by  agree")
+    print(f"  -----  -------  {'-' * width}  -----------  ------------  -----")
+    # Only the disagreements are printed row by row: 8 months x 10 rules is 80
+    # lines of 'yes' that nobody reads, and a table nobody reads is where a 'NO'
+    # hides. The totals below are what the eye is meant to land on.
+    for split, month, rule, observed, expected, _ok in disagreed:
+        print(
+            f"  {split:<5}  {month}  {rule.ljust(width)}  "
+            f"{observed:>11,}  {expected:>12,}     NO"
+        )
+    sidecar_total = sum(r[3] for r in rejected_rows)
+    counted_total = sum(r[4] for r in rejected_rows)
+    rejected_agreed = not disagreed
     print(
-        f"[duckdb] {'GREEN' if agreed else 'RED'} — {len(rows)} month(s), "
-        f"every count reconciled: {agreed}"
+        f"  {'ALL':<5}  {'':<7}  {'(all rules)'.ljust(width)}  {sidecar_total:>11,}"
+        f"  {counted_total:>12,}  {'yes' if rejected_agreed else 'NO':>5}"
     )
-    return agreed
+    print(
+        f"  {len(rejected_rows)} (month, rule) pair(s) checked, "
+        f"{len(disagreed)} disagreement(s)"
+    )
+
+    ok = agreed and rejected_agreed
+    print(
+        f"[duckdb] {'GREEN' if ok else 'RED'} — {len(rows)} month(s), "
+        f"every count reconciled: {ok}"
+    )
+    return ok

@@ -89,6 +89,30 @@ clean:
   # Observed 2019 months reject ~2-3%; the ceiling is deliberately not snug.
   max_rejected_fraction: 0.10
 
+rejected:
+  # The rejected-row SIDECAR (M2-S1, F-005). Until this existed, "how many rows
+  # did we drop" was answerable and "which kind" was not: `duration_above_max`
+  # alone discards 159,300 trips and nothing on disk could say whether they were
+  # meter faults or a real long-haul population.
+  #
+  # Written per month, mirroring data/processed/<split>/, with the SAME writer
+  # options as the processed outputs (see `write:` below — one writer contract,
+  # not two). Every contract column survives, plus the derived target: the point
+  # of retaining rows is to answer questions nobody has thought of yet, and a
+  # column dropped here is a question that can never be asked.
+  #
+  # ATTRIBUTION IS FIRST-MATCH AND IS NOT A KNOB, deliberately. `rejection_rule`
+  # carries the FIRST rule a row violates, which is exactly what the rejection
+  # report's `rejected_by` counts, so the sidecar reconciles to the report row
+  # for row (`make duckdb` exits 1 if it does not). An all-match attribution
+  # would double-count and break that law, so it is published ALONGSIDE instead:
+  # `rejection_rules` lists every rule the row violates, comma-separated.
+  #
+  # A REFUSED month writes no sidecar. Refusals are structural (a missing column,
+  # a month over max_rejected_fraction) and leave nothing behind at all — the
+  # sidecar is for rows that were COUNTED, never for months that were refused.
+  dir: "data/rejected"
+
 analyst:
   # The DuckDB analyst layer (M1-S2). PATHS are knobs; the VIEW DEFINITIONS are
   # code (taxi_mlops.data.analyst) -- a view name is a contract cited by the EDA

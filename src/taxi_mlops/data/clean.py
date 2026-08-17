@@ -9,6 +9,17 @@ Two counts per rule, on purpose:
   rule sitting behind an overlapping earlier rule reads as `0` and looks dead
   when it is merely shadowed.
 
+Since M2-S1 the dropped rows are also RETAINED (F-005), not only counted: the
+same pass that builds the table builds the sidecar frame, carrying two columns.
+
+* ``rejection_rule`` — the first rule violated. Same attribution as
+  ``rejected_by``, which is what makes the sidecar reconcile to the report
+  exactly; ``make duckdb`` fails if it ever does not.
+* ``rejection_rules`` — every rule the row violates, comma-separated, so the
+  shadowed rules are visible per ROW as well as per count. A 200-minute trip
+  that also has a zero distance is filed under ``duration_above_max`` and still
+  says so.
+
 Every threshold and bound is read from configs/data.yaml — the rules here own
 the LOGIC, never the numbers.
 """
@@ -20,10 +31,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .config import DataConfig
 from .errors import RejectionThresholdError
+
+# The sidecar's own two columns. Names, not knobs: `trips_rejected` publishes
+# them and the reconciliation cites them, so they are a contract in reviewed
+# code — the same call analyst.VIEWS makes about view names.
+RULE_COLUMN = "rejection_rule"
+RULES_COLUMN = "rejection_rules"
 
 
 @dataclass
@@ -136,18 +154,53 @@ def _masks(df: pd.DataFrame, month: str, cfg: DataConfig) -> list[tuple[str, pd.
     return out
 
 
-def clean(df: pd.DataFrame, month: str, cfg: DataConfig) -> tuple[pd.DataFrame, RejectionReport]:
-    """Derive the target, drop rows against named rules, count every drop.
+def _label_rejected(
+    df: pd.DataFrame,
+    masks: list[tuple[str, pd.Series, dict]],
+    dropped: pd.Series,
+    first_rule: pd.Series,
+) -> pd.DataFrame:
+    """The sidecar frame: every dropped row, with its rule and all its rules.
+
+    The all-match string is built on the SUBSET, never on the whole month: it
+    concerns ~1.6% of the rows and running ten string concatenations over 7M
+    rows to describe 114k of them would be paid on every ingest forever.
+    """
+    rejected = df.loc[dropped].copy()
+    rejected[RULE_COLUMN] = first_rule.loc[dropped].astype("string")
+
+    joined = np.full(len(rejected), "", dtype=object)
+    for name, mask, _params in masks:
+        joined = joined + np.where(mask.loc[dropped].to_numpy(), f",{name}", "")
+    rejected[RULES_COLUMN] = pd.Series(
+        [value[1:] for value in joined], index=rejected.index, dtype="string"
+    )
+    return rejected.reset_index(drop=True)
+
+
+def clean(
+    df: pd.DataFrame, month: str, cfg: DataConfig
+) -> tuple[pd.DataFrame, pd.DataFrame, RejectionReport]:
+    """Derive the target, drop rows against named rules, count AND keep every drop.
+
+    Returns (kept, rejected, report). The rejected frame is the F-005 sidecar:
+    the same rows the report counts, in the same first-match attribution, so the
+    two can be checked against each other rather than merely believed.
 
     Raises RejectionThresholdError when a month loses more than the configured
-    fraction — a month that thin is a broken input, not a cleaning success.
+    fraction — a month that thin is a broken input, not a cleaning success. The
+    raise happens BEFORE anything is returned, so a refused month has no sidecar
+    for the same reason it has no output.
     """
     df = add_target(df, cfg)
     report = RejectionReport(month=month, rows_in=len(df))
 
+    masks = _masks(df, month, cfg)
     already = pd.Series(False, index=df.index)
-    for name, mask, params in _masks(df, month, cfg):
+    first_rule = pd.Series(pd.NA, index=df.index, dtype="string")
+    for name, mask, params in masks:
         first = mask & ~already
+        first_rule[first] = name
         report.rules.append(
             {
                 "name": name,
@@ -167,7 +220,7 @@ def clean(df: pd.DataFrame, month: str, cfg: DataConfig) -> tuple[pd.DataFrame, 
             f"{month}: rejected {report.rejected_fraction:.3%} of rows, ceiling is {ceiling:.3%}. "
             f"That is a broken input, not a cleaning result. Table:\n{report.table()}"
         )
-    return kept, report
+    return kept, _label_rejected(df, masks, already, first_rule), report
 
 
 def sort_deterministically(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:

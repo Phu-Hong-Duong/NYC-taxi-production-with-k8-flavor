@@ -264,6 +264,20 @@ def test_verify_m1_has_no_skip_flag_for_the_expensive_rebuild_leg():
     assert "SKIP_REBUILD" not in text and "FAST=" not in text
 
 
+def test_verify_m1_quotes_the_count_the_rebuild_proof_actually_hashed():
+    """M2-S1: the leg used to `grep -c` every line ending in 'yes' across the
+    WHOLE log, so it also counted the duckdb reconciliation's per-month rows and
+    printed '16 output(s)' for 8 files. The assertion was never false — 'all
+    byte-identical: True' carried it — but the number it showed a human came
+    from somewhere else, which is the same defect this leg's own comment warns
+    about. It now parses the proof's own summary line."""
+    text = VERIFY_M1.read_text()
+    assert "all byte-identical: True$/\\1/p" in text
+    assert "grep -cE '  yes$'" not in text
+    # and the emptiness of that parse must be a FAIL, not an unbound comparison
+    assert '[[ -n "$identical" && "$identical" -gt 0 ]]' in text
+
+
 def test_verify_m1_seeds_its_corrupt_fixture_in_a_sandbox_not_in_data_raw():
     """gotcha #33's neighbour: a proof must not damage the artifact it protects.
     The fixture goes into a throwaway raw_dir under a throwaway config."""

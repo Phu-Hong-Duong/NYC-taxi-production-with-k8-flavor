@@ -281,3 +281,26 @@ the seed line are earned by THIS project.
     lifecycle — resolve the link before you debug the tool. Sibling of #24: the
     chain's environment has moving parts that outlive no reboot, and the
     staleness check exists precisely to find them before the work does.
+
+35. **A test that rewrites a shell array truncated it at the first `)` — and the
+    surviving entries ran as commands.** `tests/unit/test_cluster_scripts.py`'s
+    `_sandbox()` swaps `cluster.sh`'s REGENERABLE allowlist for a one-entry
+    version so the destroy guard can be red-teamed. It found the array's end
+    with `text.index(")", start)`. That works exactly as long as no entry's
+    trailing prose comment contains a paren. M2-S1 added one —
+    `# ... (`make rebuild-proof` proves it)` — and four guard tests died with
+    **rc 127**, `cluster.sh: line 28: data/interim: No such file or directory`:
+    the splice had cut the array open mid-way, so the remaining quoted paths
+    were parsed as commands to execute. The failure did not point at the comment
+    or at the test helper; it pointed at a line the diff had not touched.
+    Tuition paid 2026-08-17 (M2-S1, ~10 minutes). The fix is the idiom the SAME
+    FILE already used one test lower down — split on the closing paren **at the
+    start of a line** (`text.index("\n)", start)`), which
+    `test_the_catalogue_is_destroyable_and_the_dvc_cache_is_not` had been doing
+    since M1-S2 with a comment explaining why. General form: when a test parses
+    the source of the thing it tests, the parser is production code with none of
+    production's tests — and a lesson learned in one function does not travel to
+    its neighbour by itself. Look for the second copy of a parse the day you fix
+    the first. Sibling of the twins lesson (CLAUDE.md port family): two places
+    that must agree, and only one of them was taught.
+
