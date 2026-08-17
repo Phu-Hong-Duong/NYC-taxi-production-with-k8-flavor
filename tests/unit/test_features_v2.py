@@ -227,6 +227,25 @@ def test_borough_pair_is_defined_for_the_unknown_zones_which_is_the_point_of_it(
     assert table.boroughs[table.borough_code[264]] == "Unknown"
 
 
+def test_the_two_non_places_share_ONE_borough_code_though_the_file_spells_them_differently():
+    """Regression, found 2026-08-17 by the test below going red on a real defect.
+
+    The shipped lookup says Borough "Unknown" for 264 and Borough "N/A" for 265.
+    Taken literally that mints a second borough that means "we do not know" —
+    and `borough_pair` would then carry two coarse-backoff categories for the
+    same absence of information. DR-04 condition 1 asks for ONE named fallback.
+    """
+    table = zones.load_zone_table()
+    assert table.borough_code[264] == table.borough_code[265]
+    assert table.boroughs[table.borough_code[265]] == "Unknown"
+    assert "N/A" not in table.boroughs, table.boroughs
+    # The real boroughs must survive the fold — this is not a flattening of the
+    # column, it is a fold of the two spellings of its null.
+    assert {"Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island", "EWR"} <= set(
+        table.boroughs
+    )
+
+
 def test_an_unseen_zone_id_cannot_invent_a_category_code():
     """The unseen-category law (eda_report §11: ~0.017% of held-out rows carry an
     OD pair train never saw) applied to the NEW categoricals.

@@ -309,7 +309,9 @@ def _log(
                     else f"yes — {args.sample_fraction:.0%} sample (F-008)"
                 ),
                 "aggregates_point_in_time": (
-                    "n/a" if fitted is None else ("yes" if fitted.point_in_time else "NO — RED TEAM")
+                    "n/a"
+                    if fitted is None
+                    else ("yes" if fitted.point_in_time else "NO — RED TEAM")
                 ),
             }
         )

@@ -47,6 +47,11 @@ UNKNOWN_ZONES = (264, 265)
 #: Highest id the lookup arrays are sized for. TLC ids are dense 1..265.
 MAX_ZONE_ID = 265
 
+#: How the shipped lookup spells "this id is not a place". TWO spellings, one
+#: meaning: 264 carries Borough "Unknown", 265 carries "N/A". Read from the
+#: committed file, not assumed — and folded onto one code in `load_zone_table`.
+NOT_A_PLACE_BOROUGHS = frozenset({"Unknown", "N/A", "nan", ""})
+
 #: Airport zones, confirmed against the shapefile's own `zone` field at M3-S2
 #: (`docs/feature_dossier.md` row 12). The sources had to INFER airports by
 #: clustering coordinates; a zone id names them exactly, which is one of the few
@@ -107,13 +112,22 @@ def load_zone_table(
 
     # Boroughs come from the lookup CSV rather than the centroid table, because
     # it is the one that has a row for 264/265 — and a borough IS defined for
-    # them ("Unknown"), which is exactly what makes borough_pair the coarse
-    # backoff dossier row 13 argues for: it exists for every OD pair.
+    # them, which is exactly what makes borough_pair the coarse backoff dossier
+    # row 13 argues for: it exists for every OD pair.
+    #
+    # The two non-places are spelled DIFFERENTLY in the shipped file: 264 is
+    # Borough "Unknown" and 265 is Borough "N/A" (read live 2026-08-17). Both
+    # mean the same thing, so they are folded onto the ONE Unknown code —
+    # DR-04 condition 1 asks each spatial feature for a single named fallback
+    # for the non-places, and two codes would make borough_pair carry two
+    # categories that mean "we do not know" while looking like two boroughs.
     names = ["Unknown"]
     codes = np.zeros(MAX_ZONE_ID + 1, dtype="int16")
     lookup_frame = pd.read_csv(lookup)
     for _, row in lookup_frame.iterrows():
-        borough = str(row["Borough"])
+        borough = str(row["Borough"]).strip()
+        if borough in NOT_A_PLACE_BOROUGHS:
+            borough = "Unknown"
         if borough not in names:
             names.append(borough)
         location_id = int(row["LocationID"])
