@@ -45,15 +45,17 @@ verify-m1: ## M1 gate: rebuild + DVC match; corrupt-file refusal; dbt tests gree
 	@bash scripts/verify_m1.sh
 
 # ---- M2 modeling I (role:MLE) ----
-.PHONY: train train-redteam predictions verify-m2
+.PHONY: train train-redteam predictions verify-m2 verify-m2-redteam
 train: ## both floors + LightGBM v1 through ONE evaluator, promotion gate on test, champion alias on a pass (exit 1 = refused)
 	uv run python -m taxi_mlops.training train
 train-redteam: ## prove the gate can say no: a hobbled challenger through the SAME gate, expect REFUSED
 	@bash scripts/train_redteam.sh
 predictions: ## score the REGISTERED champion on val+test and publish row-level predictions (M2-S4; then make duckdb, make marts)
 	uv run python -m taxi_mlops.training predict
-verify-m2: ## registry v1 w/ signature; hobbled model refused with both numbers
-	@echo "TODO(M2)"
+verify-m2: ## M2 gate: champion w/ signature; the gate still refuses; predictions reconcile; memo + error board render
+	@bash scripts/verify_m2.sh
+verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, expect RED naming it, restore, expect GREEN
+	@bash scripts/verify_m2_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
 .PHONY: automl tune verify-m3
