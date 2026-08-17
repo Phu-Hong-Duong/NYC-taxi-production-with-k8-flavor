@@ -1,5 +1,197 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (w) — M2-S1: the rows we threw away had a signature, and 85% of them were the same fault
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), **role:DE**,
+one story. **M2-S1 COMPLETE — F-005 CLOSED by every one of its own conditions.**
+PR #10 merged (merge commit `256f23c`), `git branch -r --contains ad874e0` →
+`origin/main`. **Next: EXECUTOR runs M2-S2** (quote-time features + honest
+baselines + LightGBM v1 through ONE evaluator), scheduled by ritual (a).
+
+### Staleness check of (v)'s Next — reality MATCHED, nothing to reconcile
+(v) claimed cluster up, MLflow holding only `Default`, tree clean on `main` at
+the kickoff commit. All three held: `kubectl get nodes` → 3/3 Ready v1.36.1
+(57m old) · `kubectl get pods -A --field-selector=status.phase!=Running` → `No
+resources found` · `git status --short --branch` → `## main...origin/main`,
+clean, HEAD `0c0d21c` · `data/analyst.duckdb`, `data/processed/{train,val,test}`
+and `data/raw` all present · 947G free, 47Gi RAM. Docker Desktop was running —
+gotcha #34 did not fire, but it was checked before anything relied on it.
+
+### Done (every leg with the command and what came back)
+
+- **The sidecar exists, and it is 27 MB, not the ~1 GB F-005 predicted.**
+  `make ingest` writes `data/rejected/<split>/yellow_tripdata_<month>.parquet`
+  through the SAME `write_processed` function and the same pinned options —
+  16 files (8 processed + 8 rejected), 914,459 retained rows. Every contract
+  column plus the derived target survives; `rejection_rule` names the rule that
+  filed the row and `rejection_rules` lists every rule it violates.
+
+- **Two craft calls, both recorded in `configs/data.yaml:rejected` rather than
+  in a commit message.** (1) **First-match attribution is LAW, not a knob** —
+  a `first_match | all_match` switch was considered and refused, because
+  `rejection_rule` equalling `rejected_by` is exactly what makes the sidecar
+  checkable against the report; a switch that can break an invariant is a
+  trapdoor, not a knob. The all-match information is published alongside as a
+  second column, so nothing was lost. (2) **No `enabled:` flag** — a disabled
+  path would be a branch nobody exercises and would leave `trips_rejected`
+  pointing at nothing. The only knob is `dir`.
+
+- **`make data` GREEN end to end**, with the DVC leg LAST (gotcha #33) and
+  `data/rejected` as its own third target:
+
+  ```
+  ALL        57,042,337    56,127,878     914,459   1.603%
+  [duckdb] 10 view(s): ... trips_clean, trips_rejected, ...
+  [duckdb] retained rejected rows vs the per-rule counts (F-005)
+    ALL             (all rules)                       914,459       914,459    yes
+    80 (month, rule) pair(s) checked, 0 disagreement(s)
+  [duckdb] GREEN — 8 month(s), every count reconciled: True
+  9 files pushed · Cache and remote 'localstore' are in sync
+  ```
+
+  The row counts are M1's to the row (56,127,878), which is the point below.
+
+- **Reconciliation is per (month, RULE), never per month — and the red-team
+  proves why.** A sidecar that files every row under the wrong rule has a
+  PERFECT monthly total. `test_reconciliation_catches_rows_filed_under_the_wrong_rule`
+  relabels a month's rows, asserts the total is still 4, and watches exactly two
+  (month, rule) pairs go red. Two more red-teams: rows removed, sidecar deleted
+  — each exits 1 through the CLI. The join is a FULL OUTER on purpose: a rule
+  present only in the sidecar (what a half-finished rename looks like) is
+  invisible to a LEFT join.
+
+- **The free re-proof the kickoff predicted, collected twice.** Re-running a
+  CHANGED ingest left `data/processed.dvc` **unmodified in git** — the new code
+  reproduced M1's bytes exactly. Then `make rebuild-proof`, widened to cover
+  BOTH derived trees:
+
+  ```
+  [rebuild-proof] hashed 16 derived parquet file(s)
+  [rebuild-proof] 16 output(s), all byte-identical: True
+  second witness — DVC's own view of the derived trees:
+    data/processed.dvc: Data and pipelines are up to date.
+    data/rejected.dvc:  Data and pipelines are up to date.
+  [rebuild-proof] GREEN
+  ```
+
+  The sidecar went INTO the proof rather than beside it: a proof that re-derives
+  half a command's output proves half a command, and the half it skips is the
+  half nobody looks at.
+
+- **F-005's question, ANSWERED — and the answer was never "either".**
+  `docs/rejected_rows_appendix.md` (Appendix R), every number from a named view,
+  SQL quoted per section, no parquet path opened. Of `duration_above_max`'s
+  **159,300** trips:
+  - **135,460 (85.035%) are a 23–24 h clock artefact.** Median **2.19 miles**,
+    median fare **$12.00**, **98.97%** dropped off the NEXT DAY and **62.64%**
+    within the same clock hour. Two independent witnesses: the timestamps say
+    "session closed a day late", and *the money was never wrong* — an ordinary
+    clean trip is 1.66 mi / $9.50, while the genuine 100–120 min tail the rule
+    KEEPS is 19.1 mi / $53.00. No ETA model is missing out on these.
+  - **5,601 (3.516%) in the 120–180 min band are real long-haul.** 52.78% touch
+    an airport, 66.01% run ≥ 10 miles, 78.41% cost $40+, and **32.87%** carry an
+    out-of-city rate code against **2.7497%** of the clean data (12×). Top OD
+    pairs: JFK→outside-NYC (448), JFK→JFK (177), LGA→outside-NYC (73); the
+    recurring $52.00 is the JFK flat fare.
+  - The bands between are a graded mixture and the gradient is **monotone in
+    every discriminator**, which is what makes it an interpretation rather than
+    a story.
+
+  **No rule was changed and none is proposed.** `max_minutes: 120.0` stands:
+  the population it removes is 85% unusable, the 5,601 genuine trips are 0.010%
+  of delivered data, and admitting them would admit the wall with them.
+  (Loosening a threshold is a PO fork in any case — nothing here asks for one.)
+
+- **Two facts M1-S3 asked ARCH to weigh, now answered.** The rising rejection
+  rate (1.428% → 2.020%) is **NOT** driven by this rule — its share is flat,
+  0.273%–0.299% per month — so the trend lives in `duration_below_min` /
+  `distance_non_positive`, which is where a future drift memo should look. And
+  the `plausible_long` count more than **doubles** across the window (417 →
+  1,020), which is the number M2-S4's long-trip segment should quote.
+
+- **M1's gate re-run against the changed data path: `make verify-m1` → 37 `ok`,
+  0 FAIL, exit 0**, all 9 sections, `dropped=914,459 attributed=914,459
+  rules=10`, dbt `PASS=39 ERROR=0`, four marts reconciled, both boards verified
+  through the API with a card RUN each, boundary grep empty. Closing line:
+  `[verify-m1] GREEN — every M1 sub-check passed.` (Entry (u) counted 30
+  sub-checks; this story added none, so the two counts were taken differently —
+  37 is what `grep -c` on the `ok` marker returns today.)
+
+- **Tests + lint.** `uv run pytest tests/unit -q` → **160 passed** (was 142),
+  cluster-free. `uv run ruff check src tests scripts pipelines` → `All checks
+  passed!`. CI on PR #10: `lint-test pass 40s`.
+
+### Defects / Surprises
+- **Gotcha #35, and it cost ~10 minutes.** Adding a prose comment containing
+  parens to `cluster.sh`'s REGENERABLE array broke FOUR destroy-guard tests with
+  **rc 127** (`cluster.sh: line 28: data/interim: No such file or directory`).
+  `_sandbox()` in `test_cluster_scripts.py` found the array's end with
+  `text.index(")", start)` and cut it open mid-way, so the surviving quoted
+  paths were parsed as COMMANDS. The failure pointed at a line the diff never
+  touched. Fixed by the idiom the SAME FILE already used one test lower down —
+  split on the closing paren at the start of a line — which
+  `test_the_catalogue_is_destroyable_and_the_dvc_cache_is_not` had been doing
+  since M1-S2 with a comment explaining why. General form: when a test parses
+  the source of the thing it tests, the parser is production code with none of
+  production's tests, and a lesson learned in one function does not travel to
+  its neighbour by itself.
+- **A number in the M1 gate that was right for the wrong reason.** Leg 1
+  reported `16 output(s) byte-identical` when there were **8** files: it
+  `grep -c`'d every line ending in `yes` across the WHOLE log, so it also
+  counted the duckdb reconciliation's 8 per-month rows. Never a false green —
+  `all byte-identical: True` carried the assertion — but the number shown to a
+  human came from somewhere else, which is precisely what that leg's own comment
+  warns about. My change would have pushed it to 25. It now parses the proof's
+  own summary line, an empty parse is a FAIL, and a test pins both. Craft-level
+  fix inside my blast radius, verified by the full green re-run above.
+- **A fabricated number caught before it shipped.** A test docstring I wrote
+  claimed `missing_timestamp` accounts for "8,251 of the real 2019 rejects".
+  `SELECT rule, SUM(rejected_by) FROM ingest_rejections` says it is **0** — that
+  rule, `location_out_of_range` and `passenger_count_out_of_range` have never
+  fired in this window (`matched = 0` too, so nothing is shadowing them).
+  Docstring corrected to say so, which is the more useful fact anyway: a rule
+  with no live victims is one nobody would notice breaking.
+- **An EDA cross-reference that did not hold.** Appendix R first cited
+  "1.16% of clean trips" for out-of-city rate codes from `eda_report.md` §6; the
+  live query says **2.7497%**. The appendix now cites the query it ran. The
+  enrichment is 12×, not 28×.
+- Size: F-005 estimated "~+1 GB DVC cache and remote" for the sidecar. Actual is
+  **27 MB** — 1.6% of the rows, and the columns compress well.
+
+### Next
+1. **EXECUTOR: M2-S2** per `docs/milestones/M2_KICKOFF.md` — `taxi_mlops.features`
+   (quote-time pure, exclusions NAMED IN CODE: the six post-trip columns closing
+   F-007(a), `trip_distance` deferred to M3's dossier, `congestion_surcharge`
+   recommended EXCLUDE closing F-006, `airport_fee` 100% null), `taxi_mlops.training`
+   with `evaluate` as THE metric source (gotcha #15), both baselines re-derived
+   through the model's own code path with an unseen-group fallback, then LightGBM
+   v1 logged to MLflow experiment `m2-modeling` with signature + input example.
+   **Starting state:** cluster UP (3/3, all pods Running), platform + Metabase
+   healthy, MLflow holding only `Default`, tree clean on `main` at `256f23c`,
+   `make verify-m1` GREEN today, `make data` GREEN today with all pins pushed.
+2. **Carry-ins for S2, none silent:** ML deps are still absent from
+   `pyproject.toml` — `uv add lightgbm mlflow scikit-learn` resolves LIVE, never
+   pre-pinned from memory, and the MLflow SERVER is **3.15.1**, so match the
+   client major at add time (gotcha #14 is the M5 bill for getting this wrong).
+   Record whatever resolves in CLAUDE.md's pin table. Expect ≈7.89 (constant
+   median) / ≈3.72 (group median) val MAE — a large disagreement with the EDA's
+   SQL floors is a bug in `evaluate`, not a discovery.
+3. **New for S4, from this story:** the long-trip segment now has context past
+   the boundary — 12,522 clean trips at 100–120 min (19.1 mi, $53) and 5,601
+   genuine long trips immediately past it (18.06 mi, $62). The discontinuity at
+   120 minutes is an artefact of the rule, not of the city, and the error memo
+   should say so. `trips_rejected` is available to it.
+4. **For the whole milestone:** M2 carries ◆ — S5 exits to REV, never straight
+   to ARCH.
+5. Standing, PO's hands, non-blocking: **AWAITING_PO 2026-08-16-2** (allowlist).
+   Unchanged this session — though F-001's closing condition moved closer: `ls`,
+   `sed`, `grep`, `find`, `rm` and `du` all ran unprompted here. What still gets
+   refused is shell **syntax**, not verbs: `cmd && echo "EXIT=$?"` and an `awk`
+   pipeline were both blocked this session, exactly as the M1-S1 note predicted.
+
+---
+
 ## Session 2026-08-17 (v) — M1 BOUNDARY (ARCH): the gate re-run green by the approver, every open item dispositioned out loud, M2 authored
 
 ### State
