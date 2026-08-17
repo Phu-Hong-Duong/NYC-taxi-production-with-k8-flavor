@@ -39,6 +39,7 @@ class TrainedModel:
     categorical: list[str]
     best_iteration: int
     params: dict[str, Any]
+    hobble: str | None = None
 
     def predict(self, features: pd.DataFrame) -> np.ndarray:
         """Predictions in MINUTES, whatever scale the model was fitted on."""
@@ -49,6 +50,24 @@ class TrainedModel:
         # A duration is never negative. Clipping at zero is not cosmetic: the
         # promotion gate and the M5 SLO both read a number a rider could be quoted.
         return np.clip(values, 0.0, None)
+
+
+#: The red team (M2-S3). A hobbled model exists to be REFUSED by the promotion
+#: gate, so that the gate is watched saying no rather than only saying yes.
+#: `shuffled-target` permutes the TRAIN labels and leaves val and test alone —
+#: chosen over the "1% sample" alternative because a sampled model is merely
+#: worse and might still clear the bar, while a model fitted to noise has learned
+#: nothing by construction and its refusal cannot be a coincidence. Shuffling the
+#: val or test labels too would be a broken MEASUREMENT rather than a broken
+#: MODEL, and the gate would be refusing the wrong thing.
+HOBBLES = ("shuffled-target",)
+
+
+def _hobble(y: np.ndarray, how: str, seed: int) -> np.ndarray:
+    if how not in HOBBLES:
+        raise ValueError(f"model hobble {how!r} is not one of {'|'.join(HOBBLES)}")
+    rng = np.random.default_rng(seed)
+    return rng.permutation(y)
 
 
 def _transform(y: pd.Series, how: str) -> np.ndarray:
@@ -67,6 +86,7 @@ def fit(
     *,
     name: str | None = None,
     target_transform: str | None = None,
+    hobble: str | None = None,
 ) -> TrainedModel:
     """Fit one LightGBM contender. The only place `import lightgbm` happens."""
     ensure_openmp()
@@ -76,9 +96,14 @@ def fit(
     params = dict(model_cfg["lightgbm"])
     rounds = int(model_cfg["num_boost_round"])
 
+    train_label = _transform(train.y, how)
+    if hobble:
+        train_label = _hobble(train_label, hobble, int(params.get("seed", 0)))
+        print(f"[model] HOBBLED ({hobble}): train labels permuted; val and test are UNTOUCHED")
+
     train_set = lgb.Dataset(
         train.features,
-        label=_transform(train.y, how),
+        label=train_label,
         categorical_feature=categorical,
         free_raw_data=True,
     )
@@ -109,4 +134,5 @@ def fit(
         categorical=list(categorical),
         best_iteration=int(booster.best_iteration or rounds),
         params=params,
+        hobble=hobble,
     )

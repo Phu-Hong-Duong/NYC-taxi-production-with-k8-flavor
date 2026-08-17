@@ -85,6 +85,50 @@ model:
   early_stopping_rounds: 30
   log_period: 50
 
+# -------------------------------------------------------------------- gate ---
+# THE PROMOTION GATE (M2-S3, role:MLE). The one place this program says "no".
+#
+# LOOSENING ANYTHING BELOW IS A PO FORK, NOT AN EDIT (CLAUDE.md). Tightening is
+# the MLE's to argue for. The margin is recorded here with its reasoning because
+# a threshold whose argument lives in someone's head gets rounded down the first
+# time a model misses it.
+gate:
+  # Judged on TEST, and the gate raises if handed anything else. Early stopping
+  # reads VAL (model.early_stopping_rounds), so a verdict on val would score a
+  # model against a month it has already been fitted to once.
+  holdout_split: test
+  # The HONEST floor. The constant-median floor (7.6667 min test) is NOT the bar
+  # and never will be: against it, v1's 3.2608 reads as a 57% triumph, which is
+  # the number a demo quotes and a rider never feels. Passing that baseline in
+  # here raises rather than flatters.
+  floor: baseline-group-median
+  # WHY 2.00%. The measured gap between LightGBM v1 and this floor on test is
+  # 7.07% (M2-S2: 3.2608 vs 3.5090), so this is a bar with headroom rather than
+  # a rubber stamp cut to fit the model we have. It is NOT a statistical bar —
+  # over 5.95M test rows even 0.5% is significant. It is a MAINTENANCE-COST bar:
+  # 2% of the floor is ~4 seconds of mean error, and a model whose whole
+  # advantage over a `GROUP BY` is four seconds does not earn a booster to serve,
+  # a registry entry to version, and a rollback path to rehearse. Below this
+  # line, ship the lookup table.
+  min_improvement_pct: 2.0
+  # The second condition, and it can refuse a model the margin would admit:
+  # KPI-09 is a mean over ~6M rows, KPI-10 is what one rider experiences. A
+  # challenger that improves the average while quoting more riders wrongly has
+  # optimised what we report and degraded what we promise — and only the second
+  # of those is on M5's SLO.
+  require_no_kpi10_regression: true
+
+# ---------------------------------------------------------------- registry ---
+registry:
+  # One registered model for the ETA service; contenders are VERSIONS of it, not
+  # models of their own. M3's tuned challenger and M7's retrains all land here,
+  # so the alias below is the single thing M5's deployment resolves.
+  model_name: "nyc-taxi-eta"
+  # Serving resolves `models:/nyc-taxi-eta@champion`. An alias and not a stage:
+  # MLflow 3 deprecated stages, and an alias is a pointer a rollback can move
+  # back in one call.
+  champion_alias: "champion"
+
 # ------------------------------------------------------------------ mlflow ---
 mlflow:
   # The tracking server's host route (CLAUDE.md port family: 5000 <- 30500).

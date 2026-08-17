@@ -45,9 +45,11 @@ verify-m1: ## M1 gate: rebuild + DVC match; corrupt-file refusal; dbt tests gree
 	@bash scripts/verify_m1.sh
 
 # ---- M2 modeling I (role:MLE) ----
-.PHONY: train verify-m2
-train: ## baseline + LightGBM v1, MLflow-tracked, promotion gate printed
-	@echo "TODO(M2): python -m taxi_mlops.training.train --config configs/train.yaml"
+.PHONY: train train-redteam verify-m2
+train: ## both floors + LightGBM v1 through ONE evaluator, promotion gate on test, champion alias on a pass (exit 1 = refused)
+	uv run python -m taxi_mlops.training train
+train-redteam: ## prove the gate can say no: a hobbled challenger through the SAME gate, expect REFUSED
+	@bash scripts/train_redteam.sh
 verify-m2: ## registry v1 w/ signature; hobbled model refused with both numbers
 	@echo "TODO(M2)"
 

@@ -354,6 +354,53 @@ can never disagree (the port-family twins lesson, applied before it bit).
   package in M4's image; AWAITING_PO 2026-08-17-1 offers the PO a one-line fix
   for this laptop. Both non-blocking.
 
+## The promotion gate and the first champion (M2-S3) — the one place this program says no
+- **`make train` is the whole path now**: both floors + LightGBM v1 through ONE
+  evaluator → the GATE on the untouched TEST month → promotion, only on a pass.
+  **A refusal exits 1** (from M4 this is a pipeline step; a gate that says no
+  while exiting 0 is a gate the pipeline cannot hear). `make train-redteam` is
+  its twin and inverts that, exactly as `marts-redteam` does.
+- **The bar: 2.00% KPI-09 margin over the group-median floor, plus KPI-10 must
+  not regress.** The margin is a MAINTENANCE-COST bar, not a statistical one —
+  over 5.95M test rows even 0.5% is significant, but 2% of the floor is ~4
+  seconds of mean error, and a model whose whole advantage over a `GROUP BY` is
+  four seconds does not earn a booster to serve and a rollback to rehearse. The
+  measured gap is 7.07%, so the bar has headroom BY DESIGN. Both knobs live in
+  `configs/train.yaml: gate` with their reasoning; **loosening either is a PO
+  fork** (never an edit). The KPI-10 condition can refuse a model the margin
+  admits: a mean over 6M rows can improve while more riders are quoted wrongly.
+- **`gate.py` decides (pure), `registry.py` acts (mutating), and a test keeps
+  them apart.** `decide()` RAISES rather than warns when handed val metrics
+  (early stopping read val — judging there scores a model against a month it was
+  already fitted to) or the flattering constant-median floor. The registry API
+  appears in exactly one module, pinned by a test.
+- **The red team is watched saying no.** A challenger fitted on PERMUTED train
+  labels (val/test untouched — shuffling those is a broken measurement, not a
+  broken model) goes through the same fit, evaluator and gate with promotion
+  ENABLED: **REFUSED on both conditions** (−118.49% KPI-09, −32.018 points
+  KPI-10), exit 1, and the script proves the registry is identical before and
+  after. It reads the alias via `get_model_version_by_alias`, NOT off
+  `search_model_versions` (which returns `aliases` EMPTY on server 3.15.1 — a
+  snapshot built from that field would be blind to the exact mutation it checks).
+  The hobbled run is KEPT and marked (`red_team`/`hobbled`/`do_not_promote`):
+  a deleted refusal cannot be checked by anyone who was not watching.
+- **What the refusal taught, and it is better than the verdict**: fitted to noise
+  LightGBM early-stopped at **iteration 1** with test MAE **7.6667** — equal to
+  `baseline-constant-median` to four decimals. "Learned nothing" numerically IS
+  the median, and against the flattering floor that model scores **+0.00%**.
+- **The champion exists**: `models:/nyc-taxi-eta@champion` → version **1**, run
+  `3adee05a855a424bb664c7fea3735703`, signature + input example, promoted at
+  +7.07% (81.480% vs 80.322% KPI-10). Promotion is **idempotent by RUN** —
+  re-running reuses the version and leaves the alias alone (proved live, `noop?
+  True`). Nothing in `registry.py` deletes: a replaced champion is what a
+  rollback needs to find. The verdict travels ON the version as tags, so "what
+  was this measured against?" is answered by the registry, not by a transcript.
+- **F-008 (new, lands M3): a sampled run makes this gate EASIER to pass.** The
+  floor is fitted on the same data as the challenger, so shrinking train degrades
+  the BAR faster than the model. Measured on one train month: floor 3.5090 →
+  4.1138, model 3.2608 → **3.4207** (worse), margin 7.07% → **16.85%** (better).
+  M3's scout and sniper sample BY DESIGN.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -393,6 +440,8 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
 | Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1. **WIDENED + RE-VERIFIED 2026-08-17 (M2-S1): 16/16** — it now wipes and re-derives `data/rejected/` too and asks DVC about BOTH `.dvc` files (`data/processed.dvc: up to date` · `data/rejected.dvc: up to date`). A proof that re-derives half a command's output proves half a command |
 | Baselines + LightGBM v1 (M2-S2) | `python -m taxi_mlops.training train` (`--ablation` adds the log1p variant; `--train-months` is the sample-first override; `--no-mlflow` is a smoke test, never a result) | VERIFIED 2026-08-17 (M2-S2): 43,987,422 train rows, 4 MLflow runs in `m2-modeling`, `lightgbm-v1` logged WITH signature + input example (7 artifacts in MinIO). The two floors came back **7.8866** and **3.7170** val MAE — the EDA's SQL numbers to four decimals, from different code. Registry left EMPTY on purpose (S3's) |
+| Train + gate + promote (M2-S3) | `make train` (`--no-promote` prints the verdict only; `--hobble shuffled-target` is the red team; **exit 1 = the gate refused**) | VERIFIED 2026-08-17 (M2-S3): 43,987,422 train rows, 500/500 rounds, verdict **PROMOTE** at +7.07% over the honest floor (3.2608 vs 3.5090 test) and +1.158 KPI-10 points, `nyc-taxi-eta` version 1 aliased `@champion` with signature + input example, exit 0. Every number in the table reproduced M2-S2's to four decimals. Re-promoting the same run is a NO-OP (`noop? True`, versions still `[1]`) |
+| Prove the gate can REFUSE | `make train-redteam` (`bash scripts/train_redteam.sh`) | VERIFIED 2026-08-17 (M2-S3): a challenger fitted on permuted train labels went through the SAME gate with promotion ENABLED → **REFUSE on both conditions** (−118.49% KPI-09, −32.018 points KPI-10), CLI exit 1, script inverted it to 0. Registry snapshot identical across the run (`versions=[] · alias @champion -> UNSET` before AND after). Hobbled run kept and tagged `red_team`/`hobbled`/`do_not_promote`; it is not a registry version |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |
 | Scout / sniper | `make automl` / `make tune` | pending M3 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |
