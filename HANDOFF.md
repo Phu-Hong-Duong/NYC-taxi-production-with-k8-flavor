@@ -1,5 +1,93 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (v) — M1 BOUNDARY (ARCH): the gate re-run green by the approver, every open item dispositioned out loud, M2 authored
+
+### State
+on-track — **ARCH (Fable 5, claude-fable-5, stated first line)**, the M1
+boundary session (M1 carries no ◆, so no REV precedes it). **M1 CLEANLY
+CLOSED — tagged `m1-closed`**, sign-off row written (producer EXEC S1–S5,
+PRs #5–#9; approver ARCH — producer ≠ approver holds). `docs/milestones/
+M2_KICKOFF.md` authored and pushed. **Next: EXECUTOR runs M2-S1** (the
+rejected-row sidecar — F-005's landing), chained via
+`automation/next_session.sh executor 120`.
+
+### Staleness check of (u)'s Next — reality matched, nothing to reconcile
+Cluster 3/3 Ready (v1.36.1, ~48m — S5's rebuild) · MLflow `/health` 200 and
+holding exactly one experiment (`0|Default`) · Metabase `/api/health` 200 ·
+`data/analyst.duckdb` present (274,432 bytes) · tree clean,
+`## main...origin/main` at `001a027`. Docker Desktop was RUNNING this time —
+gotcha #34 did not fire, but it was checked before anything relied on it.
+
+### Done (the boundary's three jobs, in order)
+- **TRIAGE.** `make verify-m1` re-run by the approver: **GREEN, exit 0, all 9
+  sections, every sub-check ok** — the slow leg ran honestly (`rebuild-proof
+  GREEN — 16 output(s) byte-identical after a full re-derive`, DVC second
+  witness), `dropped=914,459 attributed=914,459 rules=10`, dbt `PASS=39
+  ERROR=0`, four marts reconciled in Postgres to the row, both boards verified
+  through the API with a card RUN each, boundary-law grep empty. Closing line:
+  `[verify-m1] GREEN — every M1 sub-check passed.` Lineage spot-check:
+  `git branch -r --contains d954edc` → `origin/main`.
+- **Every open item dispositioned, none silent** (full table in the kickoff's
+  §0): **F-005** — the ARCH scoping call its row prescribes, made: absorbed
+  into **M2-S1** (role:DE), landing scope quoted from §9/M2's error memo
+  ("where does it fail: … long trips?"); ledger row annotated, closes only by
+  its own conditions. **F-006 → M2-S2** (evidenced choice; kickoff recommends
+  EXCLUDE). **F-007(a) → M2-S2**, (b) stays M3's dossier. **F-001** standing
+  PO fork, non-blocking, unchanged. **D-001** carried, not due (M4, quote
+  re-verified). **NEW DEBT D-003**: the 23 GB full-refresh peak lands M4 with
+  §9/M1-S6's own sentence as the quoted scope ("From M4 the build+publish runs
+  as the tail task of the monthly Flyte pipeline"). **Gotcha #34** resolved as
+  an ARCH decision, not a fork: the chain PARKS naming the gotcha — an
+  unattended session launching Windows-side processes is autonomy nobody
+  granted; recovery is one launch + ~15s and documented. **The
+  `_handoff_entry.md` near-miss** becomes a verify-m2 sub-check (M2-S5): the
+  fold is now a thing something checks, not a habit.
+- **AUTHOR.** `docs/milestones/M2_KICKOFF.md` per the template: §0 triage
+  (above) · preconditions verified LIVE (verify-m1 paste; MLflow empty but for
+  `Default` — M2 writes the first real experiments; Metabase 200; ML deps
+  confirmed absent from pyproject — `uv add` live at S2, mind the client/server
+  skew against MLflow server 3.15.1; 948G disk) · debt intake: NO debt row
+  lands at M2 (D-001, D-003 restated with quoted M4 landings); findings
+  intaken by id into S1/S2 · **five stories**: S1 sidecar (F-005, DE) · S2
+  quote-time features + honest baselines + LightGBM v1 through ONE evaluator
+  (F-006, F-007(a), MLE; gotcha #15 law restated — evaluate is the only
+  KPI-09/10 source; the honest floor is 3.7170, never 7.8866) · S3 promotion
+  gate red-teamed with a hobbled model (MLE) · S4 error memo + error-segment
+  board (DA; predictions parquet is the one-way door marts may read) · S5
+  verify-m2 red-teamed + **◆ exit to REV** (`automation/next_session.sh rev
+  120`; REV then chains architect). Out-of-scope and walls named; no new fork.
+- **CONTINUE.** Nothing blocks: committed on main, pushed, chain scheduled —
+  `automation/next_session.sh executor 120`.
+
+### Defects / Surprises
+- None operational this session. One observation for the record: verify-m1's
+  rebuild-proof line now says **16 output(s)** where S2's original said 8 —
+  the count grew when the proof widened to the rejection reports beside the
+  parquet; the check asserts a positive count (S5's fix) and both witnesses
+  agreed, so this is the check working, not drift.
+
+### Next
+1. **EXECUTOR: M2-S1** per `docs/milestones/M2_KICKOFF.md` — the rejected-row
+   sidecar (F-005 lands): retain rejected rows under `data/rejected/` with the
+   rejecting rule per row, refusal path untouched, DVC pin LAST (gotcha #33),
+   `trips_rejected` view + exact reconciliation (914,459), rebuild-proof must
+   stay GREEN, then the committed characterization of `duration_above_max`
+   (159,300 trips) and F-005 closed by its own conditions in the same PR.
+   **Starting state:** cluster UP (platform + Metabase Running, verify-m0 and
+   verify-m1 both green today), tree clean on `main` at the kickoff commit,
+   MLflow holding only `Default`.
+2. **Carry-ins for S1**, none silent: the sidecar must NOT change processed
+   bytes (rebuild-proof is the tripwire); a refused month writes no sidecar;
+   `make duckdb` exits 1 on any reconciliation miss — same law as the other
+   views.
+3. **For the whole milestone:** M2 carries ◆ — S5 exits to REV, never straight
+   to ARCH; REV re-derives ≥1 metric from the raw predictions parquet, which
+   exists precisely so it can (gotcha #18: fresh session, artifacts only).
+4. Standing, PO's hands, non-blocking: **AWAITING_PO 2026-08-16-2**
+   (allowlist). Unchanged this session.
+
+---
+
 ## Session 2026-08-17 (u) — M1-S5: a tool that vanished without being uninstalled, a port you cannot add to a running cluster, and the M1 gate GREEN then RED then GREEN
 
 ### State
