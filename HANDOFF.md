@@ -1,5 +1,153 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (ae) — M3-S1: the gate learned what it was being compared to
+
+### State
+on-track — **EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped
+fresh session.** Executed **M3-S1** (role:MLE), merged as **PR #16** (merge commit
+`19d5200`, story commit `02b7dc9`). Four findings CLOSED by their own evidence —
+**F-008, F-010, F-011, F-012** — plus **F-013's gate half**. `make verify-m2`
+**GREEN 54/54** on main after the merge. Tree clean, `## main...origin/main`.
+**Nothing was promoted: `@champion` is version 1 before and after this session**,
+and `registry.py` still deletes nothing.
+
+### Staleness check of (ad)'s Next — reality matched, for once
+(ad) said the chain was scheduled with EXECUTOR/M3-S1 next, cluster up,
+`make verify-m2` GREEN. All three held: `automation/STOP` absent · `/mnt/wsl`
+lists `docker-desktop` (gotcha #34 checked BEFORE the first `kubectl`, as (ad)
+asked) · `kubectl get nodes` **3/3 Ready v1.36.1**, **17/17 pods Running** (they
+restarted 25 min before this session — Docker Desktop had come back) · tree clean
+at `cc57bae`. Nothing to reconcile; S1 was taken as written.
+
+### Done (every leg with the command and what came back)
+
+- **F-010 — the floor got stronger, and the headroom got honest.**
+  `baseline-group-median-od-fallback` is a NEW named baseline (full key →
+  `(PU, DO)` → global), never an edit to the published floor — `configs/train.yaml:
+  baselines` legislated exactly that in M2. Measured on full data through the ONE
+  evaluator (`python -m taxi_mlops.training train --no-promote --experiment m3-gate
+  --story M3-S1`, 43,987,422 train rows): **3.5515 val / 3.3518 test KPI-09,
+  80.733% test KPI-10**, 1,610,050 groups + **46,938 backoff cells**. REV's F-010
+  re-derivation from published rows predicted **3.3518** and **+2.71%**; the fit
+  measured 3.3518 and +2.71%. Two instruments, one number — nothing was tuned to
+  match. **ADOPTED as the gate's floor** (DR-06 §3), with the argument written
+  beside the value in `configs/train.yaml: gate` and DR-06 cited there (**AI-4
+  discharged**). The **2.00% bar is unchanged, and that is a conclusion**: it is a
+  maintenance-cost bar and 2% of 3.3518 is still ~4.0 s of mean error. What
+  changed is the headroom — **1.35×, not 3.5×**. Honest cost, stated in the doc
+  and the config: **M3's bake-off must now land ≤ 3.2848 on test**, a bar 0.157
+  min harder than M2's.
+- **F-011 — the gate consults the incumbent, and was watched refusing.** Both
+  options (a) and (b), because either alone can be walked around: `gate.decide`
+  gained KPI-09 **and** KPI-10 conditions against the serving champion (the
+  registry read lives in `run._resolve_incumbent`, so `decide` stays pure —
+  the existing no-side-effects test still passes), and `registry.promote` gained a
+  **required** `incumbent_version` that it checks against the live alias.
+  `make gate-redteam` (new): a challenger built as the champion **+0.06 min** on
+  every quote scored **3.2667 / 81.423%**, **cleared the floor bar at +2.54%**,
+  and was **REFUSED on both incumbent conditions** against v1's 3.2608 / 81.480%
+  — with the floor conditions still passing, which is what makes it a test of the
+  new condition. The bypass (`incumbent_version=None`) was refused by
+  `registry.promote`. Registry snapshot **identical**: `alias 1, versions [1]`.
+- **F-012 — the floor half of `make predictions` is checked, as a refusal to
+  write.** It now fits the floor the **CHAMPION** was gated against, read off the
+  version's `gate_floor` tag rather than today's config — after F-010 those
+  legitimately differ, and observed live it built `baseline-group-median` while
+  the config names the new floor. `make predictions-redteam` (new): floor fitted
+  on 2019-01 → re-fit measured **4.1138** against the tag's **3.5090** → **write
+  REFUSED, exit 2**, and all three published files **byte-identical by sha256**
+  before and after.
+- **F-008 — a sampled run gets no verdict.** `gate.assert_full_train_months`
+  refuses **before a row is read** (observed: instant, **exit 2**, message naming
+  both month sets and the DIRECTION of the error). `--no-gate` is the sample-first
+  smoke path, legal ONLY with `--train-months` (observed: `--no-gate` alone →
+  exit 2 refusing), promotes nothing, exits **3**, and tags its runs
+  `sample_run`/`do_not_promote`/`gate_verdict: NONE` — option (b) carried along
+  for free. The sampled smoke run re-measured the finding's own numbers from
+  scratch: floor **4.1138**, model **3.4207** on test — M2-S3's figures to four
+  decimals.
+- **F-013 (gate half)** — `configs/promotion.yaml` **deleted**; a test fails if
+  any file under `configs/` other than `train.yaml` names a gate **knob** (knobs,
+  not filenames — the next stub will be called something else).
+- **`make verify-m2` GREEN 54/54** (was 49: five sub-checks ADDED to §2, none
+  removed or weakened — the named wall in the kickoff). §2 now replays the M3
+  transcripts too **with the incumbent each one records**, pins the floor by name,
+  and measures the DIRECTION of the floor change from two committed transcripts
+  (`3.5090 → 3.3518 on the same 5,950,708 rows`), because a floor swap is only
+  not-a-loosening if the new floor is harder. `make verify-m2-redteam` **PASSED**
+  (RED naming the alias, restored → GREEN at 54).
+- `uv run pytest tests/unit -q` → **324 passed**; `uv run ruff check .` → clean;
+  CI green on PR #16 (`lint-test pass 45s`); merged with a merge COMMIT;
+  `git branch -r --contains 02b7dc9` → **origin/main** (gotcha #20).
+
+### The trap this story paid tuition on — now gotcha #42
+**The first full run of the hardened gate REFUSED the champion against itself.**
+`registry.promote` writes `gate_challenger_mae` as `f"{...:.4f}"`; a deterministic
+re-fit of version 1 measures `3.2608234…`; `3.2608234 <= 3.2608` is False. Every
+unit test had passed, because a test writes the same literal on both sides — the
+two numbers only diverge once one has crossed a serialisation boundary.
+`gate.INCUMBENT_MAE_DECIMALS` / `INCUMBENT_WITHIN_DECIMALS` now compare at the
+precision the registry recorded, a test pins them as twins of the format strings
+in `run._promote`, and a regression of one ten-thousandth of a minute is still
+refused. **Cost: one 25-minute training run.** Value: this would otherwise have
+fired for the first time at S5, on the bake-off, against a live champion.
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **Adopted the stronger floor rather than keeping the old one with a footnote.**
+  DR-06 §3 allowed either. Keeping it was cheaper and would have left the gate
+  able to admit a booster that a two-line `GROUP BY` beats; adopting it costs M3's
+  own contenders 0.157 min of bar. Tightening is the MLE's to argue (CLAUDE.md),
+  so this is not a fork — but it is the expensive option and the handoff says so.
+- **The F-011 red-team challenger is BUILT, not fitted.** F-011's window is ~0.02
+  min wide and no hobbled *fit* lands there on purpose; the drill fails loudly if
+  the constructed challenger does not really clear the floor bar. The +0.06 min
+  constant was chosen by querying `data/predictions/test` — that query chose a
+  constant and reported nothing; every number in the transcript is the evaluator's.
+- **`--experiment` / `--story` are now CLI flags** and `run._log`'s hardcoded
+  `milestone: M2 · story: M2-S3` tags are gone. They were true for one story and
+  would have mislabelled every run after it; a run with no story states
+  `unstated` rather than claiming someone else's. M3-S1's runs live in **`m3-gate`**
+  (4 runs), so M2's experiment is unpolluted and verify-m2 §3 still reads 10.
+- **`docs/BLUEPRINT.md` edited (one parenthetical).** It named the deleted
+  `configs/promotion.yaml` as the gate's home. The spec's intent — one gate, no
+  side doors — is untouched; only a path written before the code existed moved.
+  Flagged here because the BLUEPRINT is ARCH's document.
+- **`scripts/gate_redteam_incumbent.py` is a .py, not a heredoc in a .sh.** The
+  first attempt died on gotcha #37: the OpenMP shim RE-EXECS, and a script fed on
+  stdin cannot be replayed — the source is gone. A file path replays verbatim.
+
+### Open items this story did NOT touch (none silently)
+- **F-013's features half → M3-S3** (`configs/features.yaml` still names
+  `trip_distance` in its stale "v1"), together with Design Review **AI-6**.
+- **F-009 → M5** · **D-001/D-003/D-004 → M4**. Unchanged, none due.
+- **AWAITING_PO: no new entry.** Nothing is parked and no direction fork opened.
+  The two standing non-blocking entries (2026-08-16-2 allowlist, 2026-08-17-1
+  libgomp) are unchanged and still the PO's hands — the libgomp shim fired on
+  every run this session, exactly as that entry predicts.
+- **Limits recorded rather than filed** (`docs/promotion_gate_m3.md` §7): the
+  incumbent comparison assumes both models were scored on the same holdout MONTH,
+  and the month is a config value, not a version tag; champion v1's KPI-10 is read
+  off its RUN because versions promoted before this story were tagged with KPI-09
+  only (backfilling would be a registry write from outside `registry.py`); and the
+  gate still knows nothing about serving cost — M5 owns that number.
+
+### No wall hit this session.
+
+### Next (for the session after this one)
+**EXECUTOR, story M3-S3** (role:MLE) per `docs/milestones/M3_KICKOFF.md` — the
+artisan track, feature-set v2, executed per `docs/artisan_playbook.md` with the
+Design Review's budget (DR-01: 9,000 fitting seconds, actuals printed — AI-1) and
+keep-threshold (DR-02: ≥0.50% relative val MAE, KPI-10 per group, drops listed)
+binding. Scheduled via `automation/next_session.sh executor 120`.
+Read before touching anything: **`docs/promotion_gate_m3.md` §1** — the bar S3's
+work will eventually be judged against is now **3.3518**, and a v2 contender must
+reach **≤ 3.2848** on test to clear it; **F-008 is live**, so every sampled
+iteration needs `--no-gate` and its runs are tagged non-promotable (the playbook's
+sample-first protocol still works, it just cannot produce a verdict); and **F-013's
+features half is S3's**, so `configs/features.yaml` gets ONE home in this story.
+Nothing in S3 promotes — the registry API stays out of its diff, exactly as the
+kickoff says.
+
 ## Session 2026-08-17 (ad) — M3-S2: the forbidden feature turned out to be replaceable, and one query said so
 
 ### State
