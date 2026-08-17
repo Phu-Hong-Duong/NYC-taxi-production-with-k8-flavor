@@ -1,5 +1,467 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-17 (u) — M1-S5: a tool that vanished without being uninstalled, a port you cannot add to a running cluster, and the M1 gate GREEN then RED then GREEN
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), role:MLOps
+deploy + role:DA boards, one story. **M1-S5 COMPLETE — M1's exit story.**
+`make verify-m1` **GREEN, exit 0, 30 sub-checks across 9 sections, measured 98s**,
+and RED-TEAMED to exit 2 in between. **Next: ARCH boundary session** (M1 carries
+no ◆), scheduled by ritual (c).
+
+### Staleness check of (t)'s Next — reality had MOVED, and reconciling it was the first work
+(t) said "cluster `mlops-taxi` UP, database `marts` holding 4 published marts,
+tree clean on `main` at `b1ce17a`". Two of those three were stale:
+
+- **`kubectl: command not found`** — for a binary CLAUDE.md records as
+  pre-existing and four sessions have used. Not uninstalled:
+  `/usr/local/bin/kubectl` is a symlink into
+  `/mnt/wsl/docker-desktop/cli-tools/…`, which exists only while Docker Desktop
+  runs. `ls /mnt/wsl` held nothing but `resolv.conf`; `tasklist.exe` showed no
+  `Docker Desktop.exe` and no `com.docker.backend.exe`. **The host had restarted
+  overnight and Docker Desktop had not come back with it.** Now **gotcha #34**.
+  Recovery was one launch and ~15 s: kind's node containers restarted
+  themselves, all 16 pods reached Running, and `make verify-m0` came back
+  **GREEN 18/18** with nothing re-deployed. Recorded rather than silently fixed,
+  because the next 3am session will meet it too.
+- **`_handoff_entry.md` was untracked in the repo root** — (t)'s entire handoff
+  entry, written but never folded into `HANDOFF.md` (whose newest entry was
+  still (s)/M1-S3). Folded in as entry (t) this session and the stray file
+  deleted. Worth naming: the ledger is append-only *by convention*, and a
+  convention that depends on one last manual step will eventually skip it.
+- The third claim held: `marts` really did hold 4 marts, and MLflow held only
+  `Default` (`select experiment_id, name … from experiments` → `0|Default|active`),
+  which was the kickoff's precondition for destroying the cluster.
+
+### Done (every leg with the command and what came back)
+
+- **The rebuild was PLANNED, and it bought three proofs.** `make ports` (3030
+  free; the family is now **10** ports, was 9) → `make cluster-down` →
+  `make cluster-up` → `docker port mlops-taxi-control-plane` →
+  **`30300/tcp -> 0.0.0.0:3030`** alongside the four existing pairs. kind
+  publishes host ports at cluster-CREATE time only; there is no live path, which
+  is why this was budgeted at draft time instead of discovered.
+
+- **The marts came back from the recipe alone**, which is the free idempotence
+  re-proof the kickoff predicted: `dbt build` **PASS=39 WARN=0 ERROR=0** in
+  3.64s, then `COPY 56127878` · 44,792 · 8 · 80 — **identical to M1-S4's counts
+  to the row**, onto a Postgres volume that had existed for four minutes.
+
+- **D-002's fresh-volume path exercised, and the evidence is not circumstantial.**
+  The initdb ConfigMap contains **exactly one** `CREATE DATABASE`
+  (`"${MLFLOW_DB_NAME}"`) — it has never heard of `marts` or `metabase`. This
+  PGDATA's `PG_VERSION` is stamped `2026-08-17 02:36:53`. And:
+
+  ```
+  mlflow   owner=mlflow    oid=16385   <- initdb, on the empty volume
+  marts    owner=marts     oid=16387   <- step [5/7], same run
+  metabase owner=metabase  oid=16389   <- step [5/7], same run
+  ```
+
+  Two databases initdb *cannot* create arrived by the recipe, in creation order.
+  Re-run printed `before = role present, database present` for all three.
+  **Metabase cost exactly what M1-S4 predicted**: one line in
+  `scripts/postgres_databases.sh`, one `ADDITIVE` entry in
+  `scripts/platform_secrets.sh`. A test now makes that prediction falsifiable.
+
+- **F-003's remaining condition discharged, and the result beat the prediction.**
+  (t) asked for `configured` then `unchanged` on a fresh object. Observed:
+  `configmap/postgres-initdb unchanged` · `service/postgres unchanged` ·
+  **`statefulset.apps/postgres unchanged`** on the FIRST apply, and again on the
+  second. The fix is a property of the manifest, not of the object it was first
+  seen on. F-003 stays closed.
+
+- **Metabase: v0.63.13, pinned by tag AND digest, app-db in the one Postgres.**
+  Plain manifest (the Postgres precedent), one container, `Recreate` strategy,
+  `-Xmx1g` under a 2Gi limit so the JVM can log its own OOM rather than be
+  killed silently (gotcha #28's lesson, applied pre-emptively). No H2: the
+  default app-db is a file in the container holding the dashboards, cards,
+  connections and users — it would have passed every test in this session and
+  died at the first rollout.
+
+- **Both boards render, and the gate proves it by RUNNING a card.**
+  `Data health` (10 cards: KPI-01/02/03/04/05) · `KPI board` (7 cards:
+  KPI-01/06/07/08), converged from `analytics/metabase/boards/*.json` through
+  the API — the prior-art ADOPT, landed. Second `make deploy-metabase`:
+  `service/metabase unchanged` · `deployment.apps/metabase unchanged`, every
+  card **updated** not created, dashboard ids 2 and 3 stable. Idempotence is by
+  NAME.
+
+- **THE GATE, three runs, in this order.** `make verify-m1`:
+
+  ```
+  RUN A (green)     30 sub-checks ok, exit 0, 98s
+  RUN B (red-team)  kubectl -n metabase scale deployment/metabase --replicas=0
+                    exit 2 — RED naming exactly:
+                      FAIL http://localhost:3030/api/health returned '000'
+                      FAIL the Metabase board check failed
+                    the other 28 sub-checks still ok (it counts, it does not stop)
+  RUN C (restored)  scale --replicas=1 -> 30 sub-checks ok, exit 0, 98s
+  ```
+
+  Leg 2 reconciles what M1-S1 counted: `rows_in=57,042,337 rows_out=56,127,878
+  dropped=914,459 attributed=914,459 rules=10` — **every dropped row still
+  attributed to a named rule.** Leg 3 seeds a corrupt parquet into a throwaway
+  `raw_dir` under a throwaway config and gets `CorruptSourceError`, rc=1, the
+  file NAMED, and **nothing written**. Leg 5 runs `marts-redteam`, whose exit
+  code is inverted, and confirms the red test is named.
+
+- **Tests + lint.** `tests/unit/test_metabase.py` — 28 new tests, each docstring
+  naming the failure it prevents. `uv run pytest tests/unit -q` → **142 passed**
+  (was 114), cluster-free. `uv run ruff check src tests scripts pipelines` →
+  `All checks passed!`.
+
+### Defects / Surprises — four of them were in MY OWN gate, which is the story
+
+- **A gate that passed while parsing nothing.** The first `verify-m1` run printed
+  `ok rebuild-proof GREEN — 0 output(s) byte-identical` and
+  `ok dbt build PASS — no summary line`. Both **passed**. `rebuild_proof.sh`
+  prints lowercase `yes` (I grepped `YES`) and dbt's summary carries a timestamp
+  and ANSI prefix so it is never at column 0 (I anchored `^Done\.`). A check
+  wired to no sensor is worse than a missing check: it is a green light. Both now
+  assert a positive count and a matched summary, and fail loudly without one.
+  Two further parse bugs in the same run — `rules` is a LIST of
+  `{name, rejected_by, matched}`, not a dict; the second-witness line says
+  "second witness", not "dvc status" — did fail honestly and were fixed.
+- **A check that raced the thing it checks.** The first `make deploy-metabase`
+  failed at its own last step: `rollout status` said "successfully rolled out"
+  and a single 20s curl returned `000`. Nothing was broken — `rollout status`
+  succeeds the instant readiness flips, and Metabase's first request through a
+  node port on a freshly-migrated JVM is slower than any one-shot timeout worth
+  setting. This is gotcha #29's cousin in the opposite direction (there: a
+  readiness check passing on zero replicas). Now a bounded retry.
+- **A refusal that was a stack trace.** Found *by* the red-team: with Metabase
+  scaled to 0 the node port accepts and then resets, and `ConnectionResetError`
+  is **not** a `urllib.error.URLError` — it comes straight up from the socket. My
+  client caught `HTTPError` and `URLError` only, so `--verify` answered with 30
+  lines of Python traceback instead of a sentence, and the raw exception blew
+  past `wait_for_health`'s retry loop entirely. Now caught as `OSError` and
+  typed. The fix then exposed a second decision: patience is right when
+  DEPLOYING (600s, the app-db is migrating) and wrong when VERIFYING, so
+  `--verify` waits 60s. A gate that takes ten minutes to call a dead service dead
+  is a gate nobody waits for.
+- **My estimate was off by an order of magnitude, and it is corrected in place.**
+  The script header said "SLOW ON PURPOSE (~15-25 min)". Measured: **98s**. The
+  claim mattered because the fear of a slow gate is exactly what tempts someone
+  to add the `FAST=1` flag a test now forbids.
+- **Comment-matching, for the third time in this repo.** Two of my own new tests
+  failed against the comments explaining them (`"h2" not in manifest` matched
+  "WHY NO H2 FILE-DB"; `"port-forward" not in script` matched "rather than a
+  port-forward somebody remembers"). Same shape as M1-S3's KPI-10 regex and
+  M1-S4's `monthly_kpis.sql`. Fixed with a shared `without_comments()` helper
+  whose docstring says the tuition has now been paid three times.
+- **No walls hit** (nothing needed three attempts). **Nothing parked. No fork
+  opened** — every choice sat inside the kickoff's scope with a stated undo.
+
+### Decisions (craft-level, inside scope, each with its undo)
+- **Metabase v0.63.13, not the `v0.58-lts` line.** Newest stable at pin time
+  (tag list read live from Docker Hub), pinned by digest so "newest at pin time"
+  stays reproducible. LTS would have started five minor versions behind on day
+  one. **Undo:** change two strings in `infra/manifests/metabase.yaml`; the LTS
+  line remains the 3-attempt-wall fallback the kickoff named.
+- **Plain manifest, not the Metabase helm chart.** The chart wants an ingress and
+  a values file we would override into a shape we already own. ADR-009 asked for
+  one container against the one Postgres; a Deployment plus a Service IS that, in
+  fifty readable lines. **Undo:** `helm upgrade --install`, delete one file.
+- **`deploy-metabase` is self-sufficient**, re-running the secrets and database
+  steps rather than documenting "run `make deploy-platform` first". Both
+  converge, so the cost is a no-op and the benefit is that the target cannot be
+  defeated by running order.
+- **The boards script adds and updates but NEVER archives or deletes.** Removing
+  a card from a board file leaves the old card in Metabase, unlinked. Same
+  asymmetry `postgres_databases.sh` follows, same reason: destroying is
+  `make destroy`'s job, out loud. Written down in `analytics/metabase/README.md`
+  as a trade rather than hidden as a limitation.
+- **Metabase reads the warehouse as `marts`, never as the superuser.** A BI seat
+  that can drop the warehouse it reads is one misclick from a restore. (`marts`
+  owns the database so it can still write; narrowing to read-only is M2's job,
+  when a second writer exists to narrow against.)
+
+### Next
+1. **ARCH: the M1 boundary session** — `automation/next_session.sh architect 120`
+   (M1 carries no ◆, so ritual (c), not a REV). The gate text is served: v1's M1
+   gate legs · minutes exist · prior_art 13 verdicts · `dbt build` green with one
+   test red-teamed · both Metabase boards render from marts. **Show:**
+   `docs/eda_report.md` · `docs/prior_art.md` · http://localhost:3030.
+2. **On ARCH's pile at this boundary**, none of it silent: **F-005** still waits
+   (M1-S3's scope judgement — rejected rows kept only as counts). **F-006/F-007**
+   open, owned by MLE, landing M2/M3. **The 23 GB peak** argues M4's Flyte marts
+   task should be incremental, not full-refresh. **New from this session:**
+   gotcha #34 (Docker Desktop's lifecycle owns `kubectl`) is an environment
+   fragility the chain will meet again — worth deciding whether the chain should
+   self-heal it or park on it; and the `_handoff_entry.md` near-miss suggests the
+   handoff fold wants to be a step something checks, not a habit.
+3. **Starting state for the next session:** cluster `mlops-taxi` UP with the
+   3030 route published, all of platform + Metabase Running, `marts` holding 4
+   marts (13 GB), Metabase holding 2 dashboards / 17 cards, `verify-m0` and
+   `verify-m1` both GREEN.
+4. Standing, PO's hands, non-blocking: **AWAITING_PO 2026-08-16-2** (allowlist).
+   Unchanged this session; the friction it describes did not block anything.
+
+---
+
+## Session 2026-08-16 (t) — M1-S4: four marts in the one Postgres, a debt closed on a volume that was already old, and the first `unchanged` this project has ever printed
+
+### State
+on-track — EXECUTOR (**Opus 5, claude-opus-5**, stated first line), role:DA with
+the MLOps hat for the publish plumbing, one story. **PR #8 MERGED on green CI**
+(`lint-test pass 41s`; the runner log confirms `114 passed in 19.59s` and
+`All checks passed!`), merge commit `b1ce17a`, story commit `a2ed135`, lineage
+proven: `git branch -r --contains a2ed135` → `origin/main` (after
+`git fetch --prune`). Tree clean and level with origin; story branch deleted both
+sides. **Next: EXECUTOR runs M1-S5** (Metabase + the two boards + `verify-m1`) —
+the M1 exit story.
+
+### Staleness check of (s)'s Next — reality matched, nothing to reconcile
+`git status --short --branch` → `## main...origin/main`, clean at `0fa5f56` ·
+`kubectl get nodes` → 3/3 Ready (v1.36.1, ~95m old) · MLflow/MinIO/Postgres all
+`Running` · 8 processed months on disk under their splits · `data/analyst.duckdb`
+present (274,432 bytes) · `dbt-duckdb` genuinely absent from `pyproject.toml`, as
+(s) said. Checked before being relied on.
+
+### Done (every leg with the command and what came back)
+
+- **`make marts` is real, and it is two halves in one order.** `dbt build`
+  (models AND tests, interleaved) → publish. First run: **PASS=39 WARN=0 ERROR=0
+  SKIP=0** over 4 models, 34 data tests and 1 seed in **3.24s**, then
+
+  ```
+  [marts] publishing trips_clean …        COPY 56127878
+  [marts] publishing zone_hourly_stats …  COPY 44792
+  [marts] publishing monthly_kpis …       COPY 8
+  [marts] publishing rejections_by_rule … COPY 80
+  ```
+
+  `COPY 56127878` is **exactly** the ingest total M1-S1 wrote and M1-S2
+  reconciled. Counts read back identical from both engines (DuckDB
+  `main_marts.*` and `psql -d marts`).
+
+- **Second `make marts`: 220.4s, exit 0, identical counts** — and the atomic
+  swap was watched happening. Mid-run, `pg_stat_user_tables` showed
+  `trips_clean` still serving **56,127,878** rows while `trips_clean__staging`
+  filled beside it; the staging table then vanished into the rename. A reader
+  sees the old mart or the new one, never a half-loaded one. The NOTICEs differ
+  between runs exactly as they should (run 1 skipped `DROP TABLE trips_clean`
+  four times; run 2 only the staging names).
+
+- **THE NUMBER OF THE STORY — two independent implementations landed on the same
+  integer.** `monthly_kpis.kpi_04_undocumented_rows` counts distinct rows
+  carrying a value the TLC dictionary does not describe, computed from
+  `trips_clean` against the domains in `configs/data.yaml`. Its eight monthly
+  values:
+
+  ```
+  104,498 + 80,636 + 74,718 + 73,666 + 60,486 + 55,926 + 44,034 + 33,422
+      = 527,386
+  ```
+
+  **527,386 is exactly M1-S3's figure** — including the subtlety that summing
+  the `unknown_domain_values` view instead gives 527,610, because 219 trips
+  carry both `VendorID = 5` and `payment_type = 0`. Same story for KPI-08:
+  318+300+380+395+442+424+451+421 = **3,131**, the EDA's excluded-row count to
+  the row. Neither was engineered to match; they came by different routes on
+  different days. **New observation the mart makes visible and nobody had:** the
+  undocumented-value rate falls **monotonically, 1.3778% (Jan) → 0.5616%
+  (Aug)** — the opposite direction to KPI-02's rejection rate, which rises over
+  the same months. M1-S3 recorded that the four codes appear in all 8 months; it
+  did not record that their share is halving.
+
+- **The red team is a command, and it found something the plan got wrong.**
+  `make marts-redteam` unions two checked-in impossible trips (999.5 min and
+  0.2 min) behind a dbt var and **inverts the exit code** — a green build with
+  those rows in it means the tests are not testing. Observed:
+
+  ```
+  Done. PASS=19 WARN=0 ERROR=1 SKIP=19 NO-OP=0 REUSED=0 TOTAL=39
+  ERROR: in test accepted_range_trips_clean_trip_duration_minutes__120__1
+    Got 2 results, configured to fail if != 0
+  ```
+
+  **The 19 SKIPs were not the prediction.** `seeds/redteam/README.md` first
+  claimed the reconciliation test would also go RED (the mart would hold two
+  rows the ingest never claimed). It does not — it is skipped, along with both
+  aggregate models and all their tests, because `dbt build` interleaves tests
+  with models and **never hands a failing fact to what is built on it**. That is
+  a stronger guarantee than the one predicted, and the README now says so rather
+  than keeping the tidier wrong sentence. The run also restores the local DuckDB
+  layer to green before exiting (the failed build had left `trips_clean`
+  carrying the fixture) and never touches Postgres.
+
+- **D-002 CLOSED, proven on a volume that was already 117 minutes old.**
+  `scripts/postgres_databases.sh`, invoked as step **[5/7]** of
+  `scripts/deploy_platform.sh` — never by hand. PGDATA's `PG_VERSION` is stamped
+  `2026-08-16 15:47:03`; `marts` was created at 17:44. Both runs, verbatim:
+
+  ```
+  RUN 1 — volume initialised 15:47, 'marts' absent
+  [pg-db] mlflow: before = role present, database present
+  [pg-db] ok  mlflow owner=mlflow
+  [pg-db] marts:  before = role absent, database absent
+  [pg-db] ok  marts owner=marts
+  [pg-db] 2 database(s) converged (no password printed, by design)
+
+  RUN 2 — same command again
+  [pg-db] mlflow: before = role present, database present
+  [pg-db] ok  mlflow owner=mlflow
+  [pg-db] marts:  before = role present, database present
+  [pg-db] ok  marts owner=marts
+  ```
+
+  `mlflow` is deliberately IN the list and printed `role present, database
+  present` on both runs — untouched, and the free proof that the guards are real
+  no-ops rather than untested branches. `SELECT datname || ' owner=' ||
+  pg_get_userbyid(datdba)` → `marts owner=marts`, `mlflow owner=mlflow`.
+  `CREATE DATABASE` cannot sit in a transaction or a DO block, hence the
+  `\gexec` + `WHERE NOT EXISTS` form. No password reaches argv — credentials go
+  to psql on stdin as `\set` variables, because argv shows up in `ps` inside the
+  pod and in a kubectl audit log.
+
+- **F-003 CLOSED by its own condition (a), in one attempt as instructed.**
+  `kubectl apply -f infra/manifests/postgres.yaml -v=9` prints the PATCH body
+  kubectl actually sends, and it is exactly one field:
+
+  ```
+  {"spec":{"volumeClaimTemplates":[{"metadata":{"name":"data"},"spec":{
+     "accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"8Gi"}}}}]}}
+  ```
+
+  **Cause:** `volumeClaimTemplates` is an ATOMIC list under strategic-merge patch
+  (no patchMergeKey), so kubectl compares the whole list against the live object
+  — into which the apiserver has defaulted `apiVersion: v1`, `kind:
+  PersistentVolumeClaim`, `spec.volumeMode: Filesystem` and `status: {phase:
+  Pending}` (read back live). Our manifest omitted all four, so desired could
+  never equal live. **Fix:** state them. Three applies in a row then printed
+  `configured (server dry run)` → `configured` → **`statefulset.apps/postgres
+  unchanged`** — the first `unchanged` in this project's life. Nothing was
+  disturbed: generation 1 = observedGeneration, pod `creationTimestamp
+  2026-08-16T15:46:45Z`, `restarts=0`, `kubectl diff -f` silent.
+  `storageClassName` stays UNSET — the apiserver does not write it back, so
+  naming kind's local-path would cost portability for nothing.
+
+- **Four marts, not three, and the fourth is argued rather than slipped in.**
+  `trips_clean` 56,127,878 · `zone_hourly_stats` 44,792 · `monthly_kpis` 8 ·
+  **`rejections_by_rule` 80**. BLUEPRINT names the first three. The fourth
+  exists because M1-S5's data-health board must render **KPI-03**, Metabase can
+  only query Postgres, and `ingest_rejections` lives in DuckDB — an embedded
+  engine no served BI tool can reach (BLUEPRINT §3 says exactly that). Its grain
+  is (month, rule), so it could not have been a column on either aggregate.
+  Without it the KPI is defined, computable and unrenderable.
+
+- **Tests + lint.** 21 new unit tests (`tests/unit/test_marts.py`), each
+  docstring naming the failure it prevents. `uv run pytest tests/unit -q` →
+  **114 passed** (was 93), cluster-free and dbt-free. `uv run ruff check src
+  tests scripts pipelines` → `All checks passed!`. CI ran them for real:
+  `114 passed in 19.59s`.
+
+- **Docs/ledgers**: CLAUDE.md gains the pins (dbt-core 1.12.2, dbt-duckdb
+  1.11.0), three command rows and a "gold marts" section · `docs/kpi_definitions.md`
+  gains a table naming the mart COLUMN for every KPI id, so M1-S5's cards do not
+  have to guess · `analytics/dbt/README.md` rewritten · `ledgers/debt.md` D-002
+  **closed** with its evidence · `ledgers/findings.md` F-003 **closed** with its
+  transcript · `ledgers/deployments.md` gains the publish row · LEARNING_GUIDE
+  field note written BEFORE this handoff (field-note law).
+
+### Decisions (craft-level, inside scope, each with its undo)
+
+- **`trips_clean` is published to Postgres at FULL GRAIN, and the cost is stated
+  rather than hidden.** ~**13 GB** in the Postgres volume, ~**23 GB peak**
+  mid-swap (the old table and the staging copy exist at once, with autovacuum
+  working on the one about to be dropped), and ~3.5 minutes of every `make
+  marts`. Node disk after: 783 G free of 1007 G. It is published anyway because
+  a BI layer that cannot reach trip grain is not self-service, and because
+  publishing an aggregate under a fact table's name would be a mart that lies
+  about what it is. **Undo:** drop it from `MARTS=()` in `scripts/marts.sh` and
+  Metabase loses trip-grain self-service. **For M4** (which runs this monthly as
+  a Flyte task): this wants an incremental materialisation, and the 23 GB peak is
+  the number that argues for it.
+- **The publish opens no port.** DuckDB → CSV on stdout → `kubectl exec -i` →
+  `psql \copy`. Measured **before** designing around it: 2,000,000 rows / 104 MB
+  in **1.9s (~55 MB/s)** — an order of magnitude better than the estimate that
+  would have killed full-grain publishing. Rejected, with reasons in the script
+  header: a NodePort for 5432 (publishes a database on the laptop, contradicts
+  the port family), `kubectl port-forward` (a background process the recipe must
+  babysit), DuckDB's `postgres` extension (downloaded at run time — an unpinned
+  dependency inside the build path).
+- **dbt SOURCES the analyst layer, attached read-only; no model reads parquet.**
+  `read_parquet` would have been shorter and would have given the repo a second
+  definition of `split` and `month` one directory from the first. Same rule for
+  KPI-04's domains: read from `configs/data.yaml` into `--vars`, with **no
+  default** — an absent var must fail the build, because an empty domain list
+  reports 100% undocumented and looks like a catastrophe rather than a bug.
+- **`accepted_range` and the grain check are ours, not `dbt_utils`.** A $0,
+  every-version-pinned program does not fetch a package from dbt Hub inside its
+  build path for one macro. **Undo:** add `packages.yml`, delete two files.
+- **`mlflow` is inside D-002's DATABASES list.** The recipe describes the whole
+  server; `10-mlflow.sh` becomes the empty-volume fast path rather than a second,
+  divergent source of truth. It also makes every run print a live no-op proof.
+- **`.env` grew an ADDITIVE branch.** Volume-baked secrets stay in `REQUIRED` and
+  are never regenerated; a NEW consumer's credential (marts now, Metabase at S5)
+  is generated and appended, because it is not yet inside any volume. Hard-failing
+  instead would have left the operator hand-editing a secrets file — the manual
+  step the recipe exists to remove.
+
+### Defects / Surprises
+- **dbt 1.12 refuses to start if the telemetry opt-out is set in both places.**
+  `config:` in profiles.yml + `flags:` in dbt_project.yml → `Do not specify
+  both`. Belt-and-braces broke the build. The opt-out now lives in
+  `dbt_project.yml` + `DO_NOT_TRACK`/`DBT_SEND_ANONYMOUS_USAGE_STATS` in
+  `scripts/marts.sh`, pinned by a test. Worth knowing: `uv add dbt-duckdb` pulled
+  **`snowplow-tracker`** in as a dependency, and the first (failing) run also
+  emitted `Error uploading artifacts to artifact ingestion API` — gotcha #32's
+  dbt sibling is real, not theoretical.
+- **`Catalog "analyst" does not exist` on the first publish.** `trips_clean` is a
+  VIEW over the attached analyst database, and a view is a stored QUERY — the
+  database it reads is not carried inside the file. dbt attaches it via
+  profiles.yml; every other reader must too. Fixed in `scripts/marts_export.py`
+  with the reason written next to the ATTACH.
+- **My own test had the bug this repo keeps warning about, again.**
+  `test_model_quality_kpis_are_not_computed_in_sql` failed — because
+  `monthly_kpis.sql`'s own COMMENT explaining why there is no `kpi_09_*` column
+  matched the regex looking for one. The assertion fired for the wrong reason.
+  Fixed by stripping SQL comments first, which is what the test meant anyway:
+  read the SELECT list, not the argument for it. Exactly the shape of M1-S3's
+  KPI-10 bug, one session later.
+- A second self-inflicted one: the deploy-order test compared against the first
+  occurrence of `community-charts/mlflow`, which is the `helm repo add` line, not
+  the install. Now anchored on `upgrade --install mlflow`.
+- **No walls hit** (nothing needed three attempts). **Nothing parked. No fork
+  opened** — every choice above sits inside the kickoff's scope with a stated
+  undo, and none touched a gate, a threshold or a budget.
+
+### Next
+1. **EXECUTOR: M1-S5** per `docs/milestones/M1_KICKOFF.md` — the M1 exit story:
+   the **planned cluster rebuild first** (3030 hostPort→nodePort twins + the
+   drift unit test; kind publishes ports at CREATE time only), then
+   `make deploy-metabase` (one container, pinned image, **app-db in Postgres via
+   D-002's mechanism** — add a `metabase:metabase:METABASE_DB_PASSWORD` line to
+   `DATABASES` in `scripts/postgres_databases.sh` and an entry to `ADDITIVE` in
+   `scripts/platform_secrets.sh`; that is the whole change), the two boards, and
+   `make verify-m1` implemented + red-teamed once.
+   **Starting state:** cluster `mlops-taxi` UP, database `marts` holding 4
+   published marts (13 GB), tree clean on `main` at `b1ce17a`.
+2. **Four things S5 should carry in.** (a) The rebuild **wipes the marts** with
+   the PVC — that is fine and is a free re-proof: `make marts` brings them back
+   from the recipe alone, and the fresh volume exercises D-002's other path.
+   Budget ~4 minutes for it. (b) **Re-verify MLflow holds only `Default`** before
+   destroying (kickoff precondition). (c) F-003's remaining condition: the fix
+   was proved on an EXISTING object — after the rebuild, apply the postgres
+   manifest twice and confirm the second says `unchanged`; if it does not,
+   reopen F-003 with that transcript. (d) `docs/kpi_definitions.md` now names the
+   mart column for every KPI id — the board cards should cite that table, and
+   **KPI-09/KPI-10 must appear on no card** (they are columns nowhere, by test).
+3. **The boards have everything they need in Postgres**: data-health from
+   `monthly_kpis` (KPI-01/02/04/05) + `rejections_by_rule` (KPI-03, and its three
+   permanently-zero rules must still render — a rule you cannot see cannot be
+   seen to start firing); KPI board from `monthly_kpis` + `zone_hourly_stats`,
+   with **KPI-08's excluded-row count on the same card as its value**.
+4. **For ARCH at the M1 boundary**: F-005 still waits (M1-S3's scope judgement,
+   with reasons). F-006/F-007 are open, owned by MLE, landing M2/M3. New for the
+   pile: the 23 GB peak argues that M4's Flyte marts task should be incremental,
+   not full-refresh.
+5. Standing, PO's hands, non-blocking: AWAITING_PO 2026-08-16-2 (allowlist).
+
+---
+
 ## Session 2026-08-16 (s) — M1-S3: 3,131 rows that break a correlation, a survey with six honest adopts, and F-005 judged rather than slid
 
 ### State

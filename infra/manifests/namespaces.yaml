@@ -9,6 +9,10 @@ metadata: {name: mlflow}
 ---
 apiVersion: v1
 kind: Namespace
+metadata: {name: metabase}     # the BI seat (ADR-009); app-db lives in platform's Postgres
+---
+apiVersion: v1
+kind: Namespace
 metadata: {name: flyte}
 ---
 apiVersion: v1

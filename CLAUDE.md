@@ -41,6 +41,12 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
   the paste to extend it is AWAITING_PO 2026-08-16-2 (non-blocking). The launch
   MODE itself now propagates down the chain (gotcha #26, fixed 2026-08-16 in
   `automation/next_session.sh` by a parallel ARCH session).
+- Observed 2026-08-17 (M1-S5 boot): the host had restarted and **Docker Desktop
+  was not running**, which presents as `kubectl: command not found` —
+  `/usr/local/bin/kubectl` is a symlink into `/mnt/wsl/docker-desktop/cli-tools/`
+  and that mount only exists while the daemon does (gotcha #34). Recovery is one
+  launch + ~15s; kind's node containers restart themselves and the platform comes
+  back with them (`make verify-m0` GREEN 18/18, nothing re-deployed).
 - Kaspersky AV on host — gotcha #9 before debugging any TLS error.
 - Cluster: kind, config at infra/kind/kind-config.yaml. $0 budget — nothing leaves
   this machine; no cloud credentials exist in this project.
@@ -83,6 +89,7 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | dvc | 3.67.1 | 2026-08-16 | `uv add dvc` (M1-S2). A runtime dep, not dev: `make data` invokes it. **Analytics disabled at init** — see gotcha #32 |
 | dbt-core | **1.12.2** | 2026-08-16 | `uv run dbt --version` (M1-S4). Note it pulled **snowplow-tracker 1.1.0** in — the telemetry client. Opt-out is `flags.send_anonymous_usage_stats: false` in `dbt_project.yml` + `DO_NOT_TRACK=1` (gotcha #32's dbt sibling, now pinned by a test) |
 | dbt-duckdb | **1.11.0** | 2026-08-16 | `uv run dbt --version` (M1-S4). A runtime dep, not dev: `make marts` invokes it |
+| Metabase | **v0.63.13**, image pinned by TAG AND DIGEST `metabase/metabase:v0.63.13@sha256:6e188e7068c6e9cf7b24480ada80f335bca9135765764ee827245f44ffa9eace` | 2026-08-17 | `docker pull` (M1-S5). Newest stable at pin time (Docker Hub tag list read live; `v0.58-lts` was the conservative alternative and stays the 3-attempt-wall fallback). Plain manifest, not the chart — `infra/manifests/metabase.yaml` header says why |
 | TLC yellow parquet (2019-01…08) | 8 files, sha256-pinned in `data/raw_manifest.json` | 2026-08-16 | `make ingest`; e.g. 2019-01 = `3ad95f39…26d`, 110,439,634 bytes. Manifest is timestamp-free by design: a diff = the bytes moved |
 | (FLAML/Optuna rows land at their milestones) | | | |
 
@@ -226,6 +233,40 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **Boundary law in force** (ADR-009, gotcha #22): `grep -r "analytics"
   src/taxi_mlops/` is empty and a unit test keeps it that way.
 
+## The BI seat (M1-S5) — what renders, from where, and the rules that keep it honest
+- **`make deploy-metabase` is the whole path**: namespace → secrets → the
+  `metabase` app-db via D-002 → Deployment → host-route check → boards. It
+  re-runs the two platform pieces it depends on rather than documenting "run
+  `make deploy-platform` first", so it cannot be defeated by running order.
+- **The app-db is a real database in the ONE Postgres, never H2.** Metabase's
+  default app-db is an H2 file inside the container holding the dashboards,
+  cards, connections and users — i.e. everything the M1 gate calls "the boards".
+  It dies with the pod, and losing a container filesystem is the NORMAL behaviour
+  of a Deployment, not an edge case. `metabase` is D-002's **third** consumer,
+  and it cost exactly what M1-S4 predicted: one line in
+  `scripts/postgres_databases.sh`, one `ADDITIVE` entry in
+  `scripts/platform_secrets.sh`. A test now makes that claim falsifiable.
+- **Metabase reads the warehouse as `marts`, never as the superuser.** A BI seat
+  that can drop the warehouse it reads is one misclick from a restore.
+- **Boards are checked-in JSON, converged through the API** (`analytics/metabase/
+  boards/*.json` → `scripts/metabase_boards.py`) — the prior-art ADOPT, landed. A
+  dashboard built by clicking exists in exactly one app-db, cannot be reviewed in
+  a PR, and cannot be rebuilt after `make destroy`. Idempotence is **by name**:
+  cards and dashboards are matched on `name` and updated in place, so a second
+  run leaves the same ids. The script **never archives or deletes** — same
+  asymmetry as `postgres_databases.sh`; destroying is `make destroy`'s job.
+- **Two boards, 17 cards, every card citing a KPI id.** Data health (10) ·
+  (KPI-01/02/03/04/05) · KPI board (7) (KPI-01/06/07/08). Enforced by test:
+  **KPI-09/KPI-10 appear on NO card** (gotcha #15) · **KPI-08's value and its
+  excluded-row count are on the SAME card** (AI-2) · **KPI-03 renders every rule
+  including the permanently-zero ones** — a rule you cannot see cannot be seen to
+  start firing · **KPI-02 is a SERIES**, because the observed rate rises
+  monotonically and an average hides exactly what the board is for.
+- **Telemetry is off in two layers, because Metabase phones home in two**
+  (gotcha #32): `MB_ANON_TRACKING_ENABLED` and `MB_CHECK_FOR_UPDATES` in the
+  manifest, plus `allow_tracking: false` in the `/api/setup` call — the setup
+  writes its own preference and would otherwise re-enable tracking at first login.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -238,10 +279,12 @@ both together. Known limit (F-002): `ss` sees only inside the WSL VM.
 cluster-CREATE time only, so the route is declared, never port-forwarded:
 `hostPort` in the kind config → `containerPort` = the Service's fixed
 `nodePort`. Live pairs: 5000←30500 (`infra/manifests/mlflow-nodeport.yaml`),
-9000←30900 and 9001←30901 (`infra/helm/minio/values.yaml`), 8081←80 / 8443←443
+9000←30900 and 9001←30901 (`infra/helm/minio/values.yaml`), **3030←30300**
+(`infra/manifests/metabase.yaml`, added M1-S5), 8081←80 / 8443←443
 (ingress, M5). Each pair is TWINS across two files — `tests/unit/
 test_platform_scripts.py` fails if they drift. Adding a port means
-`make cluster-down && make cluster-up`; there is no live path.
+`make cluster-down && make cluster-up`; there is no live path — M1-S5's
+rebuild was PLANNED for exactly this reason, not discovered.
 
 ## Commands (fill as they become real; each idempotent, each with a verify twin)
 | Intent | Command | Verified |
@@ -257,6 +300,9 @@ test_platform_scripts.py` fails if they drift. Adding a port means
 | Gold marts, whole (M1-S4) | `make marts` (dbt build incl. 34 tests → publish to Postgres; `SKIP_PUBLISH=1` stops at DuckDB) | VERIFIED 2026-08-16 (M1-S4): `dbt build` PASS=39 (4 models, 34 data tests, 1 seed) in 3.24s; publish printed `COPY 56127878` for `trips_clean` — exactly the ingest total — plus 44,792 · 8 · 80 for the aggregates. Re-run is a full refresh into `<name>__staging` swapped in inside ONE transaction, so a reader never sees a half-loaded mart (watched live: the old `trips_clean` still served 56,127,878 rows while `trips_clean__staging` filled) |
 | Prove the mart tests can FAIL | `make marts-redteam` | VERIFIED 2026-08-16 (M1-S4) — see the story's transcript. Unions `seeds/redteam/` (999.5-min and 0.2-min trips) and **inverts the exit code**: a GREEN build with impossible trips in it means the tests are not testing, and the script fails saying so. Never publishes |
 | Databases in the one Postgres (D-002) | `scripts/postgres_databases.sh` (step [5/7] of `make deploy-platform`; `DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S4) on the EXISTING volume (PGDATA initialised 15:47, `marts` created 17:44): run 1 `before = role absent, database absent` → `ok marts owner=marts`; run 2 `before = role present, database present`, nothing changed; `mlflow` no-op on both |
+| BI seat, whole (M1-S5) | `make deploy-metabase` (namespace → secrets → app-db via D-002 → Deployment → host-route check → boards; `SKIP_BOARDS=1` deploys only) | VERIFIED 2026-08-17 (M1-S5) — see the commands' Done rows in HANDOFF (u) |
+| Boards only (M1-S5) | `make boards` (`python scripts/metabase_boards.py`; `--verify` is the read-only twin `verify-m1` uses) | VERIFIED 2026-08-17 (M1-S5): converges 17 cards + 2 dashboards from `analytics/metabase/boards/*.json`; idempotent BY NAME (second run updates in place, ids unchanged) |
+| Gate check M1 | `make verify-m1` | VERIFIED 2026-08-17 (M1-S5): 9 sections, **30 sub-checks GREEN, exit 0, measured 98s**; RED-TEAMED by `kubectl -n metabase scale --replicas=0` → exit 2 naming exactly the 2 BI checks, other 28 still green, then restored → GREEN again. **No fast mode, no skip flag** — leg 1 deletes and rebuilds ~1 GB of processed parquet, because byte-identity checked against data that was never re-derived is not a check |
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
 | Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1 |
 | Gate checks | `make verify-m1` … `verify-m8` | pending each milestone |

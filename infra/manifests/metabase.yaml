@@ -1,0 +1,103 @@
+# Metabase — the BI seat (ADR-009), one container, and the host route to it.
+#
+# WHY A PLAIN MANIFEST AND NOT A CHART. The official Metabase chart wants an
+# ingress, a StatefulSet-shaped app-db story and a set of values we would have to
+# override into a shape we already own. ADR-009 asked for exactly one container
+# against the one Postgres; a Deployment plus a Service IS that, in fifty lines
+# we can read. Same call as Postgres (see infra/manifests/postgres.yaml's
+# header). Undo: `helm upgrade --install metabase metabase/metabase` with a
+# values file, and delete this manifest.
+#
+# WHY NO H2 FILE-DB. Metabase's default app-db is an H2 file inside the
+# container. It holds the dashboards, the cards, the database connections and
+# the users — i.e. everything M1's gate calls "the boards" — and it dies with the
+# pod, which is not a durability edge case but the normal behaviour of a
+# Deployment. The app-db is therefore a real database in the ONE Postgres,
+# created by the D-002 recipe (scripts/postgres_databases.sh). The charter
+# refuses a state store that a rollout destroys.
+#
+# 30300 here and hostPort 3030 in infra/kind/kind-config.yaml are TWINS —
+# change both together; tests/unit/test_platform_scripts.py fails if they drift.
+# kind publishes host ports at cluster-CREATE time only, so this pair arrived
+# with a deliberate cluster rebuild (M1-S5), not with a port-forward.
+#
+# TELEMETRY IS OFF, DELIBERATELY (gotcha #32's Metabase sibling, named in that
+# entry before this file existed). Metabase phones home two different ways and
+# both are opt-OUT by default: anonymous usage tracking and a version check
+# against metabase.com. A $0 program whose charter is "nothing leaves this
+# machine" turns both off in the manifest, where the diff is visible, rather
+# than in a UI checkbox nobody can grep. Pinned by a unit test.
+apiVersion: v1
+kind: Service
+metadata:
+  name: metabase
+  namespace: metabase
+  labels:
+    app.kubernetes.io/name: metabase
+    app.kubernetes.io/component: host-route
+spec:
+  type: NodePort
+  selector: {app: metabase}
+  ports:
+    - name: http
+      port: 3000            # Metabase's own listen port inside the container
+      targetPort: http
+      nodePort: 30300       # twin of hostPort 3030 in infra/kind/kind-config.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase
+  namespace: metabase
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # one app-db, one writer; no two-version overlap
+  selector:
+    matchLabels: {app: metabase}
+  template:
+    metadata:
+      labels: {app: metabase}
+    spec:
+      containers:
+        - name: metabase
+          # Pinned by TAG AND DIGEST: the tag says what a human should read, the
+          # digest is what actually runs. Observed 2026-08-16 by `docker pull`.
+          image: metabase/metabase:v0.63.13@sha256:6e188e7068c6e9cf7b24480ada80f335bca9135765764ee827245f44ffa9eace
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 3000}
+          env:
+            # --- app-db: the one Postgres, database 'metabase' (D-002) --------
+            - {name: MB_DB_TYPE,   value: postgres}
+            - {name: MB_DB_DBNAME, value: metabase}
+            - {name: MB_DB_HOST,   value: postgres.platform.svc.cluster.local}
+            - {name: MB_DB_PORT,   value: "5432"}
+            - name: MB_DB_USER
+              valueFrom: {secretKeyRef: {name: metabase-db, key: username}}
+            - name: MB_DB_PASS
+              valueFrom: {secretKeyRef: {name: metabase-db, key: password}}
+            # --- nothing leaves this machine ---------------------------------
+            - {name: MB_ANON_TRACKING_ENABLED, value: "false"}
+            - {name: MB_CHECK_FOR_UPDATES,     value: "false"}
+            # --- sized for a laptop sharing 48GB with six other stacks --------
+            # (gotcha #28: a server's default heap is sized for a server). Xmx is
+            # set below the container limit on purpose: the JVM must hit its own
+            # OutOfMemoryError, which it can log, rather than be OOMKilled by the
+            # kubelet, which it cannot.
+            - {name: JAVA_OPTS, value: "-Xmx1g"}
+          resources:
+            requests: {cpu: 250m, memory: 1Gi}
+            limits:   {memory: 2Gi}
+          # Metabase runs its own app-db migrations at boot and is slow to first
+          # answer; startupProbe carries that cost so liveness can stay tight.
+          startupProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 10
+            failureThreshold: 60      # up to 10 minutes to migrate and boot
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 30
+            failureThreshold: 5
