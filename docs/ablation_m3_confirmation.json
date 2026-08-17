@@ -1,0 +1,134 @@
+{
+  "fitting_seconds": 2135.045337563999,
+  "rows": [
+    {
+      "set": "v1",
+      "groups": [],
+      "n_features": 5,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count"
+      ],
+      "val_mae": 3.47603843547682,
+      "val_within_rate": 79.69330900062491,
+      "delta_mae_pct": 0.0,
+      "delta_within_points": 0.0,
+      "best_iteration": 500,
+      "fit_seconds": 484.9672386740003,
+      "train_rows": 43987422,
+      "val_rows": 6189748,
+      "run_id": "a4d9f9ebd62a4e628ce7dccecce55fd3"
+    },
+    {
+      "set": "v1_g1",
+      "groups": [
+        "g1_temporal_extras"
+      ],
+      "n_features": 15,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "hour_sin",
+        "hour_cos",
+        "weekpos_sin",
+        "weekpos_cos",
+        "minute_of_day",
+        "part_of_day",
+        "is_weekend",
+        "is_holiday",
+        "is_near_holiday",
+        "is_business_day"
+      ],
+      "val_mae": 3.414469590331683,
+      "val_within_rate": 80.26265366538347,
+      "delta_mae_pct": 1.7712360288297913,
+      "delta_within_points": 0.5693446647585603,
+      "best_iteration": 500,
+      "fit_seconds": 579.5678261309986,
+      "train_rows": 43987422,
+      "val_rows": 6189748,
+      "run_id": "9fd1429002104c61ad111c94731109bb"
+    },
+    {
+      "set": "v1_g2",
+      "groups": [
+        "g2_centroid_geometry"
+      ],
+      "n_features": 14,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "centroid_haversine_km",
+        "centroid_dlat_km",
+        "centroid_dlon_km",
+        "centroid_manhattan_km",
+        "centroid_bearing_deg",
+        "log1p_haversine_km",
+        "midpoint_lat",
+        "midpoint_lon",
+        "has_geometry"
+      ],
+      "val_mae": 3.4542189979219033,
+      "val_within_rate": 79.89352716782653,
+      "delta_mae_pct": 0.6277099048222552,
+      "delta_within_points": 0.20021816720162633,
+      "best_iteration": 500,
+      "fit_seconds": 501.1313219399999,
+      "train_rows": 43987422,
+      "val_rows": 6189748,
+      "run_id": "9494748ffcbd4dcd971f31976a03a0f7"
+    },
+    {
+      "set": "v2",
+      "groups": [
+        "g1_temporal_extras",
+        "g2_centroid_geometry"
+      ],
+      "n_features": 24,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "hour_sin",
+        "hour_cos",
+        "weekpos_sin",
+        "weekpos_cos",
+        "minute_of_day",
+        "part_of_day",
+        "is_weekend",
+        "is_holiday",
+        "is_near_holiday",
+        "is_business_day",
+        "centroid_haversine_km",
+        "centroid_dlat_km",
+        "centroid_dlon_km",
+        "centroid_manhattan_km",
+        "centroid_bearing_deg",
+        "log1p_haversine_km",
+        "midpoint_lat",
+        "midpoint_lon",
+        "has_geometry"
+      ],
+      "val_mae": 3.3905388307148137,
+      "val_within_rate": 80.50637925808934,
+      "delta_mae_pct": 2.459685252308724,
+      "delta_within_points": 0.8130702574644317,
+      "best_iteration": 500,
+      "fit_seconds": 569.3789508190002,
+      "train_rows": 43987422,
+      "val_rows": 6189748,
+      "run_id": "6807116edf4c49d681a31bd941298a81"
+    }
+  ]
+}

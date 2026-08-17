@@ -1,0 +1,55 @@
+{
+  "fitting_seconds": 166.1612465929993,
+  "rows": [
+    {
+      "set": "v1",
+      "groups": [],
+      "n_features": 5,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count"
+      ],
+      "val_mae": 3.4935018524850787,
+      "val_within_rate": 79.55177487070014,
+      "delta_mae_pct": 0.0,
+      "delta_within_points": 0.0,
+      "best_iteration": 500,
+      "fit_seconds": 77.19390115900023,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "4cb2964ae1264f83a4e8a8679f55660b"
+    },
+    {
+      "set": "v1_g3",
+      "groups": [
+        "g3_spatial_identity"
+      ],
+      "n_features": 11,
+      "features": [
+        "hour",
+        "dayofweek",
+        "PULocationID",
+        "DOLocationID",
+        "passenger_count",
+        "pu_is_airport",
+        "do_is_airport",
+        "is_airport_trip",
+        "pu_borough",
+        "do_borough",
+        "borough_pair"
+      ],
+      "val_mae": 3.4881427169700006,
+      "val_within_rate": 79.57859341577792,
+      "delta_mae_pct": 0.15340296760587022,
+      "delta_within_points": 0.026818545077773592,
+      "best_iteration": 500,
+      "fit_seconds": 88.96734543399907,
+      "train_rows": 6598113,
+      "val_rows": 928462,
+      "run_id": "14b697188eba4ce98991cbfbc614756c"
+    }
+  ]
+}

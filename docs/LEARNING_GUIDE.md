@@ -9,7 +9,7 @@ months from now.
 
 ## M3
 
-### M3-S3 — the strongest feature in the literature lost, and the sample lied about the second-strongest (2026-08-17, role:MLE)
+### M3-S3 — the strongest feature in the literature lost, and the sample that lied was the one nobody was allowed to quote (2026-08-17, role:MLE)
 
 **What was built.** Feature set **v2**, earned group by group. Five feature
 groups were declared in `configs/features.yaml` in a fixed order *before anything
@@ -58,16 +58,27 @@ serves a train row a one-month window and a validation row a six-month one — t
 feature the model is fitted on is not the feature it is scored on. That is
 gotcha #43, and it is a failure mode created by the fix, not by the flaw.
 
-*The second: the protocol that looks like ceremony is the one that saves you.*
-The playbook says sample-first, then confirm winners at full scale. That reads
-like a formality until you watch the same group measured at three data sizes.
-The centroid-geometry group — the F-007(b) substitute this whole milestone was
-built around — came in at **+2.98%** on a 0.5% sample, **+0.63%** on a 15%
-sample, and CONFIRMATION at full data. The trend is the group's own mechanism:
-centroid distance is a smooth ordering over zone pairs the tree has too few rows
-to learn individually, so **a feature whose job is to stand in for missing data
-is worth less as the data arrives.** Any sample-only keep decision systematically
-over-values exactly the features you reach for when you are short of data.
+*The second: the protocol that looks like ceremony is the one that saves you —
+and it saved this story by DISAGREEING with the person running it.* The playbook
+says sample-first, then confirm winners at full scale. Watch the
+centroid-geometry group — the F-007(b) substitute this whole milestone was built
+around — measured at three data sizes: **+2.98%** on a 0.5% harness smoke run,
+**+0.6312%** on the 15% ablation, **+0.6277%** on all 43,987,422 rows.
+
+This session wrote the explanation *before* the last number existed, and the
+explanation was wrong. It predicted the decline would continue, on a real
+mechanism: centroid distance is a smooth ordering over zone pairs the tree has
+too few rows to learn individually, so a feature whose job is to stand in for
+missing data should be worth less as the data arrives. The measurement says that
+effect is **exhausted by 6.6M rows** — 15% and 100% agree to two decimal places
+on both surviving groups. The prediction is still in `docs/ablation_m3.md` §5
+with its refutation printed underneath it, because a forecast deleted after the
+fact teaches nothing and this one is instructive twice: **the sample that lied
+was the 220k smoke test the protocol had already ruled inadmissible** (no MLflow
+row, so by playbook §3.3 not a result), and the sample the protocol *did* trust
+was accurate to 0.02 percentage points. Sampling error is not a slope; it is a
+small-sample effect with a size, and the protocol's job is to keep you from
+quoting the run that has it.
 
 **The red team, and what it actually showed.** The drill fitted the aggregate
 tables across the validation month on purpose — the same line the top-6% Kaggle
