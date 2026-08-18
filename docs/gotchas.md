@@ -647,3 +647,50 @@ the seed line are earned by THIS project.
     and `tests/unit/test_verify_m3.py` fails if it pins a run id, an experiment
     name or a floor name. Related: #15, #42, and the same argument M3-S5 applied
     to two feature tests that pinned the literal `v1`.
+
+51. **A component printed a claim it was structurally incapable of checking, and
+    it printed it on every verdict this program ever issued.** `gate.verdict_lines`
+    said the holdout was "untouched by training **and by selection**". The first
+    half the gate can vouch for — `decide()` refuses metrics from any split but
+    the configured holdout. The second half is a fact about the *caller's*
+    process: how the challenger being judged was chosen. For the whole of M3-S5
+    it was false — `scripts/bakeoff_m3.py` ranked five arms by their holdout MAE
+    and handed the winner to the very function that then certified the holdout
+    selection-free. Nobody lied; the sentence simply lived in the one module that
+    could not evaluate it. The cure is not a better sentence, it is moving the
+    claim to whoever can make it: `holdout_untouched_by_selection` is now a
+    caller-supplied argument **defaulting to the weaker, always-true form**, so a
+    claim nobody made is never printed as if somebody had. Ask of any assertion
+    a component prints about its own inputs: *could this component tell if it
+    were false?* If not, it is documentation with a confident voice. Related:
+    #15 (only one module may report a number), #50 (a guard that fires on
+    correct behaviour).
+
+52. **The fix that changes a value leaves the hazard in scope; the fix that
+    changes the ORDER removes it.** F-018's obvious repair was one character —
+    rank on `"val"` instead of `"test"`. It is correct, and it leaves the ranking
+    sitting *after* both splits have been scored, where a holdout number exists
+    and the only thing preventing its use is that nobody typed it. The repair
+    that lands moved the selection *inside the val pass*, before the holdout
+    parquet is loaded: there is no test number in existence to rank on, correctly
+    or otherwise. **A property you can only violate by deleting code beats a
+    property you can violate with a two-character edit.** The corollary is a
+    testing one and cost this story a rewrite: the behavioural test must make the
+    two splits **disagree**, because a fixture built from the real run (where val
+    and test ranked identically — which is why the defect was harmless, and why
+    it went unseen) passes under BOTH rules and proves nothing. And ordering
+    itself is not behaviourally testable at all when the orderings agree, so the
+    companion check is structural (AST: the call sits under the `split == "val"`
+    guard). Related: #35 (the other place a structural test earned its keep).
+
+53. **Two tests went red because they searched TEXT for a module name and found
+    it in a docstring** — in the same file, within a minute of each other. One
+    asserted the reporting stages do *not* import `taxi_mlops` (its docstring
+    names `taxi_mlops.training.evaluate`, which is the point of the docstring);
+    the other asserted `src/` does not import `pipelines` (`src/taxi_mlops/
+    __init__.py` explains the dependency direction in prose). Both were fixed by
+    reading Import/ImportFrom nodes off the AST. This is #35's lesson from the
+    other side: **in a repo where the prose is load-bearing, a substring check
+    answers a question about documentation while claiming to answer one about
+    dependencies** — and it is green or red for reasons unrelated to the property
+    either way. Any check whose subject is code structure should parse code.
