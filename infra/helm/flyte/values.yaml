@@ -74,6 +74,75 @@ configuration:
     level: 4  # 4 = info. The chart default (1) is error-only, which makes a
               # first deployment's normal startup indistinguishable from a hang.
 
+  # --- F-023: the blob store is ONE MinIO with TWO names ----------------------
+  # Raw config merged into the rendered set, because the chart surfaces no value
+  # for this key. `configuration.storage` above configures how the SERVER and the
+  # task pods reach MinIO — by in-cluster DNS, which is the only name a pod can
+  # use. But the CLI on this host does NOT upload through the server: it asks the
+  # dataproxy for a PRESIGNED URL (`CreateUploadLocation` -> `signed_url`) and
+  # then PUTs straight at object storage. The server signs that URL with the
+  # endpoint below, so with one endpoint the client is handed an in-cluster DNS
+  # name it cannot resolve, and `flyte run` dies at `Uploading code bundle...`
+  # with `ConnectError: [Errno -2] Name or service not known` — three steps after
+  # the image and the bundle succeeded, which reads like a storage outage and is
+  # not one. That is F-023.
+  #
+  # WHY CLIENT-SIDE SETTINGS CANNOT FIX IT (M4-S2 tried, 2 of its 5 attempts):
+  # `FLYTE_AWS_ENDPOINT` and friends configure the SDK's own storage client. The
+  # code-bundle upload never builds a URL — it is handed one, already signed. No
+  # client-side value can change a URL the server minted.
+  #
+  # WHY NOT "one name both sides resolve" (F-023's recorded probe 2): there isn't
+  # one. Measured 2026-08-18 from WSL — `172.19.0.3:30900` (the node's
+  # docker-bridge address + MinIO's nodePort) returns 000, and so does the
+  # apiserver at `172.19.0.3:6443`; kubectl reaches the cluster through
+  # `127.0.0.1:35553`, a docker-PUBLISHED port. Under Docker Desktop on WSL2 the
+  # bridge is not routable from this side at all, so the probe's premise is false
+  # on this machine.
+  #
+  # `storage.signedUrl.stowConfigOverride` is flytestdlib's answer to exactly this
+  # split horizon — the same lever Flyte 1.x exposes as
+  # `storage.signedUrl.stowConfigOverride` in its chart. The 2.x CHART renders no
+  # value for it, but the 2.x BINARY still carries it (checked in the running
+  # image: `grep -ao "stowConfigOverride" /usr/local/bin/flyte` hits), which is
+  # why this is an inline override and not a fallback to 1.x.
+  #
+  # It overrides the endpoint ONLY for URL SIGNING. Task pods are untouched: they
+  # read `storage.stow.config.endpoint` (server config) and the copilot Secret,
+  # both still the in-cluster name — and the in-pod runtime writes its inputs and
+  # outputs through `flyte.storage` directly, never through a signed URL. So
+  # `localhost:9000` is the route the ONE external client on this single-machine
+  # program can take: the kind hostPort -> nodePort 30900 route from M0-S3, the
+  # same one `make backup` mirrors through. SigV4 signs the Host header, and the
+  # host the client sends is the host the server signed, so the signature holds.
+  #
+  # HONEST LIMIT, stated because it is real: this makes presigned URLs usable
+  # from THIS host and from nowhere else. On a real cluster the signing endpoint
+  # would be the ingress name that resolves everywhere. Recorded rather than
+  # generalised — the same shape as the console's port-forward deviation below.
+  inline:
+    storage:
+      signedUrl:
+        stowConfigOverride:
+          endpoint: "http://localhost:9000"
+    # The OTHER half of the same split horizon, and it is the half that surprises.
+    # The three storage configurations above (server config, copilot Secret, this
+    # values file) all miss the process that actually writes a task's outputs: the
+    # Flyte 2 python runtime INSIDE the task container, which builds its S3 client
+    # from its own environment. Unset, it falls through to the default AWS
+    # credential chain and dies against the EC2 metadata address — a task that ran
+    # perfectly and then could not put its result anywhere.
+    #
+    # `default-pod-template-name` makes the k8s plugin merge a named PodTemplate
+    # into EVERY task pod, so the wiring lives with the cluster instead of in each
+    # `flyte.TaskEnvironment`. The object is
+    # infra/manifests/flyte-task-podtemplate.yaml (applied by deploy_flyte.sh) and
+    # it carries the in-cluster endpoint plus a secretRef; the argument for that
+    # shape, and for the container having to be named `default`, is in its header.
+    plugins:
+      k8s:
+        default-pod-template-name: "flyte-task-defaults"
+
 # --- the pod ------------------------------------------------------------------
 deployment:
   # Three kind nodes share a 47Gi VM that also has to hold Postgres, MinIO,

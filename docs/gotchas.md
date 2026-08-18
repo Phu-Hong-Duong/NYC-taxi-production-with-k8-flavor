@@ -768,3 +768,54 @@ the seed line are earned by THIS project.
     git contains*, and a test asserts the ignore file against `data/.gitignore`
     in both directions.
 
+
+59. **A CLI can exit 0 for a run that FAILED — assert positively on the artifact,
+    never on the absence of an error.** `flyte run --follow` waits for the run to
+    reach a terminal state and then exits **0 whether it succeeded or failed**.
+    Cost 2026-08-18 (M4-S4): `make pipeline` printed `ok  run … completed; six
+    stages on-cluster` over a run that had died on `ErrImagePull` before a single
+    stage started. Every other signal agreed with the green line — exit code 0, a
+    run name parsed out of the output, and a readable outputs blob from
+    `flyte get io`. The ONLY difference was the outputs' content:
+    `ActionOutputs(o0=None)`, because a failed workflow returns nothing. The fix
+    is not a better error check, it is a POSITIVE one: assert that the run's
+    output carries the thing the pipeline exists to produce (here a `"decision"`
+    key). That assertion is strictly stronger than a phase string — a run can
+    reach SUCCEEDED and still be caught if it stops emitting a verdict — and it
+    caught the next three distinct failures immediately instead of painting them
+    green. Gotcha #51's question ("could this component tell if it were false?")
+    asked of a checker, and this time the checker was minutes old.
+
+60. **Backticks in an UNQUOTED heredoc are command substitution, including in
+    comments.** A pod manifest was embedded as `<<EOF` (unquoted, because it
+    needed `$NAMESPACE` interpolated) and its own explanatory comments referred to
+    `` `tar -x` ``, `` `du` `` and a `` `docker image inspect …` `` command. The
+    shell RAN all three: tar read the script's stdin and printed "This does not
+    look like a tar archive", docker printed a usage error, and both were spliced
+    into the YAML, which then failed with `error converting YAML to JSON: yaml:
+    line 15: could not find expected ':'` — a parse error pointing at a line that
+    had nothing to do with the cause. Cost 2026-08-18 (M4-S4), one run. This is
+    #35 (a test parsing a shell array truncated at a `)` in a comment) and #53
+    (assertions matching prose in a docstring) a third time: **in a repo where
+    comments are load-bearing, prose must not sit anywhere a shell or a parser
+    will read it as code.** The fix is also the better design — the manifest
+    became a file, which is where cluster objects belong and which cannot be
+    command-substituted. If a heredoc must stay, quote the delimiter (`<<'EOF'`)
+    and pass values another way.
+
+61. **Setting a security allow-list REPLACES its default, and host-header
+    matching includes the port.** MLflow 3.x serves under uvicorn with
+    DNS-rebinding protection; its allow-list (`MLFLOW_SERVER_ALLOWED_HOSTS`,
+    chart value `serverAllowedHosts`) is auto-derived from an ingress, so a
+    deployment with no ingress silently allows only the loopback names — which is
+    invisible for as long as every client is host-side, four milestones here. The
+    first in-cluster client gets `403 'Invalid Host header - possible DNS
+    rebinding attack detected'` from an endpoint that reads like an application
+    fault. Then the fix bites twice: writing the value at all replaces MLflow's
+    default list, and the middleware compares the **whole Host header, port
+    included** — so a list of bare hostnames repairs the pod and gives every
+    host-side client the identical 403. The two-line experiment that separates
+    them: `curl -H 'Host: localhost' 127.0.0.1:5000/health` → OK while
+    `curl localhost:5000/api/...` → 403. List every name with AND without its
+    port, and never reach for `["*"]` — that deletes the protection rather than
+    configuring it.

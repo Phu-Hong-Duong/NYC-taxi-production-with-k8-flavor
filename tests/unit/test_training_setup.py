@@ -8,6 +8,7 @@ later, usually at the moment something tries to serve the model (gotcha #5).
 
 from __future__ import annotations
 
+import os
 import sys
 import types
 
@@ -159,9 +160,58 @@ def test_missing_credentials_are_refused_by_NAME_and_the_value_never_appears(
     assert "visible-secret" not in capsys.readouterr().out
 
 
-def test_an_absent_env_file_points_at_the_script_that_owns_it(tmp_path):
+def test_an_absent_env_file_points_at_the_script_that_owns_it(tmp_path, monkeypatch):
+    """No file AND no exported credentials is still a refusal that names the fix.
+
+    The `delenv` calls are load-bearing since M4-S4: `configure` no longer refuses
+    on the file's absence alone, so what makes this case an error is that nothing
+    supplies the keys. Without these the test would pass or fail depending on
+    whether the developer's shell happens to export AWS credentials.
+    """
+    for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"):
+        monkeypatch.delenv(key, raising=False)
     with pytest.raises(tracking.TrackingConfigError, match="platform_secrets"):
         tracking.configure(TRAIN_CFG["mlflow"], env_file=tmp_path / "nope")
+
+
+def test_a_pod_with_no_env_file_but_a_complete_environment_configures(tmp_path, monkeypatch):
+    """The in-cluster case, pinned: the task image contains no `.env` by design.
+
+    This is M4-S4's property and the reason `load_env` grew `missing_ok`. Before
+    it, the first Flyte task to reach the train stage died on `no /app/.env` while
+    holding every value it needed in its environment — the docstring's promise
+    that an in-cluster caller "needs no code change" had never been exercised.
+    """
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.mlflow.svc.cluster.local:5000")
+    monkeypatch.setenv("MLFLOW_S3_ENDPOINT_URL", "http://minio.platform.svc.cluster.local:9000")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "in-pod-key")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "in-pod-secret")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+
+    uri = tracking.configure(TRAIN_CFG["mlflow"], env_file=tmp_path / "absent")
+
+    assert uri == "http://mlflow.mlflow.svc.cluster.local:5000"
+    assert os.environ["MLFLOW_S3_ENDPOINT_URL"].endswith("cluster.local:9000")
+
+
+def test_the_credentials_banner_names_the_source_it_actually_used(
+    tmp_path, monkeypatch, capsys
+):
+    """A pod with no `.env` must not print 'set from .env'.
+
+    The banner is the first line a reader trusts when an artifact 404s (gotcha
+    #5), so a banner that names the wrong source is worse than no banner.
+    """
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "visible-pod-key")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "visible-pod-secret")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    tracking.configure(TRAIN_CFG["mlflow"], env_file=tmp_path / "absent")
+    out = capsys.readouterr().out
+    assert "credentials set from the environment" in out
+    assert "from .env" not in out
+    # The banner names KEYS, never values — unchanged since M2-S2.
+    assert "visible-pod-key" not in out
+    assert "visible-pod-secret" not in out
 
 
 # ------------------------------------------------------------- the story boundary ---
