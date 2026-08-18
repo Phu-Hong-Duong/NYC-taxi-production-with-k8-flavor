@@ -571,6 +571,144 @@ marts tail task, `make verify-m4` and its red team.
 
 §13–§15 are M4-S5's. §1–§12 are M4-S4's record and are left unedited.
 
+## 13. Kill-a-pod: what survived it, and the three things the drill was wrong about first
+
+`make pipeline-kill-drill` deletes the pod a stage is running in, mid-work, and
+checks that the pipeline finishes anyway. **GREEN, 9 checks** (2 in phase 0, 7 in
+the drill proper), run `rb2cxpmsksx489qjbn5b`, month **2019-03**, sampled and
+therefore verdict-free by construction (F-008, and the M4 kickoff names a sampled
+run as legal here because what is under test is the ORCHESTRATOR).
+
+```
+[kill-drill] pod …-e5rvu8gd7fu01qmk5ojfc8ufh-0 is Running on node mlops-taxi-worker2
+             (uid 1223e07d-…) — letting it work for 120s
+[kill-drill] KILLING …-e5rvu8gd7fu01qmk5ojfc8ufh-0 at 2026-08-18T15:38:01Z
+[kill-drill] ok  a DIFFERENT pod object ran 'train' after the kill:
+             …-e5rvu8gd7fu01qmk5ojfc8ufh-0 (uid 9d8b05a3…, created 2026-08-18T15:38:32Z)
+             — the killed pod was uid 1223e07d…
+[kill-drill] ok  'train' ended SUCCEEDED despite losing its pod mid-work
+[kill-drill] ok  the pipeline completed (run_pipeline.sh exit 0) — a killed pod cost time, not the run
+[kill-drill] ok  @champion unchanged across the drill (read by run_pipeline.sh, before and after)
+[kill-drill] 7/7 verdicts passed
+[kill-drill] GREEN — a stage lost its pod mid-work and the pipeline still finished
+```
+
+**31 seconds from kill to replacement.** The `train` action's total was **939.8 s**
+against ~870 s for an undisturbed sampled fit, so the cost of the kill was the
+~123 s of work in flight plus the gap — the fit restarted from zero, which is
+what makes the idempotence argument load-bearing rather than decorative. Every
+other stage was `CACHE_POPULATED` and `SUCCEEDED`; `@champion` read **2** before
+and after, by `run_pipeline.sh` itself, which exits 2 if it moved.
+
+### 13.1 The prediction was written first, and it was wrong
+
+The drill writes `automation/runs/m4-kill/prediction.json` **before** it kills
+anything, and a test pins that ordering positionally. On the first run the
+prediction said the retry would appear as a pod named `…-1`, because Flyte names a
+task pod `<run>-<action>-<attempt>` and a retry ought to bump the attempt.
+
+Observed instead: the k8s plugin **recreated the pod under the same name with a
+new UID**, and the run finished perfectly — so a correct survival was reported as
+a **failed drill, 6/7**. The first prediction and its refutation are kept whole in
+`automation/runs/m4-kill/attempt1-prediction-wrong/`, which is the point of
+writing predictions down.
+
+The fix was not a looser assertion, it was **the right property**: identity, not
+name. A different pod object ran the stage. That is true whether the platform
+bumps the attempt (new name) or recreates the attempt (same name, new object), and
+it is asserted by comparing the UID read **before** the kill against the UIDs
+present after.
+
+### 13.2 The drill was measuring pod recreation, not the retry budget — so the budget is now measured on its own
+
+The same run said something the drill had not thought to ask: the control plane
+recorded the killed action at **one attempt**. Recreating a pod is not the same
+event as failing an attempt, so `retries=2` — declared on every stage this session
+— **had never been observed doing anything**. A number nobody has watched work is
+a number nobody should rely on.
+
+`pipelines/flyte/retry_probe.py` is one task whose only job is to raise, carrying
+the same budget **by import** (`from …workflows import _STAGE_RETRIES`) so that it
+measures the number this repo declares rather than one it restates. Phase 0 of the
+drill runs it to exhaustion, in ~90 seconds, in front of the ~20-minute leg — the
+same cheap-probe-before-the-expensive-run shape as `make flyte-hello` and
+`DRILL_STAGE=ingest`:
+
+```
+[kill-drill] phase 0: spending the declared budget (retries=2) on a task that always fails
+[kill-drill] phase 0: the probe's action settled at FAILED
+[kill-drill] ok  the declared budget is REAL and BOUNDED: a task that always raises
+             settled at attempt index 3, inside the [1, 3] that retries=2 allows
+[kill-drill] ok  the budget is FINITE: retries ran out and the run FAILED, which is
+             why the number is small rather than generous
+```
+
+Both halves matter. `retries=2` buys three attempts and then **stops** — which is
+the argument for the number being small: a generous budget converts a systematic
+fault into a slow success, and at 31 minutes a stage that would be half an hour of
+hiding it each time. The bound is asserted as a RANGE, `[1, retries+1]`, because
+whether the last attempt is reported 0-based or 1-based is a convention this repo
+neither controls nor has a stake in; the exact index is printed.
+
+**Two mechanisms, both now measured, and they are not the same mechanism**: a
+deleted pod is survived by recreation (attempts unchanged), and a raising task is
+survived — up to a point — by the declared budget (attempts 1 → 3).
+
+### 13.3 F-027: the reader had been answering `attempts: 0` for everything
+
+Phase 0's first run reported the budget broken: `attempts=0` on a task that had
+demonstrably been retried. Two separate faults, found in the order they bit.
+
+**The instrument.** `scripts/flyte_run_actions.py` collected
+`int(getattr(status, "attempt", 0) or 0)`. The field is **`attempts`**, plural. A
+protobuf message answers `getattr` for its own fields only, so the misspelling did
+not raise — it returned the default. **Every action of every run this program has
+ever inspected was recorded with `attempts: 0`**, including
+`automation/runs/m4-cache/cache_drill.json`, and nothing looked wrong because `0`
+is exactly what an un-retried action should say. It could only surface where the
+number was supposed to be non-zero. Filed and closed as **F-027**; now gotcha #64.
+The test pins the reader against `ActionStatus.DESCRIPTOR` rather than against the
+string `"attempts"`, so it fails on the next typo in the next field.
+
+*Honest consequence, not quietly corrected:* the historical `attempts: 0` values in
+M4-S4's committed cache evidence are defaults, not measurements. Those runs really
+were not retried (every pod is `…-0`), so no claim made from that file is wrong —
+but `verify-m4` must not treat the old values as evidence.
+
+**The observation window.** `flyte run --follow` returned **7 seconds** after
+launching the probe, with the action still `RUNNING` and two retries still to come:
+`--follow` follows the **log stream**, and the stream ends when the first attempt's
+container exits. The check now polls the server for a terminal phase. Sibling of
+gotcha #59 — the CLI's return is not a statement about the run's outcome, and now
+also not about its completeness (gotcha #65).
+
+### 13.4 A third defect, found before the first kill: the runner buffered its own transcript
+
+The drill cannot delete a pod belonging to a run it cannot name, and the run's name
+appears only in `flyte run --follow`'s output — which `run_pipeline.sh` captured
+into a shell variable, i.e. into something that does not exist until the command
+exits. The drill polled an empty file until the run it meant to interrupt was over.
+
+The fix is `RUN_DIR/flyte_run.log`, and it is a better transcript for everyone, not
+only for this drill: §9 of this document is an entire section about per-stage
+detail that had to be recovered from the server *because it was never written
+down*. Same absence, one layer earlier.
+
+### 13.5 Why `train`, and why the drill refuses a cached stage
+
+The five other stages last between 3 and 15 seconds, so a kill aimed at one of them
+tests whether the script can win a race. `train` is the only stage whose loss would
+actually cost anything, so it is the honest target — and the drill's default month
+is one the pipeline has never seen, because **a cached stage runs in no pod**. The
+verdict refuses to be green if the target came back `CACHE_HIT`: the mirror of the
+cache drill's "run 1 executed no stage", and for the same reason.
+
+Each stage's idempotence is cited to the story that proved it, in the script's own
+header — `ingest` to M1-S2's byte-identical `make rebuild-proof`, not to an
+assertion made here. The one honest cost is named there too: **a killed `train`
+attempt leaves its MLflow run behind**, because the run is minted when the fit
+starts and the process that would have closed it is gone.
+
 ## 14. D-003's tail task: the one fact it is designed around, measured
 
 Leg 2 of M4-S5 — the marts build+publish as the pipeline's tail task — is NOT

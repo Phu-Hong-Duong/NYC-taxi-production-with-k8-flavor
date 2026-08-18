@@ -115,8 +115,12 @@ json.dump(
                 "convention. Identity is the property that holds under both."
             ),
             "control_plane_attempts": (
-                "0 for the killed action, because recreating a pod is not the same "
-                "event as failing an attempt. REPORTED RATHER THAN ASSERTED: which "
+                "1 for the killed action — one attempt, unincremented, because "
+                "recreating a pod is not the same event as failing an attempt. "
+                "(This line said 0 on the run of 2026-08-18T15:35Z, and 0 was what "
+                "a BROKEN reader reported: F-027, a protobuf field asked for in the "
+                "singular, which answered with a default for every run this program "
+                "had ever inspected.) REPORTED RATHER THAN ASSERTED: which "
                 "counter a deleted pod increments is a property of the platform's "
                 "classification, not of whether the pipeline survived. The USER "
                 "budget (`retries=`) is measured separately and positively, by "
@@ -494,9 +498,11 @@ record = {
 # Predicted vs observed, side by side, on the one number the prediction file
 # deliberately declined to assert.
 print(f"[kill-drill] REPORTED (not asserted, see prediction.json): the control plane "
-      f"recorded attempts={target.get('attempts')} for '{stage}'. A `kubectl delete pod` "
-      f"is classified by the platform, not by this drill; the pod named `-1` is the "
-      f"assertion.")
+      f"recorded attempts={target.get('attempts')} for '{stage}' — one attempt, "
+      f"unincremented, because recreating a pod is not the same event as failing an "
+      f"attempt. Which counter a deleted pod moves is the platform's classification, "
+      f"not this drill's business; the pod's IDENTITY is the assertion, and the user "
+      f"budget is measured on its own by phase 0.")
 
 failures = [m for good, m in verdicts if not good]
 for good, msg in verdicts:
