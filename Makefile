@@ -106,7 +106,7 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam pipeline pipeline-local stage-data verify-m4
+.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam pipeline pipeline-cache-drill pipeline-local stage-data verify-m4
 MONTH ?= 2019-01
 image-build: ## build the task image only; the cluster is not touched (M4-S3)
 	@bash scripts/image_build_load.sh --build-only
@@ -130,6 +130,8 @@ pipeline-local: ## rehearse the six-stage graph on MONTH=$(MONTH) in plain Pytho
 	@uv run python pipelines/tasks.py --month $(MONTH)
 pipeline: ## the six stages on-cluster for MONTH=$(MONTH) (M4-S4; TRAIN_MONTHS=... makes it a sampled, verdict-free smoke)
 	@bash scripts/run_pipeline.sh
+pipeline-cache-drill: ## run the pipeline TWICE and prove run 2 reused run 1 (M4-S4; DRILL_STAGE=ingest is the 1-min mechanism probe)
+	@bash scripts/pipeline_cache_drill.sh
 verify-m4: ## green run + cache-hit rerun + kill-a-pod retry survives
 	@echo "TODO(M4)"
 
