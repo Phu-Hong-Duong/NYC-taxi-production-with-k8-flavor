@@ -109,6 +109,13 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 .PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam marts-peak pipeline pipeline-cache-drill pipeline-kill-drill pipeline-local stage-data verify-m4
 MONTH ?= 2019-01
 MARTS_MONTHS ?=
+# Passed EXPLICITLY into the recipes below rather than relying on make's export
+# rules for command-line variables: `make pipeline TRAIN_MONTHS=2019-01` has to
+# mean the same thing as `TRAIN_MONTHS=2019-01 bash scripts/run_pipeline.sh`, and
+# a variable that silently does not reach the script produces a FULL-DATA run
+# where a sampled one was asked for — a 31-minute misunderstanding.
+TRAIN_MONTHS ?=
+PUBLISH_MARTS ?= 1
 image-build: ## build the task image only; the cluster is not touched (M4-S3)
 	@bash scripts/image_build_load.sh --build-only
 image-load: ## build the task image + kind load onto every node, read back with crictl (M4-S3, D-001; DRY_RUN=1 previews)
@@ -133,8 +140,9 @@ marts-peak: ## D-003: publish the marts under a size probe (MARTS_MONTHS=YYYY-MM
 	  --transport kubectl --months "$(MARTS_MONTHS)"
 pipeline-local: ## rehearse the graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1; --publish adds the marts tail)
 	@uv run python pipelines/tasks.py --month $(MONTH) $(PIPELINE_LOCAL_ARGS)
-pipeline: ## the seven stages on-cluster for MONTH=$(MONTH) (M4-S4/S5; TRAIN_MONTHS=... makes it a sampled, verdict-free smoke)
-	@bash scripts/run_pipeline.sh
+pipeline: ## the seven stages on-cluster for MONTH=$(MONTH) (M4-S4/S5; TRAIN_MONTHS=... makes it a sampled, verdict-free smoke; PUBLISH_MARTS=0 drops the tail)
+	@MONTH="$(MONTH)" TRAIN_MONTHS="$(TRAIN_MONTHS)" PUBLISH_MARTS="$(PUBLISH_MARTS)" \
+	  bash scripts/run_pipeline.sh
 pipeline-cache-drill: ## run the pipeline TWICE and prove run 2 reused run 1 (M4-S4; DRILL_STAGE=ingest is the 1-min mechanism probe)
 	@bash scripts/pipeline_cache_drill.sh
 pipeline-kill-drill: ## delete the pod a stage is running in and prove the run finishes anyway (M4-S5; prediction written BEFORE the kill)
