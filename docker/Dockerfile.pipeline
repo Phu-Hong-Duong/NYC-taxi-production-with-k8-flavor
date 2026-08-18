@@ -1,0 +1,120 @@
+# syntax=docker/dockerfile:1
+#
+# The task image: what the six stages of pipelines/tasks.py run inside from M4-S4
+# on. Owner story: M4-S3. Built and loaded by `make image-load`
+# (scripts/image_build_load.sh); proven by `make image-smoke`
+# (scripts/image_smoke.sh). D-001 (how it reaches the nodes) is decided in
+# docker/DECISION-D001-image-delivery.md; D-004 (OpenMP) is closed BY THIS FILE
+# and its proof is the smoke's first check.
+#
+# Four pins, each read live on 2026-08-18 and none from memory:
+#
+# 1. BASE — python:3.12.14-slim-trixie, by TAG AND DIGEST (the Metabase
+#    precedent, CLAUDE.md M1-S5: a tag alone is not a pin). 3.12.14 is the
+#    project interpreter (`uv run python -c "import sys; print(sys.version)"`
+#    -> 3.12.14). `trixie` is Debian 13, which is what the kind nodes already
+#    run (`kubectl get nodes -o wide` -> Debian GNU/Linux 13 (trixie)) — one
+#    libc family across the node and the workload, for free.
+#
+#    Honest non-identity, stated rather than hidden: the HOST's 3.12.14 is
+#    uv-managed python-build-standalone, built with Clang 22.1.3; this one is
+#    Debian's, built with GCC. Same CPython version, different compiler. What
+#    determines this program's numbers is the dependency graph — every
+#    numerically interesting package (pandas 3.0.5, numpy 2.5.2, lightgbm 4.7.0,
+#    xgboost 3.4.1) arrives as the same prebuilt cp312 manylinux wheel from
+#    uv.lock in both places. The smoke PRINTS sys.version in-container so the
+#    difference stays a recorded fact instead of a surprise.
+#
+# 2. uv 0.12.5, by digest, copied out of its official image — the same version
+#    that resolved uv.lock on the host (`uv --version`). A different uv could
+#    legally re-resolve; `--frozen` plus the same binary means it cannot.
+#
+# 3. THE DEPENDENCY GRAPH IS uv.lock, INSTALLED WITH `--frozen`. Not
+#    `pyproject.toml`'s ranges, and not a re-resolution: `--frozen` refuses to
+#    update the lock, so a drifted lock fails the BUILD instead of quietly
+#    shipping a different pandas than the champion was fitted with.
+#
+# 4. libgomp1 as a REAL apt package — debt D-004. The host ships no OpenMP, so
+#    `taxi_mlops.training.openmp` borrows the copy scikit-learn's wheel vendors
+#    and re-execs (gotcha #37). In here it must never fire, and "must never" is
+#    checkable: openmp_status() has to return (True, 'system libgomp.so.1') and
+#    the imports have to be silent. That is smoke check 1, not a comment.
+
+FROM python:3.12.14-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a
+
+# --- D-004: the OpenMP runtime, as a package, once, for the whole image -------
+# libgomp1 is what LightGBM and XGBoost dlopen by SONAME. ca-certificates is
+# needed because every task talks to MLflow and MinIO over the cluster network.
+# No compilers and no build-essential: every wheel in uv.lock is prebuilt for
+# cp312 manylinux, and a toolchain in a task image is attack surface that buys
+# nothing.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgomp1 ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# --- uv, pinned by digest ------------------------------------------------------
+COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:e85be844203885286c60ffad8a858d48afb6c5a5c237ca0e67f12e74b8f174b1 /uv /uvx /usr/local/bin/
+
+ENV UV_PYTHON=/usr/local/bin/python3.12 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_FROZEN=1 \
+    UV_NO_SYNC=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+# UV_PYTHON_DOWNLOADS=never: use the interpreter this base image already has.
+# Without it uv reads .python-version and may fetch a managed 3.12, leaving the
+# image with two CPythons and no way to tell which one a task ran under.
+# UV_NO_SYNC + UV_FROZEN: `uv run` in here must never mutate the environment or
+# the lock. The environment is a BUILD artifact; a task that re-resolves at run
+# time is a task whose dependency graph is decided in production.
+
+# --- the non-root user comes FIRST, and that is a size decision ----------------
+# Flyte tasks need no privileges, so the image runs as uid 1000. The obvious
+# ordering — build everything as root, then `chown -R taxi /app` at the end —
+# was BUILT AND MEASURED FIRST and is wrong: `docker history` showed the chown as
+# a **1.7 GB layer**, a byte-for-byte duplicate of the venv underneath it (a
+# layer records a file's new metadata by storing the whole file again), and it
+# cost 139 s of the build. Creating the user before anything is installed makes
+# the same image without the copy. uid 1000 also happens to be this host's user,
+# which is what lets the smoke mount the DVC-pinned data/ read-only and read it.
+RUN useradd --uid 1000 --create-home --shell /bin/bash taxi \
+ && mkdir -p /app \
+ && chown taxi:taxi /app
+USER taxi
+WORKDIR /app
+
+# --- layer 1: dependencies only -----------------------------------------------
+# Copied alone so an edit to src/ or configs/ does not re-download 1.5 GB of
+# wheels. --no-install-project defers OUR package to layer 2.
+COPY --chown=taxi:taxi pyproject.toml uv.lock .python-version ./
+RUN --mount=type=cache,target=/home/taxi/.cache/uv,uid=1000,gid=1000 \
+    uv sync --frozen --no-install-project
+
+# --- layer 2: the repo, then the project itself --------------------------------
+# The whole build context (minus .dockerignore) lands at /app, so /app IS the
+# repo root: configs/*.yaml, analytics/, scripts/, pipelines/ and src/ sit where
+# every path in this codebase already expects them, and `load_config()` needs no
+# container special case. The project installs EDITABLE (uv's default), which
+# keeps taxi_mlops.training.openmp._repo_root() pointing at /app the way it
+# points at the repo on the host — same code, same layout, one less difference.
+COPY --chown=taxi:taxi . .
+RUN --mount=type=cache,target=/home/taxi/.cache/uv,uid=1000,gid=1000 \
+    uv sync --frozen
+
+# The dev group (pytest, ruff) is INSTALLED ON PURPOSE. The container smoke runs
+# the unit suite inside the image, and a separate "test stage" would prove the
+# suite passes in an image that is not the one that ships. Cost, measured: pytest
+# 9.1.1 + ruff 0.16.3 + pluggy/iniconfig, single-digit MB against an image whose
+# largest single item is nvidia-nccl-cu13 at 241 MB (a hard dep of xgboost 3.4.1
+# on linux; there is no GPU here and it is never loaded — noted, not fought:
+# image slimming is explicitly out of M4's scope).
+
+ENV PATH="/app/.venv/bin:${PATH}"
+# On PATH so `python`, `pytest` and `dbt` are the venv's without `uv run`. Flyte
+# overrides the container command anyway; what it must find is an interpreter
+# that already has the graph.
+
+CMD ["python", "-c", "import taxi_mlops, sys; print('taxi-mlops task image ready:', sys.version)"]

@@ -110,6 +110,26 @@ def ensure_openmp(*, allow_reexec: bool = True) -> str:
             "requires a re-exec, which this caller disallowed."
         )
 
+    if _invoked_with_dash_c():
+        # F-024, found 2026-08-18 by M4-S3's D-004 sensor drill and reproduced on
+        # the host. CPython does not keep the `-c` code anywhere reachable: under
+        # `python -c "…"`, sys.argv is ["-c", *args] and the SOURCE STRING is gone.
+        # So this branch cannot rebuild its own command line, and the old code
+        # exec'd `python -c` with no code — which the interpreter answers with
+        # "Argument expected for the -c option", a message about argument parsing
+        # for a problem about a shared library. Refusing here is the honest move:
+        # nothing is mutated, and the message names the three ways out. Every real
+        # entry point in this program is `python -m …` or a .py file, both of which
+        # _relaunch_argv() reconstructs correctly — this is the ad-hoc-probe path.
+        raise OpenMPUnavailableError(
+            f"{SONAME} is not loadable and this process was started with `python -c`, "
+            "whose source string CPython does not preserve — so the re-exec that would "
+            f"pick up the vendored copy ({vendored}) cannot be reconstructed. Use "
+            "`python -m <module>` or a .py file (both re-exec correctly), call "
+            "openmp_status() instead if you only wanted to probe, or remove the need "
+            "entirely: `sudo apt install libgomp1`, which the M4 task image does."
+        )
+
     shim = _shim_dir()
     shim.mkdir(parents=True, exist_ok=True)
     link = shim / SONAME
@@ -127,6 +147,16 @@ def ensure_openmp(*, allow_reexec: bool = True) -> str:
     )
     os.execv(sys.executable, [sys.executable, *_relaunch_argv()])
     raise AssertionError("unreachable: execv does not return")  # pragma: no cover
+
+
+def _invoked_with_dash_c() -> bool:
+    """Was this interpreter started as `python -c "<code>"`?
+
+    CPython sets sys.argv[0] to the literal string "-c" for that form (documented
+    behaviour) and drops the code itself. `python -m pkg` and `python file.py`
+    both leave a reconstructible argv, which is what _relaunch_argv() uses.
+    """
+    return bool(sys.argv) and sys.argv[0] == "-c"
 
 
 def _relaunch_argv() -> list[str]:

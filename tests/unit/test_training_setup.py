@@ -81,6 +81,38 @@ def test_no_openmp_anywhere_names_the_real_fix_rather_than_the_workaround(monkey
         openmp.ensure_openmp()
 
 
+def test_a_dash_c_invocation_is_refused_instead_of_re_exec_d(monkeypatch, tmp_path):
+    """F-024, found 2026-08-18 by M4-S3's sensor drill and reproduced on the host.
+
+    Under `python -c "<code>"` CPython sets sys.argv[0] to the literal "-c" and
+    keeps the source string NOWHERE, so `_relaunch_argv()` used to hand execv a
+    bare `python -c` — and the interpreter answered "Argument expected for the -c
+    option", a message about argument parsing for a problem about a shared
+    library. The failure mode is worse than an error: the shim ANNOUNCED that it
+    had linked the library and re-executed, so the visible story was "the shim
+    worked" followed by an unrelated usage message.
+
+    The refusal must also leave nothing behind: it comes before the mkdir.
+    """
+    monkeypatch.setattr(openmp, "_load", lambda: False)
+    monkeypatch.setattr(openmp, "_vendored", lambda: openmp.Path("/x/libgomp.so.1.0.0"))
+    monkeypatch.setattr(openmp, "_shim_dir", lambda: tmp_path / "openmp")
+    monkeypatch.setattr(sys, "argv", ["-c"])
+    with pytest.raises(openmp.OpenMPUnavailableError, match=r"python -c"):
+        openmp.ensure_openmp()
+    assert not (tmp_path / "openmp").exists(), "a refusal must not create the shim directory"
+
+
+def test_the_dash_m_and_script_forms_are_still_allowed_through(monkeypatch):
+    """The refusal must be narrow: only the form that cannot be reconstructed."""
+    monkeypatch.setattr(sys, "argv", ["-m", "whatever"])
+    assert openmp._invoked_with_dash_c() is False
+    monkeypatch.setattr(sys, "argv", ["/x/__main__.py", "train"])
+    assert openmp._invoked_with_dash_c() is False
+    monkeypatch.setattr(sys, "argv", ["-c"])
+    assert openmp._invoked_with_dash_c() is True
+
+
 # -------------------------------------------------------------------- the client ---
 def test_the_client_is_pointed_at_minio_as_well_as_the_tracking_server(tmp_path, monkeypatch):
     """gotcha #5: the run appears either way; only the artifacts know the difference."""
