@@ -54,6 +54,12 @@ template:
   spec:
     containers:
       - name: default
+        # Required by the PodTemplate schema and never used: the API server
+        # rejects a container without an `image`, but the k8s plugin overwrites
+        # this field with the task's own image when it merges. Named to say so —
+        # a plausible-looking image here would be a trap for the next reader, who
+        # would reasonably assume tasks run it.
+        image: unused-placeholder-the-task-image-replaces-this
         env:
           - name: FLYTE_AWS_ENDPOINT
             value: "http://minio.platform.svc.cluster.local:9000"

@@ -99,12 +99,10 @@ fi
 # at exactly the moment it is wanted. Observed here on the first run — exit 2,
 # not one line of diagnosis.
 # `--follow` (`-f`) is what makes this an ACCEPTANCE test rather than a launch.
-# Without it `flyte run` uploads, creates the run, prints its URL and exits 0 —
-# so the script's own grep for the greeting was the only thing standing between
-# "the orchestrator ran our work" and "the orchestrator accepted our work",
-# which are different claims and the second one is cheap. With `--follow` the
-# CLI waits for the run to reach a terminal state and prints its output, so a
-# task that fails on-cluster fails this script.
+# Without it `flyte run` uploads, creates the run, prints its URL and exits 0
+# while the pods are still being scheduled — so the script would be asserting
+# that the orchestrator ACCEPTED our work, not that it RAN it. Those are
+# different claims and the second one is cheap.
 rc=0
 out="$("${FLYTE[@]}" run --follow "${SCOPE[@]}" \
        "$REPO_ROOT/pipelines/flyte/hello.py" main --name "$NAME" 2>&1)" || rc=$?
@@ -114,8 +112,27 @@ if [[ "$rc" != "0" ]]; then
   exit 1
 fi
 
-if ! grep -qiF -- "$EXPECTED" <<<"$out"; then
+# `--follow` streams the run's LOGS, and this workflow's tasks log nothing — they
+# return a value. So the greeting is not in `$out` even on a perfect run, and
+# grepping the follow output would fail a green run (and, worse, would pass on
+# any run whose task happened to PRINT the string without returning it). The
+# return value lives in the run's outputs, which is what `flyte get io` reads
+# back out of the blob store. Ask for it explicitly.
+RUN_NAME="$(sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$out" \
+            | sed -n 's/.*Created Run:[[:space:]]*\([A-Za-z0-9_-]\+\).*/\1/p' | head -1)"
+if [[ -z "$RUN_NAME" ]]; then
+  echo "[flyte-hello] FAIL: could not find the run name in \`flyte run\` output" >&2
+  exit 1
+fi
+echo "[flyte-hello] run $RUN_NAME — reading its outputs back"
+
+io="$("${FLYTE[@]}" get io "${SCOPE[@]}" "$RUN_NAME" --outputs-only 2>&1)" || {
+  echo "$io"; echo "[flyte-hello] FAIL: could not read run outputs" >&2; exit 1; }
+echo "$io"
+
+if ! grep -qiF -- "$EXPECTED" <<<"$io"; then
   echo "[flyte-hello] FAIL: the run did not return '$EXPECTED'" >&2
   exit 1
 fi
 echo "[flyte-hello] ok  two tasks ran on-cluster and the second consumed the first's output"
+echo "[flyte-hello] ok  the value came back through the flyte-data bucket, not off a log line"
