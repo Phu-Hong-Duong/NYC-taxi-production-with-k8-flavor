@@ -9,6 +9,69 @@ months from now.
 
 ## M4
 
+### M4-S4 (second session) — the cache, and three defects the cheap probe found before the expensive run did (2026-08-18, role:MLOps A / MLE R)
+
+**What was built.** The pipeline's second leg: `make pipeline-cache-drill`, which
+runs the same on-cluster invocation twice and proves the rerun reused the first
+run; `flyte.Cache` on the five deterministic stages with a salt derived from the
+DVC pins; and `scripts/flyte_run_actions.py`, a reader that asks the control plane
+what it recorded for every action of a run. Plus the finding the checking turned
+up (F-026: a task pod's `src/taxi_mlops` comes from the IMAGE, not the code
+bundle) and its guard.
+
+**Why this way.** Three ideas, and the first is the one worth carrying anywhere.
+
+*A cache key describes what you declare, not what you read.* Every stage here
+declares a month string or a row count and then reads 1.8 GB off a mounted
+volume. Flyte cannot see that volume, so the cache's honest failure mode is not a
+stale model — it is a stale model **with a green transcript**, which is strictly
+worse than a crash. The fix is to put the data into the key: `data/*.dvc` is a
+content hash of each tracked tree, it is committed, and only `make data` changes
+it. Whenever you cache anything, write down the inputs the key does NOT cover,
+and then go and cover them.
+
+*Ask a different system.* The drill's headline evidence is `cache_status:
+CACHE_HIT`, straight from the control plane. But the leg that could actually
+catch a lie is MLflow's run count: a re-executed train stage MINTS A RUN, so if
+the fit secretly re-ran, a database that has never heard of Flyte would say so.
+Evidence that comes from the same system making the claim is a restatement of the
+claim.
+
+*Two stages refuse a cache, and the refusals are more interesting than the
+cache.* `register` reads the live registry — a cached answer to "what is serving
+right now?" is wrong exactly when the alias has moved, which is the only time
+anyone asks. It costs 3.7 seconds against a 31-minute fit, so this is the rare
+case where correct is also nearly free. And `main` stays uncached so the rerun's
+evidence stays per-stage: a cached parent would return in one action and prove
+nothing about the five stages under it.
+
+**The concept underneath: put the cheap check in front of the expensive one.**
+The full drill costs ~35 minutes. `DRILL_STAGE=ingest` runs one stage twice for
+~40 seconds, and it found three real defects before the expensive run ever
+started — a shell-quoting bug that reported itself five lines away (gotcha #62),
+a threshold measured on the wrong clock (#63), and a drill that would have gone
+red comparing two reruns to each other. None of the three was about caching. That
+is the usual yield of a cheap probe: it does not find the hard bug you feared, it
+finds the four ordinary ones standing in front of it. `make flyte-hello` is the
+same idea one layer down.
+
+**What to look at.** `pipelines/flyte/workflows.py` — `_data_pin()` beside
+`_image_ref()`, the same "this module is imported in two places and only one has
+the file" problem solved the same way twice · `scripts/pipeline_cache_drill.sh`,
+the three-legged verdict block and the two-clocks note · `docs/pipeline_m4.md`
+§9–§11 · `tests/unit/test_flyte_task_wiring.py`, where the cache decisions are
+pinned by parsing the AST rather than the prose (the file argues its design at
+length; a grep for "cache" would pass on the argument and never read the
+decorator).
+
+**What to try yourself.** Run `DRILL_STAGE=ingest make pipeline-cache-drill`
+twice in a row and watch the second one refuse to be green — it is comparing two
+reruns and says so. Then edit one line inside a cached stage's body and run it
+again: the function-body hash changes, the key changes, and the stage executes.
+Finally, add a `print()` to `pipelines/tasks.py` and run `make pipeline` — nothing
+happens on the pod, because that file arrives in the image, which is F-026 in one
+command.
+
 ### M4-S4 — the split horizon had a lever, and four of five defects were in the checkers (2026-08-18, role:MLOps A / MLE R)
 
 **What was built.** The project's own pipeline running on the cluster:

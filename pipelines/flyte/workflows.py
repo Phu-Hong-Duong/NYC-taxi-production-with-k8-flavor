@@ -41,17 +41,29 @@ gate, so `register` returns the verdict as data and never raises. The exit-code
 mapping (0/1/2/3) lives in exactly one place, `tasks.RegisterResult.exit_code`,
 and is a CLI concern that this file does not import.
 
+FIVE STAGES ARE CACHED, TWO ARE NOT, AND BOTH REFUSALS ARE ARGUED WHERE THEY ARE
+MADE. The cache key is the function body plus the declared inputs plus a salt
+derived from the DVC pins (`_data_pin`), so code, inputs and DATA all invalidate
+it — the third being the one Flyte cannot see on its own, because these stages
+declare a month string and read a 1.8 GB volume. `register` is uncached because
+it reads the live registry, and `main` because a cached parent would make the
+rerun's evidence unreadable. Both docstrings say so at length.
+
 Run it:  make pipeline MONTH=2019-01     (scripts/run_pipeline.sh for the wiring)
+         make pipeline-cache-drill       (runs it twice and proves the reuse)
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
 from pathlib import Path
 
 import flyte
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # The task image, read from the file `make image-load` writes rather than
 # hardcoded. The tag is the git short sha (M4-S3), so it moves with every commit
@@ -60,7 +72,7 @@ import flyte
 # node holds is a loud `ImagePullBackOff` rather than a wrong number, which is the
 # property M4-S3 chose the tagging scheme FOR. If that is what you are looking at,
 # the tree moved and the fix is `make image-load`.
-_IMAGE_MANIFEST = Path(__file__).resolve().parents[2] / "automation/runs/m4-image/image.json"
+_IMAGE_MANIFEST = _REPO_ROOT / "automation/runs/m4-image/image.json"
 
 
 def _image_ref() -> str:
@@ -92,6 +104,56 @@ def _image_ref() -> str:
     return json.loads(_IMAGE_MANIFEST.read_text())["image_ref"]
 
 
+# The DVC pins, and they are here because of what a cache key does NOT cover.
+# Flyte keys a cached result on the task's name, the hash of its function body and
+# its declared INPUTS — and every stage below declares a month string, a row count
+# or a manifest, never the 1.8 GB of parquet it actually reads off the staged
+# volume. So the honest failure mode of caching this pipeline is not a stale model,
+# it is a stale model with a green transcript: re-stage the volume from different
+# data, ask for the same month, and every stage returns the previous answer while
+# the numbers it was computed from no longer exist anywhere.
+#
+# The fix is to put the data INTO the key. `data/*.dvc` is exactly the right
+# object for it: DVC's pin is a content hash of each tracked tree, it is committed,
+# and `make data`/`make stage-data` are the only things that legitimately change
+# it. A salt derived from those three files means a re-derived or re-staged tree
+# invalidates every cached stage automatically, and nobody has to remember.
+_DVC_PINS = ("data/raw.dvc", "data/processed.dvc", "data/rejected.dvc")
+
+
+def _data_pin() -> str:
+    """A short hash of the DVC pins — the cache salt, and it TRAVELS like the image.
+
+    Same two-places problem as `_image_ref`, same answer: this module is imported
+    on the host (where the `.dvc` files are) AND inside a task pod (where they may
+    not be, and where the image's copy would be the tree at BUILD time, not the
+    tree this run was launched from). The host's value is carried in
+    `TAXI_DATA_PIN` and read here first, so the two sides agree by construction
+    rather than by both computing something.
+
+    It RAISES rather than defaulting when it can find neither. A salt that quietly
+    falls back to a constant is worse than no salt at all: it produces exactly the
+    green-transcript-over-stale-data failure the salt exists to prevent, and it
+    produces it silently.
+    """
+    override = os.environ.get("TAXI_DATA_PIN")
+    if override:
+        return override
+    missing = [p for p in _DVC_PINS if not (_REPO_ROOT / p).exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"cache salt: {', '.join(missing)} not found and TAXI_DATA_PIN is unset. "
+            "On the host, run `make data` (DVC pins what ingest produced). Inside a "
+            "task pod this means a TaskEnvironment stopped passing TAXI_DATA_PIN — "
+            "the pins are not in the image and must not be."
+        )
+    digest = hashlib.sha256()
+    for rel in _DVC_PINS:
+        digest.update(rel.encode())
+        digest.update((_REPO_ROOT / rel).read_bytes())
+    return digest.hexdigest()[:12]
+
+
 # `from_base`, not `from_debian_base`: the image already EXISTS (M4-S3 built it
 # and `kind load` put it on all three nodes), and asking Flyte to build one would
 # throw away the artifact whose dependency graph was proved identical to the
@@ -106,9 +168,25 @@ def _image_ref() -> str:
 # observed is recorded in docs/pipeline_m4.md rather than left in a comment here.
 _IMAGE_REF = _image_ref()
 _IMAGE = flyte.Image.from_base(_IMAGE_REF)
+_DATA_PIN = _data_pin()
 # Carried into every task pod so the in-pod import of this module resolves the
-# same string without the manifest file. See `_image_ref`.
-_ENV_VARS = {"TAXI_PIPELINE_IMAGE": _IMAGE_REF}
+# same strings without the manifest file and without the `.dvc` pins. See
+# `_image_ref` and `_data_pin`.
+_ENV_VARS = {"TAXI_PIPELINE_IMAGE": _IMAGE_REF, "TAXI_DATA_PIN": _DATA_PIN}
+
+# THE CACHE, and the two rules that decide which stages get one (M4-S4, leg 2).
+#
+# `behavior="auto"` hashes each task's function body, so an edit to a stage
+# invalidates that stage and nothing else; `salt` adds the data pin above, so a
+# re-derived or re-staged tree invalidates ALL of them. Together the key covers
+# the three things that can change an answer here — the code, the inputs and the
+# data — which is the most a cache key can honestly claim on this pipeline.
+#
+# Rule 1: cache a stage only if its output is a FUNCTION OF ITS INPUTS. Rule 2:
+# a stage that reads live state outside its inputs is not cacheable at any price,
+# because a cached answer to "what is serving right now?" is not a saving, it is a
+# wrong answer served fast. Rule 2 costs `register` its cache — see its docstring.
+_STAGE_CACHE = flyte.Cache(behavior="auto", salt=_DATA_PIN)
 
 # The light stages: read a manifest, report a verdict. Nothing loads a dataframe.
 light_env = flyte.TaskEnvironment(
@@ -150,7 +228,7 @@ train_env = flyte.TaskEnvironment(
 # whole design, including why the data is mounted by subPath.
 
 
-@data_env.task
+@data_env.task(cache=_STAGE_CACHE)
 async def ingest(month: str) -> str:
     """Re-derive one month from the sha256-pinned raw parquet. Idempotent.
 
@@ -170,7 +248,7 @@ async def ingest(month: str) -> str:
     return result.processed_path
 
 
-@data_env.task
+@data_env.task(cache=_STAGE_CACHE)
 async def validate(month: str, ingested: str) -> int:
     """Re-read what ingest wrote and put it back through the OUTPUT contract.
 
@@ -191,7 +269,7 @@ async def validate(month: str, ingested: str) -> int:
     return result.rows
 
 
-@data_env.task
+@data_env.task(cache=_STAGE_CACHE)
 async def build_features(month: str, validated: int) -> int:
     """Build the configured feature set through the ONE feature path.
 
@@ -210,7 +288,7 @@ async def build_features(month: str, validated: int) -> int:
     return result.rows
 
 
-@train_env.task
+@train_env.task(cache=_STAGE_CACHE)
 async def train(train_months: str, judge: bool, featured: int) -> str:
     """Fit the floors and the challenger, score them, ask the gate. Promote NEVER.
 
@@ -242,7 +320,7 @@ async def train(train_months: str, judge: bool, featured: int) -> str:
     return manifest
 
 
-@light_env.task
+@light_env.task(cache=_STAGE_CACHE)
 async def evaluate(manifest: str) -> str:
     """Report what the ONE evaluator measured. Compute nothing (gotcha #15)."""
     from pipelines import tasks
@@ -267,13 +345,26 @@ async def evaluate(manifest: str) -> str:
     return manifest
 
 
-@light_env.task
+@light_env.task(cache="disable")
 async def register(manifest: str) -> str:
     """The gate's verdict, as the pipeline's output. A REFUSE is not a failure.
 
     Returns the decision as a JSON string rather than a bare word, because the
     numbers the decision was made from are the half a reader actually needs and
     a downstream reader must never have to parse a transcript to get them.
+
+    **THE ONE STAGE THAT MAY NOT BE CACHED, and it is the cheapest one.** Every
+    other stage is a function of its inputs; this one READS THE LIVE REGISTRY —
+    `champion_alias_version` is what `@champion` resolves to at the moment it is
+    asked, and (from M3-S1's F-011) the gate's incumbent condition is decided
+    against whatever is serving. Cache that and a rerun answers "what is serving?"
+    with what WAS serving when the key was first populated: right-looking, fast,
+    and wrong exactly when it matters, because the alias having moved is the one
+    circumstance under which anybody re-reads this field. The saving forgone is a
+    few seconds against a train stage measured in tens of minutes — this is the
+    rare case where the correct choice is also nearly free, and it is written down
+    because the next person to see one uncached stage in six will assume an
+    oversight.
     """
     from pipelines import tasks
 
@@ -296,7 +387,7 @@ async def register(manifest: str) -> str:
     )
 
 
-@light_env.task
+@light_env.task(cache="disable")
 async def main(month: str = "2019-01", train_months: str = "", judge: bool = True) -> str:
     """ingest -> validate -> build_features -> train -> evaluate -> register.
 
@@ -307,6 +398,15 @@ async def main(month: str = "2019-01", train_months: str = "", judge: bool = Tru
     refuses a sampled run that asks for a verdict, in the one place that owns that
     rule, and a second copy of it in an orchestrator wrapper is exactly the kind
     of duplicated law this program keeps deleting.
+
+    **UNCACHED ON PURPOSE, for a reason that has nothing to do with correctness.**
+    A cached parent would be a perfect cache hit and useless evidence: the rerun
+    would return the previous answer in one action without ever consulting its
+    children, so the transcript could not distinguish "five stages were reused"
+    from "the whole thing was skipped", and the kill-a-pod drill (M4-S5) would have
+    no pod to kill. Leaving the parent uncached costs a few seconds of
+    orchestration and buys a rerun whose per-stage cache status is legible one line
+    at a time — which is the artifact the milestone's second leg asks for.
     """
     ingested = await ingest(month)
     rows = await validate(month, ingested)

@@ -983,6 +983,81 @@ can never disagree (the port-family twins lesson, applied before it bit).
   assertion is now POSITIVE — the outputs must carry a `"decision"` — and it caught
   the next three failures instead of painting them green.
 
+## The cache, the full-data run, and what an image carries (M4-S4, second session)
+- **The full-data run is DONE and its per-stage detail was recovered from the
+  SERVER, not from a log.** `flyte run --follow` streams the parent's log and
+  printed `Scrolled 2 lines`, so the transcript §5 shows for the sampled run does
+  not exist for this one — but the control plane recorded every action, and
+  `scripts/flyte_run_actions.py` reads it back: **six stages, 1909.7 s, of which
+  the fit is 1874.7 s and everything else together is 34.6 s (98.2% is one
+  stage)**. That ratio is the entire argument for caching this pipeline.
+- **Its verdict is a REFUSE, and the REFUSE is the gate working.** The challenger
+  cleared the FLOOR condition at **+3.26% against a 2.00% bar** and was refused by
+  F-011's **incumbent** condition: the pipeline fits `configs/train.yaml`'s set v2
+  with v1's hyperparameters — which is M3's `artisan v2` — measuring **3.2425** on
+  the holdout against the serving champion's **3.2403**. **The pipeline re-derived
+  M3-S5's bake-off number to four decimals**, on a kind node, in a container, and
+  was then correctly told it is 0.07% worse than what serves. A pipeline that
+  promoted here would have been the defect. Honest gap carried to M4-S5: the
+  output's `margins` carries the FLOOR numbers only, so the JSON shows REFUSE
+  beside a passing margin and the reader must know M3-S1 to reconcile them.
+- **The cache-hit rerun: 33 minutes to 11 seconds, GREEN 19/19.** `make
+  pipeline-cache-drill MONTH=2019-01` (detached): run 1 populated all five
+  cacheable stages (**train 1935.2 s**), run 2 hit all five (**train 0.1 s**);
+  executed stages **1966.9 s -> 3.2 s (0.2%)**, wall-clock **1974 s -> 11 s
+  (0.6%)**, MLflow **12 -> 16 -> 16** (four runs are what one fit costs, so "no
+  new runs" is the positive statement that the fit did not happen twice), and
+  `@champion` version **2** after both. `register` re-executed both times at 3.2 s
+  — which is the only reason that last line means anything.
+- **`make pipeline-cache-drill` asks THREE systems, and ranks them.** The claim is
+  the control plane's per-action `cache_status` (`CACHE_HIT`/`CACHE_POPULATED`/
+  `CACHE_DISABLED` — a field the CLI does not render, which is why the reader
+  exists). The clock corroborates and is deliberately the WEAKEST leg: a faster
+  second run is equally consistent with a less busy machine. **MLflow is the
+  strongest**: a re-executed train stage MINTS A RUN, so the experiment's run count
+  must be identical across run 2 — said by a different server, in a different
+  database, by code that has never heard of Flyte.
+- **The cache key covers code + inputs + DATA, and the third term is the one that
+  matters.** Every stage declares a month string or a row count and then reads
+  1.8 GB off a volume Flyte cannot see, so the honest failure mode is not a stale
+  model, it is **a stale model with a green transcript**. The salt is a hash of
+  `data/*.dvc` (a content hash of each tracked tree, committed, changed only by
+  `make data`), and it TRAVELS to the pods in `TAXI_DATA_PIN` for the same reason
+  and by the same mechanism as `TAXI_PIPELINE_IMAGE` — the pins are not in the
+  image and must not be. `_data_pin()` RAISES rather than defaulting: a salt that
+  falls back to a constant produces exactly the failure it exists to prevent.
+- **Two stages refuse a cache.** `register` reads the LIVE registry — a cached
+  answer to "what is serving right now?" is wrong precisely when the alias has
+  moved, which is the only time anyone asks; it costs **3.7 s against a 31-minute
+  fit**, the rare case where correct is also nearly free. `main` is uncached so
+  the rerun's evidence stays per-stage: a cached parent returns in ONE action and
+  could not distinguish "five stages reused" from "the whole thing skipped" — and
+  M4-S5's kill-a-pod drill would have no pod to kill. Both are pinned by tests
+  that **parse the AST**, because the file argues its cache design at length and a
+  grep for the word would pass on the argument (gotcha #53).
+- **The cheap probe found three defects before the expensive run started.**
+  `DRILL_STAGE=ingest make pipeline-cache-drill` runs one stage twice in ~40 s
+  (against ~35 min) and is `make flyte-hello`'s idea one layer up. It caught: an
+  apostrophe inside `${VAR:+word}` that swallowed four lines and reported itself
+  as `line 72: $!: unbound variable` on an innocent port-forward (**gotcha #62**);
+  a bar measured on the wrong clock, which called a **98.7% saving** a failure
+  because a one-stage rerun is mostly launch overhead (**gotcha #63**); and a
+  drill that would have gone red comparing two reruns to each other, because the
+  cache outlives a drill. None of the three was about caching, which is the usual
+  yield of a cheap probe.
+- **F-026 (new, closed): a task pod's `src/taxi_mlops` comes from the IMAGE, not
+  the code bundle.** `flyte run` defaults to `--copy-style loaded_modules` (22
+  files observed, against 36 `.py` in `src/taxi_mlops` alone) and every stage
+  imports the model code INSIDE its body — so editing `src/`, committing and
+  running the pipeline executes the PREVIOUS code with a green transcript. The
+  runner now diffs the image manifest's sha against HEAD over **`src/`,
+  `pyproject.toml`, `uv.lock`, `docker/`** and exits **3**. `pipelines/` is
+  deliberately NOT guarded: that IS the bundle, and guarding it would have refused
+  this story's own drill. The old comment — "a pull error here means the tree
+  moved" — described a protection that does not exist: M4-S3's loud
+  `ImagePullBackOff` fires for a tag no node holds, and a stale manifest names a
+  tag every node holds.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1064,6 +1139,8 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Prove the D-004 checks can go RED (M4-S3) | `make image-smoke-redteam` | VERIFIED 2026-08-18 (M4-S3): masks `/lib/x86_64-linux-gnu/libgomp.so.1` with an **empty file in ONE `--rm` container** → the probe flips to `(False, 'not loadable yet; a vendored copy exists at …scikit_learn.libs/libgomp-e985bcbb.so.1.0.0')`, the shim **announces itself**, `/app/.venv/lib/openmp` **appears**, F-024's `-c` refusal is asserted, and a fresh container from the same image reads `absent` again. Exit code inverted like `marts-redteam`'s: a check that stays green under the mask FAILS the drill. Touches no image, no node, no cluster |
 | Stage the data a task pod reads (M4-S4) | `make stage-data` (`scripts/stage_pipeline_data.sh`; `RESTAGE=1` forces the re-stream, `DRY_RUN=1` measures and transfers nothing) | VERIFIED 2026-08-18 (M4-S4): **1.8G across raw/processed/rejected** onto PVC `taxi-data` by `tar | kubectl exec -i` (the M1-S4 shape — the kind nodes cannot see the host FS and `extraMounts` is a config edit, i.e. a rebuild), then checked by per-tree **FILE COUNTS** — `raw: 8 == 8 · processed: 16 == 16 · rejected: 8 == 8` — because a size check passes on a tree that arrived truncated. The stager pod is DELETED afterwards (a pod holding an RWO volume open is one day the reason a task cannot schedule) while the PVC and its data remain. `DRY_RUN=1` prints the source size and `nothing was applied, nothing was transferred`. Re-run skips on size unless `RESTAGE=1`; it never DELETES, for `postgres_databases.sh`'s reason |
 | The six stages on-cluster (M4-S4) | `make pipeline MONTH=YYYY-MM` (`scripts/run_pipeline.sh`; `TRAIN_MONTHS=…` makes it a SAMPLED, verdict-free smoke — F-008) | **VERIFIED SAMPLED 2026-08-18 (M4-S4); the FULL-DATA run is NOT done and is M4-S5's inheritance.** Run `r5kzpr785rt8m6tn9b7l`: ingest **7,696,617 → 7,584,656 rows, 1.4547% rejected** (M4-S1's host rehearsal reproduced TO THE ROW, in a container) · validate 20 columns through the output contract · features set **v2**, 24 features · train `lightgbm-v1` run `e17ce5846aaf…` in **869.7 s** · evaluate reporting the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=false`** as DATA. `@champion` read BEFORE and AFTER by the script itself: **2 → 2**, and a move exits 2. **Its assertion is POSITIVE and had to be**: `flyte run --follow` exits 0 for a FAILED run, so the check is that the run's OUTPUTS carry a `"decision"` — the exit-code version printed `ok … six stages on-cluster` over a run that died on `ErrImagePull` |
+| Prove the rerun REUSED the first run (M4-S4) | `make pipeline-cache-drill MONTH=YYYY-MM` (`DRILL_STAGE=ingest` is the ~40 s mechanism probe; `DRILL_MAX_RATIO`/`DRILL_MAX_STAGE_RATIO` are the two clocks' bars) | VERIFIED 2026-08-18 (M4-S4, second session): **GREEN 19/19**, run 1 `r56p9p7qwfsqgh6qgrlw` populating all five cacheable stages, run 2 `rbbvfb5mhfgz8cngx9rn` hitting all five — **train 1935.2 s -> 0.1 s**, executed stages **1966.9 s -> 3.2 s (0.2%)**, wall-clock **1974 s -> 11 s (0.6%)**, **MLflow 16 -> 16 across run 2** (and 12 -> 16 across run 1, so the saving is real), `@champion` **2** after both. Three independent systems, ranked: the control plane's `cache_status` is the CLAIM, the clock CORROBORATES, MLflow is the one that could catch a lie. It refuses to be green if run 1 executed nothing — a drill comparing two reruns can show no saving |
+| What a Flyte run's actions actually did (M4-S4) | `uv run python scripts/flyte_run_actions.py <run> [--json]` (needs a route; the drill and `run_pipeline.sh` stand one up) | VERIFIED 2026-08-18 (M4-S4, second session): recovered the full-data run's per-stage detail that `--follow` never logged — **six stages, 1909.7 s, fit 1874.7 s, everything else 34.6 s**. Reads `cache_status`, which the CLI does not render. A READER: pinned by a test that it calls nothing which launches, aborts or deletes, because `verify-m4` is meant to reuse it |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
@@ -1173,4 +1250,11 @@ extended, when you set it, and MLflow's host-header middleware compares the WHOL
 header INCLUDING the port — so the fix that let the first in-cluster client in
 gave every host-side client the same 403, and the tell was
 `curl -H 'Host: localhost' 127.0.0.1:5000/health` returning OK while
-`curl localhost:5000/...` returned 403 (#61)**.
+`curl localhost:5000/...` returned 403 (#61)**. Newest (M4-S4 second session),
+and both were found by a 40-second probe standing in front of a 35-minute run:
+**an apostrophe inside `${VAR:+word}` opens a quote, so bash swallowed four lines
+and blamed a `$!` five lines below on a port-forward that was perfectly fine —
+the fourth time prose has sat where a parser reads it as code (#62)**, and **a
+bar measured on the wrong clock called a 98.7% saving a failure, because a
+one-stage rerun is mostly the launch overhead no cache can touch; the fix was the
+right quantity, not a looser threshold (#63)**.

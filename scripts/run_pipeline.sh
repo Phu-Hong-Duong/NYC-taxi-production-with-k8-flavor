@@ -71,7 +71,50 @@ if not p.exists():
     sys.exit('no task image manifest — run: make image-load')
 print(json.loads(p.read_text())['image_ref'])
 ")"
-echo "[pipeline] task image $IMAGE_REF (IfNotPresent; a pull error here means the tree moved — re-run make image-load)"
+echo "[pipeline] task image $IMAGE_REF"
+
+# --- F-026: the image is where the MODEL CODE comes from, and nothing said so ---
+# `flyte run` defaults to `--copy-style loaded_modules`, so the code bundle carries
+# only what is imported AT REGISTRATION — observed 22 files, against 36 `.py` files
+# in `src/taxi_mlops` alone. Every stage body imports `pipelines.tasks` (and through
+# it `taxi_mlops`) INSIDE the function, so the modules that compute every number in
+# this pipeline arrive in the TASK IMAGE. Its tag is read out of a manifest that
+# only `make image-load` rewrites — so editing `src/`, committing, and running this
+# script executes the PREVIOUS code and prints a green transcript.
+#
+# The line above used to promise that "a pull error here means the tree moved",
+# which is a protection that does not exist: M4-S3's loud-`ImagePullBackOff`
+# property fires for a tag no node holds, and a stale manifest names a tag every
+# node holds. So the check is made explicitly, and it is SCOPED to the paths that
+# reach a pod only through the image. `pipelines/` is deliberately absent — that IS
+# the code bundle, so an edit there does reach the pod, and refusing on it would
+# have refused this story's own cache drill. A guard that fires when nothing is
+# wrong is a guard that gets deleted (gotcha #50).
+IMAGE_SHA="${IMAGE_REF##*:}"
+IMAGE_PATHS=(src pyproject.toml uv.lock docker)
+if [[ "${IMAGE_DRIFT_OK:-0}" == "1" ]]; then
+  echo "[pipeline] WARN: IMAGE_DRIFT_OK=1 — not checking whether image $IMAGE_SHA carries this tree's code"
+elif [[ "$IMAGE_SHA" == *-dirty ]]; then
+  echo "[pipeline] FAIL: the image was built from a DIRTY tree ($IMAGE_SHA), so what it" >&2
+  echo "[pipeline]       carries cannot be identified. Commit, then: make image-load" >&2
+  exit 3
+elif ! git -C "$REPO_ROOT" cat-file -e "${IMAGE_SHA}^{commit}" 2>/dev/null; then
+  echo "[pipeline] WARN: image tag '$IMAGE_SHA' is not a commit in this repo — drift unverifiable"
+else
+  drift="$(git -C "$REPO_ROOT" diff --name-only "$IMAGE_SHA" HEAD -- "${IMAGE_PATHS[@]}")"
+  dirty="$(git -C "$REPO_ROOT" status --porcelain -- "${IMAGE_PATHS[@]}")"
+  if [[ -n "$drift$dirty" ]]; then
+    echo "[pipeline] FAIL: the task image predates the source it would run (F-026)." >&2
+    echo "[pipeline]       image $IMAGE_SHA vs HEAD $(git -C "$REPO_ROOT" rev-parse --short HEAD), differing under ${IMAGE_PATHS[*]}:" >&2
+    { [[ -n "$drift" ]] && sed 's/^/[pipeline]         committed: /' <<<"$drift"; } >&2 || true
+    { [[ -n "$dirty" ]] && sed 's/^/[pipeline]         uncommitted: /' <<<"$dirty"; } >&2 || true
+    echo "[pipeline]       These reach a task pod ONLY through the image, so this run would" >&2
+    echo "[pipeline]       compute its numbers with the old code. Fix: make image-load" >&2
+    echo "[pipeline]       (IMAGE_DRIFT_OK=1 waives this, and says so in the transcript.)" >&2
+    exit 3
+  fi
+  echo "[pipeline] ok  image $IMAGE_SHA carries this tree's ${IMAGE_PATHS[*]} (F-026 checked)"
+fi
 
 # The data has to be on the volume before a task looks for it. Cheap to assert,
 # expensive to discover from inside a pod as a FileNotFoundError three stages in.
