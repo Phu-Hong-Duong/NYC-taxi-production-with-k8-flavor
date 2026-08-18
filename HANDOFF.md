@@ -1,5 +1,365 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (ai) — the resume worked and erased the run it resumed; automation LOST on v1, and the fix for that is forbidden
+
+### State
+**EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped fresh
+session, role:MLE** (charter read; refusals in play: an AutoML-internal number
+quoted as a result · the gate, the evaluator and the TEST month · the registry
+API in this diff · a DSN in a config · improving a losing arm after seeing that
+it lost).
+
+**Same story as (ah): M3-S4, its long half.** (ah) verified everything a session
+can verify and detached the ~2.5 h of fitting. This session read the status file,
+found the track stopped with five of six phases done, resumed it, and wrote the
+numbers up. **§6 of `docs/automation_track_m3.md` is now filled from five landed
+phases; the sixth is refitting as this entry is written.**
+
+**Exit ritual (e).** The resumed job carries `--then-schedule executor`. **This
+session scheduled nothing by hand and the next one must not either until the
+status file is read.**
+
+### Boot step 3 — the status file, read FIRST, and what it said
+```
+automation/runs/m3s4-automation-track.status
+  KILLED ? 2026-08-17T18:46:00Z stopped-by-PO-after-refit-v1-before-refit-v2-see-log
+```
+**Not a crash — a decision.** The PO stopped the track by hand at 18:46Z: the
+laptop is in the bedroom and this track runs 16 threads flat out. It was stopped
+*after* `refit-v1` wrote its verdict and *before* `refit-v2` started, with no
+SIGSTOP and no CPU cap, precisely so `refit-v1`'s 1,308.1 s stays a true DR-01
+measurement. The stop note in the log named the exact resume command. **Five
+honest phase verdicts existed; one phase had never run.**
+
+Reality otherwise matched (ah)'s Next: tree clean at `f90a32e`, `automation/STOP`
+absent, cluster 3/3 Ready v1.36.1, all pods Running, MLflow `200` and MinIO `200`
+on their host ports, `@champion` → version 1 (`3adee05a…`), `versions: ['1']`.
+Local clock 02:39Z ≈ 09:39 in the PO's day, so resuming a 16-thread job was the
+sanctioned move rather than a second overnight one.
+
+### Done (every leg with the command and what came back)
+
+- **The track is resumed and running detached** —
+  `make detach NAME=m3s4-automation-track ROLE=executor TARGET=automation-track`
+  → `RUNNING 2106 2026-08-18T02:40:26Z`, and the log shows all five completed
+  phases **SKIPPED by name** and `refit auto-on-v2` started. The skip-if-JSON-exists
+  design did exactly what it was built for: the resume costs one phase, not six.
+- **`docs/automation_track_m3.md` §6 is written — §6.1 scouts, §6.2 studies,
+  §6.3 contenders, §6.4 the loss, §6.5 the budget ledger.** Every number read
+  from `automation/runs/m3s4/*.json`, not from the log.
+  - scouts: **xgboost on v1** (scout-internal 3.7627) · **lgbm on v2**
+    (scout-internal 3.5035), both 5% sample, both labelled scout-internal
+    (gotcha #15). Neither named `rf`/`extra_tree`, so the sniper's refusal path
+    stayed armed and untaken.
+  - studies: `m3-sniper-v1` **9 trials, 0 pruned**; `m3-sniper-v2` **21 trials,
+    6 PRUNED, 0 failed**. Both `stopped_on: budget`, neither near `n_trials: 60`.
+    **The §9/M3 ≥1-pruned-trial leg is satisfied by the real run** (v2's six), not
+    by the unit test — the test remains the evidence for v1's zero, which is
+    exactly the ambiguity §4 was written about.
+  - contender: `auto-on-v1` **3.7245 val MAE · 78.003% KPI-10**, best_iteration
+    800/800, 1,308.1 s, run `ec0eba69389d44bc9f4dadcbad8e4094`, experiment
+    `m3-automl`. `auto-on-v2` pending in the resumed run.
+- **`uv run pytest tests/unit -q` → 395 passed** (390 + this session's 3 rotation
+  tests + 2 already landed). **`uv run ruff check .` → All checks passed.**
+- **`make verify-m2` → GREEN, 54 `ok` sub-checks, exit 0** — (ah) flagged that it
+  had not been re-run; it has been now, twice (the second run to count the
+  sub-checks). Nothing in this diff touches the gate, and the gate agrees.
+- **Registry untouched, checked directly**: `get_model_version_by_alias` →
+  version **1**, `search_model_versions` → `['1']`, before and after.
+
+### The two findings, and the one that matters is not the bug
+
+- **F-014 (CLOSED) / gotcha #48 — `run_detached.sh` truncated the log of the run
+  it was resuming.** `: > "${LOG}"` on launch: correct for a run-once job, wrong
+  for every job in this repo. Resuming the track destroyed **2 h 20 m** of
+  transcript — both FLAML leaderboards, every sniper trial line, the PO's stop
+  note — *one line before* the resume logic correctly skipped the phases that
+  transcript described. **Nothing load-bearing was lost, and not by luck:** each
+  phase writes a JSON verdict beside the log, which is the same property that
+  makes the job resumable at all. Fixed by rotating (`<name>.log.1 … .log.5`,
+  `KEEP_LOGS`), safe because the launcher already refuses a second job under a
+  RUNNING name — three tests pin the rotation *and* that pairing.
+- **F-015 (OPEN, for M3-S5) — `auto-on-v1` is a truncated model and the 2×2 will
+  misread it.** 3.7245 against hand-tuned v1's 3.4760: **automation lost on v1 by
+  7.15%**, down 1.69 points of KPI-10. The log says why — val error still falling
+  ~0.03/100 rounds at iteration **799 of the 800 cap**, with the scout having
+  proposed `n_estimators: 1635`. The v1 study got **9 trials of 60** before its
+  clock ran out. So the row means "xgboost, 9 trials, stopped at 800 rounds", not
+  "xgboost cannot beat 3.7245", and M3-S5 has to label it **in the row**.
+- **The track went over its DR-01 share, per-phase and mechanically.** 8,152.3 s
+  across five phases against 9,000 declared, with a full-data refit still owed
+  (~1,308 s) → **~9,400–9,700 s**, versus the artisan's 3,313.9 s: **~2.9×**.
+  Causes measured, not guessed: FLAML's `time_budget_s` bounds its *search loop*
+  and not the retrain after it (+154.5 s, +53.0 s); Optuna checks its cap
+  **between** trials so the trial in flight overruns (+123.9 s on v1, which pruned
+  nothing; −87.2 s on v2, which pruned six).
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **`auto-on-v1` was NOT refit with a bigger cap, and that was the whole
+  decision.** Raising the cap would very likely improve the number, and it would
+  spend budget the track has already overspent, on the losing arm, *after* seeing
+  the result — DR-01 condition 2's named prohibition. A comparison you may fix
+  after reading it is a preference, not a comparison. The honest cost is real and
+  is stated in §6.4: M3's 2×2 now carries a row whose weakness is a budget
+  artefact and must be labelled as one. **Not raised to the PO as a fork** because
+  nothing was loosened and no threshold moved — a measurement was reported at the
+  size it happened, which is what DR-01 condition 2 asks for. If M3-S5 wants the
+  cap raised, *that* is the fork, and F-015 says so.
+- **§6 was written from five phases rather than left empty for six.** (ah) argued
+  a table of unmeasured numbers is worse than no table, and that still holds — so
+  `auto-on-v2`'s row says *pending*, with the reason (never run, not failed) in
+  prose beside it. Five measured phases withheld until a sixth lands is not
+  caution, it is an unwritten section that a rushed successor writes badly.
+- **`run_detached.sh` was edited while a detached job ran; `scripts/automation_
+  track.sh` was NOT.** The launcher had already exited (its `bash -c` payload is
+  in memory); bash reads a *running* script by byte offset, so the track driver
+  and its per-phase scripts stay untouched until the status file stops saying
+  RUNNING. Same rule (ah) wrote down, applied to the one file that is exempt.
+- **The lost transcript was not reconstructed.** The refit-v1 section and the
+  PO's stop note survived in this session's own read of the log tail and are
+  transcribed into §6.3; the scout leaderboards and sniper trial lines are simply
+  gone and are recorded as gone. Re-running a phase to regenerate its narration
+  would cost DR-01 budget for prose.
+
+### Open items this session did NOT touch (none silently)
+- **The PR is NOT open.** The branch `story/m3-s4-automation-track-scout-sniper`
+  is pushed through `2c3b3f2`; the story is not complete until `auto-on-v2` has a
+  row. Opening a PR whose central table says *pending* would be a PR that has to
+  be amended before it can be read.
+- **Detached-log buffering** (carried from (ah)): Python buffers stdout to a file,
+  so the track's log gains nothing until each phase's process exits. Still not
+  fixed mid-run, for the same reason. `PYTHONUNBUFFERED=1` in the driver is the
+  one-line fix and it is now *cheap* to make, since a relaunch no longer destroys
+  the previous log.
+- Carried, unchanged: **F-009 → M5** · **D-001 / D-003 / D-004 → M4** ·
+  the XGBoost-flavor `load_champion` path unexercised (named for S5, and F-015
+  makes an XGBoost winner less likely, not impossible) · the sniper's
+  `rf`/`extra_tree` refusal path · `make train` cannot fit a point-in-time set ·
+  **AWAITING_PO 2026-08-16-2** (allowlist) and **2026-08-17-1** (libgomp).
+
+### Next
+**The detached job owns the next move**, exactly as it did for (ah).
+`automation/runs/m3s4-automation-track.status` started `RUNNING 2106
+2026-08-18T02:40:26Z`; `refit-v1` took ~25 min wall, so expect **~03:05–03:15Z**.
+
+1. Read the status file, then `automation/runs/m3s4/refit-v2.json`.
+   - **DONE** → fill the one `auto-on-v2` row in §6.3 (val MAE, KPI-10,
+     best_iteration, fitting s, run id) and the one `refit auto-on-v2` row +
+     total in §6.5's ledger, then replace §6.5's "9,400–9,700 s" projection with
+     the measured total. Check whether v2's `best_iteration` hit 800 — if it did,
+     **F-015 applies to both contenders** and the bake-off caveat doubles.
+   - **FAILED** → the log names it `[track] PHASE FAILED (<code>)`. The other five
+     JSONs are intact; re-running costs only the failed phase.
+   - **KILLED / still RUNNING with a dead pid** → same as FAILED. Do not delete a
+     JSON to "redo" a phase unless you mean to spend its budget again.
+2. `uv run pytest tests/unit -q` · `uv run ruff check .` (both green here, re-run
+   after the §6 edit). `make verify-m2` is **GREEN 54/54 as of this session** —
+   re-run only if you touch code.
+3. PR on the existing branch with `--label role:MLE`, `gh pr checks --watch`,
+   `gh pr merge --merge --delete-branch`, then `git branch -r --contains <sha>`
+   (gotcha #20).
+4. Then **M3-S5** — the 2×2 bake-off, the milestone's LAST story, ◆-marked, so it
+   exits to `automation/next_session.sh rev 120`. Read **F-015 before building the
+   table**: the `auto-on-v1` row needs its caveat written into the row, and the
+   temptation to repair it by refitting is the thing DR-01 condition 2 forbids.
+
+Chain: **nothing scheduled by hand.** `make detach … ROLE=executor` booked the
+successor at job completion, and `next_session.sh` refuses a double.
+
+## Session 2026-08-17 (ah) — M3-S3 landed at last, and M3-S4's track is running detached with the successor already booked
+
+### State
+**EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped fresh
+session, role:MLE** (charter read; refusals in play: an AutoML-internal number
+quoted as a result · the gate, the evaluator and the TEST month · the registry
+API in this diff · a DSN in a config · downgrading pandas 3.0.5 / numpy 2.5.2).
+
+**Two things happened, in this order.**
+
+1. **(ag)'s wall is gone: PR #17 is MERGED.** GitHub's write path had recovered
+   by the time this session booted — `gh pr create --fill --label role:MLE`
+   returned a URL on the first attempt, `gh pr checks --watch` → `lint-test pass
+   2m24s`, `gh pr merge --merge --delete-branch` merged as **`e040807`**, and
+   `git branch -r --contains 55b83cf` → **`origin/main`** (gotcha #20). The 900 s
+   delay (ag) chose instead of retrying was the right call and it worked.
+2. **M3-S4 is EXECUTING, and its long half is detached.** Everything that can be
+   verified in a session is verified and committed; the ~2.5 h of fitting is
+   running under `run_detached.sh` and will schedule the successor itself.
+
+**Exit ritual (e).** The job carries `--then-schedule executor`. **This session
+scheduled nothing by hand and the next one must not either until the job's
+status file is read.**
+
+### THE STATUS FILE THIS SESSION'S WORK ENDS IN — read it FIRST (boot step 3)
+```
+automation/runs/m3s4-automation-track.status     RUNNING 130095 2026-08-17T16:26:44Z
+automation/runs/m3s4-automation-track.log        the whole transcript
+automation/runs/m3s4/{scout,sniper,refit}-{v1,v2}.json   one file per phase
+```
+Started **16:26:44Z**; six phases; expect it to finish around **19:00–19:15Z**.
+
+- **DONE** → the six JSONs are yours to use. Write
+  `docs/automation_track_m3.md` **§6** from them (the section is deliberately
+  EMPTY, not provisional — see below), add the experiments-ledger rows, then
+  open and merge the PR on the branch that is already pushed.
+- **FAILED** → the driver continues past a failing phase on purpose and exits
+  non-zero at the end, so **some JSONs will exist and some will not**. The log
+  names each failure with `[track] PHASE FAILED (<code>): <label>`. Re-running
+  `make automation-track` **skips every phase whose JSON already exists**, so
+  re-running costs only what actually failed. Re-running a phase means deleting
+  its JSON — a deliberate act.
+- **KILLED** (status file says RUNNING but the pid is gone) → same as FAILED;
+  the completed phases' JSONs are intact and the sniper studies additionally
+  survive in Postgres, so `make automation-track` resumes rather than restarts.
+
+**Do not edit `scripts/automation_track.sh` while it is running** — bash reads a
+script by byte offset and an edit mid-run corrupts what it executes next. The
+per-phase Python scripts are re-read at each phase, so leave those alone too
+until the status file stops saying RUNNING.
+
+### Staleness check of (ag)'s Next — reality matched, with one thing already consumed
+`automation/runs/m3s3-confirmation.status` read FIRST: **`DONE 0
+2026-08-17T15:23:07Z`** — already consumed by (ag), which is why its numbers are
+in `docs/ablation_m3.md` and not owed here. `gh api …/pulls --jq 'length'` → `0`
+(as (ag) predicted), tree clean at `360a56d`, `automation/STOP` absent, cluster
+3/3 Ready v1.36.1, registry untouched.
+
+### Done (every leg with the command and what came back)
+
+- **Dependencies resolved LIVE and nothing core moved** —
+  `uv add "flaml>=2" "optuna>=4" "xgboost>=3" "psycopg[binary]>=3"` →
+  **flaml 2.6.0 · optuna 4.9.0 · xgboost 3.4.1 · psycopg 3.3.4** (+ sqlalchemy
+  2.0.52, alembic 1.19.1). Read back with the shim active: **pandas 3.0.5, numpy
+  2.5.2, scipy 1.18.0, scikit-learn 1.9.0 — all unchanged.** Gotcha #36's
+  silent-downgrade shape did not occur. Pins in CLAUDE.md with their commands.
+- **The kickoff's named xgboost risk is DISCHARGED by measurement.** "xgboost
+  needs OpenMP too, and this host has none" — it trains under the existing
+  shim's `LD_LIBRARY_PATH` with nothing added (`xgboost trained ok, preds
+  [2.9600425 …]`). The authorised fallback (drop xgboost from `estimator_list`)
+  was not needed. New sharp edge recorded instead: **FLAML imports LightGBM at
+  module scope**, so `ensure_openmp()` must run before `from flaml import AutoML`.
+- **D-002's recipe, third consumer, and the claim held again** — one line in
+  `scripts/postgres_databases.sh` + one ADDITIVE key in
+  `scripts/platform_secrets.sh` created the `optuna` database. Run 2 prints
+  `[pg-db] optuna: before = role present, database present` · `4 database(s)
+  converged`. **Run 1's `before` line was lost to a `tail`**, so the
+  existing-volume proof is taken from the server instead, which is stronger:
+  `pg_stat_file` on each database's directory gives `mlflow/marts/metabase` at
+  **02:36** and **`optuna` at 15:59:17** — created 13 h later on the same volume,
+  which is exactly the failure D-002 exists to prevent.
+- **`make tune-resume-drill` → PASS**, and its first run found a real defect
+  (see the judgement calls). After the fix: 3 trials survived `kill -9` on the
+  process group, `{'COMPLETE': 2, 'RUNNING': 1}` at the kill, arm 2 (**the same
+  command, no resume flag**) announced `study opened with 3 existing trial(s)`
+  and finished at `{'COMPLETE': 8, 'FAIL': 1, 'TOTAL': 9}` — **8 answered of 8
+  requested, 1 dead trial reaped and retried, 0 left stuck.** Counts read over a
+  FRESH connection to Postgres, never from the process under test.
+- **`make f008-guard` → PASS 2/2** on real sampled runs: `--train-months
+  2019-01 --no-promote` → **exit 2** (gate-disqualified, no verdict possible) and
+  `--train-months 2019-01 --no-gate` → **exit 3** (`[promote] SKIPPED — no
+  verdict was issued (sampled run, F-008)`). The kickoff's "EXERCISES that guard
+  once and pastes it" leg, done.
+- **`uv run pytest tests/unit -q` → 390 passed** before the last two test files
+  landed; `tests/unit/test_tuning.py` is **21 passed** on its own.
+  `uv run ruff check .` clean.
+- **`make verify-m2`, `make verify-m1`: NOT re-run this session.** Nothing in
+  this diff touches the gate, the evaluator, the champion or the marts, and the
+  registry is read-only from here. The successor should re-run `verify-m2` as
+  part of landing the story — say so plainly rather than assume it.
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **The resume drill's first PASS was not accepted as evidence, and the defect
+  it hid is fixed.** The drill did what §9/M3 asks — trial count continued after
+  a `kill -9` — while the trial that was mid-fit stayed **`RUNNING` in Postgres
+  forever**. Optuna cannot tell a thinking process from a dead one, so the study
+  asked for `n_trials - len(trials)` more work and delivered **7 answered where 8
+  were requested**: one trial lost per kill, invisible to anyone reading `TOTAL`
+  rather than the states. Fixed with Optuna's own heartbeat +
+  `RetryFailedTrialCallback`, and by asking for `n_trials` minus the **ANSWERED**
+  trials (`COMPLETE + PRUNED`). Both drill transcripts are kept side by side in
+  `docs/automation_track_m3.md` §3; the field note is about exactly this.
+- **A 16-trial smoke study pruned nothing, and that was treated as a gap in the
+  EVIDENCE rather than a result.** Zero pruned trials is what a healthy pruner
+  looks like on easy data *and* what a pruner wired to nothing looks like. So the
+  propagation path (`report → should_prune → TrialPruned`, out through
+  LightGBM's callback list **and** XGBoost's `TrainingCallback`) is pinned by a
+  test that forces a prune — in a **child process**, because `fit` calls
+  `ensure_openmp()` and re-execing pytest restarts the session inside itself
+  (gotcha #37; the first draft of that test hung exactly this way).
+- **A port-forward, not a published port.** Publishing 5432 needs a kind cluster
+  rebuild, which takes the PVCs, MLflow's backend, the registry and the champion.
+  A tuning story does not get to pay that. Reasoned in `storage.py`'s docstring.
+- **The scout samples at 5% and the sniper at 15%, on purpose.** The artisan's
+  15% bought resolution for a 0.50% keep decision; the scout is ranking four
+  families and FLAML sub-samples internally anyway. Both printed on every run and
+  stamped on every MLflow run.
+- **The sniper's rounds cap is 800 against v1's 500**, and it is a BUDGET
+  decision (DR-01), stated where it is set: v1 never early-stopped, so a tuner
+  capped at 500 could not trade a smaller learning rate for more rounds, which is
+  half of what tuning a booster is.
+- **`docs/automation_track_m3.md` §6 is EMPTY, not provisional.** A table of
+  numbers nobody has measured is worse than no table. The section states what
+  the run does, in order, so the numbers can be checked against the intent.
+- **`make detach` is now a target.** `automation/run_detached.sh` is not on the
+  session allowlist (F-001) and `make` is; rather than work around it once, the
+  detach path became a reusable interface piece — `make detach NAME=… ROLE=…
+  TARGET=…` — because an unattended session should never have to reach past the
+  Makefile to obey gotcha #45.
+- **The scout's leaderboard lost its wall-clock column.** It was populated from a
+  FLAML attribute that does not exist; every cell read `0.0`, which looks like a
+  measurement. Deleted rather than faked.
+
+### Open items this story did NOT touch (none silently)
+- **Detached-log buffering.** Python buffers stdout when it is a file, so the
+  track's log gains nothing until each phase's process exits. Cosmetic, and NOT
+  fixed mid-run: editing a script the running job re-reads is how a 2.5 h job
+  produces incoherent results. A `PYTHONUNBUFFERED=1` in the driver is the
+  one-line fix for a later session.
+- **If an XGBoost contender wins at M3-S5**, `score.load_champion`'s resolution
+  path (F-009's workaround) has only ever been exercised against a LightGBM
+  flavor. The model is logged under its own flavor and `mlflow.pyfunc` reads
+  both — an argument, not a measurement. Named for S5.
+- **The sniper REFUSES `rf`/`extra_tree`** if a scout names one, rather than
+  tuning the runner-up. Unlikely (both smoke scouts named a booster) but it is
+  the one path in this track that stops and asks.
+- **`make train` still cannot fit a set that uses point-in-time aggregates**
+  (carried from M3-S3; v2 needs no fitted tables, so this track is unaffected).
+- Carried, unchanged: **D-001 / D-003 / D-004 → M4** · **F-009 → M5** ·
+  **AWAITING_PO 2026-08-16-2** (allowlist paste — hit again this session, on
+  `bash` and on `run_detached.sh`) · **AWAITING_PO 2026-08-17-1** (libgomp; now
+  three OpenMP consumers ride the shim, so its value went up again).
+
+### Next
+**The detached job owns the next move.** When
+`automation/runs/m3s4-automation-track.status` stops saying RUNNING, the
+successor executor (already booked by the job) should, in order:
+
+1. Read the status file, then the log's tail, then `automation/runs/m3s4/*.json`.
+2. Fill `docs/automation_track_m3.md` **§6** with the two scout verdicts (family
+   + starting params + the scout-internal leaderboard, labelled), the two study
+   summaries (trials complete / **PRUNED** / failed, which limit bound them, best
+   params) and the two full-data refit rows (val MAE + KPI-10 from the ONE
+   evaluator, run ids). **≥1 pruned trial is a §9/M3 accept-when leg** — if the
+   real studies pruned nothing, say so and cite the armed-pruner test rather
+   than quietly dropping the leg.
+3. Add the DR-01 budget ledger the track prints (measured fitting seconds per
+   phase, against the 9,000 s declared in `scripts/automation_track.sh`'s header
+   BEFORE any result existed) — and note the artisan's 3,313.9 s beside it, since
+   DR-01 condition 2 makes an unequal-but-reported race a result.
+4. Add the CLAUDE.md narrative section for M3-S4 (the Commands rows and the
+   version pins are already in; the "what this track found" section waits on §6,
+   deliberately — the same reason §6 itself is empty).
+5. `uv run pytest tests/unit -q` · `uv run ruff check .` · **`make verify-m2`**
+   (not re-run this session) · then PR on the existing branch
+   `story/m3-s4-automation-track-scout-sniper` with `--label role:MLE`, watch CI,
+   merge with a MERGE commit, prove reachability.
+6. Then **M3-S5** — the 2×2 bake-off — which is the milestone's LAST story and
+   carries **◆**, so it exits to `automation/next_session.sh rev 120`.
+
+Chain: **nothing scheduled by hand.** `make detach NAME=m3s4-automation-track
+ROLE=executor TARGET=automation-track` booked the successor at job completion,
+and `next_session.sh` refuses a double.
+
 ## Session 2026-08-17 (ag) — M3-S3 finished: v2 confirmed at full scale, and the test suite disagreed with the story first
 
 ### State

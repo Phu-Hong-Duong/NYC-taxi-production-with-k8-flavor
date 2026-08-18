@@ -250,3 +250,90 @@ def test_the_same_red_does_not_toast_every_ten_minutes(tmp_path):
     assert first == 1
     assert second == 1, "the second look at the same failure rang the alarm again"
     assert "toast suppressed" in _wlog(tmp_path)
+
+
+# --------------------------------------------------------------------------
+# run_detached.sh — the launcher's own record-keeping (gotcha #48)
+# --------------------------------------------------------------------------
+
+
+def _detach(tmp_path: Path, env: dict, *cmd: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", str(tmp_path / "automation" / "run_detached.sh"), "job", "--", *cmd],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
+    )
+
+
+def _wait_for_status(tmp_path: Path, want: str, timeout: float = 20.0) -> str:
+    status = tmp_path / "automation" / "runs" / "job.status"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        text = status.read_text() if status.exists() else ""
+        if text.startswith(want):
+            return text
+        time.sleep(0.1)
+    return status.read_text() if status.exists() else ""
+
+
+def test_a_resumed_job_does_not_erase_the_run_it_resumes(tmp_path):
+    """Gotcha #48: the launcher used to truncate the log of the run being resumed.
+
+    scripts/automation_track.sh is DESIGNED to be relaunched under the same
+    name — it skips every phase whose output JSON already exists — so a
+    relaunch is the normal case, not the exception. Truncating on launch meant
+    the second run destroyed the transcript of every phase the first one
+    completed. The M3-S4 track lost 2h20m of scout and sniper output that way.
+    """
+    tmp_path, env = _sandbox(tmp_path)
+    log = tmp_path / "automation" / "runs" / "job.log"
+
+    _detach(tmp_path, env, "echo", "FIRST-RUN-MARKER")
+    assert _wait_for_status(tmp_path, "DONE").startswith("DONE")
+    assert "FIRST-RUN-MARKER" in log.read_text()
+
+    result = _detach(tmp_path, env, "echo", "SECOND-RUN-MARKER")
+    assert _wait_for_status(tmp_path, "DONE").startswith("DONE")
+
+    assert "SECOND-RUN-MARKER" in log.read_text()
+    assert "FIRST-RUN-MARKER" not in log.read_text(), "the live log should be the live run's"
+    rotated = tmp_path / "automation" / "runs" / "job.log.1"
+    assert rotated.exists(), "the previous run's log was destroyed, not kept"
+    assert "FIRST-RUN-MARKER" in rotated.read_text()
+    assert "kept as" in result.stdout, "the rotation happened silently"
+
+
+def test_rotation_keeps_a_bounded_history(tmp_path):
+    """Kept, not hoarded: the oldest rotation falls off at KEEP_LOGS."""
+    tmp_path, env = _sandbox(tmp_path)
+    env = {**env, "KEEP_LOGS": "2"}
+    runs = tmp_path / "automation" / "runs"
+
+    for i in range(4):
+        _detach(tmp_path, env, "echo", "RUN-" + str(i))
+        assert _wait_for_status(tmp_path, "DONE").startswith("DONE")
+
+    assert "RUN-3" in (runs / "job.log").read_text()
+    assert "RUN-2" in (runs / "job.log.1").read_text()
+    assert "RUN-1" in (runs / "job.log.2").read_text()
+    assert not (runs / "job.log.3").exists(), "KEEP_LOGS=2 kept a third rotation"
+
+
+def test_a_live_job_is_never_rotated_out_from_under_itself(tmp_path):
+    """The rotation is only reachable when nothing is RUNNING under that name.
+
+    Renaming a file a live process holds open is how a launcher turns a working
+    job into a log nobody can find, so the double-launch guard is what makes
+    the rotation safe — this pins the two together.
+    """
+    tmp_path, env = _sandbox(tmp_path)
+    runs = tmp_path / "automation" / "runs"
+
+    _detach(tmp_path, env, "sleep", "5")
+    assert _wait_for_status(tmp_path, "RUNNING").startswith("RUNNING")
+    first = (runs / "job.log").read_text()
+
+    result = _detach(tmp_path, env, "echo", "SHOULD-NOT-RUN")
+
+    assert "ALREADY RUNNING" in result.stdout
+    assert not (runs / "job.log.1").exists(), "a live job's log was rotated"
+    assert (runs / "job.log").read_text() == first

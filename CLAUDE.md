@@ -98,7 +98,11 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | scipy | 1.18.0 | 2026-08-17 | transitive via scikit-learn (M2-S2) |
 | pyshp | **3.1.6** | 2026-08-17 | `uv add pyshp` (M3-S2). Pure-Python shapefile reader — zero transitive deps, which is why it beat geopandas for one lookup table |
 | pyproj | **3.7.2** | 2026-08-17 | `uv add pyproj` (M3-S2). Does the ESRI-WKT → WGS84 transform for the zone centroids. **Checked at add time: pandas stayed 3.0.5 and numpy 2.5.2** — gotcha #36's silent-downgrade shape did NOT occur (3 packages touched, one of them the project itself) |
-| (FLAML/Optuna rows land at their milestones) | | | |
+| FLAML | **2.6.0** | 2026-08-17 | `uv add "flaml>=2"` (M3-S4). Imports LightGBM at module scope, so `ensure_openmp()` must run BEFORE `from flaml import AutoML` (gotcha #37's third consumer) |
+| Optuna | **4.9.0** | 2026-08-17 | `uv add "optuna>=4"` (M3-S4). Pulled `alembic` 1.19.1 + `sqlalchemy` 2.0.52 + `colorlog`/`greenlet` in. Note `optuna.integration` is NOT here — Optuna 4 moved it to a separate distribution, which is why `taxi_mlops.tuning.fit` writes its own pruning callbacks |
+| XGBoost | **3.4.1** | 2026-08-17 | `uv add "xgboost>=3"` (M3-S4). The second OpenMP consumer the kickoff named as a risk: **discharged** — it trains under the shim's `LD_LIBRARY_PATH` with no extra work (proved live). It drags **`nvidia-nccl-cu13` 2.31.2 (241 MB)** in as a hard dep on linux — no GPU here, and it is never loaded |
+| psycopg | **3.3.4** (`psycopg[binary]`) | 2026-08-17 | `uv add "psycopg[binary]>=3"` (M3-S4). Optuna's Postgres driver. SQLAlchemy's bare `postgresql://` still means psycopg**2**, so every DSN this repo builds says `postgresql+psycopg://` explicitly (pinned by a test) |
+| **The M3-S4 add touched pandas/numpy not at all** | pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 unchanged | 2026-08-17 | Checked at add time against gotcha #36's silent-downgrade shape. Four packages requested, 12 installed, 1 uninstalled (the project itself, rebuilt) — no core downgrade |
 
 ## The data contract (M1-S1) — where the rules actually live
 Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT
@@ -634,6 +638,55 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **Anything long runs detached.** `automation/run_detached.sh` + `watchdog.sh` on
   cron; ending a turn kills every background task the session started (gotcha #45).
 
+## The automation track (M3-S4) — what tuning bought, what it cost, and the two rows it produced
+- **`make automation-track` is the whole path**, six phases in one order: scout ×2
+  (FLAML, 5% sample) → sniper ×2 (Optuna TPE + MedianPruner, 15% sample, studies in
+  the ONE Postgres) → full-data refit ×2 (DR-05). **Every phase is skipped if its
+  output JSON already exists**, so a killed track resumes at the phase it lost
+  instead of re-spending the hours before it — the numbers live in
+  `automation/runs/m3s4/*.json`, one file per phase, and NOT in the log.
+  `docs/automation_track_m3.md` is the narrative; §6 is the numbers.
+- **The scouts disagreed, which is why DR-03 made the sniper follow its own
+  scout**: FLAML picked **xgboost on v1** (scout-internal 3.7627) and **lgbm on
+  v2** (scout-internal 3.5035). Both are 5%-sample, FLAML-internal losses and
+  neither is a result (gotcha #15). Neither scout named `rf`/`extra_tree`, so the
+  sniper's refusal path stayed armed and untaken.
+- **Both studies were stopped by the CLOCK, not by `n_trials: 60`** — v1 got
+  **9 trials (0 pruned)**, v2 got **21 (6 PRUNED)**. The pruner bought more than
+  double the search on the same budget, and v2's six prunings are what satisfies
+  the §9/M3 ≥1-pruned-trial leg by measurement; v1's zero is why the armed-pruner
+  unit test exists.
+- **Automation LOST on v1, and its own budget says why.** `auto-on-v1` measured
+  **3.7245 val MAE · 78.003% KPI-10** against hand-tuned v1's **3.4760 / 79.693%**
+  — **7.15% worse** — and it hit its **800-round cap with val still falling ~0.03
+  per 100 rounds**. It is a truncated model, not a converged one (the scout had
+  proposed `n_estimators: 1635`). Refitting it bigger *after* seeing that number
+  would spend budget the track already overspent, on the losing arm, which is what
+  DR-01 condition 2 forbids — so the row stands as measured and labelled, and the
+  call is M3-S5's.
+- **Automation WON on v2, by 0.24%.** `auto-on-v2` (lgbm, 21 trials) measured
+  **3.3823 val MAE · 80.552% KPI-10** against the artisan's v2 at **3.3905 /
+  80.506%** — **+0.2436%** relative MAE, **+0.046** KPI-10 points. That is **less
+  than half of DR-02's ≥0.50% keep bar for a single feature group**, bought with
+  4,247.3 s on that arm alone. Against the same v1 baseline both tracks started
+  from: features **+2.46%**, tuning-on-top-of-features **+2.70%**.
+- **Both refits hit the 800-round cap; only v1 was hurt by it.** v2 never
+  early-stopped either (best iteration 791/800) but its curve was flat —
+  **0.00034** MAE over its last 100 rounds against v1's **0.02808**, ~**82×** less
+  slope. A cap is a truncation only if the curve is still moving under it, so
+  **F-015's caveat is v1's row and does not double**.
+- **The track went OVER its DR-01 share and the overrun is per-phase and
+  mechanical**: **9,133.8 s measured across six phases against 9,000 declared
+  (+133.8 s, +1.49%)**. FLAML's `time_budget_s` bounds its search loop and not the
+  retrain after it; Optuna checks its cap BETWEEN trials, so the trial in flight
+  overruns. Against the artisan's 3,313.9 s that is **2.76×** — an unequal race,
+  reported at the size it happened (DR-01 condition 2), never re-run. **The two
+  tracks also stopped for different KINDS of reason** — the artisan on its own
+  keep rule, the automation on a clock that expired mid-search on both studies —
+  which is the asymmetry that survives normalising the seconds.
+- **Nothing here promotes.** The registry API appears in none of this story's
+  scripts, and a test keeps it out.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -686,7 +739,12 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Prove the gate refuses a WORSE-THAN-CHAMPION challenger (M3-S1) | `make gate-redteam` (`uv run python scripts/gate_redteam_incumbent.py`) | VERIFIED 2026-08-17 (M3-S1): a challenger built as the champion **+0.06 min** on every quote scored **3.2667 / 81.423%**, cleared the floor bar at **+2.54%**, and was **REFUSED on both incumbent conditions** against version 1's 3.2608 / 81.480% while the floor conditions still passed. The bypass (`incumbent_version=None`) was refused by `registry.promote`. Registry identical before and after (alias 1, versions [1]). ~6 min; it is a .py and not a heredoc because the OpenMP shim re-execs and stdin cannot be replayed (gotcha #37) |
 | Prove a wrong-window floor cannot be published (M3-S1) | `make predictions-redteam` (`bash scripts/predictions_redteam.sh`) | VERIFIED 2026-08-17 (M3-S1): floor fitted on 2019-01 instead of six months → re-fit measured **4.1138** against the version's `gate_floor_mae` **3.5090** → **write REFUSED, exit 2**, and all three published files **byte-identical by sha256** before and after |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2 live; M3+ pending each milestone |
-| Scout / sniper | `make automl` / `make tune` | pending M3 |
+| FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
+| Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
+| Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
+| Exercise the F-008 sampled-run guard (M3-S4) | `make f008-guard` | VERIFIED 2026-08-17 (M3-S4): `--train-months 2019-01 --no-promote` → **exit 2** (gate-disqualified) and `--train-months 2019-01 --no-gate` → **exit 3** (`[promote] SKIPPED — no verdict was issued`). PASS 2/2 |
+| The whole automation track (M3-S4) | `make automation-track` — scout ×2 → sniper ×2 → full-data refit ×2, budget DECLARED in the script header before any result exists; **run it detached**; every phase SKIPS if its JSON exists | VERIFIED END TO END 2026-08-18 (M3-S4): five phases ran 2026-08-17 16:26→18:46Z (scout v1/v2, sniper v1/v2, refit v1) and the PO stopped the machine for the night; the SAME command on 2026-08-18 02:40Z skipped all five BY NAME and ran only the missing refit → `[track] finished 2026-08-18T02:59:07Z; 0 phase(s) failed`. **The resume cost one phase, not six.** Numbers in `docs/automation_track_m3.md` §6, one JSON per phase in `automation/runs/m3s4/` (six files). **9,133.8 s of fitting across six phases against a 9,000 s DR-01 share** — it goes over by 1.49%, and §6.5 says which phases and why |
+| Run something that must OUTLIVE the session | `make detach NAME=<slug> ROLE=executor\|rev\|architect TARGET=<make target>` | VERIFIED 2026-08-17 (M3-S4): launched the automation track under `setsid`, `--then-schedule executor`. It is a make target because `run_detached.sh` is not on the session allowlist (F-001) and `make` is — an unattended session must never have to reach past the Makefile to obey gotcha #45 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |
 | Chain kill switch | `touch automation/STOP` | VERIFIED 2026-08-16 (M0-S4 drill): scheduler refuses, exit 0, daily counter unmoved, no log created, no residue after `rm`. The harder half — STOP written AFTER a session is scheduled, and the daily cap — is covered by `tests/unit/test_chain_script.py` against a sandboxed scheduler with a fake `claude` |
 | Chain next session | `automation/next_session.sh <executor\|rev\|architect> [delay]` | REAL-CLI proven 2026-08-16 (hello-chain fired +60s; `opus`→claude-opus-5; log+counter OK) |
@@ -734,4 +792,10 @@ Newest, and both cost a session: **ending a turn kills every background task the
 session started, so "I'll pick this up when the run reports" destroys the run
 (#45 — the chain died for 38 minutes; `automation/run_detached.sh` and the cron
 `watchdog.sh` are the answer)**, and a reference file can spell its own null two
-ways while the comment above the loop swears it does not (#46).
+ways while the comment above the loop swears it does not (#46). Newest: **a
+SIGKILLed Optuna trial stays RUNNING in the storage forever, so a resumed study
+loses one trial per kill and the drill that finds this is the one that PASSED
+(#47)**, and **the launcher for resumable jobs TRUNCATED the log of the run it
+was resuming — one line before correctly skipping the phases that log described
+(#48; when a job is built to be re-run, audit what its launcher does to state
+that already exists)**.

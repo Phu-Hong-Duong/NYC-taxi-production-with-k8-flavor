@@ -51,10 +51,17 @@ DRY_RUN="${DRY_RUN:-0}"
 # The desired state of the server: one line per database, "db:role:passwordkey".
 # A new consumer adds a line here and nothing else — M1-S5 added `metabase` and
 # that claim held: one line here, one ADDITIVE entry in platform_secrets.sh.
+# M3-S4 added `optuna` (the sniper's study storage) and it held a THIRD time.
+# `optuna` is the first consumer that is NOT a pod: the study driver runs on the
+# host, so this database gets a role and no Kubernetes Secret. The credential
+# still lives only in .env; scripts/optuna_storage.py reads it from there and
+# builds the DSN in memory (configs/tuning.yaml says `storage: postgres` and
+# carries no DSN, by its own law).
 DATABASES=(
   "mlflow:${MLFLOW_DB_USER:-mlflow}:MLFLOW_DB_PASSWORD"
   "marts:${MARTS_DB_USER:-marts}:MARTS_DB_PASSWORD"
   "metabase:${METABASE_DB_USER:-metabase}:METABASE_DB_PASSWORD"
+  "optuna:${OPTUNA_DB_USER:-optuna}:OPTUNA_DB_PASSWORD"
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -69,6 +76,7 @@ DATABASES=(
   "mlflow:${MLFLOW_DB_USER:-mlflow}:MLFLOW_DB_PASSWORD"
   "marts:${MARTS_DB_USER:-marts}:MARTS_DB_PASSWORD"
   "metabase:${METABASE_DB_USER:-metabase}:METABASE_DB_PASSWORD"
+  "optuna:${OPTUNA_DB_USER:-optuna}:OPTUNA_DB_PASSWORD"
 )
 
 psql_admin() {

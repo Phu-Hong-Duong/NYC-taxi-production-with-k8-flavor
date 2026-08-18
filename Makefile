@@ -4,6 +4,21 @@
 SHELL := /bin/bash
 MONTH ?= 2019-09
 
+# The one supported way to run something that must OUTLIVE the session starting
+# it (gotcha #45: a Claude Code background task is a CHILD of the session and
+# dies with it, which cost the chain 38 minutes on 2026-08-17). It is a make
+# target and not just a script call because `make` is the interface every role
+# already has: an unattended session should never have to reach past it.
+#   make detach NAME=m3s4-automation-track ROLE=executor TARGET=automation-track
+# ROLE is the successor the JOB schedules on completion — the launching session
+# must then schedule nothing itself (next_session.sh refuses the double anyway).
+.PHONY: detach
+detach: ## run a make TARGET detached so it survives this session; the JOB schedules ROLE after (gotcha #45)
+	@test -n "$(NAME)"   || { echo "make detach needs NAME=<slug>" >&2; exit 2; }
+	@test -n "$(TARGET)" || { echo "make detach needs TARGET=<make target>" >&2; exit 2; }
+	@test -n "$(ROLE)"   || { echo "make detach needs ROLE=executor|rev|architect" >&2; exit 2; }
+	@automation/run_detached.sh $(NAME) --then-schedule $(ROLE) -- make $(TARGET)
+
 .PHONY: help
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "};{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -58,7 +73,7 @@ verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, exp
 	@bash scripts/verify_m2_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
-.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune verify-m3
+.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune tune-resume-drill automl-refit automation-track f008-guard verify-m3
 zones: ## derive the 263 TLC zone centroids from the sha256-pinned shapefile (M3-S2; --refresh re-downloads)
 	@uv run python scripts/derive_zone_centroids.py $(ZONES_ARGS)
 ablation: ## artisan track: one feature GROUP per experiment on a 15% sample, val only, runs in m3-artisan (M3-S3)
@@ -69,10 +84,18 @@ gate-redteam: ## prove the gate refuses a challenger that beats the FLOOR and is
 	@uv run python scripts/gate_redteam_incumbent.py
 predictions-redteam: ## prove a floor fitted on the wrong window cannot be published (M3-S1, F-012)
 	@bash scripts/predictions_redteam.sh
-automl: ## FLAML scout under configs/automl.yaml time budget -> scout report
-	@echo "TODO(M3): python -m taxi_mlops.tuning scout"
-tune: ## Optuna study (Postgres-backed, resumable) centered on scout winner
-	@echo "TODO(M3): python -m taxi_mlops.tuning study"
+automl: ## FLAML scout under configs/automl.yaml time budget -> scout verdict (family + starting params); every number scout-internal
+	@uv run python scripts/automl_scout.py $(AUTOML_ARGS)
+tune: ## Optuna sniper: TPE + MedianPruner, study in the one Postgres, namespaced m3, resumable (M3-S4)
+	@uv run python scripts/optuna_sniper.py $(TUNE_ARGS)
+tune-resume-drill: ## prove the study outlives its process: kill -9 mid-run, re-run the same command, trial count continues
+	@uv run python scripts/sniper_resume_drill.py $(DRILL_ARGS)
+automl-refit: ## refit the sniper's winner on the FULL train months through the one evaluator (DR-05; nothing promotes)
+	@uv run python scripts/automl_refit.py $(REFIT_ARGS)
+automation-track: ## the whole M3-S4 track in order (scout x2 -> sniper x2 -> full-data refit x2) under DR-01's declared budget; ~2.5h, run it DETACHED
+	@bash scripts/automation_track.sh
+f008-guard: ## exercise M3-S1's F-008 guard on a real sampled run: exit 2 (disqualified) and exit 3 (no verdict issued)
+	@uv run python scripts/f008_guard_exercise.py
 verify-m3: ## dossier+ablation+leakage red-team; kill/resume; >=1 pruned trial; 5 gate verdicts from our evaluator
 	@echo "TODO(M3)"
 

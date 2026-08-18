@@ -9,6 +9,173 @@ months from now.
 
 ## M3
 
+### M3-S4 — the drill passed, and the thing it found was a corpse the pass rate could not see (2026-08-17, role:MLE)
+
+**What was built.** The automation half of M3's 2×2: a FLAML **scout** that
+spends `configs/automl.yaml`'s 1,800 s naming a model family and a starting
+region, an Optuna **sniper** that searches inside it with TPE + MedianPruner
+against a study living in the one Postgres, a **full-data refit** that turns the
+study's best parameters into a bake-off contender through the one evaluator, and
+the plumbing under all three — `taxi_mlops.tuning.{storage,space,fit}`. Plus the
+two arms §9/M3 asks to *watch*: kill-and-resume, and a pruner. Nothing promotes.
+
+**Why this way — three decisions worth the space.**
+
+*(1) The study's storage is the feature, so it got the design.* Optuna will
+happily keep a study in memory or in a SQLite file and the search will look
+identical. The one thing this arm exists to demonstrate — kill the process, run
+the same command, watch the trial count continue — is a property of *where the
+trials are*, and of nothing else. So the storage got a module, a credential
+chain that ends in `.env` (never a config, never argv), and a test that walks
+every file under `configs/` looking for a connection string.
+
+*(2) A port-forward, deliberately, over the tidier answer.* Publishing 5432
+would be cleaner — except kind publishes host ports at cluster-CREATE time only,
+so it costs a `cluster-down && cluster-up`, and that takes the PVCs, and with
+them MLflow's backend, the registry and the champion. The tunnel is uglier and
+strictly reversible. It is also thematically right: the tunnel dies with the
+process while the trials do not, which is the demonstration.
+
+*(3) The scout's leaderboard lost a column.* The first draft printed per-family
+wall-clock from a FLAML attribute that does not exist. Every cell came back
+`0.0` — which reads like a measurement. The column was deleted rather than
+fixed: FLAML does not expose the number, and a zero that looks like a timing is
+worse than a missing column.
+
+**The concept underneath.** *A test that passes tells you what it checked, not
+what is true.* The resume drill passed on its first run and printed exactly what
+the milestone gate asks for: three trials survived a `kill -9`, the resumed
+process continued the count, transcript pasted. It was also, quietly, wrong. The
+trial that was mid-fit at the instant of the kill stayed `RUNNING` in Postgres
+**forever** — Optuna cannot distinguish a process that is thinking from one that
+no longer exists — so the study asked for `n_trials - len(trials)` more work and
+delivered seven answered trials where eight were requested. One trial lost per
+kill, invisible to anyone reading the total rather than the *states*. The fix is
+Optuna's own (a heartbeat plus `RetryFailedTrialCallback`, and counting
+`COMPLETE + PRUNED` rather than rows), but the lesson is the shape: the drill
+was written to satisfy a sentence, and the sentence was satisfiable by a system
+that was silently losing work. **Ask what a green light would still be
+compatible with.** The same instinct killed the 16-trial pruning smoke as
+evidence: zero trials pruned is what a healthy pruner looks like on easy data
+*and* what a pruner wired to nothing looks like, so the propagation path is
+pinned by a test that forces a prune instead.
+
+**What to look at.** `docs/automation_track_m3.md` §3 — both drill transcripts,
+before and after, kept side by side · `src/taxi_mlops/tuning/storage.py`'s
+`rdb_storage` docstring, which is the finding written where the fix is ·
+`tests/unit/test_tuning.py::test_a_pruned_trial_really_raises_out_of_the_boosters_callback`
+and its `_prune_probe.py` child process (gotcha #37 again: re-execing pytest
+restarts the test session inside itself) · `scripts/automation_track.sh`'s
+header, where the 9,000 s is split **before** any result exists.
+
+**What to try yourself.** Run `make tune-resume-drill DRILL_ARGS="--heartbeat-seconds
+3600"` and watch the drill fail on the leg it added — the grace period never
+elapses, the killed trial is never reaped, and the study reports one fewer
+answered trial than it asked for. That is what the first version of this code
+did on every kill, and the only difference between the two runs is whether
+anybody looked past `TOTAL`.
+
+### M3-S4 (part 2) — the resume worked, and the launcher deleted the run it was resuming (2026-08-18, role:MLE)
+
+**What happened.** The track had been stopped by hand overnight after five of
+six phases. Resuming it is one command — `scripts/automation_track.sh` skips any
+phase whose output JSON already exists — and the resume did exactly that,
+skipping 2 h 20 m of completed work and starting the one missing refit. One line
+earlier, `run_detached.sh` had opened the log with `: > "${LOG}"` and destroyed
+the transcript those five skipped phases had written. Both FLAML leaderboards,
+every sniper trial line and the PO's hand-written stop note, gone (gotcha #48).
+
+**Why it did not cost the story, and why that is the actual lesson.** Every
+load-bearing number survived, because each phase writes a JSON verdict beside
+the log and the log was only ever the narration. That was not luck exactly — it
+was the same decision that made the track resumable, since a phase can only be
+skipped if its result is durable somewhere a new process can read. **The
+property that let the job resume is the property that made the loss
+survivable.** The failure and its own containment came from one design choice.
+
+**The transferable shape.** *When a job is built to be re-run, audit everything
+its launcher does to state that already exists.* "Start clean" is the default
+assumption of almost every wrapper ever written, and a resumable job has already
+contradicted it. The truncation had been in that script since the day it was
+written to solve gotcha #45, and it survived a code review and a test suite —
+because nothing had ever relaunched under the same name before, and the first
+relaunch was the first execution of that line in its real context.
+
+**The other half of the session: a number that must not be improved.**
+`auto-on-v1` came in at **3.7245** val MAE against hand-tuned v1's **3.4760** —
+the automation track lost on v1 by 7.15% — and the log shows why: it hit its
+800-round cap with validation error still falling steeply. It is a *truncated*
+model, and the obvious repair (raise the cap, refit, quote the better number)
+is precisely the move DR-01 condition 2 forbids: spending more budget on one arm
+*after* seeing that arm's result. The honest version costs something real — M3's
+2×2 now carries a row whose weakness is a budget artefact and has to be labelled
+as one, rather than a clean number. A comparison you are allowed to fix after
+reading it is not a comparison, it is a preference.
+
+**What to look at.** `automation/run_detached.sh`'s rotation block and the three
+tests in `tests/unit/test_watchdog.py` that pin it — especially
+`test_a_live_job_is_never_rotated_out_from_under_itself`, which pins the
+rotation to the double-launch guard that makes it safe · `docs/
+automation_track_m3.md` §6.4 (the truncated contender) and §6.5 (the budget
+ledger, over) · `docs/gotchas.md` #48.
+
+**What to try yourself.** Run any `make detach NAME=… ` twice in a row and look
+in `automation/runs/` for the `.log.1`. Then read `scripts/automation_track.sh`'s
+`phase()` function and ask what *else* a launcher could reasonably do to a
+directory whose contents are the resume points — that question is worth more
+than the one bug it found here.
+
+### M3-S4 (part 3) — the same ceiling bound both arms, and only one of them was truncated (2026-08-18, role:MLE)
+
+**What happened.** The sixth and last phase landed at 02:59:07Z and the story
+closed: `auto-on-v2` (lgbm, 24 features, 21 trials) measured **3.3823** val MAE ·
+**80.552%** KPI-10, against the artisan's hand-held-hyperparameter v2 at
+**3.3905 / 80.506%**. Automation won that arm by **0.2436%** — and lost the other
+by 7.15%. §6 of `docs/automation_track_m3.md` is complete; nothing was refit,
+nothing promoted.
+
+**The question the previous session left, and why its obvious answer was wrong.**
+Part 2 flagged `auto-on-v1` as truncated: 800-round cap, val error still falling.
+The handoff asked the next session to check whether v2 hit the cap too, because
+if it did, "the caveat doubles". It did hit it — `Did not meet early stopping`,
+`best_iteration: 791` of 800 — and the caveat does *not* double. Over its last
+100 rounds v2 gained **0.00034** MAE; v1 gained **0.02808** over its last 99.
+**A cap is a truncation only if the curve is still moving under it**, and an ~82×
+difference in slope at the same iteration is the difference between a model that
+was cut off and one that had arrived. The two facts are identical at the level of
+"did it hit the cap" and opposite at the level that matters. *Reading the ceiling
+alone would have put a caveat on the one row in the table that had earned not
+having one.*
+
+**The number that got smaller when it was finally measured.** §6.5 had projected
+9,400–9,700 s for the track on the assumption that the missing refit would cost
+what its twin cost. It cost 981.5 s against 1,308.1 — lgbm on 24 features is
+cheaper per round than depth-12 xgboost on 5 — so the real total is **9,133.8 s**,
+still over the 9,000 s DR-01 share but by 1.49% rather than by 5–8%. The
+projection was replaced rather than quietly deleted, because it was an argument
+that ran on that number: "the track has already overspent" is the reason a losing
+arm may not be refit, and an honest version of that reason states how much.
+
+**The result underneath both arms, which is worth more than either.** Tuning nine
+hyperparameters with 21 trials bought **+0.24%** on v2. This program's own bar for
+admitting *one feature group* is **≥0.50%** (DR-02). So the entire automation axis
+on the better feature set bought less than half of what a single feature has to be
+worth to get in the door — and it cost 4,247.3 s on that arm alone against the
+artisan track's 3,313.9 s in total. That is one measurement on one dataset with
+one budget, and it is exactly the comparison the 2×2 was built to make available
+rather than assume.
+
+**What to look at.** `docs/automation_track_m3.md` §6.3 (the two contenders),
+§6.4 (both arms, the slope-at-the-cap argument, and a pre-registered prediction
+printed beside its half-refutation), §6.5 (the measured ledger) ·
+`automation/runs/m3s4/refit-v2.json` · F-015 in `ledgers/findings.md`, whose
+addendum narrows it to one row.
+
+**What to try yourself.** Take any two training logs that both ran to their round
+cap and compute the MAE gained over the final 100 rounds of each. That single
+subtraction separates "stopped early" from "finished", and it is the check that
+nothing in a JSON verdict — `best_iteration: 791` vs `800` — can do for you.
+
 ### M3-S3 — the strongest feature in the literature lost, and the sample that lied was the one nobody was allowed to quote (2026-08-17, role:MLE)
 
 **What was built.** Feature set **v2**, earned group by group. Five feature

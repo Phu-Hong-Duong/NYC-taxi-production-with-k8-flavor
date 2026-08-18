@@ -62,6 +62,34 @@ if [ -f "${STATUS}" ] && grep -q '^RUNNING' "${STATUS}" 2>/dev/null; then
   echo "[detached] stale RUNNING status for ${NAME} (pid ${RUNNING_PID} is gone) — overwriting."
 fi
 
+# ROTATE, NEVER TRUNCATE (gotcha #48, paid for on 2026-08-18).
+# This launcher used to open the log with `: > "${LOG}"`. That is safe for a job
+# that runs once and wrong for the jobs this repo actually has: a resumable
+# track (scripts/automation_track.sh skips any phase whose output JSON exists)
+# is DESIGNED to be relaunched under the same name, and the relaunch was wiping
+# the transcript of every phase the first run completed. The M3-S4 track lost
+# 2h20m of scout and sniper output that way — the JSON verdicts survived, the
+# human-readable record did not. The phase outputs are the load-bearing half, so
+# nothing was unrecoverable; it was still a record destroyed by a launcher, and
+# the fix is one rename.
+#
+# The previous log becomes <name>.log.1, the one before it <name>.log.2, and so
+# on to KEEP_LOGS. Nothing is deleted except a rotation older than that. This is
+# only ever reached when no job is RUNNING under this name (the guard above
+# refuses a live double), so no open file descriptor is ever renamed out from
+# under a writer.
+KEEP_LOGS="${KEEP_LOGS:-5}"
+if [ -s "${LOG}" ]; then
+  i="${KEEP_LOGS}"
+  while [ "${i}" -gt 1 ]; do
+    prev=$((i - 1))
+    [ -f "${LOG}.${prev}" ] && mv -f "${LOG}.${prev}" "${LOG}.${i}"
+    i="${prev}"
+  done
+  mv -f "${LOG}" "${LOG}.1"
+  echo "[detached] previous log kept as ${LOG}.1 (gotcha #48 — a resumed job must not erase the run it resumes)"
+fi
+
 : > "${LOG}"
 CMD_STR="$*"
 
