@@ -1,5 +1,114 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (an) — ◆ M3 REVIEW: the numbers all hold, and the winner was picked on the month nobody was allowed to look at
+
+### State
+**REV — Staff ML Reviewer, `claude-opus-5` (stated first line), FRESH session,
+zero builder context.** Charter read (`docs/org/ROLES.md` §REV). Committed
+artifacts read FIRST — code, configs, the raw JSON in `automation/runs/`,
+`data/predictions/*.parquet`, the registry — and the builder's prose (bake-off
+memo, automation memo, error memo §9, HANDOFF (am)) read LAST, after findings
+were drafted. Anti-anchoring held: the one finding the narrative *did* already
+cover (KPI-10) was demoted to evidence on F-016 instead of being filed twice.
+
+**Verdict: APPROVE WITH CONDITIONS.** Row in `ledgers/signoffs.md` (producer
+EXEC, approver REV — different roles). Findings **F-018 (S2) · F-019 (S2) ·
+F-020 (S3)**. No S1, so nothing parks and no AWAITING_PO entry is raised.
+
+### The re-derivations (charter obligation: at least one, from raw materials)
+
+**1. The champion's KPI-09/KPI-10, recomputed off the published rows.** numpy
+over `data/predictions/test/predictions_2019-08.parquet`, nothing from a
+transcript:
+
+```
+test  rows=5,950,708  versions=['2']
+  model KPI-09 = 3.2402793989   KPI-10 = 81.5770997333
+  floor KPI-09 = 3.3517593019   KPI-10 = 80.7334522211
+val   rows=6,189,748
+  model KPI-09 = 3.3822796832   KPI-10 = 80.5519384634
+  floor KPI-09 = 3.5514728615   KPI-10 = 79.1113951650
+```
+
+Every one equals `automation/runs/m3s5/bakeoff.json` to **10 decimals**.
+
+**2. The floor, re-fitted from raw parquet in a different engine.** Not through
+`baselines.py` — DuckDB over `data/processed/train/*.parquet`, my own SQL for
+`(hour, dow, PU, DO)` → `(PU, DO)` → global:
+
+```
+train rows 43987422
+full-key groups = 1,610,050   od groups = 46,938   global median = 11.15
+TEST rows=5,950,708  floor KPI-09 = 3.3517593019  KPI-10 = 80.7334522211  unseen=968
+```
+
+Two instruments, one number — including the 968 rows that fall past both levels,
+which is the figure the error memo's §9 headline rests on.
+
+**3. The DR-01 budgets, re-summed.** The six phase JSONs in
+`automation/runs/m3s4/` add to **9,133.8 s** exactly as claimed; the artisan's
+**3,313.9 s** reconciles from 557.1 + 2,135.0 + 455.5 (the orphan arm the doc
+declares) + 166.2. The accounting is honest, including the part that makes the
+race look unequal.
+
+**4. `make verify-m3`, re-run by the approver: GREEN 46/46, 8 sections, exit 0**,
+registry identical after (alias 2, versions [1,2]).
+
+### The findings
+
+**F-018 (S2) — the bake-off ranks on the holdout, then gates on it.**
+`scripts/bakeoff_m3.py:276` is `min(loaded[1:], key=… metrics["test"].mae)`.
+`docs/bakeoff_m3.md:87` calls those same rows "untouched by training and by
+**selection**". After line 276 that is not true, and the two v2 arms are
+**0.0022 min** apart — so which model serves was decided by the untouched month.
+It is the structure `gate.py` refuses by name one level up ("judging on val would
+score a model against a month it has already been fitted to"). Cheap, not fatal:
+every contender already carries a val number the script re-verifies to 1e-9, and
+§3 records that the val and test rankings are identical — ranking on val would
+have cost one line and produced the same champion. **M7's retrains call this
+shape**, which is why it is a condition rather than a note.
+
+**F-019 (S2) — the promoted champion raises on any request outside 2019.** v2
+admitted g1, so the served model now needs `is_holiday`; the committed table has
+**10 rows, all 2019**, and `calendar.assert_covers` raises (correctly, for
+training) on anything else. `features/` is the ONE path for training AND serving,
+so at M5 that is a 500 per quote. Reproduced live against the configured set:
+`2026-08-18 09:15` → `ValueError: … covers [2019] but the frame carries [2026]`;
+`2019-08-18 09:15` builds all 24. **v1 had none of these columns — the dependency
+entered the served model at M3-S5.** Unrecorded anywhere; the dossier row 4 says
+the opposite ("a calendar is knowable years ahead").
+
+**F-020 (S3) — the tuned config is sample-optimal, applied at full scale.**
+`min_data_in_leaf: 1293` is 1 row in 5,105 on the 15% sample and 1 in 34,020 on
+the 44M-row refit; the round budget travels by construction
+(`automl_refit.py:102` reads the sniper's own per-trial cap). The cap is
+disclosed as a budget choice and F-015 owns v1's truncation — the *transfer*
+question is nowhere, and it is the largest unstated caveat on "+0.07 points".
+
+### What I checked and found SOUND (worth as much as the findings)
+- The promoted version, the run in `bakeoff.json`, and `refit-v2.json` are one
+  run (`92b73bd4f77d…`); the signature is exactly the 24 columns `resolve('v2')`
+  produces, in order. Nothing was re-fitted to make the table.
+- `registry.promote`'s incumbent acknowledgement, the no-delete property, and the
+  `get_model_version_by_alias` read are all as documented.
+- `aggregates.fit`'s point-in-time window is genuinely point-in-time (month *k*
+  sees 1..*k*−1, first month gets NaN not zeros), and g5 lost on its own merits.
+- The 15%-vs-100% g2 prediction that was refuted is kept beside its refutation;
+  `docs/ablation_m3.md` §7 keeps the pre-fix g3 number in the table and the
+  post-fix one beside it. Neither reads as a number quietly improved.
+- Segment re-derivation off the published rows: the champion beats the floor on
+  every duration band except **0–5 min** (−0.19% MAE, KPI-10 92.531 vs 92.569),
+  which is M2's finding surviving into v2 — and on the 100–120 min band the floor
+  is still ahead on KPI-10 (0.310% vs 0.103%, 3 trips vs 1 of 969). Not filed:
+  the memo reports that band's 0.103% as the small thing it is.
+
+### Next
+`automation/next_session.sh architect 120` — ARCH's M3→M4 boundary triage, with
+three conditions to disposition with quoted landings (F-018 before M7 · F-019
+into M5's kickoff · F-020 into M7's).
+
+---
+
 ## Session 2026-08-18 (am) — M3-S5 CLOSED, M3 CLOSED: the gate went red for doing the right thing, and that was the story
 
 ### State
