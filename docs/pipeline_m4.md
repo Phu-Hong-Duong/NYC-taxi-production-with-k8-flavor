@@ -564,3 +564,95 @@ marts tail task, `make verify-m4` and its red team.
   asserting against that output — fix it *before* pinning it, or pin it and carry
   the gap, but do not do both in the wrong order.
 * **`@champion` is version 2**, read before and after all four runs this session.
+
+---
+
+# M4-S5, first session (2026-08-18) — the kill drill, and where the story is cut
+
+§13–§15 are M4-S5's. §1–§12 are M4-S4's record and are left unedited.
+
+## 14. D-003's tail task: the one fact it is designed around, measured
+
+Leg 2 of M4-S5 — the marts build+publish as the pipeline's tail task — is NOT
+built in this session (§15 says where the cut is and why). What is done is the
+measurement its whole design turns on, because getting it wrong would have been
+discovered three hours into the implementation.
+
+**The problem, stated precisely.** `make marts` publishes over `kubectl exec`
+into the postgres pod, and that is not an accident of convenience: nothing of
+ours publishes 5432 on the host (the port family annotates it "in-cluster only"),
+so the host has **no TCP route** to the database at all. `scripts/marts.sh`
+records the three rejected alternatives — a NodePort for 5432, a babysat
+port-forward, DuckDB's run-time-downloaded `postgres` extension — and they are
+still rejected. But a **task pod cannot use `kubectl exec`**: it has neither
+kubectl nor a kubeconfig, and giving a pipeline stage cluster credentials so it
+can shell into another pod would be a far worse trade than any of the three.
+
+**So the tail task needs a transport the host does not have, and the question is
+whether the obvious one works.** It does. `scripts/marts_reach_probe.py` runs one
+throwaway pod **built from the actual task image** and connects with psycopg —
+which the image already carries as Optuna's driver (M3-S4), so this costs no new
+dependency:
+
+```
+PROBE-OK ('marts', 'marts') trips_clean total size 13 GB monthly_kpis rows 8
+```
+
+Three facts in one line, and each matters:
+
+* **the pod connects** to `postgres.platform.svc.cluster.local:5432` — the
+  in-cluster half of the same split horizon F-023 named, and the reason the tail
+  task is possible at all;
+* **it connects as `marts`, not as the superuser** — the M1-S5 rule (a seat that
+  can drop the warehouse it reads is one misclick from a restore) carries over to
+  a pipeline stage unchanged;
+* **`trips_clean` is 13 GB right now**, so D-003's number is a measurement of
+  today and not a memory of M1-S4. The row's ~23 GB peak is that 13 GB plus the
+  staging copy that coexists with it during the swap.
+
+**What the probe does NOT settle, named so the next session does not read it as
+more than it is.** The probe passes credentials as env vars in a `kubectl run`
+override, which puts them in a pod spec; the real tail task must take them from a
+Secret (`flyte-task-marts`, the fourth consumer of the shape
+`scripts/platform_secrets.sh` already has) referenced from
+`infra/manifests/flyte-task-podtemplate.yaml`, exactly as the MinIO and MLflow
+identities already are. And the transport is only half the work: the tail task
+also has to rebuild the analyst layer in-pod and needs `data/predictions/` on the
+volume (the `error_segments` mart sources it), which makes `make stage-data` a
+four-tree stager.
+
+**The twin the next session must not create.** The swap SQL — staging table,
+`\copy`, rename-in-one-transaction, indexes — exists once today, in
+`scripts/marts.sh`. A second copy in Python for the in-pod path would be a twin
+of the most consequential SQL in the repo. The shape that avoids it: one module
+owning the SQL and the CSV stream (the DuckDB half already lives in
+`scripts/marts_export.py`, which is why the type mapping is testable), with two
+thin transports — `kubectl exec | psql` for the host and psycopg for the pod —
+and `marts.sh` delegating to it rather than duplicating it.
+
+## 15. Where M4-S5 is cut, and what the next session starts with
+
+**Done here:** leg 1 — the retry budget and the kill-a-pod drill (§13).
+**Not done:** leg 2 (D-003's marts tail task) and leg 3 (`make verify-m4` and its
+red team).
+
+The cut is between legs, not inside one. The reason is scope, stated with the
+work rather than as an apology: leg 2 needs a new transport, a new Secret, a
+PodTemplate change, a four-tree stager, an image rebuild and a live publish to
+measure against the 23 GB peak — and leg 3's gate is supposed to assert that the
+marts reconcile *after* the tail task, so writing it first means editing it
+immediately afterwards, which is how the M2-era literals got written (F-017,
+gotchas #49/#50).
+
+Order for the next session, and it is the kickoff's own: leg 2, then leg 3.
+Leg 3 inherits, in addition to M4-S4's list:
+
+* `automation/runs/m4-kill/kill_drill.json` — the drill's record, including the
+  killed pod, its replacement, and the actions with their phases. `verify-m4`
+  owes an assertion that the retry event is present in history, and this file is
+  where it is, without a port-forward.
+* `scripts/pipeline_kill_drill.sh`'s verdict block is the shape that assertion
+  should take, and §13's correction is the reason it does not assert on the pod
+  NAME.
+* **`train` for 2019-02 and 2019-03 is now cached.** A third kill drill needs a
+  fourth month, or an invalidating edit.
