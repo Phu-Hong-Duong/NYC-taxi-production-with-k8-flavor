@@ -71,13 +71,26 @@ ENV UV_PYTHON=/usr/local/bin/python3.12 \
 # the lock. The environment is a BUILD artifact; a task that re-resolves at run
 # time is a task whose dependency graph is decided in production.
 
+# --- the non-root user comes FIRST, and that is a size decision ----------------
+# Flyte tasks need no privileges, so the image runs as uid 1000. The obvious
+# ordering — build everything as root, then `chown -R taxi /app` at the end —
+# was BUILT AND MEASURED FIRST and is wrong: `docker history` showed the chown as
+# a **1.7 GB layer**, a byte-for-byte duplicate of the venv underneath it (a
+# layer records a file's new metadata by storing the whole file again), and it
+# cost 139 s of the build. Creating the user before anything is installed makes
+# the same image without the copy. uid 1000 also happens to be this host's user,
+# which is what lets the smoke mount the DVC-pinned data/ read-only and read it.
+RUN useradd --uid 1000 --create-home --shell /bin/bash taxi \
+ && mkdir -p /app \
+ && chown taxi:taxi /app
+USER taxi
 WORKDIR /app
 
 # --- layer 1: dependencies only -----------------------------------------------
 # Copied alone so an edit to src/ or configs/ does not re-download 1.5 GB of
 # wheels. --no-install-project defers OUR package to layer 2.
-COPY pyproject.toml uv.lock .python-version ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+COPY --chown=taxi:taxi pyproject.toml uv.lock .python-version ./
+RUN --mount=type=cache,target=/home/taxi/.cache/uv,uid=1000,gid=1000 \
     uv sync --frozen --no-install-project
 
 # --- layer 2: the repo, then the project itself --------------------------------
@@ -87,8 +100,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # container special case. The project installs EDITABLE (uv's default), which
 # keeps taxi_mlops.training.openmp._repo_root() pointing at /app the way it
 # points at the repo on the host — same code, same layout, one less difference.
-COPY . .
-RUN --mount=type=cache,target=/root/.cache/uv \
+COPY --chown=taxi:taxi . .
+RUN --mount=type=cache,target=/home/taxi/.cache/uv,uid=1000,gid=1000 \
     uv sync --frozen
 
 # The dev group (pytest, ruff) is INSTALLED ON PURPOSE. The container smoke runs
@@ -103,11 +116,5 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # On PATH so `python`, `pytest` and `dbt` are the venv's without `uv run`. Flyte
 # overrides the container command anyway; what it must find is an interpreter
 # that already has the graph.
-
-# Non-root by default. Flyte tasks need no privileges, and the smoke reads a
-# host-mounted data/ read-only as uid 1000 to prove it.
-RUN useradd --uid 1000 --create-home --shell /bin/bash taxi \
- && chown -R taxi:taxi /app
-USER taxi
 
 CMD ["python", "-c", "import taxi_mlops, sys; print('taxi-mlops task image ready:', sys.version)"]
