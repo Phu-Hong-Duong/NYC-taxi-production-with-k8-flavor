@@ -1100,6 +1100,80 @@ can never disagree (the port-family twins lesson, applied before it bit).
   which, buffered, appears when the run it meant to interrupt is already over.
   Same absence §9 had to recover from the server, one layer earlier.
 
+## The marts tail task (M4-S5 leg 2) — D-003's decision, and the twin it did not create
+- **`make pipeline` is SEVEN stages now.** `publish_marts` is the tail §9/M1-S6
+  promised at M1 and D-003 held open until the publish became scheduled: rebuild the
+  analyst layer (which is also the step that RECONCILES — the stage refuses to
+  publish from a catalogue that disagrees with the ingest reports that wrote it) →
+  `dbt build` (models AND tests interleaved) → publish. Proven on-cluster, run
+  `rw98pj84z4jh5ldqrxqp`: **90.6 s of an 886.6 s run (10.2%)**, the publish itself
+  **71.9 s**, in-pod `dbt build` **PASS=57 in 9.96 s**, 2019-01 published
+  month-scoped and **all 8 months reconciled `yes`**, `@champion` **2 → 2**.
+- **D-003 CLOSED, and the decision is a SPLIT because the marts are not one kind of
+  object.** Measured on today's data with `make marts-peak` before either option was
+  argued: **full refresh 228.2 s, `marts` DB 15.33 → 27.96 → 13.48 GiB (2.075×)**;
+  **month-scoped (2019-03, 7.75M rows) 82.7 s, peak 15.33 GiB**. So the four
+  aggregates (~46,000 rows between them) stay **full-refresh forever** — under a
+  second, and it buys the strongest property a publish can have, that the mart IS the
+  source with no possibility of drift. `trips_clean` is **month-scoped**: it is the
+  entire peak, its grain IS the month (an indexed column), and a monthly pipeline
+  re-derives ONE month, so a full refresh republishes ~7.5M changed rows by rewriting
+  56M. **Peak −45.2%, wall −63.8%.** M1-S4's remembered "~23 GB" was OPTIMISTIC — it
+  is 27.96 GiB now, because `error_segments` joined at M2-S4.
+- **Two things got worse and both are recorded as costs.** The **steady state rises**
+  (a scoped publish leaves ~7.75M dead tuples, so `end` is 15.33 GiB against a full
+  refresh's 13.48 — a lower PEAK bought with a higher FLOOR of about one month of
+  dead space), and **the mart can now drift from its source** in a way a full refresh
+  made impossible. So `reconcile` asks Postgres and DuckDB for the same per-month
+  counts after every scoped publish and refuses unless every month agrees. That check
+  is the price of the decision, not a nicety — a month deleted and not re-streamed
+  answers every query happily and just returns fewer rows (M1-S2's catalogue lesson,
+  one layer downstream). A first publish has no month to replace, falls back to a full
+  refresh, and **says so** — the one publish that legitimately pays the peak must not
+  look like the rest.
+- **One body of SQL, two thin transports, and the move was FORCED.** `make marts`
+  publishes over `kubectl exec` because nothing of ours publishes 5432; a task pod has
+  neither kubectl nor a kubeconfig, and giving a pipeline stage cluster credentials to
+  shell into another pod would be worse than any of the three alternatives `marts.sh`
+  already rejects. So `scripts/marts_publish.py` owns the swap SQL — the statement
+  that decides what a board renders — and everything below its `Transport` protocol is
+  transport-blind. The **mart list**, the **dbt `--vars` payload** and
+  **`--no-partial-parse`** moved with it: `marts.sh` has no `MARTS=(...)` array any
+  more and a test fails if one returns. The CSV producer is one thing too and it is a
+  **subprocess on both sides** (`marts_export.py`, which gained `--where` so the
+  scoped stream filters inside DuckDB); **its exit code is checked**, because a
+  `Popen` read to EOF looks identical whether it finished or died three rows in.
+- **What a pod needed that it did not have**: `flyte-task-marts` (the **fourth**
+  consumer of the `marts` role, and the pod publishes **AS `marts`, never as the
+  superuser** — a scheduled publish is a seat nobody is watching); `data/predictions/`
+  as a **fourth staged tree**, because `error_segments` sources the analyst layer's
+  `predictions` view and that view is CONDITIONAL on the tree existing; and the
+  **F-026 guard widened to `scripts/` and `analytics/`** — the tail loads
+  `marts_publish.py` by path in-pod and the dbt project is not importable at all, so
+  the image is its only carrier.
+- **The tail does not read the verdict, does not touch the registry, and is
+  UNCACHED.** It consumes `verdict` only for the edge it draws: a pipeline whose data
+  publish depended on a model verdict would leave the warehouse a month stale every
+  time the gate said no, which is precisely when a DA wants to look. Its uncaching is
+  the first in this repo argued from EFFECTS rather than inputs — its product is a
+  mutation of a Postgres the cache cannot see, so a hit would return "published, 7.5M
+  rows" in 0.1 s having published nothing, and it would be RIGHT by the cache's own
+  rules. The local rehearsal opts IN (`PIPELINE_LOCAL_ARGS=--publish`) and both
+  orchestrator drills opt out (`PUBLISH_MARTS=0`).
+- **An image rebuild invalidates every cached stage** (gotcha **#66**, found by this
+  run): five stages read `CACHE_POPULATED` on a month they were already populated for,
+  same data pin, function bodies untouched — the tag is the git short sha, so every
+  commit is a new image and it reaches a task both as the environment's image and as
+  `TAXI_PIPELINE_IMAGE`. Correct, and it agrees with F-026 from the other side; the
+  unpriced cost is that one commit under `src`/`scripts`/`analytics`/`docker`/
+  `pyproject.toml`/`uv.lock` turns the next full-data run back into a 31-minute fit.
+  **Leg 3's consequence**: `verify-m4`'s cache leg must read the RECORDED evidence in
+  `automation/runs/m4-cache/cache_drill.json`, not re-ask about the latest run.
+- **The runner's summary line was a small version of the same disease.** It said "six
+  stages on-cluster" for a month after the graph grew a seventh, and nobody noticed
+  because nothing reads a summary line for information. It now DERIVES the count from
+  `pipelines.tasks.STAGES` and names whether the tail was on.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1146,7 +1220,7 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Ingest (M1-S1) | `make ingest` (`python -m taxi_mlops.data ingest [--month YYYY-MM]`) | VERIFIED 2026-08-16 (M1-S1): 8 months, 57,042,337 → 56,127,878 rows (1.603% rejected, per-rule table printed); re-run = all 8 outputs byte-identical + manifest unchanged. RED-TEAMED twice: seeded corrupt parquet → `CorruptSourceError` naming the file, exit 1, `processed/` never created; truncated pinned raw → `ChecksumDriftError`, exit 1, output sha256 and manifest pin both untouched |
 | Data path, whole (M1-S2) | `make data` (ingest → duckdb → dvc add+push; `SKIP_DVC=1` stops before the pin) | VERIFIED 2026-08-16 (M1-S2): composed run green end to end; DVC leg runs LAST because it pins what the earlier legs produced. **RE-VERIFIED 2026-08-17 (M2-S1)** with the retaining ingest: 8 months, same 56,127,878 rows out, `data/rejected` now pinned as its own third target (`9 files pushed`, remote in sync) — and `data/processed.dvc` came back **unmodified in git**, i.e. a CHANGED ingest reproduced the M1 bytes exactly |
 | Analyst layer (M1-S2, extended M2-S1) | `make duckdb` (`python -m taxi_mlops.data duckdb`) | VERIFIED 2026-08-16 (M1-S2): 9 views, and the row count of every one of the 8 months equals the `rows_out` its ingest report claimed (56,127,878 total). Exits 1 when they disagree — RED-TEAMED in unit form by truncating a month's parquet and by inflating a report's `rows_out`. **RE-VERIFIED 2026-08-17 (M2-S1): 10 views** (`trips_rejected` added) and a SECOND reconciliation, per (month, rule): **914,459 sidecar rows == 914,459 counted, 80 pairs, 0 disagreements**. Exits 1 on either — RED-TEAMED in unit form three ways: rows removed, rows RELABELLED under the wrong rule (monthly total untouched, so a per-month check would pass), sidecar deleted |
-| Gold marts, whole (M1-S4) | `make marts` (dbt build incl. 34 tests → publish to Postgres; `SKIP_PUBLISH=1` stops at DuckDB) | VERIFIED 2026-08-16 (M1-S4): `dbt build` PASS=39 (4 models, 34 data tests, 1 seed) in 3.24s; publish printed `COPY 56127878` for `trips_clean` — exactly the ingest total — plus 44,792 · 8 · 80 for the aggregates. Re-run is a full refresh into `<name>__staging` swapped in inside ONE transaction, so a reader never sees a half-loaded mart (watched live: the old `trips_clean` still served 56,127,878 rows while `trips_clean__staging` filled) |
+| Gold marts, whole (M1-S4; publish refactored M4-S5) | `make marts` (dbt build incl. its tests → publish to Postgres; `SKIP_PUBLISH=1` stops at DuckDB; `MARTS_MONTHS=YYYY-MM` scopes the fact table) | VERIFIED 2026-08-16 (M1-S4): `dbt build` PASS=39 (4 models, 34 data tests, 1 seed) in 3.24s; publish printed `COPY 56127878` for `trips_clean` — exactly the ingest total — plus 44,792 · 8 · 80 for the aggregates. Re-run is a full refresh into `<name>__staging` swapped in inside ONE transaction, so a reader never sees a half-loaded mart (watched live: the old `trips_clean` still served 56,127,878 rows while `trips_clean__staging` filled). **RE-VERIFIED 2026-08-18 (M4-S5) after the publish moved into `scripts/marts_publish.py`**: `dbt build` PASS=57, publish printed `COPY 56127878` again and **225.8 s** through the same `kubectl exec` transport — the delegation changed the caller, not the SQL. `make verify-m1` **GREEN 41/41** over it |
 | Prove the mart tests can FAIL | `make marts-redteam` | VERIFIED 2026-08-16 (M1-S4) — see the story's transcript. Unions `seeds/redteam/` (999.5-min and 0.2-min trips) and **inverts the exit code**: a GREEN build with impossible trips in it means the tests are not testing, and the script fails saying so. Never publishes |
 | Databases in the one Postgres (D-002) | `scripts/postgres_databases.sh` (step [5/7] of `make deploy-platform`; `DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S4) on the EXISTING volume (PGDATA initialised 15:47, `marts` created 17:44): run 1 `before = role absent, database absent` → `ok marts owner=marts`; run 2 `before = role present, database present`, nothing changed; `mlflow` no-op on both |
 | BI seat, whole (M1-S5) | `make deploy-metabase` (namespace → secrets → app-db via D-002 → Deployment → host-route check → boards; `SKIP_BOARDS=1` deploys only) | VERIFIED 2026-08-17 (M1-S5) — see the commands' Done rows in HANDOFF (u) |
@@ -1183,6 +1257,9 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | The six stages on-cluster (M4-S4) | `make pipeline MONTH=YYYY-MM` (`scripts/run_pipeline.sh`; `TRAIN_MONTHS=…` makes it a SAMPLED, verdict-free smoke — F-008) | **VERIFIED SAMPLED 2026-08-18 (M4-S4); the FULL-DATA run is NOT done and is M4-S5's inheritance.** Run `r5kzpr785rt8m6tn9b7l`: ingest **7,696,617 → 7,584,656 rows, 1.4547% rejected** (M4-S1's host rehearsal reproduced TO THE ROW, in a container) · validate 20 columns through the output contract · features set **v2**, 24 features · train `lightgbm-v1` run `e17ce5846aaf…` in **869.7 s** · evaluate reporting the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=false`** as DATA. `@champion` read BEFORE and AFTER by the script itself: **2 → 2**, and a move exits 2. **Its assertion is POSITIVE and had to be**: `flyte run --follow` exits 0 for a FAILED run, so the check is that the run's OUTPUTS carry a `"decision"` — the exit-code version printed `ok … six stages on-cluster` over a run that died on `ErrImagePull` |
 | Prove the rerun REUSED the first run (M4-S4) | `make pipeline-cache-drill MONTH=YYYY-MM` (`DRILL_STAGE=ingest` is the ~40 s mechanism probe; `DRILL_MAX_RATIO`/`DRILL_MAX_STAGE_RATIO` are the two clocks' bars) | VERIFIED 2026-08-18 (M4-S4, second session): **GREEN 19/19**, run 1 `r56p9p7qwfsqgh6qgrlw` populating all five cacheable stages, run 2 `rbbvfb5mhfgz8cngx9rn` hitting all five — **train 1935.2 s -> 0.1 s**, executed stages **1966.9 s -> 3.2 s (0.2%)**, wall-clock **1974 s -> 11 s (0.6%)**, **MLflow 16 -> 16 across run 2** (and 12 -> 16 across run 1, so the saving is real), `@champion` **2** after both. Three independent systems, ranked: the control plane's `cache_status` is the CLAIM, the clock CORROBORATES, MLflow is the one that could catch a lie. It refuses to be green if run 1 executed nothing — a drill comparing two reruns can show no saving |
 | Prove the pipeline survives losing a pod (M4-S5) | `make pipeline-kill-drill` (`MONTH=` picks an UNSEEN month — a cached stage runs in no pod; `KILL_STAGE=`/`KILL_AFTER=` are the levers; ~20 min, **run it detached**) | VERIFIED 2026-08-18 (M4-S5): **GREEN, 9 checks**, run `rb2cxpmsksx489qjbn5b` on 2019-03, sampled so verdict-free (F-008). Phase 0 first: a task that always raises settles at **attempt index 3** with `retries=2` and the run **FAILS** — the declared budget is real and finite, measured in ~90 s in front of the expensive leg. Then the kill: `train`'s pod deleted 120 s into its work, **a different pod object (uid `9d8b05a3…` vs `1223e07d…`) 31 seconds later**, `train` **939.8 s** against ~870 undisturbed, all six stages SUCCEEDED, verdict object produced, `@champion` **2** before and after. **Its prediction is written to disk BEFORE the kill and the first one was WRONG** (it expected a `…-1` pod; the plugin recreates the same attempt under the same name) — kept in `automation/runs/m4-kill/attempt1-prediction-wrong/`, and the assertion is now identity rather than name. Refuses to be green if the target stage came back `CACHE_HIT` |
+| The marts tail task on-cluster (M4-S5, D-003) | `make pipeline MONTH=YYYY-MM` — the tail is stage **7** and ON by default; `PUBLISH_MARTS=0` drops it (both orchestrator drills do); `make pipeline-local PIPELINE_LOCAL_ARGS=--publish` is the host rehearsal, opt-in | VERIFIED 2026-08-18 (M4-S5 leg 2): run `rw98pj84z4jh5ldqrxqp`, sampled so verdict-free (F-008, `register` returned `NO_VERDICT` as data). `publish_marts` SUCCEEDED in **90.6 s of an 886.6 s run (10.2%)**: in-pod analyst rebuild → `dbt build` **PASS=57 in 9.96 s** → publish **71.9 s** as `marts@postgres.platform.svc.cluster.local` (**against 82.7 s host-side** — a pod's direct TCP beats `kubectl exec` by ~13%). **2019-01 month-scoped, all 8 months reconciled `yes`**, `@champion` **2 → 2** read by the runner before and after. First on-cluster attempt green, because §14 had already measured the two questions that usually cost the attempts |
+| D-003: what a publish costs the volume | `make marts-peak` (full refresh) · `make marts-peak MARTS_MONTHS=YYYY-MM` (scoped) — samples `pg_database_size('marts')` and PGDATA every 5 s around any publish | VERIFIED 2026-08-18 (M4-S5): **full refresh 228.2 s, 15.33 → 27.96 → 13.48 GiB (peak/end 2.075×), PGDATA peak 204.62 GiB**; **month-scoped 2019-03 (7,753,921 rows) 82.7 s, peak 15.33 GiB**. **Peak −45.2%, wall −63.8%** — and M1-S4's remembered ~23 GB was optimistic. It MEASURES and does not judge: no threshold lives in a probe. Summaries in `automation/runs/m4-marts/*.json`, with the sample interval recorded because it bounds the peak's resolution |
+| Read a run's stages without hand-rolling a forward (M4-S5) | `make flyte-actions RUN=<run-name>` (`ACTIONS_ARGS=--json`) | VERIFIED 2026-08-18 (M4-S5): printed all 8 actions of `rw98pj84z4jh5ldqrxqp` with phase, `cache_status`, duration and **`attempts: 1`** (F-027's fix, visible). It is the same seven port-forward lines `run_pipeline.sh` and both drills each carried inline, once — on port **8092**, so a reader cannot steal the port of a run in flight |
 | What a Flyte run's actions actually did (M4-S4) | `uv run python scripts/flyte_run_actions.py <run> [--json]` (needs a route; the drill and `run_pipeline.sh` stand one up) | VERIFIED 2026-08-18 (M4-S4, second session): recovered the full-data run's per-stage detail that `--follow` never logged — **six stages, 1909.7 s, fit 1874.7 s, everything else 34.6 s**. Reads `cache_status`, which the CLI does not render. A READER: pinned by a test that it calls nothing which launches, aborts or deletes, because `verify-m4` is meant to reuse it |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
@@ -1310,3 +1387,13 @@ follows the LOG STREAM, which ends when the FIRST attempt's container exits, so
 the CLI returned 7 seconds into a task that had two retries still to come and a
 check read `RUNNING` as the final answer (#65 — sibling of #59: the CLI's return
 says nothing about the run's outcome and nothing about its completeness)**.
+Newest (M4-S5 leg 2): **rebuilding the task image invalidates every cached Flyte
+stage, because the cache key covers the whole task SPEC and not just code, inputs
+and data — five stages read `CACHE_POPULATED` on a month they were already
+populated for, with the same data pin and untouched function bodies, purely because
+the tag is the git short sha and every commit mints a new image. It is arguably
+right and it agrees with F-026 from the other side; the unpriced cost is that ONE
+commit under `src`/`scripts`/`analytics`/`docker`/`pyproject.toml`/`uv.lock` turns
+the next full-data run back into a 31-minute fit, so a cache drill must hold the
+image constant and a gate must read RECORDED cache evidence rather than re-asking
+about the latest run (#66)**.
