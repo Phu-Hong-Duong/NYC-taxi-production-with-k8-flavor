@@ -119,12 +119,34 @@ docker build -f "$DOCKERFILE" -t "$IMAGE_REF" . || die "docker build failed"
 build_seconds=$(( $(date +%s) - build_start ))
 
 image_id="$(docker image inspect "$IMAGE_REF" --format '{{.Id}}')"
+# TWO sizes, because they answer different questions and quoting one as "the size"
+# is how a 1.7 GB duplicated layer stays invisible. `docker image inspect .Size`
+# under Docker 29's containerd store is the CONTENT size — what is stored and what
+# `kind load` streams to each node. The sum of `docker history` is what the layers
+# occupy UNPACKED on a node's filesystem, and it is the number that noticed the
+# chown mistake this Dockerfile records.
 image_bytes="$(docker image inspect "$IMAGE_REF" --format '{{.Size}}')"
+unpacked_bytes="$(docker history "$IMAGE_REF" --no-trunc --format '{{.Size}}' \
+  | python3 -c '
+import sys
+units = {"B": 1, "kB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12}
+total = 0.0
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    for suffix, factor in sorted(units.items(), key=lambda kv: -len(kv[0])):
+        if line.endswith(suffix):
+            total += float(line[: -len(suffix)]) * factor
+            break
+print(int(total))
+')"
 base_digest="$(grep -m1 '^FROM python' "$DOCKERFILE" | sed 's/^FROM //')"
 say ""
 say "  built in ${build_seconds}s"
 say "  image id   : $image_id"
-say "  size       : $(( image_bytes / 1024 / 1024 )) MiB ($image_bytes bytes)"
+say "  content    : $(( image_bytes / 1024 / 1024 )) MiB stored/transferred ($image_bytes bytes)"
+say "  unpacked   : ~$(( unpacked_bytes / 1000 / 1000 )) MB of layers on a node (docker history sum)"
 say "  base       : $base_digest"
 
 if [[ "$BUILD_ONLY" == "1" ]]; then
@@ -174,15 +196,16 @@ done
 # --- record -------------------------------------------------------------------
 mkdir -p "$MANIFEST_DIR"
 python3 - "$MANIFEST" "$IMAGE_REF" "$IMAGE_NAME" "$TAG" "$image_id" "$image_bytes" \
-         "$base_digest" "$dirty" "$build_seconds" "$load_seconds" "${NODES[@]}" <<'PY'
+         "$base_digest" "$dirty" "$build_seconds" "$load_seconds" "$unpacked_bytes" "${NODES[@]}" <<'PY'
 import json, subprocess, sys
-(path, ref, name, tag, image_id, size, base, dirty, build_s, load_s), nodes = sys.argv[1:11], sys.argv[11:]
+(path, ref, name, tag, image_id, size, base, dirty, build_s, load_s, unpacked), nodes = sys.argv[1:12], sys.argv[12:]
 record = {
     "image_ref": ref,
     "image_name": name,
     "tag": tag,
     "image_id": image_id,
-    "size_bytes": int(size),
+    "content_bytes": int(size),
+    "unpacked_bytes_approx": int(unpacked),
     "base_image": base,
     "git_sha": subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip(),
     "tree_dirty": dirty == "yes",
