@@ -10,8 +10,28 @@
 # mounted path), never by being baked in — data is DVC's to pin, and an image
 # carrying a copy of it would be a second, unpinned definition of the dataset.
 
-# --- the two big ones ---
-data/
+# THE RULE, and it was learned the hard way. This file's first draft excluded
+# `data/` wholesale, and the in-image unit suite went red on 24 tests: 1.1 MB of
+# `data/reference/` is COMMITTED — the zone centroids, the TLC zone lookup, the
+# pinned `taxi_zones.zip`, the federal-holiday table — and it is not "data" in the
+# DVC sense at all, it is the lookup layer `taxi_mlops.features` reads at fit time
+# and (from M5) at serving time. Excluding it produced an image that imports fine
+# and cannot build a feature.
+#
+# So the rule is: **the image contains what git contains.** The exclusions below
+# are the repo's own ignore rules (root .gitignore + data/.gitignore) plus the
+# build-context-only entries (.git, .github). Anything a `git clone` would give
+# you is in the image; anything DVC pins, a build produces, or a session logs is
+# not. That also makes this file checkable — tests/unit/test_task_image.py asserts
+# every path data/.gitignore names is excluded here and that data/reference is not.
+
+# --- the big ones: DVC's, exactly as data/.gitignore names them ---
+data/raw/
+data/processed/
+data/rejected/
+data/predictions/
+data/analyst.duckdb
+data/analyst.duckdb.wal
 .venv/
 
 # --- host-resolved state the image must rebuild, not inherit ---
@@ -26,8 +46,11 @@ dist/
 mlruns/
 
 # --- secrets: never, under any circumstances, in an image layer ---
+# `.env.example` is the exception and it is deliberate: it holds no secret (it is
+# the committed TEMPLATE), and tests/unit/test_marts.py asserts it documents the
+# marts credentials — a test that went red in-image when a `.env.*` glob ate it.
 .env
-.env.*
+!.env.example
 
 # --- history, run logs and editor state: no bearing on what the image runs ---
 .git/
