@@ -255,7 +255,13 @@ async def evaluate(manifest: str) -> str:
         print(
             f"[flyte] evaluate {result.challenger} {row.split}: "
             f"KPI-09 {row.kpi_09_mae_minutes:.4f} min · "
-            f"KPI-10 {row.kpi_10_within_rate:.3%} over {row.rows:,} rows "
+            # `:.3f}%` and NOT `:.3%`: the evaluator already multiplies by 100
+            # (`evaluate.py`: `100.0 * (error <= tolerance).mean()`), so the
+            # percent format renders 79.170 as "7917.017%". Observed exactly that
+            # way in the first green on-cluster run — nothing was wrong with the
+            # model, and the log said the pipeline quoted 79 times more trips
+            # correctly than there were trips.
+            f"KPI-10 {row.kpi_10_within_rate:.3f}% over {row.rows:,} rows "
             f"(source {result.metric_source})"
         )
     return manifest

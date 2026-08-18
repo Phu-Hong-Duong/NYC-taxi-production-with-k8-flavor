@@ -9,6 +9,68 @@ months from now.
 
 ## M4
 
+### M4-S4 — the split horizon had a lever, and four of five defects were in the checkers (2026-08-18, role:MLOps A / MLE R)
+
+**What was built.** The project's own pipeline running on the cluster:
+`pipelines/flyte/workflows.py` (the six M4-S1 callables as Flyte tasks, three
+`TaskEnvironment`s so the fit gets 24Gi and a verdict-reader does not),
+`make pipeline MONTH=…`, `make stage-data` (1.8G of DVC-pinned data onto a PVC),
+and the object that ties it together — `infra/manifests/flyte-task-podtemplate.yaml`,
+"what a task pod in this program looks like". **F-023 closed** (M4-S2's wall),
+**F-025 found and closed**, and `tracking.configure` stopped requiring a `.env`
+that a task image must never contain.
+
+**The bug worth the session.** `make pipeline` printed
+`ok  run … completed; six stages on-cluster` over a run that had died on
+`ErrImagePull` before a single stage started. Nothing was faked: `flyte run
+--follow` **exits 0 when the run it followed FAILED**, the run name parsed fine,
+and `flyte get io` returned a perfectly readable blob. The only thing that
+differed from a real success was the CONTENT of that blob —
+`ActionOutputs(o0=None)`, because a failed workflow returns nothing. The fix was
+not a better error check but a POSITIVE one: the run's output must carry the
+`"decision"` the pipeline exists to produce. It then caught the next three
+failures on sight instead of painting them green.
+
+**The concept underneath.** *A check written against the absence of an error can
+only be as honest as the thing reporting errors.* Exit codes, phase strings and
+"did it throw?" are all second-hand accounts of success; the artifact is
+first-hand. This is gotcha #51's question — *could this component tell if it were
+false?* — asked of a checker that was minutes old, and it is the fourth time this
+program has paid for it (#50 the guard that fires when things are right, #54 the
+backup verifier that could not see the truncation it named, #55/#56 the verifiers
+that failed for their own reasons and blamed the artifact). The pattern has a
+tell: when a checker's inputs are all *about* the work rather than *of* it.
+
+**The other half: a wall can be right about the disease and wrong about the
+cure.** F-023's diagnosis — one MinIO, two names — was exactly correct, and its
+recorded probe 2 ("point both sides at the node's docker-bridge address, the one
+name both can resolve") turned out to have no answer on this machine: from WSL the
+node IPs return 000, even for the apiserver, because Docker Desktop publishes
+kubectl's route on loopback instead. A session following the plan would have spent
+its budget disproving it. What paid was probe 1 — *ask what the server actually
+hands the client* — which found that the client never builds an upload URL at all,
+it PUTs to a `signed_url` the server mints. That single fact explained the
+symptom, explained why M4-S2's client-side variables could not have worked, and
+named the fix (`storage.signedUrl.stowConfigOverride`, absent from the 2.x chart,
+present in the 2.x binary). **Read the mechanism before trying the remedies.**
+
+**What to look at.** `infra/manifests/flyte-task-podtemplate.yaml` — its header is
+the whole design, including why three existing storage configurations all missed
+the process that runs our code (it fell through to the EC2 metadata address) ·
+`infra/manifests/flyte-task-data-pvc.yaml` for the data decision AND the named
+option that was rejected · `docs/pipeline_m4.md` §6 for all five defects ·
+`tests/unit/test_flyte_task_wiring.py`, which asserts the two halves of the split
+horizon **against each other** rather than by literal value — they exist because
+they must differ · gotchas #59/#60/#61.
+
+**What to try yourself.** Break one twin and watch which layer notices: change
+`FLYTE_AWS_ENDPOINT` in the PodTemplate to `localhost:9000` and run the pipeline —
+the task will run to completion and then fail writing its output, which is the
+shape every "it worked and then it didn't" bug in this milestone had. Then set
+`serverAllowedHosts` to bare hostnames and try `curl localhost:5000/api/2.0/mlflow/experiments/search`
+against `curl -H 'Host: localhost' 127.0.0.1:5000/health` — two commands that
+disagree are how the port-in-the-header rule was found.
+
 ### M4-S3 — the image was plausible, and the tests inside it were what made it real (2026-08-18, role:MLOps)
 
 **What was built.** The task image the pipeline will run in from M4-S4 on:

@@ -111,6 +111,8 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | libgomp (in the task image) | **libgomp1 14.2.0-19** (Debian trixie), a real apt package — **D-004's closure** | 2026-08-18 | `dpkg-query` INSIDE the image (M4-S3). The shim stays in the code as the laptop path; `make image-smoke` proves it never fires in the container and `make image-smoke-redteam` proves that check can go red |
 | Task image | `taxi-mlops-pipeline:<git-short-sha>` (`-dirty` when the tree is not clean) · **737 MiB** content / **~1,898 MB** unpacked · on all 3 nodes by `kind load` | 2026-08-18 | `make image-load` (M4-S3); current ref + both image ids in `automation/runs/m4-image/image.json`. `nvidia-nccl-cu13` is 241 MB of it (hard dep of xgboost on linux, never loaded) — noted, not fought |
 | Flyte SDK / CLI | **`flyte` 2.6.1** (brings `flyteidl2` **2.0.42** — an exact match to the chart) | 2026-08-18 | `uv add "flyte>=2.6,<3"` (M4-S2). **Gotcha #36 checked at add time: 29 packages installed, only the project rebuilt, and pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 · mlflow-skinny 3.15.1 · lightgbm 4.7.0 · xgboost 3.4.1 all unchanged.** The CLI is `flyte` (verb/noun), NOT `pyflyte`/`flytectl` — those are the 1.x tools |
+| Data stager image | `busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616` — TAG AND DIGEST | 2026-08-18 | `docker image inspect --format '{{index .RepoDigests 0}}'` (M4-S4). The short-lived pod `make stage-data` uses to untar the data trees onto the PVC. busybox because the whole job is `tar -x`/`du`/`find`, and because the MLflow chart's db-check init container already pinned this version at M0 — a version this program has, not a new dependency |
+| MLflow `serverAllowedHosts` | 8 entries: `localhost`/`127.0.0.1`/`mlflow.mlflow.svc.cluster.local`/`mlflow.mlflow`, **each with and without `:5000`** | 2026-08-18 | `infra/helm/mlflow/values.yaml` (M4-S4, **F-025**). Not a version pin but it belongs beside one: setting this value REPLACES MLflow's default list, and the uvicorn middleware compares the WHOLE Host header — port included — so a list of bare hostnames 403s every host-side client. Both forms, always |
 
 ## The data contract (M1-S1) — where the rules actually live
 Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT
@@ -911,6 +913,76 @@ can never disagree (the port-family twins lesson, applied before it bit).
   It now REFUSES that form before mutating anything and names the three ways out;
   `openmp_probe` is the `-m`-runnable replacement, which is what the smoke uses.
 
+
+## The pipeline on-cluster (M4-S4) — F-023's real cause, how a task pod is wired, and the checkers that lied
+- **F-023 CLOSED, and the finding's own probe 2 was impossible.** The client never
+  BUILDS an upload URL — it asks the dataproxy for one and PUTs to the
+  `signed_url` the SERVER mints (`CreateUploadLocationResponse`), which is exactly
+  why M4-S2's `FLYTE_AWS_ENDPOINT` attempts changed nothing. The recorded probe
+  "point both sides at `<node-ip>:30900`" has no answer on this machine: from WSL
+  `172.19.0.3:30900` and even `172.19.0.3:6443` return **000**, because kubectl
+  reaches the cluster through a docker-PUBLISHED loopback port (`127.0.0.1:35553`)
+  and the docker bridge is not routable from this side. Fixed with flytestdlib's
+  own lever, `storage.signedUrl.stowConfigOverride` — which the 2.x CHART renders
+  no value for but the 2.x BINARY carries (`grep -ao "stowConfigOverride"
+  /usr/local/bin/flyte` hits) — supplied through `configuration.inline`. It
+  changes the SIGNING endpoint only; pods keep the in-cluster name. **ADR-002's
+  fallback was not executed and stays armed.**
+- **`infra/manifests/flyte-task-podtemplate.yaml` is "what a task pod in this
+  program looks like"**, named once by `plugins.k8s.default-pod-template-name` and
+  by every `TaskEnvironment`. It carries the MinIO identity, the MLflow route,
+  `imagePullPolicy: IfNotPresent` and the data volume — so a task added at M7
+  inherits all of it by naming one string, and `pipelines/flyte/workflows.py`
+  contains no endpoint at all. **The container must be named `default`** (the k8s
+  plugin's contract). **Three storage configs already existed and none of them
+  reached the process that runs our code**: the ConfigMap configures the server,
+  the copilot Secret the sidecar, the overlay helm — while the Flyte 2 python
+  runtime builds its own `flyte.storage.S3` from ITS environment and, unset, fell
+  through to the AWS credential chain: `PUT http://169.254.169.254/latest/api/token`,
+  i.e. a task that ran perfectly and had nowhere to put its result. The inline
+  `plugins.k8s` block was checked for CLOBBERING the chart's: a live task pod
+  carries both sets (`_U_EP_OVERRIDE` and `FLYTE_AWS_*`), so it deep-merged.
+- **Data reaches tasks on a staged PVC, mounted by SUBPATH** (`make stage-data`,
+  1.8G, verified by per-tree FILE COUNTS — 8/16/8 host == volume — because a
+  killed stream leaves a tree that exists and is wrong). Subpath and not
+  `/app/data`: that directory in the image holds the committed `data/reference/`
+  lookup tables, and one mount over it rebuilds gotcha #58 exactly. **The rejected
+  option is named**: tasks-read-from-MinIO is what M7 will want, and it is not a
+  platform change but a rewrite of `taxi_mlops`'s IO, in the milestone whose
+  premise is that `src/` does not move.
+- **The green run is SAMPLED and says so.** `make pipeline MONTH=2019-01
+  TRAIN_MONTHS=2019-01` → six stages on-cluster, ingest **7,696,617 → 7,584,656
+  rows, 1.4547% rejected** (M4-S1's host rehearsal reproduced TO THE ROW by the
+  same code in a container), train `lightgbm-v1` in **869.7 s**, and register
+  returning **`NO_VERDICT`** as data — a green pipeline with no verdict, which is
+  F-008 honored by construction. `@champion` read before and after by the runner:
+  version 2, and a move is exit 2, not a warning. The **full-data** run and the
+  **cache-hit rerun** are NOT done — see `docs/pipeline_m4.md` §8.
+- **The manifest's CONTENT travels between stages, not its path.** M4-S1 wrote a
+  path "because at S4 they are separate pods" — and separate pods is exactly why
+  a path cannot be the thing that travels. Passing the text puts the dependency in
+  the DAG where retry and cache can see it; a shared writable mount would hide it.
+- **F-025 (new, closed): MLflow refused every in-cluster client for four
+  milestones** — `403 'Invalid Host header - possible DNS rebinding attack
+  detected'`, because MLflow 3.x's uvicorn allow-list is derived from an ingress
+  this release does not have. Latent because every client until M4 was host-side.
+  Fixed with `serverAllowedHosts`, listed EXPLICITLY (`["*"]` deletes the
+  protection rather than configuring it) — **and the first fix broke the host
+  route**, because setting the value replaces MLflow's default AND the middleware
+  compares the whole header, port included.
+- **`tracking.configure` no longer requires a `.env` that a pod cannot have.** Its
+  docstring promised since M2-S2 that "an in-cluster caller … needs no code
+  change"; `load_env` refused on the file's absence before precedence could apply.
+  A missing file is now an empty source, the refusal moved to a value no source
+  supplies, and the banner names the source it actually used (it used to print
+  "set from .env" inside a pod that has none).
+- **Four of this story's five defects were in the CHECKERS**, and the worst printed
+  `ok … six stages on-cluster` over a run that had died on `ErrImagePull`:
+  **`flyte run --follow` exits 0 when the run it followed FAILED**, and every other
+  signal (run name, readable outputs blob) was consistent with success. The
+  assertion is now POSITIVE — the outputs must carry a `"decision"` — and it caught
+  the next three failures instead of painting them green.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -985,11 +1057,13 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Port pre-check, now holder-aware (F-021, M4-S2) | `make ports` | RE-VERIFIED 2026-08-18 (M4-S2) against the LIVE cluster: `6 port(s) held by US — the 'mlops-taxi' cluster is up, which is expected`, each naming port, purpose and `-> container mlops-taxi-control-plane`, then `OK — 10 required port(s): 4 free, 6 held by us, 0 foreign.` **exit 0** — where it used to refuse and advise stopping the stack that holds the registry. The foreign refusal is UNSOFTENED: two unit tests use the same bound port and the same fake `docker ps`, differing only in the container NAME (`mlops-taxi-control-plane` → exit 0 · `somebody-elses-stack-web-1` → exit 2), and M0-S2's fake-listener red-team (no docker shim) still goes red |
 | Flyte on the cluster (M4-S2) | `make deploy-flyte` (`scripts/deploy_flyte.sh`; `DRY_RUN=1` mutates NOTHING, helm included) | VERIFIED 2026-08-18 (M4-S2): `STATUS: deployed REVISION: 2`, all three deployments rolled out, `[pg-db] flyte: before = role absent, database absent` → `ok flyte owner=flyte` (`5 database(s) converged`). **Idempotence proved by pod AGE**: the re-run reported every deployment rolled out while all three pods were **17 minutes old** — a clean upgrade that restarted nothing. First install FAILED `context deadline exceeded` with all pods healthy (the 99 MB console image took **9m49s** to pull); `--wait` is now 20m with that measurement written beside it. Self-sufficient (re-runs namespaces/secrets/D-002/MinIO, the M1-S5 rule). No secret on a command line — mode-600 overlay deleted on EXIT. Cluster never went down |
 | Reach Flyte from the host (M4-S2) | `make flyte-console` (blocking forward) · `bash scripts/flyte_console.sh --check` (one-shot, tears the tunnel down) | VERIFIED 2026-08-18 (M4-S2): `ok  API answers: GET /healthz -> 200 (svc svc/flyte-flyte-binary-http:8090)`. The path was ASKED of the server, not remembered — `/healthcheck` (the 1.x path) returns 404, `/healthz` and `/readyz` return 200. **A port-forward, not a declared route, and that is recorded**: no hostPort exists for Flyte, adding one means a rebuild the statefulness law forbids, and there is no ingress controller until KServe at M5 — so the browser console is deliberately NOT forwarded (same-origin SPA; it would render and then fail every request) |
-| Hello-workflow on the cluster (M4-S2) | `make flyte-hello` (`scripts/flyte_hello.sh`) | **NOT VERIFIED — BLOCKED, F-023, wall recorded at 5 attempts.** It reaches the control plane and gets far (project `nyc-taxi` created · image `ghcr.io/flyteorg/flyte:py3.12-v2.6.1` resolved, no build · code bundle built) then fails at `Uploading code bundle...` with `ConnectError: [Errno -2] Name or service not known`: the blob store is ONE MinIO with TWO names and the client is handed the in-cluster one. Exporting the SDK's own `FLYTE_AWS_ENDPOINT`/key vars did NOT change it. **ADR-002's fallback is NOT executed** — its trigger is deployment or MLflow interop, and deployment succeeded. Next probes recorded in F-023; full trail in `docs/platform_flyte_m4.md` §5. The Makefile help text says BLOCKED so the target cannot look healthy |
+| Hello-workflow on the cluster (M4-S2, unblocked M4-S4) | `make flyte-hello` (`scripts/flyte_hello.sh`) | **VERIFIED 2026-08-18 (M4-S4) — F-023 CLOSED.** `ActionOutputs(o0="HELLO CROSSTOWN FROM A FLYTE TASK")`, three pods `Completed` (`a0` plus two child actions), the second task's input being the first's output **through the `flyte-data` bucket** — the seam test, not a pod-ran test. It needed the split-horizon fix (`signedUrl.stowConfigOverride`) AND two fixes to the CHECK itself: `flyte run` returns at LAUNCH, so `--follow` is what makes it an acceptance test; and `--follow` streams LOGS while these tasks RETURN a value, so the verdict is read with `flyte get io --outputs-only`. Grepping the follow output would have failed a perfect run and passed a task that merely printed the string. ~3 min; it is the cheapest check that Flyte itself is healthy |
 | Gate check M2 / M3, re-run after the F-018 repair | `make verify-m2` · `make verify-m3` | RE-VERIFIED 2026-08-18 (M4-S1): **GREEN 55/55** and **GREEN 46/46**, both exit 0, **neither verify script touched by the diff** — including verify-m3 §5, which replays the bake-off's five recorded verdicts through `gate.decide` as it exists on disk, and verify-m2 §2, which parses the OLD holdout line out of the committed promotion transcripts (the repaired `verdict_lines` keeps the shape they are parsed with, on both forms of the sentence, pinned by a test) |
 | Task image: build + reach every node (M4-S3) | `make image-load` (`make image-build` stops before the cluster; `DRY_RUN=1` previews) | VERIFIED 2026-08-18 (M4-S3): `taxi-mlops-pipeline:<git-sha>`, **737 MiB content / ~1,898 MB unpacked**, built in 352s, `kind load` in 26s, then read back with `crictl` on **all 3 nodes** (`ok mlops-taxi-{worker2,control-plane,worker}: sha256:eb6feb2c08ee…`), manifest written to `automation/runs/m4-image/image.json`. `DRY_RUN=1` prints the exact tag and `nothing was built, nothing was loaded`. D-001's decision (kind load, registry pattern deferred to the next sanctioned rebuild) is in `docker/DECISION-D001-image-delivery.md` |
 | Prove the image runs OUR code and that D-004 is dead (M4-S3) | `make image-smoke` (`SKIP_UNIT=1` is a debugging lever that counts as a FAILURE, never a pass) | VERIFIED 2026-08-18 (M4-S3): **GREEN 10/10** — `libgomp1 14.2.0-19 install ok installed` · `libgomp.so.1 => /lib/x86_64-linux-gnu/libgomp.so.1` · `openmp_status() -> (True, 'system libgomp.so.1')` first line · no `[openmp]` line anywhere · lightgbm 4.7.0 / xgboost 3.4.1 / flaml 2.6.0 / pandas 3.0.5 / mlflow 3.15.1 / flyte all import clean · **215 host / 215 image packages, 0 disagreements** · `tests/unit` **471 passed, 6 skipped IN-IMAGE** · `validate(2019-01)` → **7,584,656 rows, 20 columns** through the output contract · no shim directory. Its first two runs were RED for the verifier's own reasons and once for a real `.dockerignore` bug — see `docs/task_image_m4.md` §5 |
 | Prove the D-004 checks can go RED (M4-S3) | `make image-smoke-redteam` | VERIFIED 2026-08-18 (M4-S3): masks `/lib/x86_64-linux-gnu/libgomp.so.1` with an **empty file in ONE `--rm` container** → the probe flips to `(False, 'not loadable yet; a vendored copy exists at …scikit_learn.libs/libgomp-e985bcbb.so.1.0.0')`, the shim **announces itself**, `/app/.venv/lib/openmp` **appears**, F-024's `-c` refusal is asserted, and a fresh container from the same image reads `absent` again. Exit code inverted like `marts-redteam`'s: a check that stays green under the mask FAILS the drill. Touches no image, no node, no cluster |
+| Stage the data a task pod reads (M4-S4) | `make stage-data` (`scripts/stage_pipeline_data.sh`; `RESTAGE=1` forces the re-stream, `DRY_RUN=1` measures and transfers nothing) | VERIFIED 2026-08-18 (M4-S4): **1.8G across raw/processed/rejected** onto PVC `taxi-data` by `tar | kubectl exec -i` (the M1-S4 shape — the kind nodes cannot see the host FS and `extraMounts` is a config edit, i.e. a rebuild), then checked by per-tree **FILE COUNTS** — `raw: 8 == 8 · processed: 16 == 16 · rejected: 8 == 8` — because a size check passes on a tree that arrived truncated. The stager pod is DELETED afterwards (a pod holding an RWO volume open is one day the reason a task cannot schedule) while the PVC and its data remain. `DRY_RUN=1` prints the source size and `nothing was applied, nothing was transferred`. Re-run skips on size unless `RESTAGE=1`; it never DELETES, for `postgres_databases.sh`'s reason |
+| The six stages on-cluster (M4-S4) | `make pipeline MONTH=YYYY-MM` (`scripts/run_pipeline.sh`; `TRAIN_MONTHS=…` makes it a SAMPLED, verdict-free smoke — F-008) | **VERIFIED SAMPLED 2026-08-18 (M4-S4); the FULL-DATA run is NOT done and is M4-S5's inheritance.** Run `r5kzpr785rt8m6tn9b7l`: ingest **7,696,617 → 7,584,656 rows, 1.4547% rejected** (M4-S1's host rehearsal reproduced TO THE ROW, in a container) · validate 20 columns through the output contract · features set **v2**, 24 features · train `lightgbm-v1` run `e17ce5846aaf…` in **869.7 s** · evaluate reporting the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=false`** as DATA. `@champion` read BEFORE and AFTER by the script itself: **2 → 2**, and a move exits 2. **Its assertion is POSITIVE and had to be**: `flyte run --follow` exits 0 for a FAILED run, so the check is that the run's OUTPUTS carry a `"decision"` — the exit-code version printed `ok … six stages on-cluster` over a run that died on `ErrImagePull` |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
@@ -1084,3 +1158,19 @@ hides because the size everyone quotes is the CONTENT size, not the unpacked one
 excluding the directory wholesale builds an image that imports perfectly and
 cannot build a feature. What caught it was running the project's own unit suite
 INSIDE the artifact (28 failed + 10 errors), not reading the Dockerfile (#58)**.
+Newest (M4-S4), and the first is the worst kind: **a green line over a dead run —
+`flyte run --follow` EXITS 0 when the run it followed FAILED, so a check written
+against the exit code printed `ok … six stages on-cluster` for a run that died on
+ErrImagePull, with a run name and a readable outputs blob to agree with it; only
+the outputs' CONTENT differed (`o0=None`). Assert POSITIVELY on the artifact the
+thing exists to produce, never on the absence of an error (#59)**; **backticks in
+an UNQUOTED heredoc are command substitution, so a pod manifest's own explanatory
+comments naming `tar`, `du` and a docker command RAN them and spliced their output
+into the YAML, which failed to parse on a line unrelated to the cause — #35 and
+#53 a third time, and the fix is that prose must not sit anywhere a shell or a
+parser will read it as code (#60)**; and **a security allow-list is replaced, not
+extended, when you set it, and MLflow's host-header middleware compares the WHOLE
+header INCLUDING the port — so the fix that let the first in-cluster client in
+gave every host-side client the same 403, and the tell was
+`curl -H 'Host: localhost' 127.0.0.1:5000/health` returning OK while
+`curl localhost:5000/...` returned 403 (#61)**.
