@@ -738,6 +738,60 @@ can never disagree (the port-family twins lesson, applied before it bit).
   the number it would have changed is the edit this program never makes on its own
   authority. Routed to ARCH/PO at the M3 boundary; nothing waits on it.
 
+## The honest holdout and the task graph (M4-S1) — what the gate may claim, and where the pipeline's seams are
+- **F-018 CLOSED, and the fix is an ORDERING, not a key.** The bake-off used to
+  pick its winner with `min(…, key=… metrics["test"].mae)` — five contenders read
+  on the untouched month, lowest takes the alias — while `gate.verdict_lines`
+  printed that the holdout was "untouched by training **and by selection**".
+  Changing `"test"` to `"val"` would have left the ranking sitting AFTER both
+  splits were scored, in a scope where a holdout number exists and only politeness
+  stops its use. So `_select_winner` now runs **inside the val pass**, before the
+  holdout parquet is loaded: there is no test number in existence to rank on.
+  `SELECTION_SPLIT = "val"` carries the argument; the payload records
+  `winner_selected_on`; the floor stays out of the ranking (it is the BAR) while
+  keeping its own verdict.
+- **The gate stopped claiming what only its caller can know** (`gate.py` property
+  7). Training-purity the gate vouches for — it refuses metrics from any other
+  split. Selection-purity is a fact about the CALLER's process. So
+  `verdict_lines(decision, *, holdout_untouched_by_selection=False)`: the default
+  is the weaker, always-true sentence, `make train` and the incumbent red team
+  earn the strong one (one challenger, no ranking step), and a bake-off does not.
+  Both forms keep the shape `verify-m2` §2 parses out of the committed M2/M3
+  transcripts — a corrected claim must not orphan the record it was made in.
+- **The M3 record was corrected, never rewritten.** `bakeoff.json` is
+  byte-unchanged, nothing was re-fitted, and `docs/bakeoff_m3.md` §3 carries a
+  DATED note that leaves the false five words standing above it. The champion
+  survives its own method defect because val and test ranked identically — which
+  the memo had already recorded, and which is exactly why the defect went unseen.
+- **The regression test makes the two splits DISAGREE on purpose.** A fixture
+  built from M3-S5's real numbers passes under BOTH rules and proves nothing.
+  The companion test is structural (AST): `_select_winner` is called once, inside
+  the split loop, under the `split == "val"` guard — because no behavioural test
+  can catch the call drifting back below the holdout pass when the splits agree.
+- **`pipelines/tasks.py` is the six-stage graph as plain Python**, typed in and
+  out, every body a call into `taxi_mlops` (no logic moves). Two decisions worth
+  re-reading before M4-S4: **the train/evaluate/register seam is where the CODE's
+  seam is** (`run.run()` fits, scores and gates in one call, so `train` runs it
+  and writes a run MANIFEST; the other two read the manifest, which is a JSON path
+  because at S4 they are separate pods) and **a REFUSE is a return value, never an
+  exception** — a refused challenger is a successful run of a working gate, and
+  modelling it as a task failure attaches a retry to the program's one "no". The
+  CLI's exit-code mapping is stated ONCE, in `RegisterResult.exit_code`.
+- **No stage can move `@champion`**: `train` passes `promote=False`
+  unconditionally and has NO `promote` parameter (a law with a keyword argument is
+  a default); `register`'s promoting branch is deliberately unbuilt while F-016 is
+  on the PO's desk, and when built must call `run._promote`, never a second path.
+- **F-019 got a TRIPWIRE, not a fix** — one test builds the configured set for a
+  2026-dated request and asserts the raise names `us_federal_holidays.csv` and
+  both years. The extend-vs-policy decision is M5's, with the runbook in hand.
+- **F-022 (new, blocking at M7): `scripts/bakeoff_m3.py` has been un-runnable
+  since its own `--promote-winner` moved the alias.** `champion v1` resolves by
+  ALIAS (deliberately — "the bake-off judges what is actually serving") while its
+  Spec pre-registers `feature_set="v1"`; the alias now points at a v2 model, so
+  `_load_booster` refuses. Pre-existing, found because M4-S1 tried to smoke the
+  repaired script. Nothing re-runs a bake-off, and `verify-m3` §5 REPLAYS the
+  recorded verdicts rather than re-running it, so nothing caught it.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -791,6 +845,8 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Prove a wrong-window floor cannot be published (M3-S1) | `make predictions-redteam` (`bash scripts/predictions_redteam.sh`) | VERIFIED 2026-08-17 (M3-S1): floor fitted on 2019-01 instead of six months → re-fit measured **4.1138** against the version's `gate_floor_mae` **3.5090** → **write REFUSED, exit 2**, and all three published files **byte-identical by sha256** before and after |
 | Gate check M3 | `make verify-m3` | VERIFIED 2026-08-18 (M3-S5): **GREEN 46/46 in 4.7 s, exit 0**, 8 sections — dossier (20 candidates, source + leakage note each, all 3 HIGH-risk rows constrained to TRAIN months) · ablation (5 groups, both deltas, **DR-02's 0.50% bar RE-APPLIED to the table's own numbers reproduces all five verdicts**, 3 drops present, v2 == the survivors) · leakage drill (three numbers parse AND reconcile, `point_in_time=True` still the default, exactly one CALLER may flip it) · tuning (both sniper studies in Postgres at the count their JSON records, 6 PRUNED, the resume drill's kill survived) · **the five bake-off verdicts replayed through `gate.decide` on disk** · the four guards (F-011 both halves, val, flattering floor, F-008) · registry coherent with `bakeoff.json`'s recorded winner · F-013's one home. **Re-fits NOTHING** (M3 cost 12,447 s of fitting) and leaves the registry identical — checked: alias 2, versions [1,2]. No skip flag, no fast mode. Transcript: `docs/verify_m3_transcripts.md` §1 |
 | Prove the M3 gate can go RED | `make verify-m3-redteam` (`bash scripts/verify_m3_redteam.sh`) | VERIFIED 2026-08-18 (M3-S5): rewrites ONE contender's measured KPI-09 in `automation/runs/m3s5/bakeoff.json` (`auto-on-v1` 3.5038 → 3.2000) and leaves its recorded verdict at REFUSE → **RED exit 1**, naming the row AND both verdicts, **the four UNTAMPERED replays still passing** (what separates a replay from a checksum: red on a WRONG number, not on any edit), **44 of 46 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`c4a323ea072a…` before and after) → **GREEN 46/46**. Touches no model, no run, no registry, no study |
+| Rehearse the M4 graph locally (M4-S1) | `make pipeline-local MONTH=2019-01` (`uv run python pipelines/tasks.py --month …`; `--gate` exists only so the F-008 refusal can be watched) | VERIFIED 2026-08-18 (M4-S1): six stages composed on one month, **exit 0** — ingest 7,584,656/7,696,617 rows (1.4547% rejected, tracked tree unchanged in git) · validate re-read the parquet through the 2019 output contract, 20 columns · build_features set **v2**, 24 columns · train `lightgbm-v1` run `27aa90597f61…`, 265.8 s, sampled=True judged=False · evaluate reported the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=False`, CLI exit-code class 3** and `@champion is version 2 — read, never written`. **No orchestrator, no verdict, no result** — one train month against the champion's six (F-008). Transcript: `docs/pipeline_graph_m4.md` §4 |
+| Gate check M2 / M3, re-run after the F-018 repair | `make verify-m2` · `make verify-m3` | RE-VERIFIED 2026-08-18 (M4-S1): **GREEN 55/55** and **GREEN 46/46**, both exit 0, **neither verify script touched by the diff** — including verify-m3 §5, which replays the bake-off's five recorded verdicts through `gate.decide` as it exists on disk, and verify-m2 §2, which parses the OLD holdout line out of the committed promotion transcripts (the repaired `verdict_lines` keeps the shape they are parsed with, on both forms of the sentence, pinned by a test) |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
@@ -858,4 +914,12 @@ literals, so the first legitimate champion transition turned them RED for doing
 the right thing (#50) — a guard that fires when the program behaves correctly
 trains the next session to edit assertions, which is how a guard becomes a
 formality. When a guard goes red, ask FIRST whether the thing it names actually
-changed for the worse.**
+changed for the worse.** Newest (M4-S1): **a component printed a claim it was
+structurally incapable of checking — the gate certified the holdout "untouched
+by selection" for a bake-off that had ranked five arms on it (#51; ask of any
+self-assertion, *could this component tell if it were false?*)**; **the fix that
+changes a VALUE leaves the hazard in scope, the fix that changes the ORDER
+removes it — and a regression test built from the real run passes under both
+rules (#52)**; and **two tests went red for finding a module name in a DOCSTRING,
+in one file, minutes apart (#53 — in a repo where prose is load-bearing, a check
+about code structure must parse code)**.

@@ -166,7 +166,9 @@ def main() -> int:
     print("\n" + "=" * 78)
     print("[gate] THE SAME GATE, with the incumbent condition live")
     decision = gate.decide(challenger_metrics, floor_metrics, gate_cfg, incumbent=incumbent)
-    print(gate.verdict_lines(decision))
+    # One constructed challenger, no ranking step — the strong purity claim is
+    # earned here for the same reason `make train` earns it (F-018).
+    print(gate.verdict_lines(decision, holdout_untouched_by_selection=True))
     print("=" * 78 + "\n")
 
     check(not decision.passed, "the gate REFUSED the challenger (VERDICT REFUSE; the CLI exits 1)")

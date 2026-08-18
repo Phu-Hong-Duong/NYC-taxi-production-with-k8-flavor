@@ -258,6 +258,94 @@ def test_the_alias_cannot_move_to_a_model_the_config_does_not_describe(bakeoff):
     assert "features.version" in message and "'v1'" in message and "'v2'" in message
 
 
+# --------------------------------------- F-018: where the winner is ranked ----
+
+
+def _ranked(bakeoff, rows):
+    """Build `Loaded` rows carrying only the two numbers the ranking can see."""
+    from taxi_mlops.training.evaluate import Metrics
+
+    def m(split, mae):
+        return Metrics(contender="x", split=split, n=10, mae=mae, within_tolerance_rate=80.0,
+                       tolerance_minutes=5.0, rmse=0.0, median_ae=0.0, p90_ae=0.0)
+
+    loaded = []
+    for label, val_mae, test_mae in rows:
+        spec = next(s for s in bakeoff.CONTENDERS if s.label == label)
+        item = bakeoff.Loaded(spec=spec, name=label, run_id="r", family="lgbm",
+                              recorded_val_mae=val_mae, best_iteration=1)
+        item.metrics["val"] = m("val", val_mae)
+        item.metrics["test"] = m("test", test_mae)
+        loaded.append(item)
+    return loaded
+
+
+def test_the_winner_is_ranked_on_val_even_when_the_holdout_disagrees(bakeoff):
+    """Prevents F-018's regression: ranking five contenders by their HOLDOUT MAE
+    and then gating the winner on the same month. The rows below are built so the
+    two splits DISAGREE — `artisan v2` wins val, `auto-on-v2` wins test — because
+    a test where they agree (which is what M3-S5 actually observed) cannot tell
+    the two rules apart, and that is exactly why the defect survived a bake-off
+    everybody read."""
+    loaded = _ranked(bakeoff, [
+        ("floor", 9.9, 9.9),
+        ("champion v1", 3.4760, 3.2608),
+        ("artisan v2", 3.3800, 3.2500),   # best on val
+        ("auto-on-v2", 3.3900, 3.2000),   # best on test
+    ])
+    winner = bakeoff._select_winner(loaded, "test")
+    assert winner.spec.label == "artisan v2"
+    assert bakeoff.SELECTION_SPLIT == "val"
+
+
+def test_the_floor_is_the_bar_and_never_a_candidate_to_serve(bakeoff):
+    """Prevents: a floor so good it takes the alias. `loaded[0]` is the bar; it
+    still gets a holdout number and a verdict of its own, but it is not ranked."""
+    loaded = _ranked(bakeoff, [
+        ("floor", 0.1, 0.1),             # absurdly good, still not a candidate
+        ("champion v1", 3.4760, 3.2608),
+        ("artisan v2", 3.3800, 3.2500),
+    ])
+    assert bakeoff._select_winner(loaded, "test").spec.label == "artisan v2"
+
+
+def test_the_selection_happens_before_the_holdout_is_scored(source):
+    """Prevents: the ranking drifting back below the holdout pass, where a test
+    number would exist to rank on. Structural, because the behavioural test above
+    cannot see WHEN the call happens — the fix is the ordering, not the metric."""
+    tree = ast.parse(source)
+    main = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "main")
+    calls = [n for n in ast.walk(main)
+             if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "_select_winner"]
+    assert len(calls) == 1, "the winner is chosen in exactly one place"
+    loops = [n for n in ast.walk(main) if isinstance(n, ast.For)]
+    inside = [ln for ln in loops if calls[0].lineno <= (ln.end_lineno or 0)
+              and calls[0].lineno >= ln.lineno]
+    assert inside, "_select_winner must be called INSIDE the split loop (val iteration)"
+    # …and guarded by the val branch, so no holdout metric exists when it runs.
+    guards = [n for n in ast.walk(main) if isinstance(n, ast.If)
+              and n.lineno <= calls[0].lineno <= (n.end_lineno or 0)
+              and "val" in ast.unparse(n.test)]
+    assert guards, "the selection call must sit under the `split == 'val'` guard"
+
+
+def test_the_json_records_where_the_winner_was_ranked(source):
+    """Prevents: a future reader having to read the code that wrote the file to
+    learn which split decided. The M3 record predates the key, deliberately."""
+    assert '"winner_selected_on": SELECTION_SPLIT' in source
+
+    # The M3 record itself lives under the gitignored `automation/runs/`, so CI
+    # never sees it — skip rather than assert-on-absence, which would be green in
+    # CI for a reason that has nothing to do with the property.
+    record = REPO / "automation/runs/m3s5/bakeoff.json"
+    if not record.exists():
+        pytest.skip(f"{record} is a local run artifact (automation/runs/ is gitignored)")
+    assert "winner_selected_on" not in json.loads(record.read_text()), (
+        "the M3 record must NOT be regenerated — its silence is the honest marker "
+        "of the run that ranked on the holdout (see docs/bakeoff_m3.md §3's note)"
+    )
+
+
 # ------------------------------------------------------------- wiring ----
 
 
