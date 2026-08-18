@@ -75,6 +75,56 @@ answered trial than it asked for. That is what the first version of this code
 did on every kill, and the only difference between the two runs is whether
 anybody looked past `TOTAL`.
 
+### M3-S4 (part 2) — the resume worked, and the launcher deleted the run it was resuming (2026-08-18, role:MLE)
+
+**What happened.** The track had been stopped by hand overnight after five of
+six phases. Resuming it is one command — `scripts/automation_track.sh` skips any
+phase whose output JSON already exists — and the resume did exactly that,
+skipping 2 h 20 m of completed work and starting the one missing refit. One line
+earlier, `run_detached.sh` had opened the log with `: > "${LOG}"` and destroyed
+the transcript those five skipped phases had written. Both FLAML leaderboards,
+every sniper trial line and the PO's hand-written stop note, gone (gotcha #48).
+
+**Why it did not cost the story, and why that is the actual lesson.** Every
+load-bearing number survived, because each phase writes a JSON verdict beside
+the log and the log was only ever the narration. That was not luck exactly — it
+was the same decision that made the track resumable, since a phase can only be
+skipped if its result is durable somewhere a new process can read. **The
+property that let the job resume is the property that made the loss
+survivable.** The failure and its own containment came from one design choice.
+
+**The transferable shape.** *When a job is built to be re-run, audit everything
+its launcher does to state that already exists.* "Start clean" is the default
+assumption of almost every wrapper ever written, and a resumable job has already
+contradicted it. The truncation had been in that script since the day it was
+written to solve gotcha #45, and it survived a code review and a test suite —
+because nothing had ever relaunched under the same name before, and the first
+relaunch was the first execution of that line in its real context.
+
+**The other half of the session: a number that must not be improved.**
+`auto-on-v1` came in at **3.7245** val MAE against hand-tuned v1's **3.4760** —
+the automation track lost on v1 by 7.15% — and the log shows why: it hit its
+800-round cap with validation error still falling steeply. It is a *truncated*
+model, and the obvious repair (raise the cap, refit, quote the better number)
+is precisely the move DR-01 condition 2 forbids: spending more budget on one arm
+*after* seeing that arm's result. The honest version costs something real — M3's
+2×2 now carries a row whose weakness is a budget artefact and has to be labelled
+as one, rather than a clean number. A comparison you are allowed to fix after
+reading it is not a comparison, it is a preference.
+
+**What to look at.** `automation/run_detached.sh`'s rotation block and the three
+tests in `tests/unit/test_watchdog.py` that pin it — especially
+`test_a_live_job_is_never_rotated_out_from_under_itself`, which pins the
+rotation to the double-launch guard that makes it safe · `docs/
+automation_track_m3.md` §6.4 (the truncated contender) and §6.5 (the budget
+ledger, over) · `docs/gotchas.md` #48.
+
+**What to try yourself.** Run any `make detach NAME=… ` twice in a row and look
+in `automation/runs/` for the `.log.1`. Then read `scripts/automation_track.sh`'s
+`phase()` function and ask what *else* a launcher could reasonably do to a
+directory whose contents are the resume points — that question is worth more
+than the one bug it found here.
+
 ### M3-S3 — the strongest feature in the literature lost, and the sample that lied was the one nobody was allowed to quote (2026-08-17, role:MLE)
 
 **What was built.** Feature set **v2**, earned group by group. Five feature

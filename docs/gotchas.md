@@ -582,3 +582,26 @@ the seed line are earned by THIS project.
     a system that was quietly dropping work — so ask what a green light would
     still be compatible with. Related: #45 (the reason anything is killed at
     all), #17 (why the study is namespaced in the first place).
+
+48. **The launcher for resumable jobs truncated the log of the run it was
+    resuming.** `automation/run_detached.sh` opened its log with `: > "${LOG}"`
+    — correct for a job that runs once, wrong for every job this repo actually
+    has. `scripts/automation_track.sh` is *designed* to be relaunched under the
+    same name: it skips any phase whose output JSON already exists, so
+    relaunching is the normal path after a kill, a stop or a failure. Relaunch
+    it and the launcher wipes the transcript of every phase the previous run
+    completed, one line before the resume logic goes on to correctly skip those
+    same phases. Paid on 2026-08-18: resuming M3-S4's track to run its one
+    missing phase destroyed **2 h 20 m** of scout and sniper output, including
+    both FLAML leaderboards and the PO's hand-written stop note. Nothing
+    load-bearing was lost only because the phase verdicts live in
+    `automation/runs/m3s4/*.json` and not in the log — i.e. the design that
+    made the job resumable is the same design that made the loss survivable.
+    Fixed by rotating (`<name>.log.1 … .log.N`, `KEEP_LOGS=5`) instead of
+    truncating, which is safe precisely because the launcher already refuses to
+    start a second job under a name that is RUNNING — no live writer's file is
+    ever renamed. The transferable shape: **when a job is built to be re-run,
+    audit everything its launcher does to state that already exists**; "start
+    fresh" is an assumption a resumable job has already contradicted. Related:
+    #45 (why detached jobs exist), #47 (the other half of the same track's
+    resume story).

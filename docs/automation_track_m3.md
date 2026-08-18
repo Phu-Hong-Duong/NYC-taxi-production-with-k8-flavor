@@ -43,8 +43,11 @@ DR-01 condition 2 forbids retroactively handing the loser more budget, so a stud
 that stops at trial 34 of 60 because its share ran out **reports that** and is not
 re-run. `scripts/optuna_sniper.py` prints which limit bound it (`stopped_on`).
 
-Actual per-phase fitting seconds are printed by the track's own ledger at the end
-of `automation/runs/m3s4-automation-track.log` and are recorded in §6.
+Actual per-phase fitting seconds are recorded in **§6.5**, read from each phase's
+own JSON in `automation/runs/m3s4/`. (The track also prints a ledger at the end
+of its log, but the log is not the record: it is rotated on every relaunch and a
+resumable track gets relaunched — gotcha #48. The JSONs are.) **The track went
+over: 9,400–9,700 s spent against 9,000 declared, and §6.5 says where.**
 
 ---
 
@@ -437,6 +440,20 @@ would be a finding and a decision taken in the open, not a number.
 
 ## 7. Open, named, not silently carried
 
+- **`auto-on-v1` was truncated by the rounds cap, and M3-S5 has to decide what
+  to do about it — this session did not.** Its val curve was still falling
+  ~0.03 MAE per 100 rounds at iteration 799 of 800 (§6.4). Raising the cap and
+  refitting would very likely improve the number, and it would also spend DR-01
+  budget the track has **already overspent** (§6.5) *after* seeing the result —
+  which is the exact move DR-01 condition 2 forbids by name. So the row stands
+  as measured, labelled as truncated, and the choice belongs to the bake-off
+  session with the whole table in front of it. The cheap-looking option (refit
+  it bigger and quote the better number) is the one that costs the 2×2 its
+  meaning.
+- **The v1 study is thin: 9 trials over an 8-dimensional space** (§6.2), all
+  bound by the clock rather than by `n_trials: 60`. "Automation lost on v1" is
+  therefore a statement about *this budget*, not about the method, and M3-S5's
+  table should say so in the row rather than in a footnote.
 - **A rounds cap of 800 for the sniper and its refits, against v1's 500.** v1
   never early-stopped (500/500 with val still improving), so a tuner that could
   only ever ask for 500 would be unable to trade a smaller learning rate for more
