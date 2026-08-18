@@ -119,7 +119,7 @@ ok    lightgbm, xgboost, flaml, pandas, sklearn, pyarrow, mlflow, flyte imported
 ok    every package version in the image matches the host venv
 
 -- 6. the unit suite runs INSIDE the image
-     452 passed, 5 skipped in 43.24s
+     471 passed, 6 skipped in 42.70s
 ok    tests/unit green in-image
 
 -- 7. pipelines/tasks.py validate() runs in-image over real pinned data
