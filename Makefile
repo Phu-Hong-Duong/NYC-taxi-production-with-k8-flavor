@@ -128,8 +128,8 @@ stage-data: ## put the DVC-pinned data trees on the PVC task pods mount (M4-S4; 
 	@bash scripts/stage_pipeline_data.sh
 pipeline-local: ## rehearse the six-stage graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1)
 	@uv run python pipelines/tasks.py --month $(MONTH)
-pipeline: ## full workflow for MONTH=$(MONTH) on-cluster
-	@echo "TODO(M4): pyflyte run --remote pipelines/flyte/workflows.py ... month=$(MONTH)"
+pipeline: ## the six stages on-cluster for MONTH=$(MONTH) (M4-S4; TRAIN_MONTHS=... makes it a sampled, verdict-free smoke)
+	@bash scripts/run_pipeline.sh
 verify-m4: ## green run + cache-hit rerun + kill-a-pod retry survives
 	@echo "TODO(M4)"
 
