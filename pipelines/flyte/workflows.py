@@ -416,7 +416,7 @@ async def register(manifest: str) -> str:
     )
 
 
-@light_env.task(cache="disable")
+@light_env.task(cache="disable", retries=0)
 async def main(month: str = "2019-01", train_months: str = "", judge: bool = True) -> str:
     """ingest -> validate -> build_features -> train -> evaluate -> register.
 
@@ -427,6 +427,14 @@ async def main(month: str = "2019-01", train_months: str = "", judge: bool = Tru
     refuses a sampled run that asks for a verdict, in the one place that owns that
     rule, and a second copy of it in an orchestrator wrapper is exactly the kind
     of duplicated law this program keeps deleting.
+
+    **AND `retries=0`, which is the one stage that gets none.** A parent retry
+    re-invokes the children, and the children that already succeeded would come
+    back from the cache in milliseconds — so the only thing a parent attempt can
+    actually re-run is the child that just exhausted its OWN budget, at three
+    times the cost and for the same answer. Worse, it would print a second and
+    third failure for one fault, which is how an incident report stops naming the
+    stage that broke. The stages carry the budget; the graph does not.
 
     **UNCACHED ON PURPOSE, for a reason that has nothing to do with correctness.**
     A cached parent would be a perfect cache hit and useless evidence: the rerun
