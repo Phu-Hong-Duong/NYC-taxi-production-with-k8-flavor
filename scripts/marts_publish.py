@@ -127,6 +127,11 @@ def dbt_build(dbt_dir: Path, *, variables: dict | None = None) -> None:
     """
     import json as _json
 
+    # Resolved, because dbt reads `--profiles-dir` relative to ITS cwd — which this
+    # function sets to the project directory. A relative `analytics/dbt` therefore
+    # becomes `analytics/dbt/analytics/dbt` and dbt refuses with "Path does not
+    # exist", naming a path that never existed anywhere. Observed on first run.
+    dbt_dir = dbt_dir.resolve()
     payload = _json.dumps(dbt_vars() if variables is None else variables)
     env = {
         **os.environ,

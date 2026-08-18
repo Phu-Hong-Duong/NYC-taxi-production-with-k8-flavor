@@ -106,8 +106,9 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam pipeline pipeline-cache-drill pipeline-kill-drill pipeline-local stage-data verify-m4
+.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam marts-peak pipeline pipeline-cache-drill pipeline-kill-drill pipeline-local stage-data verify-m4
 MONTH ?= 2019-01
+MARTS_MONTHS ?=
 image-build: ## build the task image only; the cluster is not touched (M4-S3)
 	@bash scripts/image_build_load.sh --build-only
 image-load: ## build the task image + kind load onto every node, read back with crictl (M4-S3, D-001; DRY_RUN=1 previews)
@@ -126,9 +127,13 @@ flyte-hello: ## two tasks on-cluster, the second consuming the first's output th
 	@bash scripts/flyte_hello.sh
 stage-data: ## put the DVC-pinned data trees on the PVC task pods mount (M4-S4; RESTAGE=1 forces, DRY_RUN=1 previews)
 	@bash scripts/stage_pipeline_data.sh
-pipeline-local: ## rehearse the six-stage graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1)
-	@uv run python pipelines/tasks.py --month $(MONTH)
-pipeline: ## the six stages on-cluster for MONTH=$(MONTH) (M4-S4; TRAIN_MONTHS=... makes it a sampled, verdict-free smoke)
+marts-peak: ## D-003: publish the marts under a size probe (MARTS_MONTHS=YYYY-MM scopes the fact table; empty = full refresh)
+	@bash scripts/marts_peak_probe.sh $(if $(MARTS_MONTHS),month-scoped-$(MARTS_MONTHS),full-refresh) -- \
+	  uv run python scripts/marts_publish.py --duckdb analytics/dbt/marts.duckdb \
+	  --transport kubectl --months "$(MARTS_MONTHS)"
+pipeline-local: ## rehearse the graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1; --publish adds the marts tail)
+	@uv run python pipelines/tasks.py --month $(MONTH) $(PIPELINE_LOCAL_ARGS)
+pipeline: ## the seven stages on-cluster for MONTH=$(MONTH) (M4-S4/S5; TRAIN_MONTHS=... makes it a sampled, verdict-free smoke)
 	@bash scripts/run_pipeline.sh
 pipeline-cache-drill: ## run the pipeline TWICE and prove run 2 reused run 1 (M4-S4; DRILL_STAGE=ingest is the 1-min mechanism probe)
 	@bash scripts/pipeline_cache_drill.sh
