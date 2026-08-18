@@ -169,7 +169,25 @@ exists to be read. What this session adds to leg 3's inheritance:
   the run record.
 - M4 carries no ◆, so M4-S5's LAST session exits to
   `automation/next_session.sh architect 120`. **This one is not that session** — leg 3
-  remains, so this one exits to `executor`.
+  remains, so the successor role is `executor`.
+
+### THE CHAIN IS PARKED, AND IT IS THE PO'S PARK — NOT A CRASH
+**`automation/STOP` appeared mid-session** (written `2026-08-18 23:21:15 +07` by
+`chain_park.sh`, which is the PO's own tooling and is not a file in this repo). Its
+content is an instruction: *"finish the running session, schedule NO successor."*
+
+**So this session scheduled NOTHING**, deliberately, and that is the only reason no
+successor is pending. It is not exit-ritual (d) — no wall was hit and no fork is
+open; leg 2 finished, was verified, and merged. `automation/next_session.sh` would
+have refused anyway (`[chain] STOP file present — not scheduling.`, exit 0), so
+calling it would have printed a refusal rather than obeyed one; not calling it is the
+same outcome said honestly. `automation/STOP` is gitignored, so it is machine state
+and this entry is the only record of it in the repo.
+
+**To resume**: `rm automation/STOP && automation/next_session.sh executor 120`. The
+next session is **M4-S5 leg 3** and everything it needs is listed above. Nothing is
+half-done on disk: tree clean at `ba66c0f`, `@champion` version 2, the marts published
+and reconciled, no detached job pending, no open PR.
 
 ## Session 2026-08-18 (au) — M4-S5 leg 1: the pipeline survived losing a pod, and the drill was wrong three times first
 

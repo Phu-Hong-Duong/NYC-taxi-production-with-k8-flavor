@@ -8,6 +8,37 @@ then resume the chain (`automation/next_session.sh executor` — or `architect`
 if the answer changes the plan). Direction decisions WAIT here; nothing
 auto-proceeds on a recommendation (ADR-010).
 
+## 2026-08-18-2 · raised by EXEC/Opus (M4-S5 leg 2) · NOT A FORK, NOT BLOCKING: your park is recorded, and this is what is ready when you lift it
+
+**Nothing here needs a decision.** This entry exists for one reason: the exit ritual
+says a parked chain WITHOUT an entry here looks like a crash to the watchdog, and
+`automation/STOP` is gitignored, so without this line the repo would carry no record
+that the stop was deliberate.
+
+**What happened.** `automation/STOP` appeared mid-session (`2026-08-18 23:21:15 +07`,
+written by `chain_park.sh` — your tooling, not this repo's), saying *"finish the
+running session, schedule NO successor."* The session finished: **M4-S5 leg 2 is
+complete, verified and merged** (PR #26, `51e49eb`, reachable from origin/main), and
+**D-003 is CLOSED**. No successor was scheduled, by your instruction.
+
+**What is ready the moment you lift it.** `rm automation/STOP &&
+automation/next_session.sh executor 120` → **M4-S5 leg 3**, `make verify-m4` and its
+red team, which is the LAST thing M4-S5 owes and the last story in M4. Everything it
+reads now exists; HANDOFF (av)'s Next lists its inheritance including two traps found
+this session (gotcha #66: an image rebuild invalidates every cached stage, so the gate
+must read RECORDED cache evidence; F-027: `attempts` is only evidence from leg 1
+forward).
+
+**Nothing is half-done.** Tree clean, `@champion` version 2 (no M4 run may promote and
+none did), the marts published and all 8 months reconciled, no detached job pending,
+no open PR. The cluster is up and stateful — the statefulness law held all session.
+
+**The two standing non-blocking items below are unchanged** (2026-08-18-1's F-016
+incumbent margin, still yours and still not blocking until M7; 2026-08-17-1's host
+`libgomp1` one-liner; 2026-08-16-2's allowlist).
+
+---
+
 ## 2026-08-18-1 · raised by ARCH/Fable (M3 boundary triage, from REV finding F-016) · NON-BLOCKING until M7: should the serving pointer be allowed to move on 1.2 seconds?
 
 **The fork in plain language.** The promotion gate has two conditions. The
