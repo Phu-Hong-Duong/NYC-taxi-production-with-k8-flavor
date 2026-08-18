@@ -73,37 +73,7 @@ fi
 # that would read it is relevant), no credentials, and it sleeps rather than
 # serving anything.
 if ! "${KUBECTL[@]}" -n "$NAMESPACE" get pod "$STAGER" >/dev/null 2>&1; then
-  "${KUBECTL[@]}" -n "$NAMESPACE" apply -f - <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: $STAGER
-  namespace: $NAMESPACE
-  labels:
-    app.kubernetes.io/part-of: crosstown-eta
-    app.kubernetes.io/component: data-stager
-spec:
-  restartPolicy: Never
-  containers:
-    - name: stager
-      # busybox, because the whole job is `tar -x`, `du` and `find`. It is also
-      # the image the MLflow chart's db-check init container already uses, so it
-      # is a version this program has pinned since M0 rather than a new
-      # dependency. Tag AND digest, the Metabase precedent; digest read live
-      # 2026-08-18 with `docker image inspect --format '{{index .RepoDigests 0}}'`.
-      image: busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
-      command: ["sleep", "infinity"]
-      resources:
-        requests: {cpu: "50m", memory: "64Mi"}
-        limits: {memory: "256Mi"}
-      volumeMounts:
-        - name: taxi-data
-          mountPath: /stage
-  volumes:
-    - name: taxi-data
-      persistentVolumeClaim:
-        claimName: taxi-data
-EOF
+  "${KUBECTL[@]}" apply -f "$REPO_ROOT/infra/manifests/flyte-data-stager.yaml"
 fi
 "${KUBECTL[@]}" -n "$NAMESPACE" wait --for=condition=Ready "pod/$STAGER" --timeout=300s
 

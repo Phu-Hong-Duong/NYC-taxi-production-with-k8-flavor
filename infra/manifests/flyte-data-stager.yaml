@@ -1,0 +1,56 @@
+# flyte-data-stager.yaml — the short-lived pod that puts host bytes on the PVC
+# task pods mount (M4-S4). Applied and then DELETED by
+# scripts/stage_pipeline_data.sh; it is never part of the running platform.
+#
+# WHY IT IS A FILE AND NOT A HEREDOC IN THE SCRIPT. It started as a heredoc and
+# that cost a run: an UNQUOTED heredoc performs command substitution, so the
+# backticks in its own explanatory comments were executed by the shell — the
+# comment naming "tar" ran tar against the script's stdin, the one naming a
+# docker command ran docker with no arguments, and both outputs were spliced into
+# the YAML, which then failed to parse on a line that looked nothing like the
+# problem. The same shape as gotcha #35 (a test that parsed a shell array
+# truncated at a ")" in a comment) and gotcha #53 (assertions matching prose):
+# in a repo where comments are load-bearing, prose must not sit anywhere a parser
+# or a shell will read it as code. A manifest file cannot be command-substituted.
+#
+# It also belongs here on the charter: cluster objects come from recipes, and a
+# pod that exists only inside a shell string is a pod nobody can review in a diff.
+#
+# NAME AND CLAIM ARE TWINS with scripts/stage_pipeline_data.sh (STAGER) and
+# infra/manifests/flyte-task-data-pvc.yaml — pinned by
+# tests/unit/test_platform_scripts.py.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: taxi-data-stager
+  namespace: flyte
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+    app.kubernetes.io/component: data-stager
+spec:
+  # Never: this pod is a transfer, not a service. If the stream dies the pod must
+  # stay dead so the file-count check at the end of the script can say so, rather
+  # than being restarted into a half-written tree that then passes a size check.
+  restartPolicy: Never
+  containers:
+    - name: stager
+      # busybox, because the whole job is untarring a stream and counting files.
+      # It is also the image the MLflow chart's db-check init container already
+      # uses, so it is a version this program has pinned since M0 rather than a
+      # new dependency. Tag AND digest (the Metabase precedent); digest read live
+      # 2026-08-18 from docker's own RepoDigests.
+      image: busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+      command: ["sleep", "infinity"]
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "64Mi"
+        limits:
+          memory: "256Mi"
+      volumeMounts:
+        - name: taxi-data
+          mountPath: /stage
+  volumes:
+    - name: taxi-data
+      persistentVolumeClaim:
+        claimName: taxi-data
