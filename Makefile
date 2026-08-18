@@ -101,7 +101,7 @@ bakeoff: ## the M3 bake-off: 5 contenders (4 LOADED, floor fitted) through one e
 champion-transition: ## the ordered chain a moved alias owes: promote -> predictions -> duckdb -> marts -> boards -> memo numbers (M3-S5); run it DETACHED
 	@bash scripts/champion_transition.sh
 verify-m3: ## dossier+ablation+leakage red-team; kill/resume; >=1 pruned trial; 5 gate verdicts from our evaluator
-	@echo "TODO(M3)"
+	@bash scripts/verify_m3.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
 .PHONY: deploy-flyte pipeline verify-m4
