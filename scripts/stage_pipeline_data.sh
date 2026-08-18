@@ -37,12 +37,21 @@ STAGER="${STAGER_POD:-taxi-data-stager}"
 DRY_RUN="${DRY_RUN:-0}"
 RESTAGE="${RESTAGE:-0}"
 
-# The three trees, and they are the three the PodTemplate mounts by subPath.
+# The four trees, and they are the four the PodTemplate mounts by subPath.
 # TWINS with infra/manifests/flyte-task-podtemplate.yaml — a tree staged here and
 # not mounted there is invisible to every task, and a tree mounted there and not
 # staged here is an empty directory that reads as "no data for that month".
 # tests/unit/test_platform_scripts.py fails if the two lists drift.
-TREES=(raw processed rejected)
+#
+# `predictions` joined at M4-S5, for the marts tail task: the `error_segments` mart
+# sources the analyst layer's `predictions` view. It is the one tree here that is
+# NOT DVC-pinned (M2-S4 decided that deliberately — model output regenerable from
+# pinned inputs plus a registry version, and a pin that goes stale every time the
+# champion moves looks like provenance without being any), so its provenance is
+# `data/predictions/predictions.json` and the registry, not a `.dvc` file. That
+# also means it does not enter the pipeline's cache salt, which is honest: it
+# cannot, because nothing pins it.
+TREES=(raw processed rejected predictions)
 
 echo "== stage pipeline data =="
 

@@ -28,7 +28,17 @@
 # halfway leaves the previous mart serving. Re-running is a no-op in the only
 # sense that matters: same end state, every time.
 #
-# Usage: scripts/marts.sh                 (build + publish)
+# WHERE THE PUBLISH ACTUALLY LIVES, SINCE M4-S5. The second half of this script
+# used to be the publish itself — staging table, `\copy`, swap, indexes — in
+# shell. It is now `scripts/marts_publish.py`, and this script calls it with the
+# `kubectl` transport. The move was forced by the pipeline: M4-S5's tail task
+# publishes the same marts from inside a task pod, which cannot use `kubectl exec`
+# at all, and a second copy of the swap SQL in Python would have been a twin of the
+# most consequential statement in this repo. One body of SQL, two thin transports.
+# The mart LIST moved with it, for the same reason.
+#
+# Usage: scripts/marts.sh                 (build + publish, full refresh)
+#        MARTS_MONTHS=2019-03 scripts/marts.sh   (month-scoped fact table, D-003)
 #        SKIP_PUBLISH=1 scripts/marts.sh  (build + test only; no cluster needed)
 #        RED_TEAM=1 scripts/marts.sh      (union the out-of-contract fixture —
 #                                          the build MUST go red; never publishes)
@@ -42,6 +52,7 @@ POD="${POSTGRES_POD:-postgres-0}"
 KUBECTL=(kubectl --context "${KUBE_CONTEXT:-kind-mlops-taxi}")
 SKIP_PUBLISH="${SKIP_PUBLISH:-0}"
 RED_TEAM="${RED_TEAM:-0}"
+MARTS_MONTHS="${MARTS_MONTHS:-}"
 
 # gotcha #32: the third place the telemetry is turned off. dbt_project.yml and
 # profiles.yml cover project-aware runs; these cover everything else dbt does.
@@ -49,10 +60,10 @@ export DO_NOT_TRACK=1
 export DBT_SEND_ANONYMOUS_USAGE_STATS=false
 export DBT_PROFILES_DIR="$DBT_DIR"
 
-# The tables the publish moves, in dependency-free order (each is standalone in
-# Postgres). `trips_clean` is first because it is the expensive one — if the
-# pipe is going to fail, fail before the cheap ones have been swapped.
-MARTS=(trips_clean zone_hourly_stats monthly_kpis rejections_by_rule error_segments)
+# The mart LIST is not here any more: it is `MARTS` in scripts/marts_publish.py,
+# which both this script and the pipeline's tail task read. A shell array and a
+# Python tuple naming the same five tables would be twins, and the first thing
+# they would disagree about is a mart somebody added.
 
 # ---- 1. known_domains: ONE definition, passed in, never copied into SQL ------
 # monthly_kpis computes KPI-04 against the documented TLC domains. Those live in
@@ -65,16 +76,11 @@ MARTS=(trips_clean zone_hourly_stats monthly_kpis rejections_by_rule error_segme
 # where KPI-10 already reads it. A `5.0` typed into error_segments.sql would be a
 # rate whose definition disagrees with the model's the day the DA and the SRE
 # argue about the SLO — which is the M5 conversation this number exists for.
-DBT_VARS="$(python3 - "$REPO_ROOT/configs/data.yaml" "$REPO_ROOT/configs/train.yaml" <<'PY'
-import json, sys, yaml
-cfg = yaml.safe_load(open(sys.argv[1]))
-train = yaml.safe_load(open(sys.argv[2]))
-print(json.dumps({
-    "known_domains": cfg["analyst"]["known_domains"],
-    "tolerance_minutes": float(train["evaluate"]["tolerance_minutes"]),
-}))
-PY
-)"
+#
+# M4-S5: the assembly moved into `marts_publish.dbt_vars`, because the pipeline's
+# tail task builds these same models in a pod and two assemblies of one payload is
+# the same twin as two copies of the swap SQL.
+DBT_VARS="$(uv run python "$REPO_ROOT/scripts/marts_publish.py" --print-dbt-vars)"
 GREEN_VARS="$DBT_VARS"
 if [[ "$RED_TEAM" == "1" ]]; then
   DBT_VARS="$(python3 -c "
@@ -179,58 +185,13 @@ if ! "${KUBECTL[@]}" -n "$NAMESPACE" exec -i "$POD" -- \
   exit 1
 fi
 
-psql_marts() {
-  "${KUBECTL[@]}" -n "$NAMESPACE" exec -i "$POD" -- \
-    psql -v ON_ERROR_STOP=1 -U postgres -d marts "$@"
-}
+# The publish itself, over the `kubectl` transport. The SQL, the mart list, the
+# staging-and-swap and the month-scoped path all live in marts_publish.py, which
+# the pipeline's tail task calls with the OTHER transport (psycopg, from inside a
+# task pod). `MARTS_MONTHS` empty means the full refresh this command has always
+# done; setting it scopes the fact table to those months (D-003).
+POSTGRES_NAMESPACE="$NAMESPACE" POSTGRES_POD="$POD" \
+uv run python "$REPO_ROOT/scripts/marts_publish.py" \
+  --duckdb "$DBT_DIR/marts.duckdb" --transport kubectl --months "$MARTS_MONTHS"
 
-# Schema `marts` inside database `marts`: Metabase is pointed at one schema, and
-# a mart that appears is a mart that was published — not one that happened to
-# land in `public` alongside whatever else ever touches this database.
-psql_marts -q -c "CREATE SCHEMA IF NOT EXISTS marts AUTHORIZATION \"$MARTS_DB_USER\";"
-
-published=()
-for mart in "${MARTS[@]}"; do
-  echo "[marts] publishing $mart …"
-  # DuckDB owns the type mapping: it writes the CREATE TABLE for the staging
-  # table from the mart's own schema, so a column added upstream arrives here
-  # without a second schema to maintain (the twins lesson, again).
-  ddl="$(uv run python "$REPO_ROOT/scripts/marts_export.py" ddl "$DBT_DIR/marts.duckdb" "$mart")"
-
-  psql_marts -q -c "DROP TABLE IF EXISTS marts.\"${mart}__staging\";"
-  psql_marts -q -c "CREATE TABLE marts.\"${mart}__staging\" (
-  $ddl
-);"
-
-  # CSV over the pipe. `\copy` (client side) rather than `COPY ... FROM STDIN`
-  # so psql reads OUR stdin instead of needing server-side file access. Both
-  # ends stream: nothing of this ever lands on disk as a temp file.
-  uv run python "$REPO_ROOT/scripts/marts_export.py" csv "$DBT_DIR/marts.duckdb" "$mart" \
-    | "${KUBECTL[@]}" -n "$NAMESPACE" exec -i "$POD" -- \
-        psql -v ON_ERROR_STOP=1 -U postgres -d marts \
-        -c "\\copy marts.\"${mart}__staging\" FROM STDIN WITH (FORMAT csv, NULL '')"
-
-  # The swap: old table out, staging in, in ONE transaction. A reader sees one
-  # or the other, never a half-loaded mart.
-  psql_marts -q -c "BEGIN;
-    DROP TABLE IF EXISTS marts.\"${mart}\";
-    ALTER TABLE marts.\"${mart}__staging\" RENAME TO \"${mart}\";
-    ALTER TABLE marts.\"${mart}\" OWNER TO \"$MARTS_DB_USER\";
-  COMMIT;"
-  published+=("$mart")
-done
-
-# Indexes the two boards will actually use. Created after the swap because the
-# swap replaces the table (and with it any index), and because loading first and
-# indexing after is faster than the reverse.
-psql_marts -q -c "
-  CREATE INDEX IF NOT EXISTS trips_clean_month_idx        ON marts.trips_clean (month);
-  CREATE INDEX IF NOT EXISTS trips_clean_pickup_zone_idx  ON marts.trips_clean (\"PULocationID\");
-  CREATE INDEX IF NOT EXISTS zone_hourly_month_zone_idx   ON marts.zone_hourly_stats (month, pickup_zone);
-"
-
-echo
-echo "[marts] published ${#published[@]} mart(s) into database 'marts', schema 'marts':"
-psql_marts -c "SELECT relname AS mart, n_live_tup AS approx_rows
-               FROM pg_stat_user_tables WHERE schemaname = 'marts' ORDER BY relname;"
 echo "[marts] done. Metabase (M1-S5) reads exactly these tables."

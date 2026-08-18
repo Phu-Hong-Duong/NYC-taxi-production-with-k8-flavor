@@ -1,12 +1,15 @@
-"""The six pipeline stages, as plain Python. Owner story: M4-S1.
+"""The pipeline stages, as plain Python. Owner story: M4-S1 (tail added M4-S5).
 
 `ingest -> validate -> features -> train -> evaluate -> register`, the graph
-BLUEPRINT §9/M4 names, written as six callables with typed inputs and typed
-outputs and **no logic of their own**. Every body is a call into `taxi_mlops`
-plus the bookkeeping needed to hand a *serializable* result to the next stage.
-`pipelines/flyte/workflows.py` will wrap these at M4-S4 — decorator-deep, per
-ADR-002 — and that thinness is only available if the graph is already testable
-without an orchestrator, which is why this file exists a story before Flyte does.
+BLUEPRINT §9/M4 names, plus `publish_marts` — the tail §9/M1-S6 promised ("from
+M4 the build+publish runs as the tail task of the monthly Flyte pipeline") and
+D-003 held open until the publish actually became scheduled. Seven callables with
+typed inputs and typed outputs and **no logic of their own**. Every body is a call
+into `taxi_mlops` (or, for the tail, into `scripts/` — see `publish_marts`) plus
+the bookkeeping needed to hand a *serializable* result to the next stage.
+`pipelines/flyte/workflows.py` wraps these — decorator-deep, per ADR-002 — and
+that thinness is only available if the graph is already testable without an
+orchestrator, which is why this file exists a story before Flyte does.
 
 Four decisions are recorded here rather than left to be re-derived:
 
@@ -128,6 +131,20 @@ class EvaluationResult:
     challenger: str
     metric_source: str
     metrics: tuple[SplitMetrics, ...]
+
+
+@dataclass(frozen=True)
+class MartsResult:
+    """What the tail task published, and the reconciliation that let it return."""
+
+    month: str
+    mode: str
+    marts: tuple[str, ...]
+    seconds: float
+    transport: str
+    months_reconciled: int
+    fact_rows_published: int
+    approx_rows: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -399,8 +416,98 @@ def register(manifest_path: str, *, promote: bool = False) -> RegisterResult:
     )
 
 
+def publish_marts(
+    month: str,
+    *,
+    scoped: bool = True,
+    dbt_dir: str = "analytics/dbt",
+    transport: str = "psycopg",
+) -> MartsResult:
+    """The TAIL: rebuild the analyst layer, build the marts, publish them. D-003.
+
+    Three steps, in an order that is not negotiable, and each is a call into the
+    code that already owns it — this stage adds no rule of its own:
+
+    1. **The analyst layer is rebuilt** (`taxi_mlops.data.analyst.report`), because
+       it is the dbt build's SOURCE and it is a set of VIEWS over the parquet this
+       run just re-derived. It is also the step that reconciles: `report()` returns
+       False if any view's row count disagrees with the ingest report that wrote
+       the data, and this stage refuses to publish on that — publishing marts built
+       from a catalogue that does not reconcile is how a board renders a number
+       nobody can reproduce.
+    2. **`dbt build`** — models AND tests, interleaved, partial-parse off. A red
+       test stops the publish, which is the whole reason `build` is used instead of
+       `run` then `test` (M1-S4).
+    3. **The publish**, over the transport this caller can actually use.
+
+    WHY THE MODEL CODE MAY NOT DO ANY OF THIS. ADR-009's boundary law says the
+    marts serve humans and `src/taxi_mlops` never imports them — `grep -r
+    "analytics" src/taxi_mlops/` is empty and a unit test keeps it that way. So the
+    marts half of the program lives in `scripts/`, this stage calls it, and the
+    dependency runs pipelines -> scripts -> duckdb/psycopg, never through `src/`.
+
+    `scoped=True` publishes the fact table for THIS MONTH only and full-refreshes
+    the four aggregates — D-003's decision, argued with its numbers in
+    `scripts/marts_publish.publish`. `scoped=False` is the rebuild-everything path.
+    """
+    import importlib.util
+
+    from taxi_mlops.data.analyst import report
+
+    if not report():
+        raise SystemExit(
+            "[tasks] the analyst layer does not reconcile — refusing to build marts "
+            "from it. `make duckdb` prints which month disagrees with its ingest report."
+        )
+
+    # `scripts/` is not a package (no `__init__.py`, deliberately — these are
+    # commands, not a library), so it is loaded by path rather than imported. The
+    # path is resolved from THIS file, which is what makes it work identically at
+    # `/app` in a task pod and in a clone on the host.
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "marts_publish", root / "scripts" / "marts_publish.py"
+    )
+    assert spec is not None and spec.loader is not None
+    marts_publish = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(marts_publish)
+
+    project = root / dbt_dir
+    marts_publish.dbt_build(project)
+
+    owner = marts_publish.marts_owner()
+    sink = marts_publish.make_transport(transport, database="marts")
+    try:
+        summary = marts_publish.publish(
+            sink,
+            project / "marts.duckdb",
+            owner=owner,
+            months=(month,) if scoped else None,
+        )
+    finally:
+        close = getattr(sink, "close", None)
+        if close is not None:
+            close()
+
+    published = next(
+        (r["published"] for r in summary["reconciled"] if r["month"] == month), 0
+    )
+    return MartsResult(
+        month=month,
+        mode=summary["mode"],
+        marts=tuple(summary["marts"]),
+        seconds=summary["seconds"],
+        transport=summary["transport"],
+        months_reconciled=len(summary["reconciled"]),
+        fact_rows_published=published,
+        approx_rows=summary["approx_rows"],
+    )
+
+
 #: The graph, declared once so the driver, the tests and M4-S4's Flyte workflow
-#: all read the same order from the same place.
+#: all read the same order from the same place. `publish_marts` joined at M4-S5
+#: (D-003) — BLUEPRINT §9/M1-S6 always said the build+publish becomes the tail
+#: task of the monthly pipeline; this is that sentence landing.
 STAGES: tuple[str, ...] = (
     "ingest_month",
     "validate",
@@ -408,6 +515,7 @@ STAGES: tuple[str, ...] = (
     "train",
     "evaluate",
     "register",
+    "publish_marts",
 )
 
 
@@ -490,8 +598,15 @@ def rehearse(
     experiment: str | None,
     story: str | None,
     run_dir: str,
+    publish: bool = False,
 ) -> int:
-    """Run the six stages in order on ONE month. The local rehearsal, M4-S1.
+    """Run the stages in order on ONE month. The local rehearsal, M4-S1.
+
+    `publish` is OFF by default and that is not timidity: every other stage in
+    this rehearsal writes only into `data/` and MLflow, while `publish_marts`
+    mutates the warehouse two Metabase boards read. A "plumbing rehearsal" whose
+    default behaviour republishes the marts would be a command whose name lies
+    about its blast radius. `--publish` asks for it explicitly.
 
     This composer is the LOCAL driver only. M4-S4's Flyte workflow composes the
     same six callables itself — an orchestrator that called `rehearse` would be
@@ -501,17 +616,17 @@ def rehearse(
     print(f"[tasks] gate: {'ON' if judge else 'OFF (F-008 smoke; NO verdict)'}\n")
 
     ingested = ingest_month(month)
-    print(f"\n[1/6] ingest_month   : {ingested.rows_out:,} rows out of "
+    print(f"\n[1/7] ingest_month   : {ingested.rows_out:,} rows out of "
           f"{ingested.rows_in:,} ({ingested.rejected_fraction:.4%} rejected) -> "
           f"{ingested.processed_path}")
 
     validated = validate(month)
-    print(f"[2/6] validate       : {validated.rows:,} rows re-read and re-checked "
+    print(f"[2/7] validate       : {validated.rows:,} rows re-read and re-checked "
           f"against the {validated.contract_year} output contract, "
           f"{len(validated.columns)} columns")
 
     features = build_features(month)
-    print(f"[3/6] build_features : set {features.feature_set_version} — "
+    print(f"[3/7] build_features : set {features.feature_set_version} — "
           f"{len(features.features)} columns over {features.rows:,} rows "
           f"({features.split} split)")
 
@@ -522,19 +637,19 @@ def rehearse(
         story=story,
         run_dir=run_dir,
     )
-    print(f"\n[4/6] train          : {trained.challenger} (set "
+    print(f"\n[4/7] train          : {trained.challenger} (set "
           f"{trained.feature_set_version}), run {trained.run_id}, "
           f"{trained.fit_seconds:.1f}s, sampled={trained.sampled}, "
           f"judged={trained.judged}")
 
     measured = evaluate(trained.manifest_path)
-    print(f"[5/6] evaluate       : from {measured.metric_source}")
+    print(f"[5/7] evaluate       : from {measured.metric_source}")
     for row in measured.metrics:
         print(f"        {row.split:<5} KPI-09 {row.kpi_09_mae_minutes:.4f} min · "
               f"KPI-10 {row.kpi_10_within_rate:.3f}% over {row.rows:,} rows")
 
     verdict = register(trained.manifest_path)
-    print(f"[6/6] register       : decision={verdict.decision} promoted="
+    print(f"[6/7] register       : decision={verdict.decision} promoted="
           f"{verdict.promoted} (CLI exit-code class {verdict.exit_code})")
     print(f"        {verdict.reason}")
     if verdict.margins:
@@ -542,7 +657,18 @@ def rehearse(
     print(f"        @champion is version {verdict.champion_alias_version} — read, "
           "never written")
 
-    print(f"\n[tasks] all {len(STAGES)} stages composed on {month}. This is a "
+    if publish:
+        marts = publish_marts(month, transport="kubectl")
+        print(f"[7/7] publish_marts  : {len(marts.marts)} mart(s) {marts.mode} in "
+              f"{marts.seconds:.1f}s via {marts.transport}; "
+              f"{marts.fact_rows_published:,} fact rows for {marts.month}, "
+              f"{marts.months_reconciled} month(s) reconciled")
+    else:
+        print("[7/7] publish_marts  : SKIPPED — it mutates the warehouse the boards "
+              "read; pass --publish to run it")
+
+    ran = len(STAGES) if publish else len(STAGES) - 1
+    print(f"\n[tasks] {ran} of {len(STAGES)} stages composed on {month}. This is a "
           "PLUMBING rehearsal: no number above is a result.")
     return 0
 
@@ -559,6 +685,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--experiment", default="m4-pipeline")
     parser.add_argument("--story", default="M4-S1")
     parser.add_argument("--run-dir", default=DEFAULT_RUN_DIR)
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="also run the marts tail task (kubectl transport). OFF by default "
+        "because it republishes the warehouse two Metabase boards read",
+    )
     args = parser.parse_args(argv)
 
     # FIRST, before anything imports LightGBM — the shim re-execs this process
@@ -574,6 +706,7 @@ def main(argv: list[str] | None = None) -> int:
         experiment=args.experiment,
         story=args.story,
         run_dir=args.run_dir,
+        publish=args.publish,
     )
 
 

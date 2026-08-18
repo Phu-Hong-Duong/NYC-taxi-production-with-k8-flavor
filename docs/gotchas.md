@@ -879,3 +879,25 @@ the seed line are earned by THIS project.
     #59 (`--follow` also exits 0 for a run that FAILED): the CLI's return is not a
     statement about the run's outcome OR about its completeness. Poll the server
     for a terminal phase and assert on that.
+
+66. **Rebuilding the task image invalidates every cached Flyte stage — the cache
+    key is not just code, inputs and data.** The pipeline's cache salt was built to
+    cover the data (`_data_pin`, M4-S4) because the stages declare a month string
+    and read a 1.8 GB volume Flyte cannot see. Observed 2026-08-18 (M4-S5 leg 2,
+    run `rw98pj84z4jh5ldqrxqp`): `ingest`, `validate`, `build_features`, `train` and
+    `evaluate` all came back **`CACHE_POPULATED`** — not `CACHE_HIT` — on a month
+    they had each been populated for by earlier runs, with the same data pin and
+    with function bodies this story never touched. What changed was the IMAGE: its
+    tag is the git short sha, so every commit produces a new one, and it reaches a
+    task two ways at once (the `TaskEnvironment`'s image, and `TAXI_PIPELINE_IMAGE`
+    in `env_vars`) — either is part of the spec Flyte keys on. Which of the two did
+    it is not separable here: they move together by construction.
+    It is arguably CORRECT, and it agrees with F-026 from the other side — the image
+    is where the model code comes from, so a hit against a previous image would be a
+    result computed by code this tree does not contain. The trap is the unpriced
+    cost: **one commit under `src/`, `scripts/`, `analytics/`, `docker/`,
+    `pyproject.toml` or `uv.lock` turns the next full-data run back into a 31-minute
+    fit**, not M4-S4's 11 seconds. Two consequences worth carrying: a cache drill
+    must hold the image CONSTANT (ours does, deliberately), and a gate must read
+    RECORDED cache evidence rather than re-asking the control plane about the latest
+    run — whose stages are `CACHE_POPULATED` in any session that rebuilt.

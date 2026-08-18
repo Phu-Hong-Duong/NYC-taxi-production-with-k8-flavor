@@ -266,7 +266,11 @@ PY
 RUN_LOG="$RUN_DIR/pipeline.log"
 FOLLOW_LOG="$RUN_DIR/flyte_run.log"
 : >"$RUN_LOG"; : >"$FOLLOW_LOG"
-MONTH="$MONTH" TRAIN_MONTHS="$TRAIN_MONTHS" PIPELINE_RUN_DIR="$RUN_DIR" \
+# PUBLISH_MARTS=0: the drill is about the ORCHESTRATOR surviving a lost pod. The
+# marts tail would add minutes of warehouse writes after the interesting moment has
+# passed, and a drill that republishes the boards as a side effect is a drill nobody
+# runs twice.
+MONTH="$MONTH" TRAIN_MONTHS="$TRAIN_MONTHS" PIPELINE_RUN_DIR="$RUN_DIR" PUBLISH_MARTS=0 \
   bash "$REPO_ROOT/scripts/run_pipeline.sh" >"$RUN_LOG" 2>&1 &
 run_pid=$!
 note "pipeline launched (pid $run_pid); transcript: $RUN_LOG"

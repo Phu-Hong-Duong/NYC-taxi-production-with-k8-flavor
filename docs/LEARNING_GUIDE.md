@@ -9,6 +9,78 @@ months from now.
 
 ## M4
 
+### M4-S5 (second session) — one body of SQL, two transports, and a debt closed by measuring both options (2026-08-18, role:MLOps A / MLE R, DA hat for the mart decision)
+
+**What was built.** `publish_marts`, the pipeline's seventh stage: rebuild the
+analyst layer → `dbt build` → publish the gold marts into the one Postgres, from
+inside a task pod. Plus `scripts/marts_publish.py`, which is the publish itself
+extracted out of `scripts/marts.sh` so that both callers share it; a fourth staged
+data tree; a fourth consumer of the `marts` database role; and `make marts-peak`,
+the probe that made D-003 a decision instead of an opinion.
+
+**Why this way.** The forcing constraint is a transport. `make marts` publishes over
+`kubectl exec` — not out of laziness but because nothing of ours publishes 5432 on
+the host, so the host has *no TCP route to the database at all*. A task pod has the
+opposite problem: it can reach `postgres.platform.svc.cluster.local` easily and has
+neither kubectl nor a kubeconfig. Two publishers, two routes, and exactly one thing
+that must not be duplicated: the swap SQL, which is the statement that decides what a
+board renders. So the module is transport-blind below a four-method `Transport`
+protocol, and the mart list, the dbt `--vars` payload and `--no-partial-parse` moved
+with it — `marts.sh` no longer has a `MARTS=(...)` array and a test fails if one comes
+back. The CSV producer is a *subprocess* on both sides rather than an import, which
+sounds like a compromise and is actually the point: `marts_export.py` was already
+unit-tested and already streamed, and a second in-process path would have been a
+second exporter.
+
+**The decision, and why it is a split.** D-003 asked for an incremental
+materialisation *or* a recorded decision that full refresh stays, with the peak
+re-measured. The temptation is to pick one and defend it. What the measurement said
+is that the question was mis-shaped: the marts are not one kind of object. Four of
+them are ~46,000 rows and a full refresh costs under a second while buying the
+strongest property a publish can have — the mart *is* the source, drift impossible.
+The fifth is 56M rows and 13 GiB and is the entire peak. So the aggregates stay full
+refresh forever and only `trips_clean` became month-scoped. Measured: **228.2 s /
+27.96 GiB peak** against **82.7 s / 15.33 GiB** — and M1-S4's remembered "~23 GB"
+turned out optimistic, because `error_segments` joined the marts two milestones later.
+
+**The concept underneath.** *An optimisation's cost is a different quantity from the
+one it improves, and you have to name both or you have not measured anything.* The
+scoped publish lowers the PEAK by 45% and raises the STEADY STATE by 1.85 GiB, because
+a `DELETE` of 7.75M rows is space the table holds until autovacuum reclaims it. Both
+numbers came out of the same probe and only one of them is flattering. Worse, the
+scoped path gives up a property the full refresh had for free: it can leave a month
+behind, and a mart that is quietly short answers every query happily and just returns
+fewer rows. That is M1-S2's catalogue lesson arriving one layer downstream, and the
+answer is the same one: a reconciliation that runs every time and refuses. The check
+is not a nicety bolted on afterwards — it is the *price* of the decision, and if you
+would not pay it you should not make the trade.
+
+**The instrument lesson, again.** The run that proved the tail also produced a
+surprise: five cached stages came back `CACHE_POPULATED` rather than `CACHE_HIT`, on a
+month they had each been populated for, with the same data pin and untouched function
+bodies. The cause is that the image tag is the git short sha, so every commit mints a
+new image and the image is part of the task spec Flyte keys on (gotcha #66). It is
+arguably correct — it agrees with F-026 from the other side, since the image is where
+the model code comes from — but nobody had priced it: one commit under `src/` turns
+the next full-data run back into a 31-minute fit. And the same run exposed a much
+smaller version of the same disease in our own transcript: the runner had been
+printing "six stages on-cluster" after the graph grew a seventh, and nobody noticed,
+because nothing reads a summary line for information. It now derives the count from
+`pipelines.tasks.STAGES`.
+
+**What to look at.** `scripts/marts_publish.py` — read `publish`'s docstring first,
+it is D-003's decision with its numbers · `docs/pipeline_m4.md` §16, especially §16.2
+(the costs) and §16.7 (the cache surprise) · `tests/unit/test_marts_publish.py`, which
+drives the whole publish against a two-row DuckDB file and a recording transport, no
+cluster · the four assertions in `tests/unit/test_flyte_task_wiring.py` that were
+replaced by properties this session, and what each one used to encode.
+
+**What to try yourself.** Run `make marts-peak MARTS_MONTHS=2019-04` and then
+`make marts-peak` back-to-back and watch the `marts_db_end_gib` numbers diverge —
+that is the steady-state cost, and it is invisible in any single run. Then delete one
+month's rows from `marts.trips_clean` by hand and re-run a scoped publish for a
+*different* month: the reconciliation is what stops you shipping the hole.
+
 ### M4-S5 (first session) — the drill was wrong three times, and each wrong was about the instrument (2026-08-18, role:MLOps A / MLE R, SRE hat)
 
 **What was built.** `make pipeline-kill-drill`: delete the pod a stage is running

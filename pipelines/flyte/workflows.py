@@ -41,13 +41,14 @@ gate, so `register` returns the verdict as data and never raises. The exit-code
 mapping (0/1/2/3) lives in exactly one place, `tasks.RegisterResult.exit_code`,
 and is a CLI concern that this file does not import.
 
-FIVE STAGES ARE CACHED, TWO ARE NOT, AND BOTH REFUSALS ARE ARGUED WHERE THEY ARE
+FIVE STAGES ARE CACHED, THREE ARE NOT, AND EVERY REFUSAL IS ARGUED WHERE IT IS
 MADE. The cache key is the function body plus the declared inputs plus a salt
 derived from the DVC pins (`_data_pin`), so code, inputs and DATA all invalidate
 it — the third being the one Flyte cannot see on its own, because these stages
-declare a month string and read a 1.8 GB volume. `register` is uncached because
-it reads the live registry, and `main` because a cached parent would make the
-rerun's evidence unreadable. Both docstrings say so at length.
+declare a month string and read a 1.8 GB volume. `register` is uncached because it
+reads the live registry, `publish_marts` because its product is a side effect on a
+database the cache cannot see, and `main` because a cached parent would make the
+rerun's evidence unreadable. All three docstrings say so at length.
 
 Run it:  make pipeline MONTH=2019-01     (scripts/run_pipeline.sh for the wiring)
          make pipeline-cache-drill       (runs it twice and proves the reuse)
@@ -416,9 +417,71 @@ async def register(manifest: str) -> str:
     )
 
 
+@data_env.task(cache="disable", retries=_STAGE_RETRIES)
+async def publish_marts(month: str, verdict: str) -> str:
+    """The TAIL: analyst layer -> dbt build -> publish the marts. D-003, M4-S5.
+
+    `verdict` is consumed only for the edge it draws — the marts must be published
+    after the run that produced them has a verdict, so the DAG has to say so, and
+    the way you say so in a dataflow engine is to take the previous stage's output.
+    Nothing in the publish reads it: the marts are built from DATA, and a REFUSED
+    challenger changes nothing about what the boards should be showing. That is
+    also why this stage does not branch on the decision — a pipeline whose data
+    publish depended on a model verdict would leave the warehouse a month stale
+    every time the gate said no, which is precisely when a DA wants to look.
+
+    **UNCACHED, and this is the one stage where the reason is about EFFECTS rather
+    than about inputs.** Every other refusal in this file is Rule 2 — a stage that
+    reads live state outside its inputs. This one is the mirror image: its product
+    is not its return value, it is a mutation of a Postgres the cache cannot see. A
+    cache hit would return "published, 7,584,656 rows" in 0.1 s having published
+    nothing, and it would be RIGHT to do so by the cache's own rules — the inputs
+    and the code and the data pin were all identical. But somebody could have
+    dropped the table, restored the volume, or re-run `make marts` in between, and
+    the whole point of a scheduled publish is that the warehouse ends up matching
+    the data whatever else happened. That is the green-transcript-over-stale-state
+    failure the data-pin salt exists to prevent, in effect form, and no salt can
+    reach it. It costs a few minutes against a 31-minute fit.
+
+    Retries are the standard budget: the publish is idempotent by construction —
+    the aggregates are swapped in inside one transaction and the fact table's month
+    is deleted and re-streamed inside another, so a killed attempt leaves either
+    the old month or the new one, and a second attempt converges.
+    """
+    from pipelines import tasks
+
+    result = tasks.publish_marts(month, transport="psycopg")
+    print(
+        f"[flyte] marts {result.month}: {len(result.marts)} mart(s) {result.mode} "
+        f"in {result.seconds:.1f}s via {result.transport}; "
+        f"{result.fact_rows_published:,} fact rows for {result.month}, "
+        f"{result.months_reconciled} month(s) reconciled "
+        f"(after verdict {json.loads(verdict).get('decision')})"
+    )
+    return json.dumps(
+        {
+            "month": result.month,
+            "mode": result.mode,
+            "marts": list(result.marts),
+            "seconds": result.seconds,
+            "fact_rows_published": result.fact_rows_published,
+            "months_reconciled": result.months_reconciled,
+            "approx_rows": result.approx_rows,
+        }
+    )
+
+
 @light_env.task(cache="disable", retries=0)
-async def main(month: str = "2019-01", train_months: str = "", judge: bool = True) -> str:
-    """ingest -> validate -> build_features -> train -> evaluate -> register.
+async def main(month: str = "2019-01", train_months: str = "", judge: bool = True,
+               publish: bool = True) -> str:
+    """ingest -> validate -> build_features -> train -> evaluate -> register -> marts.
+
+    `publish` exists for the same reason `--publish` exists on the local rehearsal:
+    the tail mutates the warehouse two Metabase boards read, so a drill that only
+    wants to watch the orchestrator (the cache drill, the kill drill) can leave it
+    out and say so in its own transcript rather than republishing 7.5M rows twice
+    per run. It defaults to TRUE because the monthly pipeline is the publish's home
+    from M4 on — an opt-in tail would be a tail nobody runs.
 
     `judge` exists so the F-008 refusal can be honored rather than argued with: a
     sampled run (`train_months` non-empty) is not entitled to a verdict, so the
@@ -450,4 +513,15 @@ async def main(month: str = "2019-01", train_months: str = "", judge: bool = Tru
     featured = await build_features(month, rows)
     manifest = await train(train_months, judge, featured)
     manifest = await evaluate(manifest)
-    return await register(manifest)
+    verdict = await register(manifest)
+    if publish:
+        await publish_marts(month, verdict)
+    # The VERDICT is still what the workflow returns, and the tail does not change
+    # that. `scripts/run_pipeline.sh` asserts positively on a `"decision"` in the
+    # run's outputs (gotcha #59: a failed run returns o0=None and `flyte run` exits
+    # 0 either way), and every drill written against that assertion is evidence
+    # about the gate. Returning the publish's summary instead would have quietly
+    # broken all of them and replaced the one thing the pipeline exists to produce
+    # with a row count. The marts stage's own numbers are read off its action, the
+    # way §9 read the fit's.
+    return verdict

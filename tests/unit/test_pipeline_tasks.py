@@ -72,9 +72,15 @@ def _imports(node: ast.AST, prefixes: tuple[str, ...] = ("taxi_mlops",)) -> list
 
 def test_the_graph_is_the_one_the_blueprint_names(tasks):
     """Prevents: a stage quietly appearing or vanishing between the gate's text
-    and the code. §9/M4: 'ingest->validate->features->train->evaluate->register'."""
+    and the code. §9/M4: 'ingest->validate->features->train->evaluate->register',
+    plus the tail §9/M1-S6 promised — 'from M4 the build+publish runs as the tail
+    task of the monthly Flyte pipeline' — which landed at M4-S5 as D-003's closure.
+    The tail is LAST and asserted to be last: marts published before the run that
+    produced them has a verdict would be a warehouse describing a model nobody
+    judged."""
     assert tasks.STAGES == (
         "ingest_month", "validate", "build_features", "train", "evaluate", "register",
+        "publish_marts",
     )
     for name in tasks.STAGES:
         assert callable(getattr(tasks, name)), f"{name} is declared but not defined"
@@ -92,7 +98,12 @@ def test_every_stage_returns_a_typed_serializable_result(tasks):
         "train": tasks.TrainResult,
         "evaluate": tasks.EvaluationResult,
         "register": tasks.RegisterResult,
+        "publish_marts": tasks.MartsResult,
     }
+    assert set(returns) == set(tasks.STAGES), (
+        "a stage was added to the graph and not to this map, so its return type is "
+        "unchecked — which is the one property this test exists for"
+    )
     for name, kind in returns.items():
         assert dataclasses.is_dataclass(kind), f"{name} must return a dataclass"
         hints = getattr(getattr(tasks, name), "__annotations__", {})
@@ -118,6 +129,54 @@ def test_the_stages_hold_no_logic_of_their_own(source):
             f"{stage} imports {_imports(stages[stage])} — it reports a decision that "
             "was already made; a reporting stage that can compute will one day compute"
         )
+
+
+def test_the_marts_tail_reaches_the_marts_code_and_never_the_registry(source):
+    """M4-S5's stage, held to both boundaries at once.
+
+    ADR-009 says the marts serve humans and model code never imports them, so the
+    publish lives in `scripts/` and this stage calls it — the dependency runs
+    pipelines -> scripts, never through `src/`. And M4's standing law says no
+    pipeline stage moves `@champion`, so the tail must not reach the registry at
+    all: it publishes DATA, and it would have no reason to resolve an alias except
+    to become a second promotion path.
+    """
+    tree = ast.parse(source)
+    stages = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+    stage = stages["publish_marts"]
+    names = {
+        n.attr for n in ast.walk(stage) if isinstance(n, ast.Attribute)
+    } | {n.id for n in ast.walk(stage) if isinstance(n, ast.Name)}
+    assert "marts_publish" in names, "the tail no longer calls the shared publish module"
+    imported = _imports(stage)
+    assert any(m.startswith("taxi_mlops.data") for m in imported), (
+        "the tail must rebuild the analyst layer through taxi_mlops.data, which owns it"
+    )
+    forbidden = [m for m in imported if m.startswith(("taxi_mlops.training", "mlflow"))]
+    assert not forbidden, f"the marts tail reaches the registry/model code: {forbidden}"
+
+
+def test_the_marts_tail_is_the_last_stage_and_the_local_rehearsal_opts_in(source, tasks):
+    """Two properties that are easy to break in opposite directions.
+
+    LAST: marts published before the run has a verdict would be a warehouse
+    describing a model nobody judged. OPT-IN locally: every other stage of
+    `make pipeline-local` writes only into `data/` and MLflow, so a rehearsal that
+    republished the warehouse two Metabase boards read by default would be a command
+    whose name lies about its blast radius.
+    """
+    assert tasks.STAGES[-1] == "publish_marts"
+    assert "--publish" in source
+    tree = ast.parse(source)
+    rehearse = next(
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "rehearse"
+    )
+    publish_kw = [a for a in rehearse.args.kwonlyargs if a.arg == "publish"]
+    assert publish_kw, "rehearse no longer takes a publish switch"
+    default = rehearse.args.kw_defaults[rehearse.args.kwonlyargs.index(publish_kw[0])]
+    assert isinstance(default, ast.Constant) and default.value is False, (
+        "the local rehearsal now publishes the warehouse by default"
+    )
 
 
 def test_pipelines_does_not_import_an_orchestrator_yet(source):

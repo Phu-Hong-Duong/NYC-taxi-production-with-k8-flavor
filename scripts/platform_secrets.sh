@@ -210,5 +210,21 @@ apply_secret flyte flyte-task-storage \
 # artifacts, and one shared key in the task pod would undo that quietly.
 apply_secret flyte flyte-task-mlflow \
   "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
+# The warehouse credential the MARTS TAIL TASK publishes with (M4-S5, D-003). The
+# FOURTH consumer of the `marts` role — Metabase reads with it (M1-S5), the host's
+# `make marts` names it as the OWNER of the tables it creates, and from M4-S5 a
+# task pod connects AS it. Same value, a fourth copy, because Secrets do not cross
+# namespaces and this one has to be readable from `flyte`.
+#
+# `marts` and NOT the superuser, deliberately: a scheduled publish is a seat nobody
+# is watching, and one that could DROP DATABASE is one bad month from a restore.
+# `marts` owns the schema and every table in it, so it can do everything the
+# publish needs and nothing outside it.
+#
+# The keys are named exactly as `scripts/marts_publish.py` reads them, so the pod
+# needs no translation layer: MARTS_DB_USER / MARTS_DB_PASSWORD, the same names
+# .env uses on the host.
+apply_secret flyte flyte-task-marts \
+  "MARTS_DB_USER=$MARTS_DB_USER" "MARTS_DB_PASSWORD=$MARTS_DB_PASSWORD"
 
-echo "[secrets] 11 secrets converged from $ENV_FILE (no values printed, by design)"
+echo "[secrets] 12 secrets converged from $ENV_FILE (no values printed, by design)"

@@ -132,9 +132,23 @@ def test_no_secret_value_is_written_into_any_of_the_new_manifests():
         assert "SECRET_ACCESS_KEY=" not in text
         assert "secretKey:" not in text
     refs = {r["secretRef"]["name"] for r in _default_container()["envFrom"]}
-    assert refs == {"flyte-task-storage", "flyte-task-mlflow"}
-    for name in refs:
-        assert name in SECRETS.read_text(), f"{name} is referenced but never converged"
+    # A PROPERTY, not the list that happened to be true when this was written
+    # (F-017, gotchas #49/#50): every Secret a task pod reads must be one
+    # `platform_secrets.sh` converges into the `flyte` namespace, and every
+    # `flyte`-namespace Secret that script converges must be read by a task pod —
+    # a converged Secret nobody references is a credential with no consumer, and a
+    # referenced Secret nobody converges is a pod that will not start.
+    converged = set(
+        re.findall(r"^apply_secret flyte (\S+)", SECRETS.read_text(), re.M)
+    )
+    assert refs == converged, (
+        f"pod reads {sorted(refs)}, platform_secrets.sh converges {sorted(converged)}"
+    )
+    # The identities stay SEPARATE, which is the property the count is a proxy for:
+    # M4-S2 split the orchestrator's MinIO key from MLflow's so a leaked
+    # orchestrator credential could not reach the registry's artifacts, and M4-S5
+    # added the warehouse's as a third. One merged Secret would undo that quietly.
+    assert len(refs) >= 3, "the task pod's identities were merged into fewer Secrets"
 
 
 def test_the_stager_pins_its_image_by_digest():
@@ -219,19 +233,33 @@ def test_every_pipeline_task_declares_its_cache_explicitly():
     assert not silent, f"these tasks inherit their caching instead of declaring it: {silent}"
 
 
-def test_the_uncached_stages_are_exactly_register_and_main():
-    """Both refusals are deliberate and both are argued in their own docstrings.
+def test_the_uncached_stages_are_exactly_register_main_and_the_marts_tail():
+    """Three refusals, deliberate, and each argued in its own docstring.
 
     `register` reads the LIVE registry, so a cached verdict answers "what is
     serving?" with what WAS serving. `main` is uncached so the rerun's evidence
     stays per-stage — a cached parent returns in one action and proves nothing
-    about the five stages underneath it.
+    about the stages underneath it. `publish_marts` (M4-S5) is the third and the
+    only one whose reason is about EFFECTS rather than inputs: its product is a
+    mutation of a Postgres the cache cannot see, so a hit would return "published"
+    having published nothing.
+
+    The docstring requirement is asserted, not just described: a stage that loses
+    its cache silently is exactly the change this test exists to make loud.
     """
     disabled = {n for n, c in _tasks().items() if _cache_arg(c) == "disable"}
-    assert disabled == {"register", "main"}, (
+    assert disabled == {"register", "main", "publish_marts"}, (
         f"the set of uncached stages moved to {disabled}; if that is intended, the "
         f"docstring arguing it must move too, and so must the drill's own list"
     )
+    source = WORKFLOWS.read_text()
+    for name in disabled:
+        body = source.split(f"async def {name}(", 1)[1]
+        docstring = body.split('"""')[1]
+        assert "cach" in docstring.lower(), (
+            f"{name} is uncached and its docstring does not say why — the next reader "
+            "will assume an oversight and delete the refusal"
+        )
 
 
 def test_the_cached_stages_all_share_one_cache_object():
@@ -353,7 +381,15 @@ def test_the_runner_refuses_an_image_older_than_the_source_it_would_run():
     match = re.search(r"^IMAGE_PATHS=\(([^)\n]*)\)\s*$", text, re.M)
     assert match, "run_pipeline.sh no longer declares the image-carried paths"
     paths = set(match.group(1).split())
-    assert paths == {"src", "pyproject.toml", "uv.lock", "docker"}, paths
+    # M4-S5 added `scripts` and `analytics`: the marts tail task loads
+    # `scripts/marts_publish.py` by path from inside the pod, and the dbt project
+    # under `analytics/` is not importable at all, so NO copy-style would ever
+    # bundle it — the image is its only carrier, which is exactly this guard's
+    # criterion. Every entry here is asserted to be a real path, so a typo'd guard
+    # (which silently checks nothing) fails instead of passing.
+    assert paths == {"src", "pyproject.toml", "uv.lock", "docker", "scripts", "analytics"}, paths
+    for path in paths:
+        assert (REPO / path).exists(), f"the guard names {path}, which does not exist"
     assert "pipelines" not in paths, (
         "pipelines/ travels in the code bundle; guarding it would refuse runs whose "
         "code genuinely reached the pod"
