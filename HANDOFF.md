@@ -1,5 +1,135 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (at) — M4-S4 leg 2: 33 minutes to 11 seconds, and the image was carrying the code all along
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLOps (A) · MLE (R)** —
+charter read (`docs/org/ROLES.md` §MLOps). Boot reads: CLAUDE.md · HANDOFF (as) ·
+`docs/milestones/M4_KICKOFF.md` · AWAITING_PO.
+
+**M4-S4 is COMPLETE. PR #24 MERGED (`1895298`), reachable from origin/main,
+branch pruned.** Both legs the previous session left open are landed: the
+**full-data green run** (inherited DONE, read back and written up) and the
+**cache-hit rerun** (run here, GREEN 19/19). M4-S5 is unblocked in full and is
+the next story.
+
+**Staleness check found reality had moved, and it was gotcha #34 again.**
+`kubectl: command not found` on the first command — the host had restarted and
+Docker Desktop was not running, so `/mnt/wsl` held only `resolv.conf` and the
+symlink dangled. Recovered by the documented one-liner (launched through the
+allowlisted `python3`, gotcha #27's pattern, since `cmd.exe` is not on the
+allowlist): all three kind nodes restarted themselves, every platform pod came
+back, nothing was re-deployed. Second occurrence; ~2 minutes. **The detached
+full-data run had finished BEFORE the restart** (`DONE 0` at 10:04Z), so nothing
+was lost.
+
+**The statefulness law held.** No `kind delete`/`create`, no kind-config edit, no
+new hostPort. `@champion` read before and after all four on-cluster runs this
+session — **version 2**, every time, by the runner itself, which exits 2 if it
+moved.
+
+### Done (each with the command and what it printed)
+- **`make pipeline-cache-drill MONTH=2019-01` — GREEN 19/19, detached**
+  (`automation/runs/m4s4-cache-drill.log`, `DONE 0`). Run 1
+  `r56p9p7qwfsqgh6qgrlw` populated all five cacheable stages (**train 1935.2 s**);
+  run 2 `rbbvfb5mhfgz8cngx9rn` hit all five (**train 0.1 s**). Executed stages
+  **1966.9 s -> 3.2 s (0.2%)**, wall-clock **1974 s -> 11 s (0.6%)**, MLflow
+  **12 -> 16 -> 16**, `@champion` **2** after both.
+- **The full-data run's per-stage detail RECOVERED FROM THE SERVER** with the new
+  `scripts/flyte_run_actions.py`: six stages, **1909.7 s, of which the fit is
+  1874.7 s and everything else together is 34.6 s**. `flyte run --follow` had
+  logged `Scrolled 2 lines` and nothing else, so this detail did not exist in any
+  transcript. Its verdict: **REFUSE**, correctly — cleared the FLOOR condition at
+  **+3.26%** and was refused by F-011's **incumbent** condition, because the
+  pipeline's fit of set v2 with v1's hyperparameters IS M3's `artisan v2` and
+  measured **3.2425** against the champion's **3.2403**. The pipeline re-derived a
+  bake-off number to four decimals, on a kind node, and was told it is 0.07% worse
+  than what serves.
+- **`make pipeline-cache-drill DRILL_STAGE=ingest` — the 40-second mechanism
+  probe, GREEN 5/5** (`13.7 s -> 0.3 s`, `CACHE_POPULATED -> CACHE_HIT`). It found
+  three defects before the 35-minute run started; see Defects.
+- **F-026 filed and CLOSED** (see Defects), red-teamed live: `make pipeline` with
+  one line appended to `src/taxi_mlops/training/evaluate.py` → **exit 3** naming
+  the file, before the PVC check or any launch; file restored, tree clean.
+- **500 unit tests green (+8**, all in `tests/unit/test_flyte_task_wiring.py`),
+  ruff clean across `src tests pipelines scripts`, CI `lint-test` pass 1m6s.
+  **`make verify-m2` GREEN 55/55 exit 0 and `make verify-m3` GREEN 46/46**,
+  re-run after two full-data fits on the cluster.
+- Ledgers: **F-026 filed + closed**. Docs: `docs/pipeline_m4.md` §9–§12 (§1–§8
+  left UNEDITED as the first session's record), CLAUDE.md new section + 2 command
+  rows + the traps paragraph, gotchas **#62/#63**, field note written.
+
+### The strongest single number
+**MLflow 12 -> 16 across run 1, and 16 -> 16 across run 2.** Four runs are what
+one fit costs here (two floors, the challenger, the parent), so "no new runs" is
+not an absence of evidence — it is the positive statement that the fit did not
+happen twice, made by a server that has never heard of Flyte. The control plane
+saying `CACHE_HIT` is the claim; this is the leg that could have refuted it.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **Five stages cached, two refused.** `register` reads the LIVE registry, so a
+  cached answer to "what is serving?" is wrong exactly when the alias has moved —
+  3.7 s forgone against a 31-minute fit, the rare case where correct is nearly
+  free. `main` is uncached so the rerun's evidence stays per-stage; a cached parent
+  returns in ONE action and could not distinguish "five stages reused" from "the
+  whole thing skipped" — and M4-S5's kill drill would have no pod to kill.
+- **The cache key carries the DATA, via a salt hashed from `data/*.dvc`.** Flyte
+  keys on declared inputs; every stage declares a month string and reads 1.8 GB off
+  a volume. Without the salt the honest failure mode is a stale model *with a green
+  transcript*. The salt travels in `TAXI_DATA_PIN` exactly as the image ref does,
+  and `_data_pin()` raises rather than defaulting.
+- **The drill was detached without `--then-schedule`** and consumed in-session, so
+  the story could be merged verified rather than handed forward unproven. The
+  successor is scheduled by hand below — one successor, not two.
+
+### Defects/Surprises
+- **F-026 — a task pod's `src/taxi_mlops` comes from the IMAGE, not the code
+  bundle, and nothing said so.** `flyte run` defaults to `--copy-style
+  loaded_modules`: **22 files bundled**, against **36 `.py` in `src/taxi_mlops`
+  alone**, because every stage body imports the model code INSIDE the function. So
+  editing `src/`, committing and running `make pipeline` executes the PREVIOUS code
+  and prints a green transcript. The runner's own comment promised the opposite —
+  "a pull error here means the tree moved" — describing a protection that does not
+  exist: M4-S3's loud `ImagePullBackOff` fires for a tag no node HOLDS, and a stale
+  manifest names a tag every node holds. Found by asking a question the drill has
+  to answer before its result means anything (*were both runs running the same
+  code?*); they were, checked, which is why this session's numbers stand.
+- **An apostrophe swallowed four lines of shell** (gotcha **#62**). The drill's
+  banner read `${DRILL_STAGE:+ … not the milestone's evidence}`; inside `${var:+word}`
+  that apostrophe opens a quote, so bash consumed the following lines and reported
+  **`line 72: $!: unbound variable`** against a port-forward that was perfectly
+  correct. `bash -n` gave the honest message; bisecting the file by prefix located
+  it. Fourth time this program has paid for prose sitting where a parser reads it
+  as code (#35, #53, #60).
+- **A bar on the wrong clock called a 98.7% saving a failure** (gotcha **#63**).
+  The probe measured a stage `15.2 s -> 0.2 s` inside a wall-clock of `17 s -> 9 s`
+  and went RED at "52.9%, not under 50%" — a one-stage rerun is mostly the launch
+  overhead no cache can touch. The fix was the right QUANTITY (the sum of the
+  cached stages' own durations), not a looser threshold.
+- **The drill's second probe run went red comparing two reruns to each other.**
+  The cache outlives a drill, so run 1 arrived already cached and there was no
+  saving to measure. The drill now names pre-cached stages, excludes them from the
+  saving, still requires them to be `CACHE_HIT`, and REFUSES to be green if run 1
+  executed nothing at all.
+- **Carried to M4-S5, deliberately unfixed**: `register`'s output `margins` carries
+  the FLOOR numbers only, so a REFUSE decided by the INCUMBENT condition prints
+  beside a floor margin that PASSES, and the reader must know M3-S1 to reconcile
+  them. `verify-m4` is about to start asserting against that output — changing the
+  shape one story before the gate that pins it is how twins get born, so it is
+  named in `docs/pipeline_m4.md` §12 rather than changed here.
+
+### Next
+**M4-S5** (kill-a-pod retry · D-003's marts tail task · `make verify-m4` +
+red team) — the milestone's last story. It is unblocked; `docs/pipeline_m4.md`
+§12 supersedes §8 and states exactly what it inherits, including:
+- `scripts/flyte_run_actions.py` is built for `verify-m4` to reuse (a reader,
+  pinned structurally as one), and `automation/runs/m4-cache/cache_drill.json`
+  holds the cache evidence the gate owes.
+- **The kill drill needs an UNCACHED stage to kill**, and five of six are now
+  cached for `MONTH=2019-01`. Drill a fresh month (a new `ingest` key) — the
+  honest option — rather than killing the 3.2-second `register`.
+- M4 carries no ◆, so M4-S5 exits to `automation/next_session.sh architect 120`.
+
 ## Session 2026-08-18 (as) — M4-S4: the split horizon had a lever, and four of five defects were in the checkers
 
 ### State
