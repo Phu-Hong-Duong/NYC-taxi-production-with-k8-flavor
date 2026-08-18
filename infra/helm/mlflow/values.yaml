@@ -73,14 +73,31 @@ extraEnvVars:
 # reads like an MLflow problem and is a network-policy one.
 #
 # The names are listed EXPLICITLY rather than `["*"]`. `*` would make the failure
-# go away and delete the protection with it; these are the four names by which
-# this service is actually addressable, and a name that is not here should fail.
-# The middleware matches the host portion, so no ports appear.
+# go away and delete the protection with it; these are the names by which this
+# service is actually addressable, and a name that is not here should fail.
+#
+# THE PORT IS PART OF THE NAME, and finding that out cost a wrong fix. The first
+# version of this list held bare hostnames, on the reasonable assumption that the
+# middleware compares the host PORTION of the header. It does not — it compares
+# the header. Setting this value at all REPLACES MLflow's own default list, so
+# the bare-name version fixed the in-cluster client and simultaneously broke every
+# host-side one: `curl localhost:5000/api/...` started returning the same 403,
+# while `curl -H 'Host: localhost' 127.0.0.1:5000/health` returned OK — which is
+# the two-line experiment that identified it. Both forms are listed now: with the
+# port for the clients this program has, without it for a future ingress that
+# terminates on :80.
 serverAllowedHosts:
-  - "localhost"                          # the host route, via nodePort 30500
-  - "127.0.0.1"                          # the same, when a client resolves it itself
-  - "mlflow.mlflow.svc.cluster.local"    # in-cluster FQDN — Flyte task pods
-  - "mlflow.mlflow"                      # the short in-cluster form, same Service
+  # the host route, via nodePort 30500 (CLAUDE.md's port family: 5000 <- 30500)
+  - "localhost:5000"
+  - "localhost"
+  - "127.0.0.1:5000"
+  - "127.0.0.1"
+  # in-cluster FQDN — Flyte task pods, which cannot use localhost
+  - "mlflow.mlflow.svc.cluster.local:5000"
+  - "mlflow.mlflow.svc.cluster.local"
+  # the short in-cluster form of the same Service
+  - "mlflow.mlflow:5000"
+  - "mlflow.mlflow"
 
 # ClusterIP: the host route is the separate NodePort Service in
 # infra/manifests/mlflow-nodeport.yaml, because this chart has no `nodePort`
