@@ -106,7 +106,7 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam marts-peak pipeline pipeline-cache-drill pipeline-kill-drill pipeline-local stage-data verify-m4
+.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam flyte-actions marts-peak pipeline pipeline-cache-drill pipeline-kill-drill pipeline-local stage-data verify-m4
 MONTH ?= 2019-01
 MARTS_MONTHS ?=
 # Passed EXPLICITLY into the recipes below rather than relying on make's export
@@ -134,6 +134,8 @@ flyte-hello: ## two tasks on-cluster, the second consuming the first's output th
 	@bash scripts/flyte_hello.sh
 stage-data: ## put the DVC-pinned data trees on the PVC task pods mount (M4-S4; RESTAGE=1 forces, DRY_RUN=1 previews)
 	@bash scripts/stage_pipeline_data.sh
+flyte-actions: ## read a run's per-stage detail (durations, cache_status, attempts) off the control plane (M4-S5; RUN=<run-name>)
+	@bash scripts/flyte_actions.sh
 marts-peak: ## D-003: publish the marts under a size probe (MARTS_MONTHS=YYYY-MM scopes the fact table; empty = full refresh)
 	@bash scripts/marts_peak_probe.sh $(if $(MARTS_MONTHS),month-scoped-$(MARTS_MONTHS),full-refresh) -- \
 	  uv run python scripts/marts_publish.py --duckdb analytics/dbt/marts.duckdb \

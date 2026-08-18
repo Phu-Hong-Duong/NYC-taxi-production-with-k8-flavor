@@ -76,10 +76,10 @@ sleep 1
 # lives with and the run's last in-flight sample is not it.
 printf '%s\t%s\n' "$(date +%s)" "$(sample || true)" >>"$SAMPLES"
 
-python3 - "$SAMPLES" "$SUMMARY" "$LABEL" "$started" "$finished" "$rc" "$*" <<'PY'
+python3 - "$SAMPLES" "$SUMMARY" "$LABEL" "$started" "$finished" "$rc" "$*" "$INTERVAL" <<'PY'
 import json, sys
 
-samples_path, summary_path, label, started, finished, rc, command = sys.argv[1:8]
+samples_path, summary_path, label, started, finished, rc, command, interval = sys.argv[1:9]
 rows = []
 for line in open(samples_path).read().splitlines()[1:]:
     parts = [p for p in line.split("\t") if p.strip()]
@@ -99,7 +99,11 @@ summary = {
     "exit_code": int(rc),
     "seconds": int(finished) - int(started),
     "samples": len(rows),
-    "interval_seconds": None,
+    # Recorded because it BOUNDS the honesty of the peak: a 5 s sampler cannot see a
+    # spike shorter than 5 s, so a reader has to know the resolution the number was
+    # measured at. The first run of this probe left it null, which is exactly the
+    # kind of missing denominator that turns a measurement into a claim.
+    "interval_seconds": float(interval),
     "marts_db_start_gib": gib(marts[0]),
     "marts_db_peak_gib": gib(max(marts)),
     "marts_db_end_gib": gib(marts[-1]),

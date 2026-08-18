@@ -796,3 +796,237 @@ Leg 3 inherits, in addition to M4-S4's list:
   NAME.
 * **`train` for 2019-02 and 2019-03 is now cached.** A third kill drill needs a
   fourth month, or an invalidating edit.
+
+## 16. D-003 decided: the marts tail task, and why the fact table is the only mart that changed
+
+Leg 2 of M4-S5. §14 measured the one fact the design turns on and stopped there;
+this is the build, the decision the debt row demanded, and the numbers it rests on.
+
+### 16.1 The decision, in one paragraph, with its evidence
+
+D-003 asked for one of two things at the moment the publish became scheduled: an
+incremental materialisation, or a recorded decision that full refresh stays with
+the ~23 GB peak re-measured. **The answer is split, because the marts are not one
+kind of object** — and both halves were measured on today's data before either was
+argued, with `make marts-peak` sampling `pg_database_size('marts')` every 5 s:
+
+| publish | wall | `marts` DB start → **peak** → end | PGDATA used, peak |
+|---|---|---|---|
+| **full refresh** (all 8 months, 56,127,878 rows) | **228.2 s** | 15.33 → **27.96** → 13.48 GiB (**2.075×**) | 204.62 GiB |
+| **month-scoped** (2019-03, 7,753,921 rows) | **82.7 s** | 13.48 → **15.33** → 15.33 GiB (**1.0×**) | 191.99 GiB |
+
+So: the four aggregates stay full-refresh forever, and `trips_clean` is
+month-scoped. `zone_hourly_stats` (44,792 rows), `monthly_kpis` (8),
+`rejections_by_rule` (80) and `error_segments` (1,151) are ~46,000 rows between
+them; rewriting all four costs under a second and buys the strongest property a
+publish can have — **the mart IS the source, with no possibility of drift.**
+Incremental machinery there would be complexity bought with nothing. The fact
+table is the entire peak: it is 13 GiB, its grain IS the month (an indexed
+column), and a monthly pipeline re-derives ONE month, so a full refresh
+republishes ~7.5M changed rows by rewriting 56M — eight months of work to land one.
+
+**Peak down 45.2%, wall down 63.8%.** And M1-S4's remembered "~23 GB" was
+optimistic: measured today it is **27.96 GiB**, because `error_segments` joined the
+marts at M2-S4 and the fact table grew. A debt argued from a remembered number is a
+debt argued from nothing — which is why the row's closure quotes this table and not
+that sentence.
+
+### 16.2 The honest cost of the decision, stated as a cost
+
+Two things get WORSE, and neither is hidden:
+
+* **The steady state rises.** A month-scoped publish `DELETE`s 7.75M rows and
+  re-streams them, and those dead tuples are space the table holds until autovacuum
+  reclaims it — measured, `end` is **15.33 GiB** where a full refresh ends at
+  **13.48**. So incremental trades a lower PEAK for a higher FLOOR of about one
+  month of dead space. That is the right trade on a volume whose failure mode is a
+  spike, and it is the wrong one to describe as "smaller".
+* **The mart can now drift from its source in a way a full refresh made
+  impossible.** A month deleted and not re-streamed is a mart that is quietly
+  short: it answers every query happily and just returns fewer rows — M1-S2's
+  catalogue lesson, one layer downstream. So **`reconcile` runs after every
+  month-scoped publish**, asking Postgres and DuckDB for the same per-month counts
+  and refusing to return unless every month agrees. That check is the price of the
+  decision and it is not optional; `tests/unit/test_marts_publish.py` watches it say
+  no.
+
+A first publish (or a table somebody dropped) has no month to replace, so the
+scoped path falls back to a full refresh and **says so on stdout** — the one publish
+that legitimately pays the peak must not look like the rest.
+
+### 16.3 One body of SQL, two transports — and why that was forced
+
+`scripts/marts_publish.py` is new and it is mostly a MOVE. The publish used to be
+the second half of `scripts/marts.sh`, in shell, which was fine while the host was
+the only publisher. A task pod **cannot use the host's transport**: `marts.sh`
+reaches Postgres over `kubectl exec` because nothing of ours publishes 5432 (the
+port family annotates it "in-cluster only"), and a pod has neither kubectl nor a
+kubeconfig — giving a pipeline stage cluster credentials so it could shell into
+another pod would be a worse trade than any of the three alternatives `marts.sh`
+already rejects.
+
+So there are two transports and **one** body of SQL. The swap is the most
+consequential statement in this repo — it is what decides what a board renders —
+and §14 named the twin to avoid before any of it was written. Everything below the
+`Transport` protocol is transport-blind: the same statements in the same order,
+whether they arrive over `kubectl exec -i` or over a psycopg connection. Three more
+things moved for the same reason: the **mart list** (`marts.sh` no longer has a
+`MARTS=(...)` array, and a test fails if one comes back), the **dbt `--vars`
+payload** (`--print-dbt-vars`, so the mart's KPI-04 domains and the model's KPI-12
+tolerance cannot be assembled twice), and the **`--no-partial-parse` flag** (gotcha
+#38, welded onto one invocation).
+
+The CSV producer is also one thing, and it is a **subprocess on both sides**:
+`scripts/marts_export.py` already owned the DuckDB half since M1-S4, so the host
+pipes its stdout into `psql \copy` and the pod pumps it into psycopg's `COPY FROM
+STDIN` in 4 MiB chunks. It gained one option — `--where`, which scopes the stream
+inside DuckDB, because filtering 56M rows on the far side would have paid the whole
+cost of the thing it avoids. **The producer's exit code is checked explicitly**: a
+`Popen` read to EOF looks identical whether it finished or died three rows in, so
+without that the publish would commit a truncated mart and print a row count
+(gotcha #59, in miniature).
+
+### 16.4 What a task pod needed that it did not have
+
+Four pieces of wiring, each the third or fourth instance of a shape this program
+already had:
+
+* **`flyte-task-marts`** — the third Secret a task pod reads, holding
+  `MARTS_DB_USER`/`MARTS_DB_PASSWORD` under exactly the names `marts_publish.py`
+  reads, so the pod needs no translation layer. It is the **fourth** consumer of the
+  `marts` role (Metabase reads with it, the host publish owns tables as it, and now
+  a pod connects AS it). It is a separate Secret because Secrets do not cross
+  namespaces and because the two existing identities were deliberately split at
+  M4-S2 — merging them to save a Secret would quietly undo that. The test that used
+  to name the two expected Secrets now diffs the pod's `envFrom` against what
+  `platform_secrets.sh` actually converges into the `flyte` namespace, in both
+  directions: a converged Secret nobody reads is a credential with no consumer, and
+  a referenced Secret nobody converges is a pod that will not start.
+* **The pod publishes as `marts`, never as the superuser.** M1-S5's rule applied to
+  a pipeline stage: a seat that can drop the warehouse it reads is one misclick from
+  a restore, and a scheduled publish is a seat nobody is watching.
+* **`data/predictions/` as a fourth staged tree**, mounted by subPath like the other
+  three. `error_segments` sources the analyst layer's `predictions` view, and that
+  view is CONDITIONAL on the tree existing — so without the mount `analyst.build()`
+  silently omits it and the dbt build fails on a missing source three frames deep in
+  a compiled model. It is the one staged tree that is **not DVC-pinned** (M2-S4
+  decided that deliberately), so it does not enter the cache salt — honest, because
+  nothing pins it. The staged-vs-mounted twin test needed no edit: it already
+  compared the two lists rather than a remembered count.
+* **The F-026 guard widened to `scripts/` and `analytics/`.** The tail loads
+  `marts_publish.py` by path from inside the pod, and the dbt project is not
+  importable at all, so no `--copy-style` would ever bundle it: the image is its only
+  carrier, which is exactly this guard's criterion. An edit to a mart's SQL against a
+  stale image would publish the PREVIOUS model definition and reconcile perfectly
+  against it.
+
+### 16.5 The stage, and the three things it deliberately does not do
+
+`pipelines.tasks.publish_marts` is three calls in an order that is not negotiable:
+rebuild the analyst layer (`taxi_mlops.data.analyst.report`, which is also the step
+that reconciles — the stage refuses to publish from a catalogue that does not agree
+with the ingest reports that wrote it), `dbt build` (models AND tests interleaved, so
+a red test stops the publish), then the publish over the transport this caller can
+use.
+
+**It does not read the verdict, and it does not branch on it.** `verdict` is
+consumed for the edge it draws — the DAG has to say "after register", and in a
+dataflow engine you say that by taking the previous stage's output. But a pipeline
+whose data publish depended on a model verdict would leave the warehouse a month
+stale every time the gate said no, which is precisely when a DA wants to look.
+
+**It does not touch the registry**, and a test asserts that from the import list.
+ADR-009's boundary law says the marts serve humans and model code never imports
+them, so the publish lives in `scripts/` and the dependency runs `pipelines ->
+scripts -> duckdb/psycopg`, never through `src/`. M4's standing law says no pipeline
+stage moves `@champion`; a tail that could resolve an alias would have no reason to
+except to become a second promotion path.
+
+**It is UNCACHED, and it is the first stage whose reason is about EFFECTS rather
+than inputs.** Every other refusal in `workflows.py` is Rule 2 (a stage that reads
+live state outside its inputs). This one is the mirror image: its product is not its
+return value, it is a mutation of a Postgres the cache cannot see. A hit would
+return "published, 7.5M rows" in 0.1 s having published nothing — and it would be
+RIGHT by the cache's own rules, because the code, the inputs and the data pin were
+all identical. Somebody could have dropped the table or restored the volume in
+between, and the whole point of a scheduled publish is that the warehouse ends up
+matching the data whatever else happened. That is the green-transcript-over-stale-
+state failure the salt exists to prevent, in effect form, and no salt can reach it.
+
+**The local rehearsal opts IN** (`make pipeline-local PIPELINE_LOCAL_ARGS=--publish`).
+Every other stage of that command writes only into `data/` and MLflow; a "plumbing
+rehearsal" whose default republished the warehouse two Metabase boards read would be
+a command whose name lies about its blast radius. The two ORCHESTRATOR drills opt out
+the same way (`PUBLISH_MARTS=0`): the cache drill measures what a cache saves and the
+tail is uncached by design, so including it would drag the measured ratio toward 1
+without any of it being about caching.
+
+### 16.6 The run: seven stages on-cluster, and the number the tail cost
+
+`make pipeline MONTH=2019-01 TRAIN_MONTHS=2019-01`, run `rw98pj84z4jh5ldqrxqp`,
+**exit 0**. Sampled and therefore verdict-free (F-008 honored by construction — the
+register stage returned `NO_VERDICT` as data), because what is new here is the TAIL
+and the fit was already measured twice. `@champion` read **2 → 2** by the runner
+itself, which exits 2 if it moved.
+
+Per-stage detail read off the control plane with `make flyte-actions
+RUN=rw98pj84z4jh5ldqrxqp` (the reader M4-S4 wrote, now with a route of its own):
+
+```
+  a0                         main             SUCCEEDED  CACHE_DISABLED       886.6s
+  2d98cwh9qaqg2ygcjcv59zhe8  ingest           SUCCEEDED  CACHE_POPULATED       14.0s
+  c91whjsuy5pbpetnoq7b2rk57  validate         SUCCEEDED  CACHE_POPULATED        5.1s
+  6p7vnr37wglu937f3mz910l5o  build_features   SUCCEEDED  CACHE_POPULATED        7.1s
+  b8sum2j0yyx6gonm6fj1iz7ox  train            SUCCEEDED  CACHE_POPULATED      762.4s
+  35vy13jifs2n4m4dk7izdt48b  evaluate         SUCCEEDED  CACHE_POPULATED        3.4s
+  1hzjxd9vl60m8isspfwpeiijt  register         SUCCEEDED  CACHE_DISABLED         2.4s
+  8rbeep9e3sx4qs1ogfajzklpw  publish_marts    SUCCEEDED  CACHE_DISABLED        90.6s
+```
+
+**The tail cost 90.6 s of a 886.6 s run — 10.2%**, and inside it the publish itself
+measured **71.9 s** (the remaining ~19 s is pod start, the in-pod analyst-layer
+rebuild, and a `dbt build` that reported **PASS=57 in 9.96 s** from inside the
+container). It published `2019-01` month-scoped and then reconciled **all eight
+months** against the analyst layer, every one `yes`:
+
+```
+[marts] trips_clean: replacing 1 month(s) — 2019-01
+  2019-01     7,584,656     7,584,656    yes     …    2019-08     5,950,708     5,950,708    yes
+  [marts] ok  8 month(s) reconcile
+[marts] published 5 mart(s) into 'marts' via psycopg marts@postgres.platform.svc.cluster.local:5432/marts in 71.9s
+```
+
+**71.9 s in a pod against 82.7 s from the host** for the same work — the pod's direct
+TCP beats `kubectl exec` by about 13%, which is a small bonus and not the reason the
+transport exists. It worked on the first on-cluster attempt, which is worth saying
+plainly because §14 had already paid for the two questions that usually cost the
+attempts: whether a pod can reach Postgres at all, and as whom.
+
+### 16.7 An image rebuild invalidates every cached stage (gotcha #66)
+
+Every cacheable stage above reads **`CACHE_POPULATED`, not `CACHE_HIT`** — and
+`train`, `ingest`, `validate`, `build_features` and `evaluate` were all populated by
+earlier runs on this exact month with an identical data pin. Their function bodies
+were not touched by this story. What changed between those runs and this one is the
+**task image**: the tag is the git short sha (M4-S3), so every commit produces a new
+one, and it reaches the tasks two ways at once — as the `TaskEnvironment`'s image and
+as `TAXI_PIPELINE_IMAGE` in `env_vars`. Either is part of the task spec Flyte keys on.
+Which of the two did it is NOT separated here (they move together by construction, and
+separating them would mean building an image whose tag lies), so the observation is
+recorded at the precision it was measured: **an image rebuild invalidates the cache
+for every stage.**
+
+It is arguably the correct behaviour and it agrees with F-026 from the other side —
+the image is where the model code comes from, so a stage cached against a previous
+image would be a cache hit computed by code this tree does not contain. But it has a
+cost nobody had priced, and it lands on M7: **a commit under `src/`, `scripts/`,
+`analytics/`, `docker/`, `pyproject.toml` or `uv.lock` forces an image rebuild, and an
+image rebuild forces a full re-fit** — 31 minutes on full data, not the 11 seconds
+M4-S4's cache drill measured. The drill's own numbers are unaffected (both its runs
+use one image, deliberately), and this is exactly why it holds the image constant.
+
+**Consequence for leg 3:** `verify-m4`'s cache leg must read the recorded cache
+evidence from `automation/runs/m4-cache/cache_drill.json` rather than re-asking the
+control plane about the latest run — the latest run's stages are `CACHE_POPULATED`
+whenever the image moved, which is most sessions, and a gate that expected
+`CACHE_HIT` there would go red for a commit.

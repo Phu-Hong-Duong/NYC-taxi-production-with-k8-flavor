@@ -303,4 +303,17 @@ if ! grep -qF -- '"decision"' <<<"$io"; then
   exit 1
 fi
 
-echo "[pipeline] ok  run $RUN_NAME completed; six stages on-cluster for $MONTH"
+# The stage count is DERIVED, not typed. It said "six stages" for a month after the
+# graph grew a seventh, which is the smallest possible version of a transcript that
+# describes something other than what ran — and the reason it went unnoticed is that
+# nothing reads a summary line for information. `pipelines.tasks.STAGES` is the one
+# declaration of the graph, so the line quotes it and tells the truth about the tail.
+ran="$(python3 -c "
+import re, pathlib
+src = pathlib.Path('$REPO_ROOT/pipelines/tasks.py').read_text()
+names = re.search(r'STAGES: tuple\[str, \.\.\.\] = \(([^)]*)\)', src).group(1)
+n = len([x for x in re.findall(r'\"([a-z_]+)\"', names)])
+print(n if '$PUBLISH_MARTS' == '1' else n - 1)
+")"
+echo "[pipeline] ok  run $RUN_NAME completed; $ran stage(s) on-cluster for $MONTH" \
+     "(marts tail $([[ "$PUBLISH_MARTS" == "1" ]] && echo ON || echo OFF))"
