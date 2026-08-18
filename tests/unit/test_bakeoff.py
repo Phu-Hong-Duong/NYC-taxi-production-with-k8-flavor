@@ -333,8 +333,14 @@ def test_the_json_records_where_the_winner_was_ranked(source):
     """Prevents: a future reader having to read the code that wrote the file to
     learn which split decided. The M3 record predates the key, deliberately."""
     assert '"winner_selected_on": SELECTION_SPLIT' in source
-    recorded = json.loads((REPO / "automation/runs/m3s5/bakeoff.json").read_text())
-    assert "winner_selected_on" not in recorded, (
+
+    # The M3 record itself lives under the gitignored `automation/runs/`, so CI
+    # never sees it — skip rather than assert-on-absence, which would be green in
+    # CI for a reason that has nothing to do with the property.
+    record = REPO / "automation/runs/m3s5/bakeoff.json"
+    if not record.exists():
+        pytest.skip(f"{record} is a local run artifact (automation/runs/ is gitignored)")
+    assert "winner_selected_on" not in json.loads(record.read_text()), (
         "the M3 record must NOT be regenerated — its silence is the honest marker "
         "of the run that ranked on the holdout (see docs/bakeoff_m3.md §3's note)"
     )

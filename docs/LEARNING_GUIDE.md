@@ -7,6 +7,94 @@ months from now.
 
 ---
 
+## M4
+
+### M4-S1 — the winner was picked on the month nobody was allowed to look at, and the fix was one line in the wrong place (2026-08-18, role:MLE)
+
+**What was built.** Three things, in the order the M4 kickoff sequenced them.
+(1) **F-018 repaired**: `scripts/bakeoff_m3.py` now chooses its winner on VAL,
+and `gate.verdict_lines` stopped claiming — on every verdict this program has
+ever printed — that the holdout was "untouched by training **and by
+selection**". (2) **F-019's tripwire**: one test pinning the fact that the
+champion M3 promoted raises on any request dated outside 2019. (3)
+**`pipelines/tasks.py`**: the six-stage graph §9/M4 names, as plain Python with
+typed inputs and outputs, rehearsed end to end on one month before Flyte exists
+to blur whose bug is whose.
+
+**Why this way — the part worth remembering.** REV's finding was one line:
+`winner = min(loaded[1:], key=lambda item: item.metrics["test"].mae)`. Five
+contenders were read on the untouched test month and the lowest took the
+champion alias. The obvious fix is to change `"test"` to `"val"` and move on.
+That fix is *correct and insufficient*, and the difference is the note.
+
+Changing the key leaves the ranking sitting AFTER both splits have been scored —
+so the code still lives in a world where a holdout number is in scope at the
+moment of choosing, and the only thing stopping it being used is that nobody
+typed it. The repair moved the *ordering* instead: the ranking now happens
+inside the val pass of the split loop, and the holdout parquet has not been
+loaded when it runs. There is no test number to rank on, correctly or
+otherwise. A property you can only violate by deleting code beats a property you
+can violate with a two-character edit.
+
+The same instinct produced the second half. `verdict_lines` printed the purity
+claim on its own authority — but "untouched by training" is something the gate
+can vouch for (it refuses metrics from any other split), and "untouched by
+selection" is a fact about the *caller's* process that the gate cannot see. So
+the strong sentence became an argument that defaults to OFF: `make train` fits
+one challenger and earns it, a bake-off does not. The bug wasn't that the
+sentence was wrong; it was that the sentence was being made by the one component
+structurally incapable of knowing whether it was true.
+
+**The concept underneath.** *Selection on the test set* is the oldest leakage in
+applied ML and it never looks like leakage, because no test row ever touches a
+gradient. What leaks is a **decision**: max-of-five taken on the holdout is an
+optimistic estimator of the winner's true margin, biased upward by an amount
+that depends on how many arms you ran and how close they were. Ours were
+**0.0022 minutes apart** — 134 milliseconds — so the holdout didn't just inflate
+a number, it *chose which model serves*. And note what saved the result: the val
+and test rankings happened to be identical, which §3 of the bake-off memo had
+already recorded. The program was structured well enough to make its own defect
+harmless and still could not see it. That is why REV exists, and why the finding
+was filed at S2 rather than S1.
+
+**The other half of the craft: what was NOT re-run.** `automation/runs/m3s5/
+bakeoff.json` is byte-unchanged and the memo's numbers stand. Re-running would
+have spent hours re-litigating verdicts that do not change; silently rewriting
+them would have destroyed the record of a real defect. So the false five words
+are still in `docs/bakeoff_m3.md` §3 with a dated correction note *underneath*
+them — what was claimed and what was true, both readable. A document that
+quietly repairs itself cannot be compared against the decisions made from it.
+
+**What to look at.** `src/taxi_mlops/training/gate.py` property 7 and
+`verdict_lines`' new keyword · `scripts/bakeoff_m3.py`'s `SELECTION_SPLIT`
+comment and `_select_winner` · the correction block in `docs/bakeoff_m3.md` §3 ·
+`tests/unit/test_bakeoff.py::test_the_winner_is_ranked_on_val_even_when_the_
+holdout_disagrees`, whose fixture deliberately makes the two splits disagree —
+a test built on M3-S5's real numbers would pass under BOTH rules and prove
+nothing · `pipelines/tasks.py`'s four recorded decisions, especially decision 3.
+
+**Decision 3 is the second note.** A REFUSE from a working gate is a *return
+value*, not an exception. The CLI maps verdicts onto exit codes because a shell
+has nothing else to read; a workflow engine has a whole object. Model a refusal
+as a task failure and every "no" this program makes looks like an outage, gets a
+retry attached, and eventually gets the stage disabled by someone at 3am. The
+mapping still exists — `RegisterResult.exit_code` — stated once so there are not
+two copies of the rules.
+
+**What to try yourself.** Open `test_the_selection_happens_before_the_holdout_
+is_scored`. It walks the AST to prove `_select_winner` is called inside the
+split loop under the `split == "val"` guard. Ask whether that is a test or a
+straitjacket — then try to write a behavioural test that catches the ranking
+drifting back below the holdout pass. You can't: both orderings give the same
+answer whenever the two splits agree, which is the ordinary case. Some
+properties are about *when* code runs, and the only cheap instrument for those
+is structural. (Then look at the two tests in this story that went red on their
+first run because they searched TEXT for the word `taxi_mlops` and found it in a
+docstring — gotcha #35, met twice in one file, and fixed by reading imports off
+the AST instead.)
+
+---
+
 ## M3
 
 ### M3-S5 — the gate went red for doing the right thing, and that is the most dangerous kind of red (2026-08-18, role:MLE + MLOps hat)
