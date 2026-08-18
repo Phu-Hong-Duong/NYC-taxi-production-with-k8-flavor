@@ -137,7 +137,14 @@ fi
   -f "$OVERLAY" \
   --wait --timeout 10m
 
-"${KUBECTL[@]}" -n "$NAMESPACE" rollout status deployment --timeout=600s --selector "app.kubernetes.io/instance=$RELEASE"
+# `kubectl rollout status` takes one named resource — it has no --selector — so
+# the deployments are enumerated and waited on by name. Enumerating rather than
+# listing them literally means a chart that grows a component (the console and
+# the connector are already two of three) is covered without editing this line.
+while read -r dep; do
+  [[ -n "$dep" ]] || continue
+  "${KUBECTL[@]}" -n "$NAMESPACE" rollout status "$dep" --timeout=600s
+done < <("${KUBECTL[@]}" -n "$NAMESPACE" get deploy -o name)
 
 echo
 echo "[flyte] pods:"

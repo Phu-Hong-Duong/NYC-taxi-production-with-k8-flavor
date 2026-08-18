@@ -106,14 +106,16 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: backup deploy-flyte flyte-console pipeline pipeline-local verify-m4
+.PHONY: backup deploy-flyte flyte-console flyte-hello pipeline pipeline-local verify-m4
 MONTH ?= 2019-01
 backup: ## the lifeboat: pg_dump every database + mirror every MinIO bucket outside the repo (M4-S2; DRY_RUN=1 previews)
 	@bash scripts/platform_backup.sh
 deploy-flyte: ## Flyte on kind: databases via D-002, blob store in the existing MinIO (idempotent; ADR-002)
 	@bash scripts/deploy_flyte.sh
-flyte-console: ## reach the Flyte console/API from the host (port-forward; no hostPort exists — see infra/kind/kind-config.yaml)
+flyte-console: ## forward the Flyte API to localhost:8090 (port-forward, NOT a declared route — see scripts/flyte_console.sh for why)
 	@bash scripts/flyte_console.sh
+flyte-hello: ## run pipelines/flyte/hello.py ON the cluster: two tasks, the second consuming the first's output (M4-S2)
+	@bash scripts/flyte_hello.sh
 pipeline-local: ## rehearse the six-stage graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1)
 	@uv run python pipelines/tasks.py --month $(MONTH)
 pipeline: ## full workflow for MONTH=$(MONTH) on-cluster

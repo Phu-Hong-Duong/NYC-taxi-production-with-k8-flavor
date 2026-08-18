@@ -159,7 +159,8 @@ produced by scripts/platform_backup.sh on context $CONTEXT
 
 databases dumped (pg_dump plain SQL | gzip, enumerated from pg_database,
 templates excluded; each verified by gzip -t over every byte AND by pg_dump's
-own '$END_MARKER' as the last line):
+own '$END_MARKER' appearing in the final lines
+— not AS the final line: pg_dump closes with a \unrestrict token after it):
 $(for db in "${DATABASES[@]}"; do printf '  %-12s %s\n' "$db" "$(human "$(stat -c %s "$DEST/postgres/${db}.sql.gz")")"; done)
 postgres total: $(human "$total_pg")
 

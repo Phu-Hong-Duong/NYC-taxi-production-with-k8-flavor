@@ -127,3 +127,13 @@ ingress:
   create: false
 service:
   type: ClusterIP
+
+# --- what is deliberately left at the default ---------------------------------
+# `flyteconnector` (a subchart, on by default) renders a third Deployment. This
+# program has no connector tasks — connectors bridge to external services like
+# BigQuery, and everything here runs in-cluster — so it is dead weight. It is
+# left ON anyway for this first deployment: the value of a first install is that
+# it is the chart's own shape, and switching off a subchart to save one small pod
+# on a 47Gi VM is a trade that buys nothing measurable and risks an unexplained
+# render failure. Named here so M4-S4 can turn it off deliberately if the train
+# task's 24Gi request ever collides with it, rather than discovering it then.
