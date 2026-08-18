@@ -168,17 +168,23 @@ actions_json() {
 # assertion. A drill with its own launch path would be a second definition of what
 # running this pipeline means, and the copy is always the one that drifts.
 RUN_LOG="$RUN_DIR/pipeline.log"
-: >"$RUN_LOG"
-MONTH="$MONTH" TRAIN_MONTHS="$TRAIN_MONTHS" \
+FOLLOW_LOG="$RUN_DIR/flyte_run.log"
+: >"$RUN_LOG"; : >"$FOLLOW_LOG"
+MONTH="$MONTH" TRAIN_MONTHS="$TRAIN_MONTHS" PIPELINE_RUN_DIR="$RUN_DIR" \
   bash "$REPO_ROOT/scripts/run_pipeline.sh" >"$RUN_LOG" 2>&1 &
 run_pid=$!
 note "pipeline launched (pid $run_pid); transcript: $RUN_LOG"
 
-# The run name appears in `flyte run --follow`'s first lines. Poll for it rather
-# than sleeping a guessed interval.
+# The run name appears in `flyte run --follow`'s first lines — and it is read from
+# the FOLLOW log, not from run_pipeline.sh's stdout. That distinction cost this
+# drill its first launch: `flyte run`'s output used to be captured into a shell
+# variable, which does not exist until the command exits, so the file this loop
+# polls stayed empty until the run it wanted to interrupt was already over. The
+# fix is in run_pipeline.sh (it tees the follow output to `flyte_run.log`), and it
+# is a better transcript for everyone, not only for this drill.
 RUN_NAME=""
 for _ in $(seq 1 "$LAUNCH_TIMEOUT"); do
-  RUN_NAME="$(sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$RUN_LOG" \
+  RUN_NAME="$(sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$FOLLOW_LOG" \
               | sed -n 's/.*Created Run:[[:space:]]*\([A-Za-z0-9_-]\+\).*/\1/p' | head -1)"
   [[ -n "$RUN_NAME" ]] && break
   if ! kill -0 "$run_pid" 2>/dev/null; then

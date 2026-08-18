@@ -177,9 +177,24 @@ champion_before="$(champion_alias)"
 echo "[pipeline] @champion before: $champion_before"
 
 rc=0
-out="$("${FLYTE[@]}" run --follow "${SCOPE[@]}" \
-       "$REPO_ROOT/pipelines/flyte/workflows.py" main \
-       --month "$MONTH" --train_months "$TRAIN_MONTHS" "$JUDGE_FLAG" 2>&1)" || rc=$?
+# The follow output goes to a FILE and is read back, rather than being captured
+# straight into a variable. Two reasons, and the second is the one that forced it:
+#
+#   1. A command substitution holds everything until the command EXITS, so for the
+#      31 minutes of a full-data run the transcript exists nowhere a human (or
+#      another script) can look. §9 of docs/pipeline_m4.md is a whole section about
+#      per-stage detail that had to be recovered from the server because it was
+#      never written down; this is the same problem one layer earlier.
+#   2. The kill drill (M4-S5) has to learn the run's NAME while the run is still
+#      going, because it cannot delete a pod belonging to a run it cannot name.
+#      With the output buffered in a variable it polled a file that stayed empty
+#      until the very thing it was waiting to interrupt had already finished.
+FOLLOW_LOG="$RUN_DIR/flyte_run.log"
+: >"$FOLLOW_LOG"
+"${FLYTE[@]}" run --follow "${SCOPE[@]}" \
+  "$REPO_ROOT/pipelines/flyte/workflows.py" main \
+  --month "$MONTH" --train_months "$TRAIN_MONTHS" "$JUDGE_FLAG" >"$FOLLOW_LOG" 2>&1 || rc=$?
+out="$(cat "$FOLLOW_LOG")"
 echo "$out"
 
 RUN_NAME="$(sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$out" \
