@@ -5,6 +5,25 @@ interpretation · **Subject:** `models:/nyc-taxi-eta@champion` → registry vers
 **1**, MLflow run `3adee05a855a424bb664c7fea3735703`, feature set v1
 (quote-time pure, five features, no distance).
 
+> ### ⚠ READ THIS BEFORE §1: the champion moved on 2026-08-18
+>
+> **§0–§8 below describe registry version 1 and are the M2 record. They are no
+> longer what `make predictions` publishes.** M3-S5's bake-off promoted version
+> **2** (`auto-lgbm-v2`, run `92b73bd4f77d4a05b92472bfcfb3cccf`, feature set
+> **v2**, 24 features), and the published prediction rows, the mart, the board
+> and this memo's twin all describe *that* model now.
+>
+> **[§9 is the dated M3 section](#9-2026-08-18-the-same-questions-asked-of-the-champion-that-is-actually-served-m3-s5)**
+> — same questions, same queries, same order, re-answered against what is
+> served. It is the section the twin reproduces; §0–§8's figures are kept
+> unedited because a memo that silently rewrites its own numbers cannot be
+> compared against the decisions that were made from them.
+>
+> Two things moved between the two sets of numbers, not one: **the model**
+> (v1 → v2) **and the honest floor** (`baseline-group-median` →
+> `baseline-group-median-od-fallback`, M3-S1/F-010). §9 keeps them apart
+> wherever the difference matters, and says so where it cannot.
+
 **Board:** [Error segments (M2)](http://localhost:3030/dashboard/4) — 11 cards,
 defined in `analytics/metabase/boards/error_segments.json` and converged by
 `make boards`. The **name** is the address that survives (boards are idempotent
@@ -32,6 +51,12 @@ That last command is this memo's twin: one section per section here, in this
 order, printing the query it ran. A memo full of figures nobody can re-run is a
 memo nobody can check — and it earned itself on its first run, catching four
 last-digit rounding slips in §4 and §6 that had been typed rather than pasted.
+
+**Since 2026-08-18 the twin reprints §9, not §1–§6.** It reads the published
+predictions, and those describe whichever model is `@champion`; the section
+numbering is unchanged because §9 asks the same questions in the same order.
+`make champion-transition` runs the refresh chain above and prints the twin's
+output for whoever owes the next dated section.
 
 ---
 
@@ -311,3 +336,241 @@ reads as a rendering fault instead of a population.
 * **Nothing causal.** Every number here is a conditional average over a segment
   of one month. "Airport trips are harder" is a description; "the airport flag
   will fix it" is a hypothesis, and M3's ablation is where it becomes a result.
+
+---
+
+## 9. 2026-08-18 — the same questions, asked of the champion that is actually served (M3-S5)
+
+**Subject:** `models:/nyc-taxi-eta@champion` → registry version **2**, MLflow run
+`92b73bd4f77d4a05b92472bfcfb3cccf`, contender `auto-lgbm-v2` — feature set **v2**
+(24 quote-time features: v1's five, plus M3-S3's `g1` temporal extras and `g2`
+zone-centroid geometry), hyperparameters from M3-S4's FLAML scout → Optuna
+sniper. Promoted by M3-S5's five-contender bake-off at **KPI-09 3.2403 min ·
+KPI-10 81.577%** on the untouched test month — **+3.33%** over the honest floor
+and **+0.63%** over version 1.
+
+**Author's note on what this section is not.** It is a *refresh*, not a second
+analysis wave: same queries, same order, no new segments (M7 owns the next wave —
+M3 kickoff, "Out of scope"). It exists because §0–§8 describe a model nobody
+serves any more, and a memo describing an unserved model is exactly the failure
+`make verify-m2`'s memo-twin leg is a tripwire for.
+
+**Two things moved, and every comparison below inherits both.** The champion went
+v1 → v2, *and* the honest floor went `baseline-group-median` →
+`baseline-group-median-od-fallback` (M3-S1, **F-010**: one extra `(PU, DO)`
+backoff level before the global median). The published rows carry whichever floor
+the serving champion's `gate_floor` tag names, so every `floor MAE` and every
+KPI-13 in this section is against the *new*, harder floor. Where a §1–§8 number
+changed, the honest answer to "why" is usually "the floor", and it is said each
+time rather than implied.
+
+*(Every figure below was printed by `scripts/error_memo_numbers.py` inside
+`make champion-transition` step 6, transcript in
+`automation/runs/m3s5-transition.log`. Spot-checked against the mart by hand
+before being typed here.)*
+
+### 9.0 The rollup still reproduces the evaluator
+
+| split | trips | KPI-11 (mart) | KPI-09 (evaluator) | KPI-12 (mart) | KPI-10 (evaluator) |
+|---|---:|---:|---:|---:|---:|
+| val (2019-07) | 6,189,748 | 3.3823 | 3.3823 | 80.552% | 80.552% |
+| test (2019-08) | 5,950,708 | 3.2403 | 3.2403 | 81.577% | 81.577% |
+
+The dbt test that fails the build unless these four pairs agree (§0) survived a
+champion transition without an edit — which is the point of asserting a
+*property* rather than a literal.
+
+### 9.1 §1's headline INVERTED, and the model did not do it
+
+| rows | share of test | KPI-11 (model) | floor MAE | KPI-13 | KPI-12 |
+|---|---:|---:|---:|---:|---:|
+| floor has a real group median | **99.9837%** (5,949,740) | 3.2394 | 3.3474 | **+3.23%** | 81.583% |
+| floor falls back to the global median | **0.0163%** (968) | 8.7314 | **29.8623** | **+70.76%** | 43.388% |
+
+Decomposing the 0.1115 min the champion takes off the floor's MAE:
+
+* rows the floor can answer: `0.999837 × (3.3474 − 3.2394)` = **0.1080 min**, or
+  **96.9%** of the gap;
+* rows it cannot: `0.000163 × (29.8623 − 8.7314)` = **0.0034 min**, or
+  **3.1%** of the gap.
+
+*(The two parts sum to 0.1114 against a measured 0.1115 — four-decimal rounding
+in the segment MAEs, not a missing population.)*
+
+**At M2 the split was 24.6% / 75.4%; it is now 96.9% / 3.1%.** Three quarters of
+the champion's advantage used to be bought on 1.48% of rows; it is now bought
+almost entirely on the ordinary 99.98%. **This is F-010 landing, not the model
+improving where it used to be weak.** The old floor guessed 11.15 minutes for
+every trip whose `(hour, dow, PU, DO)` cell was unseen — 87,989 test rows. The
+new floor backs off to `(PU, DO)` first and only 968 test rows fall past that.
+The fallback population did not get easier: on those 968 rows the floor is now
+wrong by **29.86 minutes** (it was 18.57 on a much larger, easier set), because
+what survives two levels of backoff is genuinely strange.
+
+Consequences, restated for the milestones that inherited §1's version:
+
+1. **§1's recommendation to M3 (row 3 of §7 — "report KPI-13 split by floor
+   coverage in the bake-off") was answered by making the floor better instead.**
+   The bake-off's margins are no longer coverage-dominated: they are 96.9%
+   accuracy. That is the honest reading of why M3's headroom is **+2.71%** and
+   not M2's +7.07% (M3-S1, DR-06).
+2. **M5's "one request in 68 is in the naive-answer regime" is now one in
+   6,148.** The serving-shaped number changed by two orders of magnitude and the
+   parity/SLO work should use the new one.
+3. **The 968 rows are still worth a degraded class**, precisely because the floor
+   is *worse* on them than it ever was on the old 1.48%.
+
+### 9.2 The ceiling lifted, and it is still a ceiling
+
+| actual duration | trips | share | KPI-11 | KPI-12 | KPI-13 | mean actual | mean quoted |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1–5 min | 824,986 | 13.864% | 2.2532 | 92.531% | **−0.19%** | 3.55 | 5.70 |
+| 5–10 min | 1,754,599 | 29.486% | 2.0204 | 93.651% | +0.44% | 7.45 | 8.38 |
+| 10–20 min | 2,106,266 | 35.395% | 2.9649 | 82.384% | +2.50% | 14.19 | 13.89 |
+| 20–30 min | 747,431 | 12.560% | 4.5533 | 64.691% | +5.70% | 24.11 | 22.46 |
+| 30–45 min | 347,541 | 5.840% | 6.6312 | 49.605% | +6.48% | 36.00 | 32.86 |
+| 45–60 min | 121,577 | 2.043% | 9.2142 | 37.607% | +6.25% | 51.21 | 46.39 |
+| 60–100 min | 47,338 | 0.796% | 15.8268 | 23.182% | +6.23% | 69.47 | 56.02 |
+| **100–120 min** | **970** | 0.016% | **57.7729** | **0.103%** | +2.00% | 107.92 | **50.15** |
+
+The sharpest sentence in this memo needs one word changed. §2 said the champion
+quotes **none** of the 970 longest trips within five minutes. Version 2 quotes
+**one** — KPI-12 0.103% is a single trip — and its best quote in that band is
+**4.459 minutes** out, against version 1's 9.7. Every other row improves modestly
+and in the same direction.
+
+The mechanism is unchanged, and the whole-split evidence says so:
+
+* the highest number the champion ever predicts on test is **97.105 minutes**
+  (was 92.155), against a maximum truth of 120.0 (val: 98.237 vs 119.967);
+* it quotes above 60 minutes for **34,814** test trips (0.585%, was 28,083) while
+  **48,097** (0.808%) actually run past 60;
+* of the trips that really do exceed 60 minutes, **43.07%** now get a quote above
+  60 at all (was 36.86%).
+
+**The zone-centroid straight-line distance (`g2`) is doing exactly what M3-S2's
+DR-04 predicted, and no more.** It keeps 97.6% of the forbidden meter distance's
+correlation with the target, and it bought roughly five minutes of ceiling and
+six points of long-trip reach — real, and nowhere near enough to quote a
+two-hour trip. §7 row 1's recommendation is therefore **partially discharged, not
+closed**: the distance substitute landed, and 0.103% is still not a number
+anybody would ship an SLO against. The remaining gap is the difference between a
+straight line between two zone centroids and a route through traffic, which is
+the M9 OSRM stretch (`docs/prior_art.md`; the companion dataset is 404, our own
+263×263 matrix is the only reachable version).
+
+### 9.3 The `GROUP BY` still wins on short trips — on one month now, not two
+
+| segment | trips | KPI-11 | floor MAE | KPI-13 |
+|---|---:|---:|---:|---:|
+| duration band 1–5 min (test) | 824,986 | 2.2532 | 2.2490 | **−0.19%** |
+
+It is still the **only** segment above 5,000 trips where KPI-13 is negative — but
+it is now negative on **test only**. The val row that made this "a finding rather
+than a month" at M2 (−0.79%) no longer clears zero, and the test deficit shrank
+from −0.88% to −0.19%: about **0.004 min**, roughly a quarter of a second. The
+small negatives thinned too: **7 segments covering 139 test trips** (5 pickup
+zones, 2 drop-off zones) against M2's 12 segments and 487 trips.
+
+**Honest reading: this finding is weakening, and it is not yet gone.** The
+over-quote on short trips is still there — mean quoted 5.70 against mean actual
+3.55, **+2.15 min** (v1: +2.17) — so the mechanism §3 described has not changed;
+the model simply got a little better at the band while the floor got better too.
+It is one month from being noise, and M7's drift memo is where that gets settled.
+Nothing should be built on it in between.
+
+### 9.4 Zones: same ranking, same two stories, uniformly smaller errors
+
+| pickup zone | trips | KPI-11 | KPI-12 | floor MAE | KPI-13 | bias | mean actual |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **264** (*"unknown", not a place*) | 43,808 | **7.1581** | 51.612% | 7.4131 | +3.44% | −2.79 | 14.71 |
+| **132** (JFK) | 230,490 | 5.8937 | 59.895% | 6.0494 | +2.57% | −1.04 | 37.64 |
+| **138** (LaGuardia) | 167,740 | 5.1375 | 63.093% | 5.2862 | +2.81% | −0.78 | 29.23 |
+| 261 | 39,545 | 3.7829 | 75.802% | 3.9879 | +5.14% | −0.26 | 18.80 |
+| 88 | 25,496 | 3.6382 | 77.608% | 3.9038 | +6.80% | −0.26 | 18.91 |
+
+Best-served for contrast: 263 (2.4666, 88.611%), 238 (2.5602), 262 (2.5690), 239
+(2.5874). 262 drop-off zones and 260 pickup zones appear in test, unchanged.
+
+**Airports:**
+
+| bucket | trips | share | KPI-11 | floor MAE | KPI-12 | mean actual |
+|---|---:|---:|---:|---:|---:|---:|
+| touches JFK / LGA / EWR | 524,702 | 8.817% | **5.7224** | 5.8815 | **60.022%** | 35.18 |
+| no airport | 5,426,006 | 91.183% | 3.0003 | 3.1071 | 83.662% | 12.45 |
+
+**§4's headline survives version 2 almost exactly: 1.91× the error (was 1.90×)
+and 23.6 points less often within five minutes (was 24).** The airport gap is the
+one §4 finding v2 did *not* move, and that is informative — v2's new features
+include the OD geometry that §4 said would "identify them instantly", and the
+gap held. Two readings, and this memo cannot choose between them: either the
+straight-line distance already carries what an explicit airport flag would add,
+or the airport penalty is about *traffic and terminal dwell* rather than
+*distance*, in which case the flag is still owed and M7's dossier should say so.
+**§7 row 2 stays open**, with this as its new evidence.
+
+Zone 264 is still the worst-served pickup "zone" in New York — KPI-12 **51.6%**
+against 81.6% fleet-wide — and M3-S2's decision to give 264/265 **no centroid
+row** is why v2 helped it least: the model's newest features are, for those
+trips, a named and tested fallback rather than a measurement. §4's advice to M5
+stands unchanged and is now better founded: **treat a request resolving to
+264/265 as degraded.**
+
+### 9.5 Hours and days: the shape is the city's, and the city did not change
+
+| | best | worst | spread |
+|---|---|---|---|
+| KPI-11 by hour | 02:00 — **2.2556** | 15:00 — **3.8612** | 1.71× |
+| KPI-12 by hour | 02:00 — 91.922% | 15:00 — 75.475% | 16.4 pts |
+| KPI-13 by hour | 09:00 — +2.22% | 04:00 — **+14.76%** | — |
+| KPI-11 by day | Sunday — 2.7988 | Thursday — **3.4911** | 1.25× |
+
+Everything §5 said still holds: worst through the afternoon, best in the small
+hours, Thursday both busiest (1,077,039 test trips) and worst-served. The one
+number worth re-reading is **KPI-13 at 04:00 — +14.76%, against +16.03% at M2**,
+while the evening trough moved from +5.13% to **+2.22%**. The booster still earns
+most where the lookup table is thinnest, but the whole curve compressed, because
+the new floor has a second backoff level exactly where the old one was thinnest.
+**§5's mechanism is intact and its magnitudes are floor-dependent** — a useful
+warning for M7, which will compare these numbers across months and must compare
+them against the same floor to mean anything.
+
+### 9.6 The asymmetry is smaller and still the wrong way
+
+On test version 2 over-quotes **55.23%** of trips and under-quotes 44.77%; when
+early it is early by **2.81** minutes and when late it is late by **3.77**.
+**10.34% of test riders (13.22% on val) are still quoted a number at least five
+minutes shorter than the truth** — down from 10.82% / 13.44%, an improvement of
+roughly half a point that leaves the finding entirely intact. **§7 row 4's
+recommendation to SRE is unchanged: the M5 SLO needs a one-sided companion**,
+because KPI-10 counts both directions equally and a rider does not.
+
+**`passenger_count` not stated** — 33,014 test trips (0.555%), KPI-11 **5.8570**
+(was 6.0719) against 3.2403 fleet-wide, KPI-12 **55.549%**, mean true duration
+**34.41** minutes against the split's 14.459. Still a population, not a gap. One
+number changed enormously and it is the floor's doing again: **1.29%** of them
+are also unseen-group rows, against §6's 40.7%. The old floor had never seen
+their `(hour, dow, PU, DO)` cell; the new one nearly always has their `(PU, DO)`.
+Its MAE on them is 7.8558 and KPI-13 is +25.44% (was +58.10%) — the model is
+still doing real work here, just less of it relative to a floor that improved.
+
+### 9.7 What changed in §7's recommendations
+
+| # | To | Status after v2 |
+|---|---|---|
+| 1 | MLE (M3) | **Partially discharged.** The quote-time distance substitute (`g2`, zone-centroid haversine) landed and is in the served model; the ceiling moved 92.155 → 97.105 min and long-trip reach 36.86% → 43.07%. KPI-12 in the 100–120 band went 0.000% → 0.103%. Still the sharpest failure in the set; the remainder is routing, i.e. the M9 OSRM stretch. |
+| 2 | MLE (M3) | **Open, with new evidence.** v2 has the OD geometry and the airport gap held at 1.91×. Either the geometry already carries it or the penalty is not distance-shaped — §9.4. |
+| 3 | MLE (M3) | **Answered differently than asked.** Rather than splitting the bake-off's KPI-13 by floor coverage, M3-S1 made the floor cover the rows (F-010). Coverage now explains 3.1% of the margin instead of 75.4%. |
+| 4 | SRE (M5) | **Unchanged and still owed** — 10.34% test / 13.22% val quoted ≥5 min short; zones 264/265 degraded at KPI-12 51.6%. |
+| 5 | DA (M7) | **Unchanged, and §9.5 adds a condition**: a month-over-month KPI-11/KPI-13 comparison is only meaningful against the same floor. The floor's name travels on the champion's `gate_floor` tag; the drift memo should cite it. |
+
+### 9.8 What this section still cannot say
+
+Everything in §8 applies unchanged — no rate code, no distance, no money column,
+nothing about trips past 120 minutes, nothing causal. One addition specific to
+v2: **it cannot attribute any of these deltas to tuning versus features.** The
+served model is `auto-on-v2`, which is both v2's feature set *and* the Optuna
+sniper's hyperparameters, and the bake-off measured that pairing as **+0.63%**
+over v1 of which **+0.56%** was features alone (`docs/bakeoff_m3.md` §5). Every
+improvement in this section is therefore overwhelmingly a *feature* result, but
+this memo's queries cannot separate them and did not try.
