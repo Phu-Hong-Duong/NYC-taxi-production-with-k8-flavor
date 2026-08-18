@@ -43,10 +43,10 @@ RUN_DIR="${PIPELINE_RUN_DIR:-$REPO_ROOT/automation/runs/m4-pipeline}"
 
 # A sampled run is verdict-free BY CONSTRUCTION, not by the caller remembering.
 if [[ -n "$TRAIN_MONTHS" ]]; then
-  JUDGE="false"
+  JUDGE="false"; JUDGE_FLAG="--no-judge"
   echo "[pipeline] SAMPLED run (train months: $TRAIN_MONTHS) — F-008: no verdict will be issued"
 else
-  JUDGE="true"
+  JUDGE="true"; JUDGE_FLAG="--judge"
   echo "[pipeline] FULL-DATA run (train months: whatever configs/train.yaml names)"
 fi
 
@@ -107,8 +107,14 @@ SCOPE=(--project "$PROJECT" --domain "$DOMAIN")
 # `search_model_versions` returns: on server 3.15.1 those come back with `aliases`
 # EMPTY, so a snapshot built from that field would be blind to exactly the
 # mutation this check exists to catch (M2-S3 found that, the hard way).
+# `tail -1` and not the whole output: `tracking.configure()` prints three banner
+# lines to stdout before anything here runs, so capturing the command wholesale
+# makes the "alias" a four-line blob — which then compares EQUAL to itself before
+# and after and reports "ok @champion unchanged" no matter what happened. A check
+# that cannot fail is worse than no check (gotcha #50's shape), and this one was
+# caught by its own transcript printing a paragraph where a version goes.
 champion_alias() {
-  uv run --project "$REPO_ROOT" python - <<'PY' 2>/dev/null || echo 'UNREADABLE'
+  { uv run --project "$REPO_ROOT" python - <<'PY' 2>/dev/null || echo 'UNREADABLE'
 import mlflow
 from taxi_mlops.data.config import load_yaml
 from taxi_mlops.training import tracking
@@ -121,6 +127,7 @@ try:
 except Exception:
     print("UNSET")
 PY
+  } | tail -1
 }
 
 champion_before="$(champion_alias)"
@@ -129,7 +136,7 @@ echo "[pipeline] @champion before: $champion_before"
 rc=0
 out="$("${FLYTE[@]}" run --follow "${SCOPE[@]}" \
        "$REPO_ROOT/pipelines/flyte/workflows.py" main \
-       --month "$MONTH" --train-months "$TRAIN_MONTHS" --judge "$JUDGE" 2>&1)" || rc=$?
+       --month "$MONTH" --train_months "$TRAIN_MONTHS" "$JUDGE_FLAG" 2>&1)" || rc=$?
 echo "$out"
 
 RUN_NAME="$(sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$out" \
