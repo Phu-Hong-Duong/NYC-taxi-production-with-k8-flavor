@@ -819,3 +819,39 @@ the seed line are earned by THIS project.
     `curl localhost:5000/api/...` → 403. List every name with AND without its
     port, and never reach for `["*"]` — that deletes the protection rather than
     configuring it.
+
+62. **An apostrophe inside `${VAR:+word}` opens a quote, and the error is
+    reported five lines away on an innocent statement.** M4-S4's cache drill
+    opened with
+    `echo "== drill: $MONTH${DRILL_STAGE:+ (PROBE) — not the milestone's evidence} =="`.
+    Inside a `${var:+word}` expansion the word is still subject to quote
+    processing, so that apostrophe in "milestone's" began a single-quoted string;
+    bash swallowed the following four lines hunting for its close and then blamed
+    the first thing that broke — **`line 72: $!: unbound variable`**, pointing at
+    a `pf_pid=$!` after a port-forward that was entirely correct. `bash -n`
+    reported it as `unexpected EOF while looking for matching '}'`, which is the
+    honest message, and bisecting the file by prefix is what surfaced it. Sibling
+    of #35, #53 and #60 — the fourth time this program has paid for prose sitting
+    where a parser reads it as code, and the first time the parser was the shell's
+    parameter expansion rather than a heredoc or a comment. Rule, now with four
+    data points: **explanatory prose goes in a comment or its own `echo`, never
+    inside an expansion, a heredoc body or an array literal.** And when a shell
+    error names a variable you can see is fine, suspect the LINES ABOVE, not the
+    line named.
+
+63. **A threshold is only as good as the clock it is measured on — and a rerun's
+    wall-clock is mostly the cost of launching at all.** The cache drill's first
+    bar said "run 2 must be under 50% of run 1's wall-clock". The stage it was
+    watching went **15.2s → 0.2s, a 98.7% saving**, and the drill went RED:
+    `wall-clock 17s -> 9s (52.9%)`, because a one-stage rerun is dominated by the
+    constant overhead of bundling, uploading and launching, which no cache can
+    touch. The fix was not a looser bar — a looser bar would have hidden a real
+    regression later — it was **the right clock**: the sum of the cached stages'
+    own durations, which is the quantity the cache actually changes and the only
+    one comparable between a one-stage probe and a six-stage pipeline. The
+    wall-clock stayed, as the corroborating number a human notices, asserted only
+    where it means something. General form: when a check goes red on something you
+    can see working, ask what quantity the check is actually measuring before
+    touching its threshold — the two are different questions and only one of them
+    is about the bar.
+
