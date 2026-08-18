@@ -150,7 +150,11 @@ json.dump(
 )
 PY
   else
-    MONTH="$MONTH" TRAIN_MONTHS="$TRAIN_MONTHS" \
+    # PUBLISH_MARTS=0: this drill measures what a cache saves, and the marts
+    # tail is uncached BY DESIGN (its product is a Postgres mutation the cache
+    # cannot see), so including it would add a constant few minutes to BOTH runs
+    # and drag the measured ratio toward 1 without any of it being about caching.
+    MONTH="$MONTH" TRAIN_MONTHS="$TRAIN_MONTHS" PUBLISH_MARTS=0 \
       bash "$REPO_ROOT/scripts/run_pipeline.sh" >"$logfile" 2>&1 || true
     # The run's identity comes from the record run_pipeline.sh writes, not from
     # this script re-parsing the same CLI output a second time — two parsers of

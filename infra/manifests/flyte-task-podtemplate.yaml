@@ -107,6 +107,19 @@ template:
           # storage config uses, because they address the same server.
           - name: AWS_DEFAULT_REGION
             value: "us-east-1"
+          # --- how the marts tail task reaches the warehouse (M4-S5, D-003) -----
+          # The IN-CLUSTER name again, and this one is not a convenience: the host
+          # publishes over `kubectl exec` because nothing of ours publishes 5432
+          # (the port family annotates it "in-cluster only"), and a pod has neither
+          # kubectl nor a kubeconfig. So the pod's route is the only one it has, and
+          # it is a route the host does not have — the split horizon, a third time.
+          # Measured before the tail task was built: scripts/marts_reach_probe.py
+          # connected from a throwaway pod on THIS image and printed
+          # `PROBE-OK ('marts', 'marts')`.
+          - name: MARTS_DB_HOST
+            value: "postgres.platform.svc.cluster.local"
+          - name: MARTS_DB_PORT
+            value: "5432"
         envFrom:
           # TWO identities in one pod, deliberately. `flyte-task-storage` is
           # Flyte's own MinIO user, which may touch `flyte-data` (task inputs and
@@ -119,6 +132,14 @@ template:
               name: flyte-task-storage
           - secretRef:
               name: flyte-task-mlflow
+          # A THIRD identity, for the same reason there are two above: the marts
+          # tail task publishes as the `marts` warehouse user, which must not be
+          # reachable with either of the other two keys. It holds MARTS_DB_USER and
+          # MARTS_DB_PASSWORD under exactly the names marts_publish.py reads, so
+          # the pod needs no translation. scripts/platform_secrets.sh converges it
+          # from the same .env value Metabase and the host publish already use.
+          - secretRef:
+              name: flyte-task-marts
         # --- the data, mounted by SUBPATH and not at `/app/data` ----------------
         # Three mounts rather than one, and the reason is a trap M4-S3 already
         # paid for once (gotcha #58). `/app/data` in the image is not empty: it
@@ -139,3 +160,13 @@ template:
           - name: taxi-data
             mountPath: /app/data/rejected
             subPath: rejected
+          # The FOURTH tree, added M4-S5 for the marts tail task. `error_segments`
+          # sources the analyst layer's `predictions` view, which is a view over
+          # `data/predictions/` — the champion's published rows (M2-S4). Without
+          # this mount `analyst.build()` simply omits the view (it is conditional on
+          # the tree existing), and the dbt build then fails on a missing source
+          # three frames deep in a compiled model. Staged by `make stage-data`,
+          # whose TREES list is this list's twin and is pinned as one by a test.
+          - name: taxi-data
+            mountPath: /app/data/predictions
+            subPath: predictions

@@ -39,6 +39,13 @@ PROJECT="${FLYTE_PROJECT:-nyc-taxi}"
 DOMAIN="${FLYTE_DOMAIN:-development}"
 MONTH="${MONTH:-2019-01}"
 TRAIN_MONTHS="${TRAIN_MONTHS:-}"
+# The marts tail task (M4-S5, D-003). ON by default — the monthly pipeline is the
+# publish's home from M4 on, and an opt-in tail is a tail nobody runs. The two
+# ORCHESTRATOR drills set this to 0: the cache drill and the kill drill are about
+# Flyte's behaviour, and republishing 7.5M warehouse rows twice per drill would add
+# minutes to their wall-clock (which the cache drill measures as evidence) for no
+# extra coverage of the thing under test.
+PUBLISH_MARTS="${PUBLISH_MARTS:-1}"
 RUN_DIR="${PIPELINE_RUN_DIR:-$REPO_ROOT/automation/runs/m4-pipeline}"
 
 # A sampled run is verdict-free BY CONSTRUCTION, not by the caller remembering.
@@ -48,6 +55,14 @@ if [[ -n "$TRAIN_MONTHS" ]]; then
 else
   JUDGE="true"; JUDGE_FLAG="--judge"
   echo "[pipeline] FULL-DATA run (train months: whatever configs/train.yaml names)"
+fi
+
+if [[ "$PUBLISH_MARTS" == "1" ]]; then
+  PUBLISH_FLAG="--publish"
+  echo "[pipeline] marts tail task ON — the run ends by republishing the warehouse"
+else
+  PUBLISH_FLAG="--no-publish"
+  echo "[pipeline] marts tail task OFF (PUBLISH_MARTS=0) — the warehouse is not touched"
 fi
 
 # The client's blob-store route, and it is the OTHER side of the split horizon
@@ -90,8 +105,15 @@ echo "[pipeline] task image $IMAGE_REF"
 # the code bundle, so an edit there does reach the pod, and refusing on it would
 # have refused this story's own cache drill. A guard that fires when nothing is
 # wrong is a guard that gets deleted (gotcha #50).
+#
+# M4-S5 WIDENED THE LIST, because the marts tail task moved two more directories
+# behind the same door. `scripts/marts_publish.py` is loaded BY PATH from inside the
+# task pod, and the dbt project under `analytics/` — models, tests, seeds, profile —
+# has no other way to reach a pod at all: it is not importable, so no `--copy-style`
+# would ever carry it. An edit to a mart's SQL with a stale image publishes the
+# PREVIOUS model definition and reconciles perfectly against it.
 IMAGE_SHA="${IMAGE_REF##*:}"
-IMAGE_PATHS=(src pyproject.toml uv.lock docker)
+IMAGE_PATHS=(src pyproject.toml uv.lock docker scripts analytics)
 if [[ "${IMAGE_DRIFT_OK:-0}" == "1" ]]; then
   echo "[pipeline] WARN: IMAGE_DRIFT_OK=1 — not checking whether image $IMAGE_SHA carries this tree's code"
 elif [[ "$IMAGE_SHA" == *-dirty ]]; then
@@ -193,7 +215,8 @@ FOLLOW_LOG="$RUN_DIR/flyte_run.log"
 : >"$FOLLOW_LOG"
 "${FLYTE[@]}" run --follow "${SCOPE[@]}" \
   "$REPO_ROOT/pipelines/flyte/workflows.py" main \
-  --month "$MONTH" --train_months "$TRAIN_MONTHS" "$JUDGE_FLAG" >"$FOLLOW_LOG" 2>&1 || rc=$?
+  --month "$MONTH" --train_months "$TRAIN_MONTHS" "$JUDGE_FLAG" "$PUBLISH_FLAG" \
+  >"$FOLLOW_LOG" 2>&1 || rc=$?
 out="$(cat "$FOLLOW_LOG")"
 echo "$out"
 

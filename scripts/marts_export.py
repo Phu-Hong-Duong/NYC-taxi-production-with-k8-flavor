@@ -12,7 +12,7 @@ is a chart that silently stops summing.
 
 Usage:
     python scripts/marts_export.py ddl <duckdb_path> <mart>
-    python scripts/marts_export.py csv <duckdb_path> <mart>
+    python scripts/marts_export.py csv <duckdb_path> <mart> [--where "month = '2019-03'"]
 """
 
 from __future__ import annotations
@@ -97,17 +97,35 @@ def ddl(con: duckdb.DuckDBPyConnection, mart: str) -> str:
     return ",\n  ".join(f'"{name}" {postgres_type(dtype)}' for name, dtype, *_ in columns)
 
 
-def csv(con: duckdb.DuckDBPyConnection, mart: str) -> None:
-    """Stream the mart to stdout as CSV, for `psql \\copy` on the other end."""
+def csv(con: duckdb.DuckDBPyConnection, mart: str, where: str | None = None) -> None:
+    """Stream the mart to stdout as CSV, for the publish's transport to consume.
+
+    `where` scopes the stream — the month-scoped publish (M4-S5, D-003) passes
+    `month = '2019-03'`. It is applied HERE, inside DuckDB, rather than by filtering
+    the CSV downstream, because the data is already here and a 56M-row stream
+    filtered on the far side would have paid the whole cost of the thing it avoids.
+    The predicate is built by `scripts/marts_publish.py` out of a month it has
+    already validated as `YYYY-MM`; this function does not accept user text.
+    """
     # /dev/stdout, not a temp file: trips_clean is ~7 GB of CSV and writing it to
     # disk first would double the I/O and need somewhere to put it.
+    clause = f" WHERE {where}" if where else ""
     con.execute(
-        f"COPY (SELECT * FROM {resolve(con, mart)}) TO '/dev/stdout' "
+        f"COPY (SELECT * FROM {resolve(con, mart)}{clause}) TO '/dev/stdout' "
         "(FORMAT CSV, HEADER FALSE)"
     )
 
 
 def main(argv: list[str]) -> int:
+    where: str | None = None
+    argv = list(argv)
+    if "--where" in argv:
+        i = argv.index("--where")
+        if i + 1 >= len(argv):
+            print(__doc__, file=sys.stderr)
+            return 2
+        where = argv[i + 1]
+        del argv[i : i + 2]
     if len(argv) != 4 or argv[1] not in {"ddl", "csv"}:
         print(__doc__, file=sys.stderr)
         return 2
@@ -119,7 +137,7 @@ def main(argv: list[str]) -> int:
         if mode == "ddl":
             print(ddl(con, mart))
         else:
-            csv(con, mart)
+            csv(con, mart, where)
     finally:
         con.close()
     return 0
