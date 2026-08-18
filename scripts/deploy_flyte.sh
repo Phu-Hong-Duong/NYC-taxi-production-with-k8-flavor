@@ -60,25 +60,37 @@ echo "== [1/6] helm repos (idempotent) =="
 "${HELM[@]}" repo update flyteorg minio >/dev/null
 echo "   $FLYTE_CHART $FLYTE_CHART_VERSION (fallback $FLYTE_FALLBACK_CHART_VERSION, ADR-002)"
 
-echo "== [2/6] namespaces =="
-"${KUBECTL[@]}" apply -f "$REPO_ROOT/infra/manifests/namespaces.yaml"
+# DRY_RUN must not mutate ANYTHING, including the steps that are "only" no-ops
+# on a converged cluster — gotcha #30 is the precedent: `DRY_RUN=1 make destroy`
+# deleted the cluster for four milestones because the preview covered the files
+# and not the most expensive action. A preview that re-runs a helm upgrade is a
+# preview that can restart MinIO under whatever is reading it.
+if [[ "$DRY_RUN" == "1" ]]; then
+  echo "== [2/6] namespaces ==            DRY_RUN — WOULD apply infra/manifests/namespaces.yaml"
+  echo "== [3/6] secrets from .env ==     DRY_RUN — WOULD run scripts/platform_secrets.sh"
+  DRY_RUN=1 bash "$REPO_ROOT/scripts/postgres_databases.sh"
+  echo "== [5/6] MinIO ==                 DRY_RUN — WOULD helm upgrade minio $MINIO_CHART_VERSION (bucket flyte-data, user flyte)"
+else
+  echo "== [2/6] namespaces =="
+  "${KUBECTL[@]}" apply -f "$REPO_ROOT/infra/manifests/namespaces.yaml"
 
-echo "== [3/6] secrets from .env (adds minio-flyte-user) =="
-bash "$REPO_ROOT/scripts/platform_secrets.sh"
+  echo "== [3/6] secrets from .env (adds minio-flyte-user) =="
+  bash "$REPO_ROOT/scripts/platform_secrets.sh"
 
-echo "== [4/6] the 'flyte' database in the one Postgres (D-002) =="
-bash "$REPO_ROOT/scripts/postgres_databases.sh"
+  echo "== [4/6] the 'flyte' database in the one Postgres (D-002) =="
+  bash "$REPO_ROOT/scripts/postgres_databases.sh"
 
-echo "== [5/6] MinIO — the flyte-data bucket and the flyte user =="
-# The chart's post-install Jobs are what create buckets and users idempotently.
-# Re-running the release here is the ONLY reason this step exists: it is how the
-# bucket comes into being from the recipe rather than from somebody's `mc mb`.
-"${HELM[@]}" upgrade --install minio minio/minio \
-  --version "$MINIO_CHART_VERSION" \
-  --namespace platform \
-  -f "$REPO_ROOT/infra/helm/minio/values.yaml" \
-  --wait --timeout 10m
-"${KUBECTL[@]}" -n platform rollout status deployment/minio --timeout=300s
+  echo "== [5/6] MinIO — the flyte-data bucket and the flyte user =="
+  # The chart's post-install Jobs are what create buckets and users idempotently.
+  # Re-running the release here is the ONLY reason this step exists: it is how the
+  # bucket comes into being from the recipe rather than from somebody's `mc mb`.
+  "${HELM[@]}" upgrade --install minio minio/minio \
+    --version "$MINIO_CHART_VERSION" \
+    --namespace platform \
+    -f "$REPO_ROOT/infra/helm/minio/values.yaml" \
+    --wait --timeout 10m
+  "${KUBECTL[@]}" -n platform rollout status deployment/minio --timeout=300s
+fi
 
 # --- the secret overlay -------------------------------------------------------
 # shellcheck disable=SC1090

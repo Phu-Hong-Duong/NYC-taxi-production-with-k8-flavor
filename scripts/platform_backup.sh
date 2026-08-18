@@ -133,7 +133,11 @@ for db in "${DATABASES[@]}"; do
   # lines AFTER `-- PostgreSQL database dump complete`. So: look in the tail,
   # do not equal the tail. A blank last line is what a truncated file also has,
   # which is why the first form failed closed rather than passing wrongly.
-  if ! zcat "$out" | tail -n 10 | grep -qF "$END_MARKER"; then
+  # `-- "$END_MARKER"`: the marker itself starts with `--`, so without the
+  # end-of-options guard grep reads it as a flag and dies with a usage message
+  # while the check reports a truncated dump. A verifier that fails for its own
+  # reasons and blames the artifact is worse than no verifier.
+  if ! zcat "$out" | tail -n 10 | grep -qF -- "$END_MARKER"; then
     echo "[backup] FAIL: $out has no pg_dump completion marker in its last 10 lines" >&2
     echo "[backup]       the dump was cut short — the file is not a backup" >&2
     exit 1
