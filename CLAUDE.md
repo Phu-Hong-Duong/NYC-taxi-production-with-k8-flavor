@@ -687,6 +687,57 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **Nothing here promotes.** The registry API appears in none of this story's
   scripts, and a test keeps it out.
 
+## The bake-off, the alias, and the M3 gate (M3-S5) — what the square answered and what the gate learned
+- **The answer is FEATURES.** Five contenders, four LOADED from their MLflow
+  artifacts and only the floor fitted, one evaluator, the untouched test month:
+  **auto-on-v2 3.2403 · artisan v2 3.2425 · champion v1 3.2608 · floor 3.3518 ·
+  auto-on-v1 3.5038**. Features alone bought **+0.56%** over v1 and tuning on top
+  of them **+0.63%** — **+0.07 percentage points, 134 ms of mean error, one
+  seventh of DR-02's own keep bar**, for 2.76× the artisan's wall-clock. **Val
+  ranking == test ranking, exactly.** The floor refused itself at +0.00%, and
+  F-011's incumbent condition is the only one of the four that notices it is
+  2.79% worse than what serves. `docs/bakeoff_m3.md`.
+- **The alias moved and the whole published chain followed it, in order**:
+  `make champion-transition` → promote → `predictions` → `duckdb` → `marts` →
+  `boards` → the memo's numbers PRINTED for the human who owes the prose.
+  `@champion` is version **2** (`auto-lgbm-v2`, run `92b73bd4f77d…`, feature set
+  **v2**, 24 features) and `configs/train.yaml: features.version` moved with it —
+  the config line moves as part of a promotion or not at all.
+- **`docs/error_memo_m2.md` §9 is the dated M3 section, and §0–§8 are kept
+  UNEDITED as the M2 record.** A memo that silently rewrites its own numbers
+  cannot be compared against the decisions made from them. §9's finding: **the
+  coverage headline INVERTED** — three quarters of the champion's advantage used
+  to be bought on 1.48% of rows, and it is now **96.9% bought on the ordinary
+  99.98%**. That is **F-010 landing, not the model improving where it was weak**:
+  the new floor backs off to `(PU, DO)` first, so only **968** test rows fall past
+  it — and on those the floor is wrong by **29.86** minutes. Also: the ceiling
+  lifted 92.155 → **97.105** min and the 100–120 band went 0.000% → **0.103%**
+  KPI-12 (one trip of 970), while the **airport gap held at 1.91×** even though
+  v2 carries the OD geometry §4 said would identify them — so §7 row 2 stays open
+  with that as its new evidence.
+- **`make verify-m3` is 46 sub-checks in 8 sections, 4.7 s, and it re-fits
+  NOTHING** — M3 cost 12,447 s of fitting across two tracks, so a gate that
+  re-derived any of it would cost more than the milestone. It reads committed
+  docs, committed JSON, the Optuna storage and the registry, and **replays**:
+  DR-02's keep bar is re-applied to the ablation table's own numbers, and the
+  bake-off's five verdicts are re-computed through `gate.decide` as it exists on
+  disk. `make verify-m3-redteam` proves it can say no.
+- **The gate must assert PROPERTIES, not the literals that were true the day it
+  was written** (F-017, gotchas #49/#50) — and this story paid for the rule.
+  `verify-m2` pinned the champion's `gate_floor` name, its experiment, and read
+  `do_not_promote` by key presence; **all three went RED on the first legitimate
+  champion transition**, none of them about anything being wrong. A guard that
+  fires when the program behaves correctly teaches the next session to edit
+  assertions. Replaced by properties strictly stronger than the literals were,
+  plus one cross-system check the literal could not make (the version's
+  `gate_floor` must be the floor `predictions.json` published against — F-012 from
+  the other end). GREEN **55/55**, one added, none removed.
+- **F-016 is OPEN and was deliberately not acted on**: the incumbent condition is
+  non-regression with **no margin**, so the alias moved on **+0.63% — 1.2 seconds**
+  while the floor condition demands 2.00%. Changing a gate condition after seeing
+  the number it would have changed is the edit this program never makes on its own
+  authority. Routed to ARCH/PO at the M3 boundary; nothing waits on it.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -734,11 +785,13 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Zone centroids (M3-S2) | `make zones` (`uv run python scripts/derive_zone_centroids.py`; `ZONES_ARGS=--refresh` re-downloads) | VERIFIED 2026-08-17 (M3-S2): 263 zones from the sha256-pinned TLC shapefile, CRS **read from the .prj** (`NAD83 / New York Long Island (ftUS)`), landmarks JFK **0.63 km** · LGA **0.11 km** · EWR **0.26 km** from their published points, `.dbf` and `taxi_zone_lookup.csv` agree on borough+zone for all 263, every centroid inside the NYC bbox. Idempotent: re-run gives sha256 `37910367…` unchanged. RED-TEAMED by a **111 m** edit to one of 263 rows → the sha256-pin leg AND the byte-identity re-derivation leg both fail while all 11 semantic checks still pass (the landmark tolerance is 3 km), restore → 13/13 |
 | Artisan ablation (M3-S3) | `make ablation` (15% sample, six arms) · `make ablation ABLATION_ARGS="--full-scale --sets v1,v1_g1,v1_g2,v2 --log-model"` (the confirmation) | VERIFIED 2026-08-17 (M3-S3): six sample arms in `m3-artisan` (557.1 s of fitting) then the four-arm confirmation on **43,987,422** rows (2,135.0 s) → **v1 3.4760 · g1 +1.77% · g2 +0.63% · v2 3.3905 (+2.46%, KPI-10 80.506%)**, v2 logged with signature + input example. v1 reproduced `3.47603843547682` across two invocations 71 min apart. Val only, registry untouched. **Run it detached** (`automation/run_detached.sh`) — a session that waits for it kills it (gotcha #45) |
 | Prove a leaky aggregate flatters val and nothing else (M3-S3) | `make leakage-redteam` (`uv run python scripts/leakage_redteam.py`) | VERIFIED 2026-08-17 (M3-S3): the same tables fitted across the val month ON PURPOSE → **+0.0551 min on the month it saw, −0.1367 min on the untouched month** (2019-06, held out for the drill so the TEST month stays unread), inflation **+0.1917 min**. Arm B would have cleared DR-02's keep bar. `aggregates.fit` defaults `point_in_time=True`; only this script may pass False, and a test fails if the leaky switch stops leaking |
-| Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5), **RE-VERIFIED and WIDENED 2026-08-17 (M3-S1): GREEN 54/54**, **RE-RUN GREEN 54/54 2026-08-17 (M3-S3)** after the feature-registry refactor and the borough fix (was 49 — five sub-checks added to §2, none removed). §2 now replays M3's transcripts too, WITH the incumbent each one records; pins the floor by name; and measures the DIRECTION of the floor change from two committed transcripts (`3.5090 -> 3.3518 on the same 5,950,708 rows`), because a floor swap is only not-a-loosening if the new floor is harder. It re-reads and re-reconciles, it NEVER re-fits |
+| Gate check M2 | `make verify-m2` | VERIFIED 2026-08-17 (M2-S5), **RE-VERIFIED and WIDENED 2026-08-17 (M3-S1): GREEN 54/54**, **RE-RUN GREEN 54/54 2026-08-17 (M3-S3)** after the feature-registry refactor and the borough fix (was 49 — five sub-checks added to §2, none removed). §2 now replays M3's transcripts too, WITH the incumbent each one records; pins the floor by name; and measures the DIRECTION of the floor change from two committed transcripts (`3.5090 -> 3.3518 on the same 5,950,708 rows`), because a floor swap is only not-a-loosening if the new floor is harder. It re-reads and re-reconciles, it NEVER re-fits. **RE-VERIFIED and REPAIRED 2026-08-18 (M3-S5): GREEN 55/55** — the first legitimate champion transition turned three §1 sub-checks RED for doing the right thing (F-017, gotchas #49/#50), and each M2-era literal was replaced by the property that holds at every champion: the floor must be a name `baselines.fit_floor` can rebuild · the run must be FINISHED and NAMESPACED · a `do_not_promote` mark counts unless its VALUE says no. One sub-check ADDED, none removed |
 | Prove the M2 gate can go RED | `make verify-m2-redteam` (`bash scripts/verify_m2_redteam.sh`) | VERIFIED 2026-08-17 (M2-S5): deletes the `@champion` alias → **RED, exit 1, 4 FAILs**, the first naming `models:/nyc-taxi-eta@champion does not resolve`, **38 sub-checks still ran and passed**; alias restored by EXIT trap → **GREEN**. Deletes only the POINTER — no version, no run, no artifact |  **RE-RUN 2026-08-17 (M3-S1): PASSED, restored run GREEN at 54 sub-checks**
 | Prove the gate refuses a WORSE-THAN-CHAMPION challenger (M3-S1) | `make gate-redteam` (`uv run python scripts/gate_redteam_incumbent.py`) | VERIFIED 2026-08-17 (M3-S1): a challenger built as the champion **+0.06 min** on every quote scored **3.2667 / 81.423%**, cleared the floor bar at **+2.54%**, and was **REFUSED on both incumbent conditions** against version 1's 3.2608 / 81.480% while the floor conditions still passed. The bypass (`incumbent_version=None`) was refused by `registry.promote`. Registry identical before and after (alias 1, versions [1]). ~6 min; it is a .py and not a heredoc because the OpenMP shim re-execs and stdin cannot be replayed (gotcha #37) |
 | Prove a wrong-window floor cannot be published (M3-S1) | `make predictions-redteam` (`bash scripts/predictions_redteam.sh`) | VERIFIED 2026-08-17 (M3-S1): floor fitted on 2019-01 instead of six months → re-fit measured **4.1138** against the version's `gate_floor_mae` **3.5090** → **write REFUSED, exit 2**, and all three published files **byte-identical by sha256** before and after |
-| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2 live; M3+ pending each milestone |
+| Gate check M3 | `make verify-m3` | VERIFIED 2026-08-18 (M3-S5): **GREEN 46/46 in 4.7 s, exit 0**, 8 sections — dossier (20 candidates, source + leakage note each, all 3 HIGH-risk rows constrained to TRAIN months) · ablation (5 groups, both deltas, **DR-02's 0.50% bar RE-APPLIED to the table's own numbers reproduces all five verdicts**, 3 drops present, v2 == the survivors) · leakage drill (three numbers parse AND reconcile, `point_in_time=True` still the default, exactly one CALLER may flip it) · tuning (both sniper studies in Postgres at the count their JSON records, 6 PRUNED, the resume drill's kill survived) · **the five bake-off verdicts replayed through `gate.decide` on disk** · the four guards (F-011 both halves, val, flattering floor, F-008) · registry coherent with `bakeoff.json`'s recorded winner · F-013's one home. **Re-fits NOTHING** (M3 cost 12,447 s of fitting) and leaves the registry identical — checked: alias 2, versions [1,2]. No skip flag, no fast mode. Transcript: `docs/verify_m3_transcripts.md` §1 |
+| Prove the M3 gate can go RED | `make verify-m3-redteam` (`bash scripts/verify_m3_redteam.sh`) | VERIFIED 2026-08-18 (M3-S5): rewrites ONE contender's measured KPI-09 in `automation/runs/m3s5/bakeoff.json` (`auto-on-v1` 3.5038 → 3.2000) and leaves its recorded verdict at REFUSE → **RED exit 1**, naming the row AND both verdicts, **the four UNTAMPERED replays still passing** (what separates a replay from a checksum: red on a WRONG number, not on any edit), **44 of 46 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`c4a323ea072a…` before and after) → **GREEN 46/46**. Touches no model, no run, no registry, no study |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
@@ -798,4 +851,11 @@ loses one trial per kill and the drill that finds this is the one that PASSED
 (#47)**, and **the launcher for resumable jobs TRUNCATED the log of the run it
 was resuming — one line before correctly skipping the phases that log described
 (#48; when a job is built to be re-run, audit what its launcher does to state
-that already exists)**.
+that already exists)**. Newest, and they are the same lesson twice: **a tag named
+`do_not_promote` whose VALUE is "no" reads as a refusal to any check that tests
+for the KEY (#49)**, and **three `verify-m2` assertions encoded M2-era facts as
+literals, so the first legitimate champion transition turned them RED for doing
+the right thing (#50) — a guard that fires when the program behaves correctly
+trains the next session to edit assertions, which is how a guard becomes a
+formality. When a guard goes red, ask FIRST whether the thing it names actually
+changed for the worse.**
