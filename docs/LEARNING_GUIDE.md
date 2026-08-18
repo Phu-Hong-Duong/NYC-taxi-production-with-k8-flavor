@@ -9,6 +9,62 @@ months from now.
 
 ## M4
 
+### M4-S5 (first session) — the drill was wrong three times, and each wrong was about the instrument (2026-08-18, role:MLOps A / MLE R, SRE hat)
+
+**What was built.** `make pipeline-kill-drill`: delete the pod a stage is running
+in, mid-work, and prove the pipeline finishes anyway. Plus the retry budget it
+spends (`retries=2` on every stage, `0` on the parent), a probe that measures that
+budget on its own, and F-027 — a reader that had been answering `attempts: 0` for
+every run this program ever inspected.
+
+**Why this way.** The drill is a GAMEDAY, so it writes its predicted signature to
+disk **before** it kills anything, and a test pins that ordering positionally
+rather than by presence. That discipline is the whole reason this session produced
+knowledge instead of a green tick: the first prediction said the retry would show
+up as a pod named `…-1`, and what actually happened is that the k8s plugin
+recreated the pod **under the same name with a new UID**. The pipeline had
+survived perfectly and the drill reported 6/7. Had the expectation been formed
+after the observation, the "finding" would have been "it works".
+
+**The concept underneath: when a check goes red, ask what it is measuring before
+you touch it.** The wrong fix was available and easy — accept `…-0` as well as
+`…-1`. The right one was a different PROPERTY: **identity, not name**. A different
+pod object ran the stage; that is true whether the platform bumps the attempt or
+recreates it, and it is asserted by reading the UID before the kill.
+
+**And the deeper one: a drill can pass while measuring something other than what
+it claims.** Chasing the same thread showed the control plane recorded the killed
+action at *one attempt* — so a deleted pod is survived by **recreation**, which
+never spends the `retries=2` this session had just declared everywhere. The
+budget had never been observed doing anything. Hence `pipelines/flyte/
+retry_probe.py`: one task that always raises, carrying the same budget **by
+import** so it measures the number the repo declares rather than one it restates.
+It settles at attempt index 3 and the run FAILS — real *and* finite, which is the
+argument for the number being small.
+
+**Three defects, all in instruments, none in the pipeline.** The runner buffered
+`flyte run --follow` into a shell variable, so the run's name did not exist until
+the run was over (the drill polled an empty file). `--follow` returns when the
+FIRST attempt's log stream ends, so the probe read `RUNNING` as a final answer
+(#65). And `getattr(status, "attempt", 0)` on a protobuf returns the **default**
+for a field that does not exist — the field is `attempts` — so a reader reported
+zero retries for everything, forever, and zero is exactly what an un-retried
+action should say (#64, F-027). The pipeline was fine every time.
+
+**What to look at.** `automation/runs/m4-kill/attempt1-prediction-wrong/` — a
+prediction kept beside its refutation, which is the artifact this whole practice
+exists to produce · `scripts/pipeline_kill_drill.sh`, phase 0 and the UID
+comparison · `docs/pipeline_m4.md` §13 · the F-027 test, which pins the reader
+against `ActionStatus.DESCRIPTOR` rather than against the string `"attempts"`,
+because a literal test goes green on the next typo in the next field.
+
+**What to try yourself.** Run the drill against a month it has already seen: it
+refuses, because a cached stage runs in no pod and there would be nothing to kill.
+Then set `retries` to 0 in `pipelines/flyte/workflows.py` and run phase 0 alone —
+the probe should say the declared budget is not what the platform honours, which is
+the check proving it can fail. Finally, `grep -n attempts automation/runs/m4-cache/
+cache_drill.json` and notice that every one of them is a default.
+
 ### M4-S4 (second session) — the cache, and three defects the cheap probe found before the expensive run did (2026-08-18, role:MLOps A / MLE R)
 
 **What was built.** The pipeline's second leg: `make pipeline-cache-drill`, which

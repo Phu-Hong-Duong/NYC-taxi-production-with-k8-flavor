@@ -1058,6 +1058,48 @@ can never disagree (the port-family twins lesson, applied before it bit).
   `ImagePullBackOff` fires for a tag no node holds, and a stale manifest names a
   tag every node holds.
 
+## Losing a pod (M4-S5, leg 1) — what survives it, and the two mechanisms people confuse
+- **`make pipeline-kill-drill` deletes the pod a stage is running in, mid-work,
+  and the pipeline finishes anyway.** GREEN 9 checks (2 in phase 0, 7 after),
+  month **2019-03**, sampled and therefore verdict-free (F-008). **31 seconds
+  from kill to a DIFFERENT pod object**; `train` cost **939.8 s** against ~870 for
+  an undisturbed sampled fit, i.e. the fit restarted from zero and the loss was
+  the ~123 s in flight. `@champion` **2** before and after.
+- **The prediction is written to disk BEFORE the kill, and the first one was
+  wrong.** It expected a pod named `…-1` (Flyte names task pods
+  `<run>-<action>-<attempt>`); what happens is that the k8s plugin **recreates the
+  pod under the SAME name with a new UID**, so a correct survival was reported as
+  a failed drill, 6/7. Kept whole in `automation/runs/m4-kill/attempt1-prediction-
+  wrong/`. The fix was the right PROPERTY, not a looser bar: **identity, not
+  name** — a different pod object ran the stage, true under either classification.
+- **A deleted pod does NOT spend the retry budget, and that is why phase 0
+  exists.** The control plane recorded the killed action at **one attempt**, so
+  `retries=2` had never been observed doing anything. `pipelines/flyte/
+  retry_probe.py` is one task that always raises, carrying the same budget **by
+  import**; it settles at **attempt index 3** and the run **FAILS** — the budget is
+  real AND finite, which is the argument for the number being small (at 31 minutes
+  a stage, a generous budget is just a slower way to hide a systematic fault).
+  Two mechanisms, both measured, not interchangeable.
+- **Every stage declares `retries=_STAGE_RETRIES`; `main` declares `0`.** A parent
+  attempt can only re-run the child that just exhausted its own budget — same
+  answer, three times the cost, three reports of one fault. What makes a budget
+  safe on the gate stage is M4-S1's decision that **a REFUSE is a return value**:
+  a refusal is not a failure, so it never reaches the retry machinery. Pinned by
+  an AST test that fails if `register` starts raising.
+- **F-027 (new, closed): the action reader had been answering `attempts: 0` for
+  everything.** `getattr(status, "attempt", 0)` — the field is `attempts`, plural,
+  and a protobuf answers `getattr` for its own fields only, so the typo returned
+  the default instead of raising. Every run this program ever inspected, including
+  `automation/runs/m4-cache/cache_drill.json`, carries a default where a
+  measurement looks like it should be. Those runs genuinely were not retried, so
+  no claim is wrong — but `verify-m4` must not read the old values as evidence.
+  Pinned against `ActionStatus.DESCRIPTOR`, never against the string.
+- **`run_pipeline.sh` now streams `flyte run --follow` to `flyte_run.log`**
+  instead of capturing it into a shell variable. The drill cannot kill a pod
+  belonging to a run it cannot name, and the name exists only in that output —
+  which, buffered, appears when the run it meant to interrupt is already over.
+  Same absence §9 had to recover from the server, one layer earlier.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1140,6 +1182,7 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Stage the data a task pod reads (M4-S4) | `make stage-data` (`scripts/stage_pipeline_data.sh`; `RESTAGE=1` forces the re-stream, `DRY_RUN=1` measures and transfers nothing) | VERIFIED 2026-08-18 (M4-S4): **1.8G across raw/processed/rejected** onto PVC `taxi-data` by `tar | kubectl exec -i` (the M1-S4 shape — the kind nodes cannot see the host FS and `extraMounts` is a config edit, i.e. a rebuild), then checked by per-tree **FILE COUNTS** — `raw: 8 == 8 · processed: 16 == 16 · rejected: 8 == 8` — because a size check passes on a tree that arrived truncated. The stager pod is DELETED afterwards (a pod holding an RWO volume open is one day the reason a task cannot schedule) while the PVC and its data remain. `DRY_RUN=1` prints the source size and `nothing was applied, nothing was transferred`. Re-run skips on size unless `RESTAGE=1`; it never DELETES, for `postgres_databases.sh`'s reason |
 | The six stages on-cluster (M4-S4) | `make pipeline MONTH=YYYY-MM` (`scripts/run_pipeline.sh`; `TRAIN_MONTHS=…` makes it a SAMPLED, verdict-free smoke — F-008) | **VERIFIED SAMPLED 2026-08-18 (M4-S4); the FULL-DATA run is NOT done and is M4-S5's inheritance.** Run `r5kzpr785rt8m6tn9b7l`: ingest **7,696,617 → 7,584,656 rows, 1.4547% rejected** (M4-S1's host rehearsal reproduced TO THE ROW, in a container) · validate 20 columns through the output contract · features set **v2**, 24 features · train `lightgbm-v1` run `e17ce5846aaf…` in **869.7 s** · evaluate reporting the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=false`** as DATA. `@champion` read BEFORE and AFTER by the script itself: **2 → 2**, and a move exits 2. **Its assertion is POSITIVE and had to be**: `flyte run --follow` exits 0 for a FAILED run, so the check is that the run's OUTPUTS carry a `"decision"` — the exit-code version printed `ok … six stages on-cluster` over a run that died on `ErrImagePull` |
 | Prove the rerun REUSED the first run (M4-S4) | `make pipeline-cache-drill MONTH=YYYY-MM` (`DRILL_STAGE=ingest` is the ~40 s mechanism probe; `DRILL_MAX_RATIO`/`DRILL_MAX_STAGE_RATIO` are the two clocks' bars) | VERIFIED 2026-08-18 (M4-S4, second session): **GREEN 19/19**, run 1 `r56p9p7qwfsqgh6qgrlw` populating all five cacheable stages, run 2 `rbbvfb5mhfgz8cngx9rn` hitting all five — **train 1935.2 s -> 0.1 s**, executed stages **1966.9 s -> 3.2 s (0.2%)**, wall-clock **1974 s -> 11 s (0.6%)**, **MLflow 16 -> 16 across run 2** (and 12 -> 16 across run 1, so the saving is real), `@champion` **2** after both. Three independent systems, ranked: the control plane's `cache_status` is the CLAIM, the clock CORROBORATES, MLflow is the one that could catch a lie. It refuses to be green if run 1 executed nothing — a drill comparing two reruns can show no saving |
+| Prove the pipeline survives losing a pod (M4-S5) | `make pipeline-kill-drill` (`MONTH=` picks an UNSEEN month — a cached stage runs in no pod; `KILL_STAGE=`/`KILL_AFTER=` are the levers; ~20 min, **run it detached**) | VERIFIED 2026-08-18 (M4-S5): **GREEN, 9 checks**, run `rb2cxpmsksx489qjbn5b` on 2019-03, sampled so verdict-free (F-008). Phase 0 first: a task that always raises settles at **attempt index 3** with `retries=2` and the run **FAILS** — the declared budget is real and finite, measured in ~90 s in front of the expensive leg. Then the kill: `train`'s pod deleted 120 s into its work, **a different pod object (uid `9d8b05a3…` vs `1223e07d…`) 31 seconds later**, `train` **939.8 s** against ~870 undisturbed, all six stages SUCCEEDED, verdict object produced, `@champion` **2** before and after. **Its prediction is written to disk BEFORE the kill and the first one was WRONG** (it expected a `…-1` pod; the plugin recreates the same attempt under the same name) — kept in `automation/runs/m4-kill/attempt1-prediction-wrong/`, and the assertion is now identity rather than name. Refuses to be green if the target stage came back `CACHE_HIT` |
 | What a Flyte run's actions actually did (M4-S4) | `uv run python scripts/flyte_run_actions.py <run> [--json]` (needs a route; the drill and `run_pipeline.sh` stand one up) | VERIFIED 2026-08-18 (M4-S4, second session): recovered the full-data run's per-stage detail that `--follow` never logged — **six stages, 1909.7 s, fit 1874.7 s, everything else 34.6 s**. Reads `cache_status`, which the CLI does not render. A READER: pinned by a test that it calls nothing which launches, aborts or deletes, because `verify-m4` is meant to reuse it |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
@@ -1257,4 +1300,13 @@ and blamed a `$!` five lines below on a port-forward that was perfectly fine —
 the fourth time prose has sat where a parser reads it as code (#62)**, and **a
 bar measured on the wrong clock called a 98.7% saving a failure, because a
 one-stage rerun is mostly the launch overhead no cache can touch; the fix was the
-right quantity, not a looser threshold (#63)**.
+right quantity, not a looser threshold (#63)**. Newest (M4-S5), and both are about
+INSTRUMENTS rather than systems: **a protobuf answers `getattr` for its own fields
+only, so a field name misspelled in the singular returns the supplied DEFAULT
+instead of raising — the run-actions reader reported `attempts: 0` for every action
+of every run it was ever pointed at, including committed evidence, and `0` is
+exactly what an un-retried action should say (#64, F-027)**; and **`--follow`
+follows the LOG STREAM, which ends when the FIRST attempt's container exits, so
+the CLI returned 7 seconds into a task that had two retries still to come and a
+check read `RUNNING` as the final answer (#65 — sibling of #59: the CLI's return
+says nothing about the run's outcome and nothing about its completeness)**.
