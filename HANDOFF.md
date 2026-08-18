@@ -1,5 +1,155 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (au) — M4-S5 leg 1: the pipeline survived losing a pod, and the drill was wrong three times first
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLOps (A) · MLE (R), SRE hat
+for the kill drill** — charter read (`docs/org/ROLES.md` §MLOps; its refusals
+include manual deploys and hand-edited cluster state, and every launch, kill and
+probe this session went through a `make` target or a committed script).
+Boot reads: CLAUDE.md · HANDOFF (at) · `docs/milestones/M4_KICKOFF.md` ·
+AWAITING_PO.
+
+**M4-S5 is NOT complete. Leg 1 landed and is merged — PR #25 (`06f3b79`),
+reachable from origin/main, branch pruned.** Legs 2 and 3 are the next session's,
+and the cut is written into the repo at `docs/pipeline_m4.md` §15 rather than only
+here.
+
+**Staleness check**: cluster 3/3 Ready v1.36.1 (age 36h), every platform pod
+Running, PVCs bound, `automation/STOP` absent, tree clean at `f7bdf3d`, no
+detached job pending. Reality matched (at)'s Next; nothing to reconcile. **No
+gotcha #34 this time** — Docker Desktop was up.
+
+**The statefulness law held.** No `kind delete`/`create`, no kind-config edit, no
+new hostPort. `@champion` **version 2**, read before and after every on-cluster
+run by the runner itself, which exits 2 if it moved.
+
+### Where the story is cut, and why (read this before anything else)
+The kickoff's M4-S5 is three legs. **Leg 1 (kill-a-pod + the retry budget) is
+done and merged. Leg 2 (D-003's marts tail task) and leg 3 (`make verify-m4` +
+red team) are not started.**
+
+The cut is between legs, never inside one, and the reason is scope rather than
+trouble: leg 2 needs a transport the host does not have, a new Secret, a
+PodTemplate change, a four-tree stager, an image rebuild and a live publish to
+measure against the 23 GB peak — and leg 3's gate is supposed to assert that the
+marts reconcile *after* the tail task, so writing it first means editing it
+immediately afterwards, which is exactly how the M2-era literals were born
+(F-017, gotchas #49/#50). **Note for ARCH at the boundary: M4-S5 as chartered is
+a three-session story, not a one-session one.** That is a sizing observation, not
+a complaint, and it is the only thing in this entry that is anyone else's call.
+
+### Done (each with the command and what it printed)
+- **`make pipeline-kill-drill` — GREEN, 9 checks** (2 in phase 0, 7 after),
+  detached (`automation/runs/m4s5-kill-drill.log`, `DONE 0`). Run
+  `rb2cxpmsksx489qjbn5b`, month **2019-03**, sampled and therefore verdict-free
+  (F-008; the kickoff names a sampled run as legal here because the orchestrator
+  is what is under test). `train`'s pod deleted **120 s into its work** →
+  **a different pod object 31 seconds later** (uid `9d8b05a3…` against the killed
+  `1223e07d…`) → `train` SUCCEEDED at **939.8 s** against ~870 undisturbed, so the
+  fit restarted from zero and the loss was the work in flight. All six stages
+  SUCCEEDED, the run produced its verdict object, `@champion` **2 → 2**.
+- **A retry budget that is now measured, not just declared.** Every stage carries
+  `retries=_STAGE_RETRIES` (2); `main` carries **0** with its own argument. Phase 0
+  spends the budget on `pipelines/flyte/retry_probe.py` — one task that always
+  raises, carrying the same number **by import** — and it settles at **attempt
+  index 3** with the run **FAILED**: `ok  the declared budget is REAL and BOUNDED`
+  and `ok  the budget is FINITE`.
+- **F-027 filed and CLOSED** (see Defects), pinned by a test that reads
+  `ActionStatus.DESCRIPTOR` rather than the string.
+- **D-003 measured, deliberately not closed**: `marts.trips_clean` is **13 GB**
+  read live off `pg_total_relation_size`, and `scripts/marts_reach_probe.py`
+  printed `PROBE-OK ('marts', 'marts')` from a throwaway pod built from the actual
+  task image. Both facts are in the debt row and in `docs/pipeline_m4.md` §14.
+- **508 unit tests green (+9**, in `tests/unit/test_flyte_task_wiring.py`), ruff
+  clean across `src tests scripts pipelines`, CI `lint-test` pass 1m14s.
+  **`make verify-m2` GREEN 55/55 and `make verify-m3` GREEN 46/46**, re-run after
+  two on-cluster fits (counted by `grep -c "ok  "`).
+- Ledgers: **F-027 filed + closed**; D-003's row updated with the measurement and
+  the transport answer. Docs: `docs/pipeline_m4.md` §13–§15 (§1–§12 left UNEDITED
+  as M4-S4's record), CLAUDE.md new section + 1 command row + the traps paragraph,
+  gotchas **#64/#65**, field note written.
+
+### The strongest single number
+**Attempt index 3, on a task that always raises, with `retries=2` declared.**
+Not because 3 is interesting, but because before phase 0 existed the number 2 in
+`workflows.py` had never been observed doing anything at all — the kill drill it
+was written for is survived by pod RECREATION, which does not spend it. A declared
+budget nobody has watched work is a declared budget nobody should rely on.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **The kill targets `train`, and the drill refuses a cached stage.** The other
+  five stages last 3–15 seconds, so a kill aimed at one of them tests whether the
+  script can win a race; `train` is the only stage whose loss costs anything. And
+  a cached stage runs in **no pod**, so the verdict refuses to be green if the
+  target came back `CACHE_HIT` — the mirror of the cache drill's "run 1 executed
+  no stage". Consequence for the next session: **`train` for 2019-02 and 2019-03
+  is now cached**; a third drill needs a fourth month.
+- **`main` gets `retries=0`.** A parent attempt can only re-run the child that
+  just exhausted its own budget: same answer, three times the cost, three reports
+  of one fault.
+- **The drill was detached without `--then-schedule` and consumed in-session**, so
+  the story could be merged verified rather than handed forward unproven. The
+  successor is scheduled by hand below — one successor, never two.
+
+### Defects/Surprises
+- **The pre-registered prediction was REFUTED, and that is the session's best
+  artifact.** It said the retry would appear as a pod named `…-1`, because Flyte
+  names task pods `<run>-<action>-<attempt>`. What happens is that the k8s plugin
+  **recreates the pod under the same name with a new UID** — so a run that
+  survived perfectly was reported as a failed drill, **6/7**. The whole first
+  attempt is kept in `automation/runs/m4-kill/attempt1-prediction-wrong/`. The fix
+  was not a looser assertion but a different PROPERTY: **identity, not name**,
+  which is true whether the platform bumps the attempt or recreates it.
+- **F-027 — the action reader had been answering `attempts: 0` for everything.**
+  `getattr(status, "attempt", 0)` on a protobuf returns the **default** for a field
+  that does not exist; the field is `attempts`, plural. So
+  `scripts/flyte_run_actions.py` reported zero retries for every action of every
+  run it was ever pointed at, and nothing looked wrong, because 0 is exactly what
+  an un-retried action should say. It could only surface where the number was
+  *supposed* to be non-zero. Now gotcha **#64**. **Consequence stated rather than
+  quietly corrected: every `attempts` value in
+  `automation/runs/m4-cache/cache_drill.json` is a default.** Those runs genuinely
+  were not retried (their pods are all `…-0`), so no claim made from that file is
+  wrong — but `verify-m4` must not read the historical values as evidence.
+- **`--follow` follows the LOG STREAM** (gotcha **#65**), which ends when the
+  FIRST attempt's container exits: the CLI returned **7 seconds** into a task with
+  two retries still to come, and the probe read `RUNNING` as a final answer.
+  Sibling of #59 — the CLI's return says nothing about the run's outcome and
+  nothing about its completeness. Fixed by polling for a terminal phase.
+- **`run_pipeline.sh` buffered its own transcript.** `flyte run --follow` was
+  captured into a command substitution, which does not exist until the command
+  exits — so for the 31 minutes of a full-data run the transcript was nowhere, and
+  the drill (which cannot kill a pod belonging to a run it cannot name) polled an
+  empty file until the run it meant to interrupt was over. It now streams to
+  `RUN_DIR/flyte_run.log`. That is the same absence §9 had to recover from the
+  server, one layer earlier, and it is a better transcript for everyone.
+- **A test passed for the wrong reason and was tightened.** "The drill never calls
+  `flyte run`" stayed green after phase 0 started calling it, purely because the
+  invocation is split across two lines. It now checks WHICH workflow file reaches
+  the CLI. Same session, same file, third instance of prose-and-code confusion
+  (the prediction-ordering test also first went red on the script's own header).
+
+### Next
+**M4-S5 leg 2 — D-003's marts build+publish as the pipeline's tail task** — then
+leg 3 (`make verify-m4` + red team). `docs/pipeline_m4.md` §14–§15 supersede §12
+and state exactly what is inherited:
+- **The transport question is answered**: a task pod reaches Postgres directly as
+  `marts` (measured), because `kubectl exec` — the host's only route — is not
+  available to a pod.
+- **The twin to avoid**: the swap SQL exists once, in `scripts/marts.sh`. Do not
+  write a second copy in Python; put the SQL and the CSV stream in one module with
+  two thin transports.
+- **Still to build for leg 2**: `flyte-task-marts` Secret + PodTemplate entry,
+  `data/predictions/` as a fourth staged tree (the `error_segments` mart sources
+  it), an in-pod analyst-layer rebuild, an image rebuild, and the 23 GB peak
+  re-measured on a real publish.
+- **For leg 3**: `automation/runs/m4-kill/kill_drill.json` holds the retry
+  evidence the gate owes, and F-027 means the `attempts` field is only evidence
+  from this session forward.
+- M4 carries no ◆, so M4-S5's LAST session exits to
+  `automation/next_session.sh architect 120`. This one is not that session.
+
 ## Session 2026-08-18 (at) — M4-S4 leg 2: 33 minutes to 11 seconds, and the image was carrying the code all along
 
 ### State
