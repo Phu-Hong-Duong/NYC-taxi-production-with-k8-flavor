@@ -198,4 +198,24 @@ io="$("${FLYTE[@]}" get io "${SCOPE[@]}" "$RUN_NAME" --outputs-only 2>&1)" || {
   echo "$io"; echo "[pipeline] FAIL: could not read the run's outputs" >&2; exit 1; }
 echo "$io"
 
+# THE ASSERTION THAT MAKES THIS A CHECK, and it was added because its absence
+# printed a green line over a dead run. `flyte run --follow` EXITS 0 when the run
+# it followed FAILED — observed 2026-08-18, run rkfzd2sf9zb7r45prvsm died on
+# ErrImagePull and this script said "ok … six stages on-cluster". Every signal
+# available was consistent with success: exit code 0, a run name, a readable
+# outputs blob. The only thing that differed was the CONTENT of the outputs
+# (`ActionOutputs(o0=None)`), because a failed workflow returns nothing.
+#
+# So the check is POSITIVE and about the thing the pipeline exists to produce:
+# the register stage's verdict, which is a JSON object with a `decision`. That is
+# strictly stronger than asserting a phase string — a run can reach SUCCEEDED and
+# still be asserted against here if it ever stops emitting a verdict — and it
+# cannot be satisfied by a stage that merely printed something (gotcha #51: ask of
+# any self-assertion whether the component could tell if it were false).
+if ! grep -qF -- '"decision"' <<<"$io"; then
+  echo "[pipeline] FAIL: the run produced no verdict — its outputs are '$io'" >&2
+  echo "[pipeline]       (a FAILED run returns o0=None; \`flyte run\` exits 0 either way)" >&2
+  exit 1
+fi
+
 echo "[pipeline] ok  run $RUN_NAME completed; six stages on-cluster for $MONTH"

@@ -64,6 +64,20 @@ template:
         # a plausible-looking image here would be a trap for the next reader, who
         # would reasonably assume tasks run it.
         image: unused-placeholder-the-task-image-replaces-this
+        # THE TASK IMAGE IS LOCAL AND MUST NEVER BE PULLED. D-001 decided that
+        # images reach the nodes by `kind load` (a local registry needs a
+        # kind-config edit, i.e. a rebuild, which the statefulness law forbids),
+        # so `taxi-mlops-pipeline:<sha>` exists in every node's containerd and
+        # nowhere else. Flyte does not set a pull policy on task containers, and
+        # kubernetes' default for a non-`:latest` tag would be IfNotPresent — but
+        # the default only applies when the field is EMPTY, and observed here it
+        # was not: the first pipeline run died on
+        # `ErrImagePull … docker.io/library/taxi-mlops-pipeline:9613543: pull
+        # access denied`, i.e. it went looking for our private tag on Docker Hub.
+        # `IfNotPresent` rather than `Never` deliberately: both refuse to invent
+        # bytes, and IfNotPresent leaves the door open for the registry pattern
+        # D-001 deferred to the next sanctioned rebuild, without another edit here.
+        imagePullPolicy: IfNotPresent
         env:
           - name: FLYTE_AWS_ENDPOINT
             value: "http://minio.platform.svc.cluster.local:9000"
