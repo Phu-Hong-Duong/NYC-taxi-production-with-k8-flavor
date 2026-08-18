@@ -100,6 +100,13 @@ template:
           # URI and not this one logs metrics happily and 404s on the model.
           - name: MLFLOW_S3_ENDPOINT_URL
             value: "http://minio.platform.svc.cluster.local:9000"
+          # boto3 requires a region even when the endpoint is MinIO and the region
+          # means nothing. `taxi_mlops.training.tracking` treats it as mandatory
+          # for that reason, so it is supplied here rather than left to a default
+          # that does not exist inside a pod. Matches the `region` the flyte-binary
+          # storage config uses, because they address the same server.
+          - name: AWS_DEFAULT_REGION
+            value: "us-east-1"
         envFrom:
           # TWO identities in one pod, deliberately. `flyte-task-storage` is
           # Flyte's own MinIO user, which may touch `flyte-data` (task inputs and
