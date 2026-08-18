@@ -64,15 +64,30 @@ _IMAGE_MANIFEST = Path(__file__).resolve().parents[2] / "automation/runs/m4-imag
 
 
 def _image_ref() -> str:
-    """The image this pipeline's tasks run, or a refusal naming how to make one."""
+    """The image this pipeline's tasks run, or a refusal naming how to make one.
+
+    THIS FUNCTION RUNS TWICE, IN TWO PLACES, AND ONLY ONE OF THEM HAS THE FILE.
+    On this host it resolves the manifest `make image-load` wrote. Inside a task
+    pod the same module is imported again — and the manifest is not there and
+    cannot be: it is written AFTER the image is built, describing the image, so no
+    build can contain it. The first on-cluster run died exactly there, at import,
+    with a FileNotFoundError three frames deep in `<frozen importlib._bootstrap>`.
+
+    The resolved value therefore TRAVELS: every TaskEnvironment below passes it as
+    `TAXI_PIPELINE_IMAGE`, Flyte puts it in the pod's environment, and the in-pod
+    import reads it from there on the first line. Client and pod agree by
+    construction rather than by both looking something up. The same variable
+    doubles as the manual override, which is why it is checked first.
+    """
     override = os.environ.get("TAXI_PIPELINE_IMAGE")
     if override:
         return override
     if not _IMAGE_MANIFEST.exists():
         raise FileNotFoundError(
-            f"{_IMAGE_MANIFEST} does not exist — the task image has never been built "
-            "on this machine. Run `make image-load` (M4-S3), which builds it, loads "
-            "it onto every kind node and writes this manifest."
+            f"{_IMAGE_MANIFEST} does not exist and TAXI_PIPELINE_IMAGE is unset — "
+            "the task image has never been built on this machine. Run "
+            "`make image-load` (M4-S3), which builds it, loads it onto every kind "
+            "node and writes this manifest."
         )
     return json.loads(_IMAGE_MANIFEST.read_text())["image_ref"]
 
@@ -89,7 +104,11 @@ def _image_ref() -> str:
 # verdict-reading task, and three kind nodes share this laptop's 47Gi. The numbers
 # are starting points to be tuned by observation (M4 kickoff), and what is
 # observed is recorded in docs/pipeline_m4.md rather than left in a comment here.
-_IMAGE = flyte.Image.from_base(_image_ref())
+_IMAGE_REF = _image_ref()
+_IMAGE = flyte.Image.from_base(_IMAGE_REF)
+# Carried into every task pod so the in-pod import of this module resolves the
+# same string without the manifest file. See `_image_ref`.
+_ENV_VARS = {"TAXI_PIPELINE_IMAGE": _IMAGE_REF}
 
 # The light stages: read a manifest, report a verdict. Nothing loads a dataframe.
 light_env = flyte.TaskEnvironment(
@@ -97,6 +116,7 @@ light_env = flyte.TaskEnvironment(
     image=_IMAGE,
     resources=flyte.Resources(cpu=(1, 2), memory=("1Gi", "4Gi")),
     pod_template="flyte-task-defaults",
+    env_vars=_ENV_VARS,
 )
 
 # The data stages: one month of TLC yellow is ~7.6M rows through a pandera
@@ -107,6 +127,7 @@ data_env = flyte.TaskEnvironment(
     image=_IMAGE,
     resources=flyte.Resources(cpu=(1, 4), memory=("4Gi", "12Gi")),
     pod_template="flyte-task-defaults",
+    env_vars=_ENV_VARS,
 )
 
 # The fit. 44M rows across six months, four contenders through one evaluator.
@@ -118,6 +139,7 @@ train_env = flyte.TaskEnvironment(
     image=_IMAGE,
     resources=flyte.Resources(cpu=(2, 6), memory=("8Gi", "24Gi")),
     pod_template="flyte-task-defaults",
+    env_vars=_ENV_VARS,
 )
 
 # Every environment names the SAME PodTemplate, and that is the point of it being
