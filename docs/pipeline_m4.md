@@ -11,6 +11,11 @@ the full-data run is hours-class and is therefore detached (gotcha #45, ritual e
 and the cache-hit rerun is its successor's first command. §7 says exactly what the
 next session inherits.
 
+> **§9–§11 were added by the SECOND M4-S4 session (2026-08-18, later the same
+> day), which landed both of those legs. §1–§8 are left UNEDITED as the first
+> session's record** — the M3 precedent: a document that silently rewrites its own
+> numbers cannot be compared against the decisions made from them.
+
 **The cluster never went down.** No `kind delete`/`create`, no kind-config edit,
 no new hostPort. `@champion` read before and after every run: **version 2**,
 unchanged.
@@ -292,3 +297,152 @@ Ready and unblocked for it:
   month, image ref, judged flag and the alias read after it.
 * M4-S5 (kill-a-pod drill, D-003's marts tail task, `verify-m4`) is unblocked by
   everything above except its need for a completed FULL-DATA run to check.
+
+
+---
+
+# Added 2026-08-18 (second M4-S4 session) — the full-data run, read back; and the cache
+
+## 9. What the full-data run actually did, recovered from the server
+
+The detached full-data run (`rhgfld7j6qvqrzbrzl6v`) finished **DONE 0** at
+10:04Z — and its log holds almost nothing, because `flyte run --follow` streams
+the *parent's* log and reported `Scrolled 2 lines of logs`. The per-stage
+transcript §5 shows for the sampled run does not exist for this one.
+
+It did not need to. The control plane recorded every action, and
+`scripts/flyte_run_actions.py` (new, §10) reads them back:
+
+```
+  a0                         main             SUCCEEDED  CACHE_DISABLED      1909.7s
+  cf17y4l3o0w1ezz20fesd7n85  ingest           SUCCEEDED  CACHE_DISABLED        14.4s
+  bubrkhgpmdqfk04g3x113g4xj  validate         SUCCEEDED  CACHE_DISABLED         5.4s
+  ewu9a6k5a3ykro31o3kzb6vbx  build_features   SUCCEEDED  CACHE_DISABLED         7.4s
+  593vd4l64mxzbpinzk5ish51h  train            SUCCEEDED  CACHE_DISABLED      1874.7s
+  7ac9jg8sysloqa1zz1b7g9py9  evaluate         SUCCEEDED  CACHE_DISABLED         3.7s
+  5lnc5roda8ycuhkxgk0yzsmjh  register         SUCCEEDED  CACHE_DISABLED         3.7s
+```
+
+**Six stages, on-cluster, full data, 31m50s — of which the fit is 31m15s and
+everything else together is 34.6 seconds.** That ratio is the whole argument for
+caching this pipeline: 98.2% of the cost is one stage, and it is the stage whose
+inputs change least often.
+
+And the run's output — the gate's verdict, as data:
+
+```
+{"decision": "REFUSE", "promoted": false,
+ "reason": "--no-promote: the verdict stands recorded and the registry is untouched",
+ "margins": {"challenger_mae": 3.242513399356197, "floor_mae": 3.351759301862344,
+             "observed_pct_vs_floor": 3.2593600156624087, "required_pct_vs_floor": 2.0,
+             "challenger_within_rate": 81.58227558804766,
+             "floor_within_rate": 80.73345222114746},
+ "champion_alias_version": "2"}
+```
+
+**Read that REFUSE carefully, because it is the gate working, not failing.** The
+challenger cleared the FLOOR condition comfortably — +3.26% against a 2.00% bar.
+What refused it is F-011's **incumbent** condition: `configs/train.yaml` names
+feature set v2 and the pipeline fits it with v1's hyperparameters, which is M3's
+`artisan v2` — and `artisan v2` measured **3.2425** on the holdout against the
+serving champion's **3.2403**. The pipeline re-derived M3-S5's bake-off number to
+four decimals, on the cluster, in a container, and was then refused for being
+0.07% worse than what is already serving. A pipeline that promoted here would
+have been the defect.
+
+**One honest gap in that output, named because it is the shape of a future
+incident**: `margins` carries the floor numbers and not the incumbent's, so the
+JSON shows a decision of REFUSE beside a floor margin that PASSES, and the reader
+has to know M3-S1 to reconcile them. `pipelines.tasks.register` builds that dict;
+the decision object it reads has the incumbent checks in it. Not fixed here — it
+is a change to the register stage's output contract, which `verify-m4` (M4-S5)
+is about to start asserting against, and changing a shape one story before the
+gate that pins it is how twins get born. Carried to M4-S5 by name.
+
+## 10. The cache-hit rerun: what is cached, what refuses to be, and who is asked
+
+`make pipeline-cache-drill` runs the same invocation twice and then asks **three
+independent systems** whether the second run reused the first, because each one
+alone is refutable:
+
+1. **The control plane.** Every action carries a `cache_status`
+   (`CACHE_MISS` · `CACHE_POPULATED` · `CACHE_HIT` · `CACHE_DISABLED` …). This is
+   the claim, and it is read with `scripts/flyte_run_actions.py` — a READER, which
+   asks the server what it recorded rather than inferring from a transcript. The
+   CLI does not render this field, which is why the file exists.
+2. **The clock.** The kickoff asks for "a wall-clock a fraction of run 1". Kept,
+   and deliberately ranked WEAKEST: a faster second run is equally consistent with
+   a machine that was simply less busy.
+3. **MLflow.** A re-executed train stage MINTS A RUN. So the experiment's run
+   count must be identical before and after run 2 — measured on a different
+   server, in a different database, by code that knows nothing about Flyte. This
+   is the strongest leg: it can fail while 1 and 2 both pass, and if it does, the
+   cache is not saving the fit, it is hiding a second one.
+
+**The cache key is the function body + the declared inputs + a salt derived from
+the DVC pins**, and that third term is the one that matters. Flyte can see a
+stage's inputs; every stage here declares a month string, a row count or a
+manifest, and then reads 1.8 GB off a volume the key knows nothing about. The
+honest failure mode of caching this pipeline is therefore not a stale model — it
+is a stale model with a green transcript. `data/*.dvc` is exactly the right object
+to close that: it is a content hash of each tracked tree, it is committed, and
+`make data` is the only thing that legitimately changes it. The salt travels to
+the pods in `TAXI_DATA_PIN`, for the same reason and by the same mechanism as
+`TAXI_PIPELINE_IMAGE` — the pins are not in the image and must not be.
+
+**Two stages refuse a cache, and each argues its own case where it is made:**
+
+* **`register`** reads the LIVE registry. A cached answer to "what is serving
+  right now?" is not a saving, it is a wrong answer served fast — and it is wrong
+  exactly when the alias has moved, which is the one circumstance under which
+  anybody re-reads that field. Cost of the refusal: 3.7 seconds against a 31-minute
+  fit. The rare case where the correct choice is also nearly free.
+* **`main`** is uncached so the evidence stays legible. A cached parent returns the
+  previous answer in ONE action without consulting its children, so the transcript
+  could not tell "five stages were reused" from "the whole thing was skipped" —
+  and M4-S5's kill-a-pod drill would have no pod to kill.
+
+Both are pinned by tests that parse the AST, not the prose: `workflows.py` argues
+its cache design at length, so a check that grepped for the word would pass on the
+argument and never look at the decorator (gotcha #53). The drill's own `UNCACHED`
+list and the workflow's `cache="disable"` decorators are asserted to be the same
+set — a twin in the shape M0-S3 established for the port pairs.
+
+### The probe that cost 40 seconds and found two defects
+
+`DRILL_STAGE=ingest make pipeline-cache-drill` runs ONE stage twice (~1 minute
+against ~35). It exists for the same reason `make flyte-hello` exists next to
+`make pipeline`: the expensive drill must never be the first thing to discover
+that caching is misconfigured. It earned its keep immediately.
+
+```
+[cache-drill] --- run1 (rvs7vhmkplvt9qngqzkj) ---
+[cache-drill]   a0  ingest           SUCCEEDED  CACHE_POPULATED       13.7s
+[cache-drill] --- run2 (rz2fv7kqxn9srvtxhwcw) ---
+[cache-drill]   a0  ingest           SUCCEEDED  CACHE_HIT              0.3s
+[cache-drill] ok  the executed stages cost 13.7s -> 0.3s (2.2% of run 1, bar 10%)
+[cache-drill] GREEN — the rerun reused run 1, and three systems agree
+```
+
+**Defect 1 — an apostrophe swallowed four lines** (gotcha #60's family, third
+time). The drill's banner read `${DRILL_STAGE:+ … not the milestone's evidence}`.
+Inside `${var:+word}` that apostrophe opens a quote, so bash consumed the next
+four lines looking for its close and reported the damage as **`line 72: $!:
+unbound variable`** — pointing at the port-forward, which was fine. Prose must not
+sit anywhere a parser will read it as code; the banner is now an `if` block.
+
+**Defect 2 — the wall-clock bar called a 98.7% saving a failure.** The first probe
+measured stage `15.2s -> 0.2s` inside a wall-clock of `17s -> 9s`, and a bar
+written against the wall alone said `52.9%, not under 50%`. One stage's rerun is
+mostly the constant cost of launching at all, which no cache can touch. So the
+drill now measures **two clocks**: the sum of the cacheable stages' own durations
+(the saving itself, bar 10%) and the wall-clock (the human-visible corroboration,
+bar 50%, asserted only for the full pipeline).
+
+**And a third, found by the probe's own second run.** Re-running it turned the
+drill RED with `cached stages cost 0.4s -> 0.3s (79.1%)` — because the cache
+outlives a drill, so run 1 arrived already cached and the comparison was
+rerun-versus-rerun. The drill now names stages that arrived pre-cached, excludes
+them from the saving, still requires them to be `CACHE_HIT` in run 2, and REFUSES
+to be green if run 1 executed nothing at all: a drill that compares two reruns can
+show no saving and must not be allowed to look like one.
