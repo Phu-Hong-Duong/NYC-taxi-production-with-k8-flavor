@@ -57,11 +57,16 @@ DRY_RUN="${DRY_RUN:-0}"
 # still lives only in .env; scripts/optuna_storage.py reads it from there and
 # builds the DSN in memory (configs/tuning.yaml says `storage: postgres` and
 # carries no DSN, by its own law).
+# M4-S2 added `flyte` and it held a FOURTH time. Worth recording precisely: the
+# M4 kickoff budgeted TWO databases here ("flyteadmin/datacatalog … fourth and
+# fifth consumers"), which is the Flyte 1.x shape. The 2.x unified binary reads
+# a single `runs.database`, so it is one consumer, not two. One line, as always.
 DATABASES=(
   "mlflow:${MLFLOW_DB_USER:-mlflow}:MLFLOW_DB_PASSWORD"
   "marts:${MARTS_DB_USER:-marts}:MARTS_DB_PASSWORD"
   "metabase:${METABASE_DB_USER:-metabase}:METABASE_DB_PASSWORD"
   "optuna:${OPTUNA_DB_USER:-optuna}:OPTUNA_DB_PASSWORD"
+  "flyte:${FLYTE_DB_USER:-flyte}:FLYTE_DB_PASSWORD"
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -77,6 +82,7 @@ DATABASES=(
   "marts:${MARTS_DB_USER:-marts}:MARTS_DB_PASSWORD"
   "metabase:${METABASE_DB_USER:-metabase}:METABASE_DB_PASSWORD"
   "optuna:${OPTUNA_DB_USER:-optuna}:OPTUNA_DB_PASSWORD"
+  "flyte:${FLYTE_DB_USER:-flyte}:FLYTE_DB_PASSWORD"
 )
 
 psql_admin() {

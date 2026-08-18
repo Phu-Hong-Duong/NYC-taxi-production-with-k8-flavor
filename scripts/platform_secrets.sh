@@ -82,7 +82,9 @@ fi
 ADDITIVE=(MARTS_DB_USER=marts MARTS_DB_PASSWORD=
           METABASE_DB_USER=metabase METABASE_DB_PASSWORD=
           METABASE_ADMIN_EMAIL=mlops@crosstown.local METABASE_ADMIN_PASSWORD=
-          OPTUNA_DB_USER=optuna OPTUNA_DB_PASSWORD=)
+          OPTUNA_DB_USER=optuna OPTUNA_DB_PASSWORD=
+          FLYTE_DB_USER=flyte FLYTE_DB_PASSWORD=
+          FLYTE_S3_ACCESS_KEY=flyte FLYTE_S3_SECRET_KEY=)
 for spec in "${ADDITIVE[@]}"; do
   key="${spec%%=*}"; literal="${spec#*=}"
   if ! grep -q "^${key}=" "$ENV_FILE"; then
@@ -109,7 +111,9 @@ REQUIRED=(MINIO_ROOT_USER MINIO_ROOT_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCES
           MARTS_DB_USER MARTS_DB_PASSWORD
           METABASE_DB_USER METABASE_DB_PASSWORD
           METABASE_ADMIN_EMAIL METABASE_ADMIN_PASSWORD
-          OPTUNA_DB_USER OPTUNA_DB_PASSWORD)
+          OPTUNA_DB_USER OPTUNA_DB_PASSWORD
+          FLYTE_DB_USER FLYTE_DB_PASSWORD
+          FLYTE_S3_ACCESS_KEY FLYTE_S3_SECRET_KEY)
 missing=()
 for k in "${REQUIRED[@]}"; do
   [[ -n "${!k:-}" ]] || missing+=("$k")
@@ -174,5 +178,13 @@ apply_secret metabase metabase-db \
 # to read-only is M2's job, when a second writer exists to narrow against.)
 apply_secret metabase metabase-marts-db \
   "username=$MARTS_DB_USER" "password=$MARTS_DB_PASSWORD"
+# Flyte's MinIO identity (M4-S2). Lives in `platform` because the MinIO chart's
+# user Job reads it there — the same shape as minio-mlflow-user. Flyte's own
+# copy of the value does NOT become a Secret here: the flyte-binary chart renders
+# its storage credential itself out of values, so deploy_flyte.sh hands it over
+# through a mode-600 temp overlay it deletes on exit (never on a command line,
+# where `ps` would show it).
+apply_secret platform minio-flyte-user \
+  "secretKey=$FLYTE_S3_SECRET_KEY"
 
-echo "[secrets] 8 secrets converged from $ENV_FILE (no values printed, by design)"
+echo "[secrets] 9 secrets converged from $ENV_FILE (no values printed, by design)"
