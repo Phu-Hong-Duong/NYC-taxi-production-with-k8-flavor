@@ -1,5 +1,115 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (ap) — M4-S1: the winner had been picked on the forbidden month, and the one-character fix was the wrong fix
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLE** — charter read
+(`docs/org/ROLES.md` §MLE; its refusals include *"touching the promotion gate or
+the holdout month's role in it"*, and this story is that refusal executed, not
+bent: the gate's thresholds, splits and decision logic are byte-untouched, and
+what changed is a SENTENCE it was printing and WHERE a different script does its
+ranking). Boot reads: CLAUDE.md · HANDOFF (ao) · `docs/milestones/M4_KICKOFF.md`
+· AWAITING_PO.
+
+**M4-S1 DONE and MERGED — PR #20, merge commit `0643d79`.** Lineage proved:
+`git branch -r --contains 5182860` → `origin/main` (gotcha #20). Four stories
+remain in M4 (S2–S5); the chain continues with `executor`.
+
+**Staleness check before anything**: cluster 3/3 Ready v1.36.1 (age 26h),
+platform/mlflow/metabase/postgres/minio all Running, `automation/STOP` absent,
+tree clean at `334e473`, both prior detached jobs `DONE 0`. Reality matched the
+handoff's Next; nothing to reconcile.
+
+### Done (each with the command and what it printed)
+- **F-018 CLOSED** by its own (a)+(b) conditions. **(a)** `scripts/bakeoff_m3.py`
+  ranks on val — and it ranks there because `_select_winner` is now called
+  **inside the val pass of the split loop**, before the holdout parquet is
+  loaded. The one-character fix (`"test"`→`"val"`) was rejected on purpose: it
+  leaves the ranking sitting after both splits are scored, where a holdout number
+  exists and only politeness stops its use. `SELECTION_SPLIT` carries the
+  argument; the payload gained `winner_selected_on`; the floor is excluded from
+  the ranking (it is the BAR) while keeping its own holdout number and verdict.
+  **(b)** `gate.verdict_lines(decision, *, holdout_untouched_by_selection=False)`
+  — the strong claim is now the CALLER's, written up as `gate.py` **property 7**;
+  `make train` and `scripts/gate_redteam_incumbent.py` earn it (one challenger,
+  no ranking step), the bake-off passes False and prints its own selection basis.
+  `docs/bakeoff_m3.md` §3 and §6 carry **dated correction notes** that leave the
+  false words standing above them. **`automation/runs/m3s5/bakeoff.json` is
+  byte-unchanged and nothing was re-fitted.**
+- **F-019 tripwire** (one test, the fix left to M5 as its ledger row requires):
+  the configured set built for a 2026-dated request raises naming
+  `data/reference/us_federal_holidays.csv` and both years; the same frame in 2019
+  builds all 24 columns, so the test is about the DATE.
+- **`pipelines/tasks.py`** — the six §9/M4 stages as typed plain Python, every
+  body a call into `taxi_mlops`, plus `make pipeline-local MONTH=`. Four recorded
+  decisions; the two that matter are the train/evaluate/register **seam** (one
+  `run.run()` call + a run MANIFEST, because splitting it would move the gate's
+  decision into the orchestration layer) and **verdict-as-data** (a REFUSE is a
+  return value; the CLI's exit-code map is stated once in
+  `RegisterResult.exit_code`).
+- **The rehearsal, exit 0**: `make pipeline-local MONTH=2019-01` — ingest
+  7,584,656/7,696,617 (1.4547% rejected, tracked tree unchanged in git) · validate
+  20 columns through the 2019 output contract · features set v2, 24 columns ·
+  train `lightgbm-v1` run `27aa90597f61…` 265.8 s sampled=True judged=False ·
+  evaluate from the ONE evaluator · register **`decision=NO_VERDICT
+  promoted=False`, exit-code class 3**, `@champion is version 2 — read, never
+  written`. Transcript in `docs/pipeline_graph_m4.md` §4.
+- **Both gates re-run, neither script touched**: `make verify-m2` **GREEN 55/55**,
+  `make verify-m3` **GREEN 46/46**, both exit 0 — including verify-m3 §5's replay
+  of the five recorded bake-off verdicts and verify-m2 §2's parse of the OLD
+  holdout line out of the committed transcripts (the repaired `verdict_lines`
+  keeps that shape on BOTH forms of the sentence, pinned by a test).
+- 455 unit tests green (13 new), ruff clean, CI green in 1m17s.
+- Ledgers: **F-018 closed**, F-019 annotated, **F-022 filed**. Field note written.
+  CLAUDE.md section + 2 command rows + gotchas **#51/#52/#53**.
+
+### Defects/Surprises
+- **F-022, found by trying to smoke the thing I had just repaired.**
+  `make bakeoff BAKEOFF_ARGS="--smoke-rows 20000"` → **exit 1**:
+  `champion v1 eats [24 v2 columns] but feature set 'v1' is [5 v1 columns]`. The
+  `champion v1` contender resolves by ALIAS *on purpose* ("the bake-off judges
+  what is actually serving") while its `Spec` pre-registers `feature_set="v1"` —
+  and the bake-off's own `--promote-winner` moved the alias to a **v2** model at
+  M3-S5. **The script has been un-runnable since the moment it promoted, and
+  nothing noticed because nothing re-runs a bake-off** — `verify-m3` §5 replays
+  the recorded verdicts rather than re-executing it, correctly (M3 cost 12,447 s
+  of fitting). Pre-existing: the failure is in contender resolution, before any
+  line this story changed. Filed with three options; **not fixed here** — the
+  choice is a design call about what the incumbent ROW means and belongs with
+  whoever next builds a contender set. Nothing in M4 runs the bake-off; it is
+  **blocking at M7's first retrain**.
+  **Honest consequence, recorded rather than buried**: F-018's repair could not
+  be demonstrated end to end. Its evidence is the tests — a behavioural one whose
+  two splits DISAGREE (a fixture from the real run passes under both rules and
+  proves nothing) and a structural AST one proving the call happens inside the
+  val pass — plus verify-m3's five replays still green.
+- **Two of my own tests went red for finding a module name in a DOCSTRING**, in
+  one file, minutes apart. Fixed by reading Import/ImportFrom off the AST. Gotcha
+  **#53**; it is #35 from the other side.
+
+### Decisions (craft-level, inside scope, recorded per the protocol)
+- **Ordering over value** for F-018(a) — the fix that removes the hazard from
+  scope beats the fix that changes which key is read (gotcha #52).
+- **Default OFF** for the purity claim: a claim nobody made must not print as if
+  somebody had, so a forgetful future caller gets the weaker true sentence.
+- **`register` cannot promote at M4, by absence rather than by flag.** `train`
+  has no `promote` parameter at all — a law with a keyword argument is a default.
+  The promoting branch raises and names F-016 as the reason it is unbuilt.
+- **The M3 record corrected, never rewritten**: dated notes beside the false
+  sentences; `bakeoff.json` untouched; no re-run.
+
+### Next
+M4-S2 (Flyte on the cluster, its state given a lifeboat first — role:MLOps).
+Read the kickoff's S2 block; the **statefulness law** is the thing to internalise
+before the first `kubectl`. Its first item is `make backup` BEFORE Flyte becomes
+the next tenant in the one Postgres, then **F-021** (the port precheck must
+distinguish our own cluster from a foreign holder), then Flyte via ADR-002 with
+the 3-attempt wall pre-approved. Nothing from this story blocks it; no detached
+job is running; `@champion` is version 2 and no M4 story may move it.
+Chain: `automation/next_session.sh executor 120`.
+
+---
+
 ## Session 2026-08-18 (ao) — M3→M4 BOUNDARY: M3 closed clean, the cluster declared stateful, and the port guard caught telling us to shoot our own registry
 
 ### State
