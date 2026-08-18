@@ -65,11 +65,26 @@ EXPERIMENT="${DRILL_EXPERIMENT:-m4-pipeline}"
 # the number that matters is CACHE_HIT, and a tight bound here would turn a busy
 # laptop into a red drill.
 MAX_RATIO="${DRILL_MAX_RATIO:-0.50}"
+# The bar on the WORK the cache is supposed to remove (see the two-clocks note in
+# the verdict block). A hit costs ~0.2s against a stage measured in seconds to tens
+# of minutes, so 10% is loose by an order of magnitude and still catches a "hit"
+# that saves nothing.
+MAX_STAGE_RATIO="${DRILL_MAX_STAGE_RATIO:-0.10}"
 
 mkdir -p "$RUN_DIR"
 note() { echo "[cache-drill] $*"; }
 
-echo "== pipeline cache drill: $MONTH${DRILL_STAGE:+ (MECHANISM PROBE, stage: $DRILL_STAGE — not the milestone's evidence)} =="
+# The prose lives OUTSIDE the parameter expansion, and that is not style. The
+# first draft read `${DRILL_STAGE:+ … not the milestone's evidence}`, and the
+# apostrophe in "milestone's" opens a quote INSIDE `${…:+word}` — so bash swallowed
+# the next four lines looking for its close, and reported the damage as
+# `line 72: $!: unbound variable` at the port-forward below. Gotcha #60 a third
+# time: prose must not sit anywhere a parser will read it as code.
+echo "== pipeline cache drill: $MONTH =="
+if [[ -n "$DRILL_STAGE" ]]; then
+  echo "[cache-drill] MECHANISM PROBE (stage: $DRILL_STAGE) — this proves caching works."
+  echo "[cache-drill] It is NOT the milestone evidence; that is the full run, no DRILL_STAGE."
+fi
 
 # --- the reader's route, stood up first because the cheap mode launches through it
 "${KUBECTL[@]}" -n "$NAMESPACE" port-forward "$SERVICE" "${READER_PORT}:8090" \
@@ -121,22 +136,30 @@ run_once() {
       >"$logfile" 2>&1 || true
     RUN_NAME="$(sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$logfile" \
                 | sed -n 's/.*Created Run:[[:space:]]*\([A-Za-z0-9_-]\+\).*/\1/p' | head -1)"
-    python3 -c "
-import json
-json.dump({'run_name': '$RUN_NAME', 'month': '$MONTH', 'stage': '$DRILL_STAGE',
-           'champion_after': 'NOT-READ (stage-only probe)'},
-          open('$RUN_DIR/$label.json','w'), indent=2)
-"
+    # A QUOTED heredoc taking argv, never `python3 -c "…"`: this program has now
+    # paid twice for code sitting where a shell reads it (gotchas #35, #60), and
+    # the first draft of this very block was a `-c` string whose python dict
+    # braces made bash report a syntax error 50 lines from the cause.
+    python3 - "$RUN_DIR/$label.json" "$RUN_NAME" "$MONTH" "$DRILL_STAGE" <<'PY'
+import json, sys
+path, run, month, stage = sys.argv[1:5]
+json.dump(
+    {"run_name": run, "month": month, "stage": stage,
+     "champion_after": "NOT-READ (stage-only probe)"},
+    open(path, "w"), indent=2,
+)
+PY
   else
     MONTH="$MONTH" TRAIN_MONTHS="$TRAIN_MONTHS" \
       bash "$REPO_ROOT/scripts/run_pipeline.sh" >"$logfile" 2>&1 || true
     # The run's identity comes from the record run_pipeline.sh writes, not from
     # this script re-parsing the same CLI output a second time — two parsers of
     # one format is a twin, and the copy is always the one that drifts.
-    RUN_NAME="$(python3 -c "
-import json
-print(json.load(open('$PIPELINE_RECORD'))['run_name'])
-")"
+    RUN_NAME="$(python3 - "$PIPELINE_RECORD" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["run_name"])
+PY
+    )"
     cp "$PIPELINE_RECORD" "$RUN_DIR/$label.json"
   fi
   t1=$(date +%s)
@@ -163,7 +186,11 @@ if [[ "$run1_name" == "$run2_name" ]]; then
 fi
 
 for leg in run1 run2; do
-  name="$(python3 -c "import json;print(json.load(open('$RUN_DIR/$leg.json'))['run_name'])")"
+  name="$(python3 - "$RUN_DIR/$leg.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["run_name"])
+PY
+  )"
   uv run --project "$REPO_ROOT" python "$REPO_ROOT/scripts/flyte_run_actions.py" \
     "$name" --endpoint "localhost:${READER_PORT}" --project "$PROJECT" --domain "$DOMAIN" \
     --json > "$RUN_DIR/$leg.actions.json"
@@ -175,7 +202,7 @@ done
 
 set +e
 python3 - "$RUN_DIR" "$run1_elapsed" "$run2_elapsed" "$mlflow_before" "$mlflow_mid" \
-         "$mlflow_after" "$MAX_RATIO" "$DRILL_STAGE" <<'PY'
+         "$mlflow_after" "$MAX_RATIO" "$DRILL_STAGE" "$MAX_STAGE_RATIO" <<'PY'
 import json, pathlib, sys
 
 run_dir = pathlib.Path(sys.argv[1])
@@ -183,6 +210,7 @@ e1, e2 = int(sys.argv[2]), int(sys.argv[3])
 mlf_before, mlf_mid, mlf_after = sys.argv[4], sys.argv[5], sys.argv[6]
 max_ratio = float(sys.argv[7])
 stage_only = sys.argv[8]
+max_stage_ratio = float(sys.argv[9])
 
 a1 = json.loads((run_dir / "run1.actions.json").read_text())["actions"]
 a2 = json.loads((run_dir / "run2.actions.json").read_text())["actions"]
@@ -223,15 +251,55 @@ for name in sorted(UNCACHED & set(s2)):
           f"{name}: CACHE_DISABLED in run 2 — uncached on purpose, and still is",
           f"{name} reports {s2[name]['cache_status']} — it is supposed to be uncached")
 
-ratio = (e2 / e1) if e1 else 1.0
-check(ratio <= max_ratio,
-      f"wall-clock {e1}s -> {e2}s ({ratio:.1%} of run 1, bar {max_ratio:.0%})",
-      f"wall-clock {e1}s -> {e2}s ({ratio:.1%}) is not under {max_ratio:.0%} of run 1")
+# TWO clocks, and they are not interchangeable. `work` is the sum of the cacheable
+# stages' own durations — the thing a cache actually changes, and the number that
+# is comparable between a one-stage probe and a six-stage pipeline. `wall` includes
+# the constant cost of launching at all (bundle upload, registration, follow), which
+# the cache cannot touch. The probe's first run measured the difference the hard
+# way: stage 15.2s -> 0.2s (a 98.7% saving) inside a wall-clock of 17s -> 9s (52.9%),
+# and a bar written against the wall alone called that a failure.
+#
+# AND THE SAVING IS MEASURED ONLY OVER THE STAGES RUN 1 ACTUALLY EXECUTED. The
+# cache outlives a drill, so run 1 routinely arrives with some stages already
+# populated by an earlier run — the probe hit exactly that on its second
+# invocation, and comparing a 0.4s hit against a 0.3s hit produced "79.1%, not
+# under 10%", a red drill about nothing. Stages that were already cached in run 1
+# are named and excluded, because a rerun-versus-rerun comparison cannot show a
+# saving and must not be allowed to look like one in either direction.
+populated = [n for n in cacheable if s1.get(n, {}).get("cache_status") == "CACHE_POPULATED"]
+already = [n for n in cacheable if n not in populated]
+if already:
+    print(f"[cache-drill] NOTE: run 1 arrived with {', '.join(already)} already cached; "
+          f"excluded from the saving, still required to be CACHE_HIT in run 2.")
+work1 = sum(s1[n]["duration_ms"] for n in populated) / 1000.0
+work2 = sum(s2[n]["duration_ms"] for n in populated) / 1000.0
+work_ratio = (work2 / work1) if work1 else 1.0
+check(populated,
+      f"run 1 executed {len(populated)} stage(s) for real: {', '.join(populated)}",
+      "run 1 executed NO stage — every cacheable stage was already cached, so this "
+      "drill compares two reruns and can show no saving. Invalidate the cache first "
+      "(any edit to a stage body, or a new DVC pin, changes the key) or drill a month "
+      "these stages have never seen.")
+if populated:
+    check(work_ratio <= max_stage_ratio,
+          f"the executed stages cost {work1:.1f}s -> {work2:.1f}s ({work_ratio:.1%} of "
+          f"run 1, bar {max_stage_ratio:.0%}) — this is the saving itself",
+          f"the executed stages cost {work1:.1f}s -> {work2:.1f}s ({work_ratio:.1%}), not "
+          f"under {max_stage_ratio:.0%}: the server calls it a hit and it is not saving "
+          f"the work")
 
+ratio = (e2 / e1) if e1 else 1.0
 if stage_only:
-    print("[cache-drill] NOTE: stage-only probe — the MLflow and @champion legs are "
-          "not applicable and were not run. This proves the MECHANISM, not the milestone.")
+    print(f"[cache-drill] wall-clock {e1}s -> {e2}s ({ratio:.1%}) — REPORTED, NOT ASSERTED: "
+          f"one stage's rerun is mostly launch overhead the cache cannot touch.")
+    print("[cache-drill] NOTE: stage-only probe — the wall-clock, MLflow and @champion legs "
+          "are not applicable here. This proves the MECHANISM, not the milestone.")
 else:
+    check(ratio <= max_ratio,
+          f"wall-clock {e1}s -> {e2}s ({ratio:.1%} of run 1, bar {max_ratio:.0%})",
+          f"wall-clock {e1}s -> {e2}s ({ratio:.1%}) is not under {max_ratio:.0%} of run 1")
+
+if not stage_only:
     check(mlf_after != "UNREADABLE" and mlf_after == mlf_mid,
           f"MLflow gained NO run across run 2 ({mlf_mid} -> {mlf_after}) — the fit did not "
           f"re-execute, and that is said by a different server than the one claiming the hit",
@@ -257,6 +325,8 @@ for good, msg in verdicts:
     "run2": {"name": json.loads((run_dir / "run2.json").read_text())["run_name"],
              "seconds": e2, "actions": a2},
     "wall_clock_ratio": round(ratio, 4),
+    "cached_stage_seconds": {"run1": round(work1, 1), "run2": round(work2, 1),
+                             "ratio": round(work_ratio, 4)},
     "mlflow_runs": {"before": mlf_before, "after_run1": mlf_mid, "after_run2": mlf_after},
     "stage_only": stage_only or None,
     "verdicts": len(verdicts),
