@@ -1,5 +1,169 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (am) — M3-S5 CLOSED, M3 CLOSED: the gate went red for doing the right thing, and that was the story
+
+### State
+**EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped fresh
+session, role:MLE with the MLOps hat for the verify half** (charter read;
+refusals in play: an AutoML-internal number quoted as a result · loosening any
+gate knob · promoting on val · a verdict from a sampled run · **editing a gate
+assertion to make it green**).
+
+**M3-S5 is DONE and M3 is DONE.** PR **#19 merged** (merge commit `6b23f4e`),
+branch deleted, `git branch -r --contains 039e278` → `origin/main`. Working tree
+clean.
+
+**Exit ritual (b).** M3 carries ◆ → `automation/next_session.sh rev 120`.
+
+### Boot step 3 — the status file, read FIRST
+```
+automation/runs/m3s5-transition.status
+  DONE 0 2026-08-18T04:01:25Z        # 17 min, 03:44:34 -> 04:01:25Z
+```
+Its numbers were this session's to use. All six steps green: `@champion`
+**1 → 2**, predictions re-scored under F-012's floor check, 12 views reconciled,
+`COPY 56127878` + three aggregates + 1,151 error segments published, 28 cards
+converged, memo figures printed. Reality matched (al)'s Next exactly — tree clean
+at `32920dc`, `automation/STOP` absent, 3/3 nodes Ready v1.36.1, no pod outside
+Running, and `@champion` → version **2** (`92b73bd4f77d…`) confirmed live off the
+registry before anything was written.
+
+### The story, in the order it happened
+
+**1. The memo's dated M3 section** (`docs/error_memo_m2.md` §9). §0–§8 kept
+**unedited** as the M2 record — a memo that silently rewrites its own numbers
+cannot be compared against the decisions made from them. §9 asks the same
+questions in the same order of the model that is served.
+
+Its finding: **§1's coverage headline INVERTED.** Three quarters of the
+champion's advantage used to be bought on 1.48% of rows; it is **96.9% bought on
+the ordinary 99.98%** now. §9.1 says plainly that **F-010 did that, not the
+model** — the new floor backs off to `(PU, DO)` first, so only **968** test rows
+fall past it, and on those the floor is wrong by **29.86** minutes (it was 18.57
+on a much larger, easier set). Two orders of magnitude changed in the number M5
+was told to design around: "one request in 68 is in the naive-answer regime" is
+now **one in 6,148**.
+
+Also in §9: ceiling **92.155 → 97.105** min, long-trip reach 36.86% → **43.07%**,
+the 100–120 band **0.000% → 0.103%** KPI-12 (one trip of 970, best quote 4.459
+min out) — and the **airport gap held at 1.91×** even though v2 carries the OD
+geometry §4 predicted would identify them. Two readings, and the memo refuses to
+choose: either the straight-line distance already carries it, or the penalty is
+about queues and dwell rather than distance. **§7 row 2 stays OPEN with that as
+its new evidence.**
+
+**2. `make verify-m2` went RED — three sub-checks, none about anything wrong.**
+This is the session's real story and it is now gotchas **#49/#50** and **F-017**:
+
+| assertion | why it was red |
+|---|---|
+| `gate_floor == "baseline-group-median"` | M3-S1 replaced the floor with a NEW name *because* the config legislates that a floor change is a new name, never an edit |
+| `experiment == cfg["mlflow"]["experiment"]` | the winner is M3-S4's full-data refit and legitimately lives in `m3-automl` |
+| `"do_not_promote" in tags` | every run carries the key; the VALUE says which way, and the champion's says `"no — full-data fit; the gate sees it at M3-S5"` |
+
+The tempting repair — edit the three literals to the new values — is the disease.
+**A guard that goes red when the program behaves correctly trains the next
+session to edit assertions**, and the session after that inherits a formality.
+Each was replaced by the property that holds at *every* champion and is
+**strictly stronger** than the literal was: the floor must be a name
+`baselines.fit_floor` can rebuild (which also excludes the flattering
+constant-median floor — something the literal never checked) · the run must be
+FINISHED and NAMESPACED (gotcha #17's real invariant) · a mark counts unless its
+value says no. Plus one sub-check the literal could not make at all: the
+version's `gate_floor` must equal the floor `predictions.json` actually published
+against — **F-012's wire seen from the other end**. §3's kept-refusal leg had the
+same latent false GREEN and was fixed with it. **GREEN 55/55** (was 54; one
+added, none removed).
+
+**3. `make verify-m3` is real** — 46 sub-checks, 8 sections, **4.7 s**, exit 0.
+Sections: dossier (20 candidates, source + leakage note each, all 3 HIGH-risk
+rows constrained to TRAIN months, 7 refusals) · ablation (5 groups, both deltas,
+**DR-02's bar RE-APPLIED to the table's own numbers reproduces all five
+verdicts**, 3 drops present, v2 == the survivors) · leakage drill (three numbers
+parse AND reconcile at ±0.0005, `point_in_time=True` still the default, exactly
+one CALLER may flip it) · tuning (both sniper studies in Postgres at the count
+their JSON records, 6 PRUNED, the resume drill's kill survived) · **the five
+bake-off verdicts replayed through `gate.decide` on disk** · the four guards
+(F-011 both halves, val, flattering floor, F-008) · registry coherent with
+`bakeoff.json`'s recorded winner · F-013's one home.
+
+**It re-fits NOTHING** — M3 cost **12,447 s** of fitting across two tracks — and
+the registry is identical before and after (alias 2, versions [1,2], checked by
+hand). No skip flag, no fast mode.
+
+**4. `make verify-m3-redteam`** rewrites ONE contender's measured KPI-09
+(`auto-on-v1` 3.5038 → 3.2000) and leaves its recorded verdict at REFUSE → **RED
+exit 1**, naming the row AND both verdicts, with **the four untampered replays
+still passing** (what separates a replay from a checksum: red on a *wrong*
+number, not on any edit) and **44 of 46** sub-checks still running and passing.
+Restored from a byte copy under an EXIT trap, verified by sha256
+(`c4a323ea072a…` before and after) → GREEN 46/46. Both transcripts whole in
+`docs/verify_m3_transcripts.md`.
+
+### Done (every leg with the command and what came back)
+- `make verify-m2` → **GREEN 55/55**, exit 0 (RED 3 first, repaired, re-run)
+- `make verify-m3` → **GREEN 46/46**, exit 0, measured 4.7 s
+- `make verify-m3-redteam` → **PASSED**
+- `uv run pytest tests/unit -q` → **436 passed** (421 + 15 in
+  `tests/unit/test_verify_m3.py`) · `uv run ruff check .` → All checks passed
+- `gh pr checks 19 --watch` → `lint-test pass 1m13s` · merged with a merge
+  COMMIT, branch deleted, reachability proved
+
+### Judgement calls made inside scope (recorded, not escalated)
+- **The three `verify-m2` literals were repaired, not deleted or loosened.** The
+  bar in `configs/train.yaml` is untouched; §2's replay legs are untouched; the
+  sub-check count went UP. A gate knob would have been a PO fork — an assertion
+  that encodes yesterday's world is a defect, and the difference is the whole
+  point of F-017's row.
+- **`verify-m3` §6 calls `registry.promote` for real** with
+  `incumbent_version=None`, and that is safe *because* `promote` runs the
+  incumbent check FIRST, before it reads the artifact or touches the registry. If
+  that ordering ever changed, this sub-check would create a version — which is
+  exactly the ordering the gate should be sensitive to. Said out loud in the
+  script and pinned by a test.
+- **§3's "only one caller may flip the leaky switch" excludes
+  `aggregates.py` itself**, which is where the switch is *defined*. The unit test
+  that caught this also had to learn the difference between naming a script and
+  running one (§3 names `scripts/leakage_redteam.py` in an allowlist).
+- **No sign-off row was written.** The M3 gate crossing is ARCH's at the
+  boundary and producer must not be approver; REV comes first.
+
+### Carried into the M3 boundary — nothing is blocked
+- **F-016 OPEN, deliberately unacted-on** (raised by (al), unchanged here): the
+  incumbent condition is non-regression with **no margin**, so the alias moved on
+  **+0.63% — 1.2 seconds** while the floor condition demands 2.00%. The question
+  for ARCH/PO is whether the incumbent condition should carry a margin of its own.
+- **F-017 CLOSED** here · gotchas **#49/#50** written · `docs/error_memo_m2.md`
+  §7 row 2 (airport flag) **stays open with new evidence**; row 1 is **partially
+  discharged** (the distance substitute landed; 0.103% is still not shippable).
+- Unchanged: **F-009 → M5** · **D-001 / D-003 / D-004 → M4** · the sniper's
+  `rf`/`extra_tree` refusal path armed and untaken · `make train` cannot fit a
+  point-in-time set · **AWAITING_PO 2026-08-16-2** (allowlist) and
+  **2026-08-17-1** (libgomp), both still non-blocking · `score.py`'s xgboost load
+  path stays unexercised (the winner is lgbm) — a note for M5, not a plan.
+
+### Next — REV, then the M3 boundary
+Nothing is detached and nothing is waiting. The chain schedules **rev**.
+
+REV's mandate for a ◆ milestone (M3 kickoff §M3-S5): review the bake-off
+**claim by claim**, and **re-derive at least one of v2's aggregate features from
+raw under the point-in-time constraint**. Two pointers that will save time:
+- The bake-off's numbers are in `automation/runs/m3s5/bakeoff.json` (per
+  contender: recorded val MAE, re-scored val MAE, test MAE/KPI-10, all four gate
+  checks with their details) and the narrative is `docs/bakeoff_m3.md` §3–§6.
+  **Every contender was LOADED, not re-fitted** — the admission gate re-scored
+  each artifact on val and required it to reproduce its recorded MAE to 0.000e+00
+  before it was allowed into the table.
+- **g5 — the point-in-time aggregate family — is NOT in v2.** It lost (−1.63%).
+  The re-derivation REV owes is therefore of a *dropped* family, and its honest
+  target is `docs/ablation_m3.md` §4 plus `docs/leakage_redteam_m3.md`; the code
+  is `taxi_mlops.features.aggregates` (`point_in_time=True` by default, and
+  `make leakage-redteam` is the drill that proves the switch still leaks).
+- `make verify-m3` is a fast, read-only way to re-establish the whole milestone's
+  state in five seconds before reading anything.
+
+REV exits to `automation/next_session.sh architect 120` for the M3 boundary.
+
 ## Session 2026-08-18 (al) — the square answered FEATURES, the alias moves on 1.2 seconds, and the transition is running detached
 
 ### State
