@@ -110,7 +110,9 @@ def test_v1_still_resolves_to_the_champion_s_five_columns_in_order():
     """`nyc-taxi-eta` version 1 carries a signature over these names, in this order.
 
     verify-m2 §1 and `score.py` both fail if this drifts; failing here first is
-    cheaper than failing against a live registry.
+    cheaper than failing against a live registry. Version 1 is no longer the
+    champion after M3-S5's bake-off, but it is still a registered version with a
+    signature over exactly these five names, and a rollback resolves it.
     """
     assert quote_time.feature_names(sets.resolve_set("v1")) == [
         "hour",
@@ -119,13 +121,35 @@ def test_v1_still_resolves_to_the_champion_s_five_columns_in_order():
         "DOLocationID",
         "passenger_count",
     ]
-    assert quote_time.feature_names(load_train_config()["features"]) == [
-        "hour",
-        "dayofweek",
-        "PULocationID",
-        "DOLocationID",
-        "passenger_count",
-    ]
+
+
+def test_the_shipped_config_names_a_real_set_and_expands_to_exactly_that_set():
+    """The SERVING line is a pointer, and this test refuses to hardcode where it points.
+
+    `configs/train.yaml: features.version` moved v1 -> v2 at M3-S5 as part of a
+    promotion, and it will move again at M7. A test that pins the literal `v1`
+    turns every legitimate champion transition into two red tests and teaches the
+    session that fixes them to edit assertions — which is how a guard becomes a
+    formality. What must hold at every version is the property: the line names a
+    set the registry actually defines, and the loader expands it to that set and
+    to nothing else.
+    """
+    version = load_yaml_version()
+    assert version in sets.set_names(), (
+        f"configs/train.yaml: features.version = {version!r} is not a set in "
+        f"{sets.DEFAULT_REGISTRY} — the champion would be scored against a set nobody defines"
+    )
+    assert quote_time.feature_names(load_train_config()["features"]) == quote_time.feature_names(
+        sets.resolve_set(version)
+    )
+
+
+def load_yaml_version() -> str:
+    """Read the raw `features.version` line — before `load_train_config` expands it."""
+    import yaml
+
+    raw = yaml.safe_load(Path("configs/train.yaml").read_text(encoding="utf-8"))
+    return raw["features"]["version"]
 
 
 def test_unknown_set_and_unknown_group_are_refused_by_name():

@@ -605,3 +605,45 @@ the seed line are earned by THIS project.
     fresh" is an assumption a resumable job has already contradicted. Related:
     #45 (why detached jobs exist), #47 (the other half of the same track's
     resume story).
+
+49. **A tag named `do_not_promote` whose VALUE is `"no"` reads as a refusal to
+    every check that tests for the key.** Every run this program writes carries
+    the key; the value is what says which way — `"yes — 15% sample (F-008)"` on
+    a scout trial, `"no — full-data fit; the gate sees it at M3-S5"` on the four
+    bake-off contenders. `verify-m2` §1 asked `if "do_not_promote" in
+    run.data.tags` and called the legitimately promoted champion **hobbled**;
+    §3's kept-refusal leg had the same latent false GREEN in the other
+    direction, where a run tagged `"no"` would have counted as properly marked.
+    Presence-reading worked for two milestones only because M2 never wrote a
+    `"no"`. Fixed with one rule covering both families (`red_team` and `hobbled`
+    carry descriptive values like `"M2-S3"`, so presence IS the mark there):
+    **a mark counts unless its value says no.** The transferable shape is
+    narrower than "read values, not keys" — it is that a boolean expressed as
+    *key presence* and a boolean expressed as *key value* are two conventions,
+    and a codebase that ships both will eventually read one as the other. If the
+    key is going to carry a value at all, the value is the answer. Related: #15
+    (the other place a tag is the record), #42 (a recorded number exists only at
+    the precision it was recorded at).
+
+50. **Three `verify-m2` assertions encoded M2-era facts as literals, and all
+    three went RED the first time the program did the right thing.** The gate
+    pinned the champion's `gate_floor` tag to `baseline-group-median`, its
+    experiment to `configs/train.yaml`'s current `experiment`, and read
+    `do_not_promote` by presence (#49). M3-S1 replaced the floor with a NEW name
+    — *because the config legislates that a floor change is a new name and never
+    an edit* — and M3-S5 promoted a champion whose run legitimately lives in
+    `m3-automl`. So the first legitimate champion transition produced three red
+    sub-checks, none of which was about anything being wrong. That is the
+    dangerous shape: **a guard that goes red when the program behaves correctly
+    trains the next session to edit assertions**, and the session after that
+    inherits a formality. The cure is not to loosen but to assert the property
+    that holds at *every* champion and is strictly stronger than the literal
+    was: the floor must be a name `baselines.fit_floor` can rebuild (which also
+    excludes the flattering constant-median floor, something the literal never
+    checked), the experiment must be FINISHED and namespaced (gotcha #17's real
+    invariant), and — new — the version's floor must be the floor
+    `predictions.json` actually published against, which is F-012's wire seen
+    from the other end. `verify-m3` was written under this rule from the start
+    and `tests/unit/test_verify_m3.py` fails if it pins a run id, an experiment
+    name or a floor name. Related: #15, #42, and the same argument M3-S5 applied
+    to two feature tests that pinned the literal `v1`.

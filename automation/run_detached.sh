@@ -96,6 +96,14 @@ CMD_STR="$*"
 # setsid + nohup: own session, own process group, immune to the caller's exit.
 setsid nohup bash -c '
   set -o pipefail
+  # A detached job writes its log to a FILE, and Python block-buffers stdout to a
+  # file (4-8 KB) rather than line-buffering it to a tty. So the log of a
+  # long-running Python job gained content only when the process exited, which is
+  # exactly backwards: the log exists to be read WHILE the job runs. Carried open
+  # from sessions (ah)/(ai) as "one line in scripts/automation_track.sh"; it goes
+  # here instead, because this is the one place every detached job passes through
+  # and a per-script copy would be twins.
+  export PYTHONUNBUFFERED=1
   cd "$1"; shift
   status="$1"; shift
   log="$1"; shift

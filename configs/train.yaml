@@ -17,13 +17,16 @@ target: trip_duration_minutes
 # lives in `taxi_mlops.features.quote_time.EXCLUSIONS` with a reason per column,
 # and a guard refuses any feature matrix that contains one.
 #
-# STILL v1 AFTER M3-S3, on purpose. `nyc-taxi-eta` version 1 is serving and its
-# signature is over v1's five columns; `verify-m2` §1 and `score.py` both fail
-# if this line stops matching what the champion eats. v2 is measured, logged and
-# waiting in the registry — the bake-off at M3-S5 is what decides whether this
-# line moves, and it moves as part of a promotion, never on its own.
+# MOVED v1 -> v2 AT M3-S5, as part of a promotion and not on its own. The
+# bake-off (docs/bakeoff_m3.md §6) measured `auto-lgbm-v2` at 3.2403 min KPI-09 /
+# 81.577% KPI-10 on the untouched test month and the S1-hardened gate returned
+# PROMOTE on all four checks, so the champion alias moves to a v2 model and this
+# line moves with it. `verify-m2` §1 and `score.py` both fail if this line stops
+# matching what the champion eats — which is why `scripts/bakeoff_m3.py` REFUSES
+# to promote a winner this line does not describe, and why the two changes are
+# one change.
 features:
-  version: v1
+  version: v2
   registry: configs/features.yaml
 
 # --------------------------------------------------------------- baselines ---

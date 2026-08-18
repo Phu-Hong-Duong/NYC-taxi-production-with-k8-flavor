@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 from conftest import raw_frame
 
-from taxi_mlops.features import quote_time
+from taxi_mlops.features import quote_time, sets
 from taxi_mlops.features.quote_time import (
     EXCLUDED_COLUMNS,
     EXCLUSIONS,
@@ -49,8 +49,15 @@ def frame(rows: int = 6) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------ the include set ---
-def test_the_shipped_config_builds_the_five_v1_features():
-    out = build_features(frame(), FEATURES_CFG)
+def test_feature_set_v1_builds_its_five_columns_in_order():
+    """v1 by NAME, not by whichever set `configs/train.yaml` currently serves.
+
+    That line moved v1 -> v2 at M3-S5 as part of a promotion and moves again
+    whenever a champion transitions; this test is about what v1 IS. The shipped
+    set has its own test in `test_features_v2.py`, and it asserts a property
+    rather than a literal for exactly this reason.
+    """
+    out = build_features(frame(), sets.resolve_set("v1"))
     assert list(out.columns) == ["hour", "dayofweek", "PULocationID", "DOLocationID",
                                  "passenger_count"]
     assert len(out) == 6

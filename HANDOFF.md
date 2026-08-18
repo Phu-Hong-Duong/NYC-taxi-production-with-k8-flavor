@@ -1,5 +1,331 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (al) — the square answered FEATURES, the alias moves on 1.2 seconds, and the transition is running detached
+
+### State
+**EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped fresh
+session, role:MLE** (charter read; refusals in play: an AutoML-internal number
+quoted as a result · loosening any gate knob · re-ranking a bake-off after
+seeing it · promoting on val · a verdict from a sampled run).
+
+**M3-S5 is still OPEN.** This session consumed the bake-off's measurement, wrote
+the decision, and detached the transition it authorises. The story's declared
+mid-story safe stop (kickoff §M3-S5) is *after the bake-off + transition merge*;
+the transition is in flight now, so this checkpoint sits inside it.
+
+**Exit ritual (e).** `automation/runs/m3s5-transition.status` carries the
+verdict and the job holds `--then-schedule executor`. **This session scheduled
+nothing by hand and the next one must not either until that status is read.**
+
+Branch `story/m3-s5-bakeoff-alias-verify-m3` pushed, **4 commits, no PR yet** —
+the alias has not actually moved until that job finishes.
+
+### Boot step 3 — the status file, read FIRST
+```
+automation/runs/m3s5-bakeoff.status
+  DONE 0 2026-08-18T03:32:53Z          # 493 s, 03:24:40 -> 03:32:53Z
+```
+Its numbers were this session's to use, and they are now `docs/bakeoff_m3.md`
+§3–§6. Reality matched (ak)'s Next exactly: tree clean at `492b906`,
+`automation/STOP` absent, 3/3 nodes Ready v1.36.1 (the host restarted ~60 min
+before this session — every pod shows `RESTARTS 2 (60m ago)` and all are
+Running, so gotcha #34 did not fire), `@champion` → version **1**.
+
+### The result, in the order the square asks for it
+
+| contender | test KPI-09 | test KPI-10 | vs floor | vs champion v1 | verdict |
+|---|---:|---:|---:|---:|---|
+| **auto-on-v2** `auto-lgbm-v2` | **3.2403** | 81.577% | +3.33% | **+0.63%** | **PROMOTE** |
+| artisan v2 `artisan-v2` | 3.2425 | **81.582%** | +3.26% | +0.56% | PROMOTE |
+| champion v1 `lightgbm-v1` | 3.2608 | 81.480% | +2.71% | — | PROMOTE |
+| floor `…-od-fallback` | 3.3518 | 80.733% | +0.00% | −2.79% | **REFUSE** |
+| auto-on-v1 `auto-xgboost-v1` | 3.5038 | 79.747% | −4.54% | −7.45% | **REFUSE** |
+
+- **The answer is FEATURES.** Features alone (+0.56%) then tuning on top of them
+  (+0.63%) — **+0.07 percentage points, 134 ms of mean error, one seventh of
+  DR-02's own ≥0.50% keep bar**, bought with 2.76× the artisan's wall-clock. The
+  win is real and is reported at that size.
+- **The tuning-only axis is confounded and §5 says so in the body.** Additivity
+  would predict −6.89% for the both-cell; it measured +0.63%, because that axis
+  moves family, budget and truncation at once (xgboost truncated mid-descent,
+  F-015, vs lgbm flat at the same cap).
+- **Val ranking == test ranking**, exactly. Selection pressure on val reordered
+  nothing on the untouched month — the failure this program is structured around,
+  which did not occur.
+- **The two v2 arms split the two KPIs.** The winner is ahead by **134 ms** on
+  KPI-09 and *behind* by 0.005 points on KPI-10. The ranking metric was fixed in
+  `CONTENDERS` before any number existed, which is the only reason that sentence
+  is an observation and not a re-ranking.
+- **The floor refused itself at +0.00%** *and* on both incumbent conditions — it
+  is 2.79% worse than what is serving, and F-011's condition is the only one of
+  the four that notices.
+
+### Done (every leg with the command and what came back)
+
+- **`docs/bakeoff_m3.md` §3–§6 written from the transcript** — the table, the
+  five verdicts with all four checks each, the 2×2 arithmetic, the alias
+  decision with its three honesty notes. §0–§2 and §7 were (ak)'s.
+- **`configs/train.yaml: features.version` v1 → v2**, in the same commit as the
+  promotion path, with the comment block rewritten to say why it moved.
+- **`scripts/champion_transition.sh` + `make champion-transition`** — the
+  ordered repair: promote → `predictions` → `duckdb` → `marts` → `boards` →
+  `error_memo_numbers.py` printed. Every step aborts the chain on failure;
+  `DRY_RUN=1` is a preflight that moves nothing.
+- **Red-teamed three ways before launch**, `make champion-transition DRY_RUN=1`
+  with a doctored row set each time: missing `bakeoff.json` → **exit 2** naming
+  it · winner verdict flipped to `REFUSE` → **exit 2**, *"the alias does not
+  move, and nothing downstream of it is refreshed"* · winner's `feature_set`
+  flipped to `v1` against a `v2` config → **exit 2** naming both sides. The
+  happy-path preflight printed winner `auto-on-v2`, run `92b73bd4…`, set `v2`,
+  verdict `PROMOTE`, `@champion now 3adee05a…`.
+- **`uv run pytest tests/unit -q` → 421 passed** (409 + 11 in
+  `tests/unit/test_champion_transition.py`, + the two rewritten feature tests) ·
+  **`uv run ruff check .` → All checks passed.**
+- **Detached and running**: `make detach NAME=m3s5-transition ROLE=executor
+  TARGET=champion-transition` → `RUNNING 35413 2026-08-18T03:44:34Z`. Live
+  output is arriving unbuffered in the log — (ak)'s `PYTHONUNBUFFERED=1` fix
+  working on its first real job.
+
+### Judgement calls made inside scope (recorded, not escalated)
+- **The transition SKIPS the promotion when `@champion` already resolves to the
+  winner's run.** Not politeness: `bakeoff_m3.py` re-reads the incumbent every
+  invocation, so a second promoting run would re-judge the four losing
+  contenders against the NEW incumbent and overwrite `bakeoff.json`'s verdict
+  column with verdicts nobody took. The row set's own drift guard would not
+  catch it — it compares MAEs, which are unchanged, not verdicts, which are not.
+  This is what makes the script safe to relaunch after a failure in step 4.
+- **The memo's M3 section is PRINTED, not written, by the script.** A generated
+  memo is a document nobody read describing numbers nobody checked — the exact
+  failure `scripts/error_memo_numbers.py` exists to prevent from the other side.
+  Step 6 puts the live figures in the log so the human who owes the prose is not
+  also re-running queries. Pinned by a test.
+- **Two feature tests now assert v1 BY NAME and the shipped config by
+  PROPERTY.** `test_the_shipped_config_builds_the_five_v1_features` went red on
+  the config flip — correctly, and for a reason that will recur at M7. A test
+  pinning the literal `v1` makes every legitimate champion transition produce two
+  red tests and teaches the session that fixes them to edit assertions, which is
+  how a guard becomes a formality. What holds at every version is the property:
+  the line names a set the registry defines, and the loader expands it to that
+  set and nothing else.
+- **No field note yet, no ledger sign-off rows yet.** The field-note law is per
+  STORY and M3-S5 is open across sessions (M3-S4's own note was written once
+  across three). The closing session owes it.
+
+### The finding this session filed and did NOT act on
+**F-016 — the incumbent condition is non-regression with no margin.** The floor
+condition demands **≥2.00%** (~4 s, argued as a maintenance-cost bar); F-011's
+incumbent condition asks only for no regression. So the alias moves on **+0.63%
+— 1.2 seconds** of mean error, and the winner's margin over the runner-up is
+**0.069%** with the runner-up ahead on KPI-10. Defensible (the booster is
+already owned) but it means the champion pointer can churn on sub-keep-bar
+deltas, and M7's retrains are the next callers. **Not acted on on purpose**:
+changing a gate condition after seeing the number it would have changed is the
+edit this program never makes on its own authority. Routed to ARCH/PO at the M3
+boundary; nothing is parked and nothing waits on it.
+
+### Next — read the status file FIRST, then finish M3-S5
+
+```
+automation/runs/m3s5-transition.status    # RUNNING -> DONE | FAILED
+automation/runs/m3s5-transition.log       # the promotion + all five refresh steps
+```
+- **DONE** → the alias is version **2** (`auto-lgbm-v2`, run `92b73bd4f77d…`)
+  and predictions/views/marts/boards all describe it. Then, in this order:
+  1. **Write the dated M3 section of `docs/error_memo_m2.md`** from the figures
+     step 6 printed into the log (do not re-run the queries; do check a couple
+     against the printout). The memo must describe the model that is now served
+     — that is what makes `verify-m2`'s memo-twin leg meaningful rather than a
+     formality.
+  2. **`make verify-m2`** — expect GREEN 54/54. Its *"champion right now"* and
+     memo-twin legs are precisely the tripwires this refresh exists to satisfy,
+     so a RED here names what the transition missed. `docs/promotion_gate_m3.md`
+     may need the new champion's transcript appended if §2's replay legs read it.
+  3. **Then the second half of the story**: `make verify-m3` becomes real
+     (kickoff's leg list — no skip flag, no fast mode, `expect_verdicts` per leg,
+     re-fits NOTHING), red-teamed to RED once naming exactly the broken leg and
+     restored to GREEN, both transcripts pasted.
+  4. **Field note + ledger rows + PR + merge**, then exit **(b)**: M3 is
+     ◆-marked → `automation/next_session.sh rev 120`.
+- **FAILED** → the log names the step. **Nothing before step 1 is destructive
+  and every step after it is idempotent**, so the repair is to fix the cause and
+  re-run `make detach NAME=m3s5-transition ROLE=executor
+  TARGET=champion-transition` — the script skips the promotion if it already
+  happened. Note the log is ROTATED, not truncated (gotcha #48), so a failed
+  attempt survives at `automation/runs/m3s5-transition.log.1`.
+- **The one shape worth watching for**: a failure at step 2 (`make predictions`)
+  with a message about the floor would be **F-012 firing correctly** — the new
+  champion's `gate_floor_mae` tag must re-fit to `3.3518`. That is a refusal to
+  publish, not a corruption; nothing is half-written.
+
+Carried, unchanged: **F-009 → M5** · **D-001 / D-003 / D-004 → M4** · the
+sniper's `rf`/`extra_tree` refusal path armed and untaken · `make train` cannot
+fit a point-in-time set · **AWAITING_PO 2026-08-16-2** (allowlist) and
+**2026-08-17-1** (libgomp), both still non-blocking. **The xgboost-flavor risk
+(ak) named is now moot**: the winner is lgbm, so `score.py: load_champion`'s
+`mlflow.lightgbm.load_model` path is the one that runs. It stays unexercised for
+xgboost, which is a note for M5 and not a plan.
+
+Chain: nothing scheduled by hand. The detached job schedules `executor`.
+
+## Session 2026-08-18 (ak) — M3-S5 opened: the bake-off re-fits nothing, and the four contenders were already artifacts
+
+### State
+**EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped fresh
+session, role:MLE** (charter read; refusals in play: an AutoML-internal number
+quoted as a result · loosening any gate knob · a model registered without
+signature + input example · a verdict from a sampled run · promoting on val ·
+re-fitting a contender at bake-off time).
+
+**M3-S5 is OPEN, not done.** This session built and verified the bake-off, then
+detached the measurement. The story's declared mid-story safe stop (kickoff
+§M3-S5, "Sizing honesty") is *after the bake-off + transition merge*; this
+checkpoint is one step short of it — the numbers are being measured now.
+
+**Exit ritual (e).** `automation/runs/m3s5-bakeoff.status` carries the verdict
+and the job holds `--then-schedule executor`. **This session scheduled nothing
+by hand and the next one must not either until that status file is read.**
+
+Branch `story/m3-s5-bakeoff-alias-verify-m3` pushed, 3 commits, **no PR yet** —
+the diff's whole point is a table that does not exist yet.
+
+### Boot step 3 — the status file, read FIRST
+```
+automation/runs/m3s4-automation-track.status
+  DONE 0 2026-08-18T02:59:07Z
+```
+Spent: (aj) consumed those six JSONs and closed M3-S4. Reality matched (aj)'s
+Next exactly — tree clean at `4eeccb1`, `automation/STOP` absent, 3/3 nodes
+Ready v1.36.1, all pods Running, `@champion` → version **1**
+(`3adee05a855a424bb664c7fea3735703`).
+
+### The finding that shaped the whole story, found in the first ten minutes
+
+**All four model contenders already exist as MLflow artifacts with signature and
+input example, and M3-S4 logged them on purpose so that this story would not
+re-fit anything.** `scripts/automl_refit.py`'s own docstring says it: *"the model
+is logged with signature and input example so M3-S5 can hand it to the gate
+without re-fitting anything."* Checked live — `get_model_info("runs:/<id>/model")`
+on all four returns a signature, an input example and a flavor:
+
+```
+champ-v1     lightgbm    sig? True  ex? True   models:/m-4a4e7bdcd17a43b2…
+artisan-v2   lightgbm    sig? True  ex? True   models:/m-ca3d8467895b4864…
+auto-xgb-v1  xgboost     sig? True  ex? True   models:/m-7064520bbb264a0d…
+auto-lgbm-v2 lightgbm    sig? True  ex? True   models:/m-04478c4795474ecc…
+```
+So **the bake-off LOADS four models and fits exactly one thing: the floor** —
+which it must, because `gate.py`'s second property requires the bar re-derived
+from the challenger's own training data in the same invocation. The alternative
+(re-fit all four) would have cost ~4,600 s of the DR-01 budget the tracks have
+already spent, and would have been *worse*: a re-fit is a different MLflow run,
+and the version this bake-off promotes must be the version it measured.
+
+### Done (every leg with the command and what came back)
+
+- **`scripts/bakeoff_m3.py` + `make bakeoff`** — five contenders declared BEFORE
+  any number (`CONTENDERS`, pinned by a test), four resolved with no run id typed
+  into the file: the champion from the ALIAS, the two automation arms from
+  `automation/runs/m3s4/refit-v{1,2}.json`, the artisan arm from an MLflow search
+  that refuses unless it matches **exactly one** full-scale run.
+- **Smoked twice, 5,000 and 20,000 rows/split** (`make bakeoff
+  BAKEOFF_ARGS="--smoke-rows N"`, which writes no JSON, promotes nothing and says
+  *NOT A RESULT* on its own banner). All four artifacts resolved and loaded
+  (`family=lgbm|xgboost` read off the logged flavors, not off a run param), all
+  five gate verdicts printed, and **the floor refused itself at exactly +0.00%**
+  — the expected REFUSE the kickoff asked to see printed.
+- **The admission check exists and is a refusal, not a note**: every loaded model
+  must re-measure the val MAE its own MLflow run records, to `1e-9`. The recorded
+  values it will be held to: `3.47603843547682` · `3.3905388307148137` ·
+  `3.724473218110082` · `3.3822796832477016`. A contender that misses is not
+  admitted to the test table. Rationale in the module docstring: neither "the
+  artifact loaded is not the artifact that was measured" nor "this file builds
+  features differently from the path that fitted it" has any other symptom.
+- **`uv run pytest tests/unit -q` → 409 passed** (395 + 14 new in
+  `tests/unit/test_bakeoff.py`) · **`uv run ruff check .` → All checks passed**.
+- **`docs/bakeoff_m3.md` §0–§2 and §7 written; §3–§6 marked `Pending`** rather
+  than sketched, so a reader can tell a measurement from a plan.
+- **The detached-log buffering item, carried open from (ah)/(ai)/(aj), is
+  CLOSED** — `export PYTHONUNBUFFERED=1` inside `run_detached.sh`'s setsid'd
+  shell rather than in each long script, because that is the one place every
+  detached job passes through and a per-script copy would be twins. It does NOT
+  help the job launched this session (already forked); it helps every one after.
+  `tests/unit/test_chain_script.py tests/unit/test_watchdog.py` → 19 passed.
+- **The registry is untouched and nothing in this diff can move it**: promotion
+  is a separate explicit `--promote-winner`, it goes through `run._promote` (the
+  same function `make train` calls), and a test asserts the script names no
+  registry write API of its own.
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **The promotion refuses unless `configs/train.yaml: features.version` already
+  names the winner's feature set.** M3-S3 wrote that law as prose ("the config
+  line moves as part of a promotion or not at all"); this makes it a `SystemExit`
+  with the reason. It is not bureaucracy: `score.py` compares the champion's
+  feature names against that line and `verify-m2` checks the same, so promoting a
+  v2 model under a `v1` config would mint a version the next `make predictions`
+  refuses to score.
+- **The promoting invocation re-measures everything and must REPRODUCE the
+  read-only one.** `_write` compares against the previous `bakeoff.json` and
+  refuses on any difference. Same artifacts, same rows, same evaluator — the
+  numbers are deterministic, so the second run is a reproducibility proof rather
+  than a repetition. Re-baselining means deleting that file by hand; there is no
+  `--force`.
+- **The floor is scored on val as well as test**, though nothing is judged there
+  — it is what makes the floor's row comparable to the four val numbers the
+  ablation and the automation track published.
+- **No field note and no ledger rows yet.** The field-note law is per STORY and
+  this story is open; M3-S4's own note was written once across (ah)/(ai)/(aj).
+  No new finding was opened — F-015 is *consumed* here (it rides in the
+  `auto-on-v1` row and a test forbids it riding in the `auto-on-v2` row), not
+  closed; closing it is the write-up's.
+
+### Next — read the status file FIRST, then finish M3-S5
+
+```
+automation/runs/m3s5-bakeoff.status      # RUNNING -> DONE | FAILED
+automation/runs/m3s5-bakeoff.log         # the five verdicts, in full
+automation/runs/m3s5/bakeoff.json        # the row set, written only on success
+```
+- **DONE** → the numbers are yours. Fill `docs/bakeoff_m3.md` §3–§6 from the
+  log (the table, the five verdicts, the 2×2 arithmetic, the alias decision).
+  Then the alias:
+  1. The winner is the lowest test KPI-09 among the four models, and its verdict
+     is printed. **A PROMOTE verdict is necessary, not sufficient** — read the
+     four checks: floor margin ≥2.00%, KPI-10 vs floor, and both against
+     incumbent version 1 (**3.2608 / 81.480%**), which is the tighter bar.
+  2. **If it passes and it is a v2 model**: move `configs/train.yaml:
+     features.version` to `v2` *in the same commit as the promotion*, then run
+     `make bakeoff BAKEOFF_ARGS=--promote-winner`. It re-measures (~the same
+     wall-clock; **detach it**) and refuses if any number moved.
+  3. **Then the refresh chain, in this order** (kickoff): `make predictions` →
+     `make duckdb` → `make marts` → `make boards`, a dated M3 section in
+     `docs/error_memo_m2.md` via `scripts/error_memo_numbers.py`, then re-run
+     `make verify-m2` — its "champion right now" and memo-twin legs are exactly
+     the tripwires that refresh exists to satisfy.
+  4. **If nothing passes**: the alias does not move, that is a result, and §6
+     says so with the refusal printed. Nothing is refreshed and that is stated.
+- **FAILED / KILLED** → the story is not done and the log says how far it got.
+  Nothing was promoted and nothing was published, so a re-run is free: `make
+  detach NAME=m3s5-bakeoff ROLE=executor TARGET=bakeoff`. Note the log is
+  ROTATED, not truncated (gotcha #48), so `automation/runs/m3s5-bakeoff.log.1`
+  holds the failed attempt.
+- **Then the second half of the story** — `make verify-m3` becomes real
+  (kickoff's leg list; no skip flag, no fast mode, `expect_verdicts` per leg,
+  re-fits nothing), red-teamed to RED once naming the broken leg and restored to
+  GREEN, both pasted.
+- **Exit is (b)**: M3 is ◆-marked → `automation/next_session.sh rev 120`.
+
+Carried, unchanged: **F-009 → M5** · **D-001 / D-003 / D-004 → M4** · the
+sniper's `rf`/`extra_tree` refusal path armed and untaken · `make train` cannot
+fit a point-in-time set · **AWAITING_PO 2026-08-16-2** (allowlist) and
+**2026-08-17-1** (libgomp). Nothing new was added to AWAITING_PO.
+
+**One risk worth naming for the successor:** if `auto-on-v1` (xgboost) somehow
+wins, `score.py: load_champion` calls `mlflow.lightgbm.load_model` and would
+break on it — the flavor path is unexercised (carried from (aj)). It is the
+worst arm on val by 7.15%, so this is a note, not a plan.
+
+Chain: nothing scheduled by hand. The detached job schedules `executor`.
+
 ## Session 2026-08-18 (aj) — M3-S4 CLOSED: the sixth phase landed, automation won the arm it was expected to lose on, and the cap that bound both contenders truncated only one
 
 ### State
