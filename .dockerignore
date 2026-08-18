@@ -1,0 +1,44 @@
+# Build context for docker/Dockerfile.pipeline (M4-S3).
+#
+# This file is load-bearing, not hygiene. The repo is 5.2 GB on disk and 3.5 GB
+# of that is data/ (2.0 GB of DVC-pinned parquet) plus .venv/ (1.5 GB of wheels
+# the image resolves for itself). A build without these exclusions ships both to
+# the daemon before the first instruction runs.
+#
+# Rule of thumb for anything added later: the image may contain CODE, CONFIG and
+# the LOCKFILE. Data reaches tasks at run time (M4-S4's decision: MinIO or a
+# mounted path), never by being baked in — data is DVC's to pin, and an image
+# carrying a copy of it would be a second, unpinned definition of the dataset.
+
+# --- the two big ones ---
+data/
+.venv/
+
+# --- host-resolved state the image must rebuild, not inherit ---
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.dvc/cache/
+dist/
+*.egg-info/
+mlruns/
+
+# --- secrets: never, under any circumstances, in an image layer ---
+.env
+.env.*
+
+# --- history, run logs and editor state: no bearing on what the image runs ---
+.git/
+.github/
+automation/logs/
+automation/runs/
+analytics/dbt/target/
+analytics/dbt/logs/
+analytics/dbt/dbt_packages/
+analytics/dbt/marts.duckdb
+analytics/dbt/marts.duckdb.wal
+.idea/
+.verify_m1_sandbox/
+notebooks/
