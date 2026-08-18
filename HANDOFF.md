@@ -1,5 +1,176 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (av) — M4-S5 leg 2: one body of SQL, two transports, and D-003 closed by measuring both options
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLOps (A) · MLE (R), DA hat
+for the mart decision** — charter read (`docs/org/ROLES.md` §MLOps; its refusals
+include manual deploys and hand-edited cluster state, and every deploy, publish and
+run this session went through a `make` target or a committed script). Boot reads:
+CLAUDE.md · HANDOFF (au) · `docs/milestones/M4_KICKOFF.md` · AWAITING_PO.
+
+**M4-S5 leg 2 is COMPLETE and MERGED — PR #26 (`51e49eb`), reachable from
+origin/main (`git branch -r --contains 51e49eb` → origin/main), branch deleted.
+D-003 is CLOSED. Leg 3 (`make verify-m4` + `make verify-m4-redteam`) is the next
+session's and is the LAST thing M4-S5 owes.**
+
+**Staleness check**: cluster 3/3 Ready v1.36.1 (age 37h), every platform pod
+Running, PVCs bound, `automation/STOP` absent, tree clean at `2b56465`, no detached
+job pending. `automation/runs/m4s5-kill-drill.status` read first as the boot ritual
+requires: `DONE 0` — leg 1's evidence was already in the repo and (au)'s claims
+matched. Reality matched (au)'s Next; nothing to reconcile. **No gotcha #34** —
+Docker Desktop was up.
+
+**The statefulness law held.** No `kind delete`/`create`, no kind-config edit, no
+new hostPort. `@champion` **version 2** before and after the on-cluster run, read by
+the runner itself, which exits 2 if it moved.
+
+### Done (each with the command and what it printed)
+- **D-003 CLOSED, decided by measurement, and the decision is a SPLIT.** Both
+  candidate publishes were measured on today's data with the new `make marts-peak`
+  **before either was argued**: full refresh **228.2 s**, `marts` DB
+  **15.33 → 27.96 → 13.48 GiB (peak/end 2.075×)**, PGDATA peak 204.62 GiB; month-scoped
+  2019-03 (7,753,921 rows) **82.7 s**, peak **15.33 GiB**. The four aggregates
+  (~46,000 rows between them) stay **full refresh forever** — under a second, and the
+  mart IS the source with drift impossible. `trips_clean` is **month-scoped** — it is
+  the entire peak, its grain IS the month, and a monthly pipeline re-derives ONE month.
+  **Peak −45.2%, wall −63.8%.** M1-S4's remembered "~23 GB" was OPTIMISTIC (27.96 GiB
+  now — `error_segments` joined at M2-S4).
+- **The tail task runs on-cluster.** `make pipeline MONTH=2019-01
+  TRAIN_MONTHS=2019-01` → run `rw98pj84z4jh5ldqrxqp`, **exit 0**, sampled and
+  therefore verdict-free (F-008; `register` returned `NO_VERDICT` as data).
+  `publish_marts` SUCCEEDED in **90.6 s of an 886.6 s run (10.2%)**: in-pod analyst
+  rebuild → `dbt build` **PASS=57 in 9.96 s** → publish **71.9 s** as
+  `marts@postgres.platform.svc.cluster.local` (**against 82.7 s host-side** — a pod's
+  direct TCP beats `kubectl exec` by ~13%). **2019-01 month-scoped, all 8 months
+  reconciled `yes`.** Green on the FIRST on-cluster attempt.
+- **`scripts/marts_publish.py`: one body of SQL, two thin transports.** The mart
+  list, the dbt `--vars` payload and `--no-partial-parse` moved with it —
+  `marts.sh` has no `MARTS=(...)` array any more and a test fails if one returns.
+  `marts_export.py` gained `--where` (the scoped stream filters inside DuckDB) and
+  its exit code is now CHECKED, because a `Popen` read to EOF looks identical whether
+  it finished or died three rows in.
+- **`make marts` GREEN through the delegation**: `dbt build` PASS=57, `COPY 56127878`
+  again, **225.8 s** over the unchanged `kubectl exec` transport — the refactor
+  changed the caller, not the SQL.
+- **Cluster wiring**: `flyte-task-marts` Secret (fourth consumer of the `marts` role;
+  the pod publishes **AS `marts`, never as the superuser**) converged by
+  `make deploy-flyte` (helm revision 6, all three deployments rolled out, cluster
+  never went down) · `data/predictions/` as a **fourth staged tree**
+  (`make stage-data` → 2.0G, `raw 8 · processed 16 · rejected 8 · predictions 3`
+  file counts host == volume) · the F-026 image guard widened to `scripts/` and
+  `analytics/`, verified live in the run's own transcript.
+- **525 unit tests green (+17**, `tests/unit/test_marts_publish.py` is new and drives
+  the whole publish against a real two-row DuckDB file with a recording transport —
+  no cluster), ruff clean across `src tests scripts pipelines`, CI `lint-test` pass
+  1m18s. **`make verify-m1` GREEN 41/41 · `make verify-m2` GREEN 55/55 ·
+  `make verify-m3` GREEN 46/46.**
+- **Two new commands**: `make marts-peak` (D-003's probe; it MEASURES and does not
+  judge — no threshold lives in a probe) and `make flyte-actions RUN=…` (the seven
+  port-forward lines `run_pipeline.sh` and both drills each carried inline, once, on
+  port 8092 so a reader cannot steal a live run's port).
+- Ledgers: **D-003 CLOSED** with the measurement table and both honest costs;
+  **F-028 filed + closed**. Docs: `docs/pipeline_m4.md` §16 (§1–§15 left UNEDITED as
+  the earlier sessions' record), CLAUDE.md new section + 3 command rows + the traps
+  paragraph, gotcha **#66**, field note written.
+
+### The strongest single number
+**71.9 s in a pod against 82.7 s from the host, for the same publish.** Not because
+13% matters, but because it is the same SQL measured through two transports that
+share no code path below the protocol — which is what "one body of SQL, two thin
+transports" has to mean if it means anything. §14 predicted the pod could reach
+Postgres and said so was not measured; now both routes have a number, and they agree
+about what they did (8 months reconciled) while differing only in how long it took.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **The publish lives in `scripts/`, not in `src/`.** ADR-009's boundary law says the
+  marts serve humans and model code never imports them, so the dependency runs
+  `pipelines -> scripts -> duckdb/psycopg` and never through `src/`. The stage loads
+  the module BY PATH (scripts/ has no `__init__.py`, deliberately — these are
+  commands, not a library), which works identically at `/app` in a pod and in a clone.
+- **The tail is UNCACHED, and it is the first stage argued from EFFECTS.** Its product
+  is a mutation of a Postgres the cache cannot see; a hit would return "published,
+  7.5M rows" in 0.1 s having published nothing, and would be RIGHT by the cache's own
+  rules. No salt can reach that.
+- **The tail does not read the verdict and does not branch on it.** A pipeline whose
+  data publish depended on a model verdict would leave the warehouse a month stale
+  every time the gate said no — precisely when a DA wants to look.
+- **`main` still returns the VERDICT, not the publish summary.** Returning the tail's
+  row counts would have quietly broken `run_pipeline.sh`'s positive assertion (gotcha
+  #59) and every drill written against it, replacing the one thing the pipeline exists
+  to produce with a row count. The tail's numbers are read off its action instead.
+- **The local rehearsal opts IN** (`make pipeline-local PIPELINE_LOCAL_ARGS=--publish`)
+  and **both orchestrator drills opt OUT** (`PUBLISH_MARTS=0`) — the cache drill
+  measures what a cache saves and the tail is uncached by design.
+- **The run was SAMPLED.** What is new here is the tail; the fit was already measured
+  twice (M4-S4 full-data, M4-S5 leg 1 sampled) and re-paying 31 minutes would have
+  bought nothing about the marts. **Honest gap, stated**: the tail has not yet run
+  behind a REAL verdict. It cannot behave differently — it ignores the verdict by
+  construction and a test asserts the edge — but it has not been watched doing so.
+
+### Defects/Surprises
+- **An image rebuild invalidates every cached stage** (gotcha **#66**), and this run
+  is how it was found: `ingest`, `validate`, `build_features`, `train` and `evaluate`
+  all came back **`CACHE_POPULATED`, not `CACHE_HIT`**, on a month each had been
+  populated for, with the same data pin and function bodies this story never touched.
+  The tag is the git short sha, so every commit mints a new image, and it reaches a
+  task both as the environment's image and as `TAXI_PIPELINE_IMAGE` — either is part
+  of the spec Flyte keys on. Which of the two did it is NOT separable (they move
+  together by construction) and is recorded at that precision. Arguably correct, and
+  it agrees with F-026 from the other side; the unpriced cost is that **one commit
+  under `src`/`scripts`/`analytics`/`docker`/`pyproject.toml`/`uv.lock` turns the next
+  full-data run back into a 31-minute fit.**
+- **F-028: the runner printed `six stages on-cluster` after the graph grew a
+  seventh.** A literal typed at M4-S4 that nothing kept true, on the line a human
+  reads to confirm what happened — #51's question asked of a transcript rather than a
+  checker. It survived because the assertion ABOVE it is positive and about the run's
+  outputs, so the check was right while its report was not. Fixed by DERIVING the
+  count from `pipelines.tasks.STAGES` (gotcha #52: change the mechanism, not the
+  value) and naming whether the tail ran. Deliberately given no test of its own — a
+  test asserting "the transcript says seven" is the same literal one layer out.
+- **Four assertions were replaced by PROPERTIES rather than updated** (F-017, gotchas
+  #49/#50), because all four went red for the program behaving correctly: the pod's
+  Secret set is now diffed BOTH WAYS against what `platform_secrets.sh` converges into
+  the `flyte` namespace (a converged Secret nobody reads is a credential with no
+  consumer; a referenced Secret nobody converges is a pod that will not start), the
+  F-026 guard's paths are asserted to EXIST (a typo'd guard silently checks nothing),
+  each uncached stage must ARGUE its uncaching in its own docstring, and the
+  stage→return-type map must cover `STAGES` exactly (a stage added and not mapped had
+  its return type unchecked — the one property that test exists for).
+- **`dbt_build` failed on its first call for a reason that named a path that never
+  existed**: `--profiles-dir` is resolved against dbt's cwd, which this function SETS
+  to the project directory, so a relative `analytics/dbt` became
+  `analytics/dbt/analytics/dbt`. Fixed by resolving, with the observation written
+  beside it.
+- **`marts_peak_probe.sh` wrote `interval_seconds: null` on its first two runs** — the
+  sampler's resolution, i.e. the denominator that BOUNDS how honest a "peak" is (a 5 s
+  sampler cannot see a 3 s spike). Fixed and recorded; the two committed summaries were
+  produced at the default 5 s.
+
+### Next
+**M4-S5 leg 3 — `make verify-m4` and `make verify-m4-redteam`** — and it is the last
+thing M4-S5 owes. The kickoff's §M4-S5 Do list is the spec; everything it asks for now
+exists to be read. What this session adds to leg 3's inheritance:
+- **The marts leg has its numbers**: the gate owes "marts row counts reconcile
+  post-tail-task", and `marts_publish.reconcile` is the shape — ask Postgres and the
+  analyst layer for the same per-month counts. Do not re-publish to check it.
+- **The cache leg must read RECORDED evidence** (`automation/runs/m4-cache/cache_drill.json`),
+  NOT re-ask the control plane about the latest run: gotcha #66 means the latest run's
+  stages are `CACHE_POPULATED` in any session that rebuilt the image, which is most of
+  them, and a gate expecting `CACHE_HIT` there would go red for a commit. And F-027
+  means that file's `attempts` values are defaults — the retry evidence lives in
+  `automation/runs/m4-kill/kill_drill.json`, from this session forward only.
+- **`make flyte-actions RUN=…` is the reader with a route**, so `verify-m4` no longer
+  needs to hand-roll a port-forward to read a run's stages.
+- **Properties, not literals** (F-017, and this session paid for it a fifth time): pin
+  no run id, no experiment name, no floor name, no stage count typed by hand.
+- **The evidence on disk** (gitignored, `automation/runs/m4-marts/`): both peak
+  summaries with their raw samples, the tail pod's full log, the run's actions JSON,
+  the run record.
+- M4 carries no ◆, so M4-S5's LAST session exits to
+  `automation/next_session.sh architect 120`. **This one is not that session** — leg 3
+  remains, so this one exits to `executor`.
+
 ## Session 2026-08-18 (au) — M4-S5 leg 1: the pipeline survived losing a pod, and the drill was wrong three times first
 
 ### State
