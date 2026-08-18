@@ -179,6 +179,14 @@ say "-- read-back (crictl on each node) -----------------------------"
 # docker printed above. Docker names this build by its manifest-LIST digest;
 # containerd names the image by its CONFIG digest. Both are correct and they
 # differ by construction, so the comparison below is node-id against node-id.
+#
+# And that is not merely tidiness — OBSERVED 2026-08-18 across two consecutive
+# builds of an identical tree: docker's manifest-list digest CHANGED
+# (bf82ba68… -> 3e5066b4…) while containerd's config digest stayed
+# 65c9b2b49163… on all three nodes. BuildKit's provenance attestation carries
+# build metadata, so the outer digest is not reproducible; the config digest is.
+# An idempotence check written against docker's id would report a change on every
+# rebuild and mean nothing by it.
 failures=0
 containerd_id="unknown"
 for node in "${NODES[@]}"; do

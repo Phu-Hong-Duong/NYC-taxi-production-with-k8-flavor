@@ -57,10 +57,26 @@ first says a transfer ran, the second says what containerd will hand a pod. The
 script prints each node's id **before and after**, so an idempotent re-load shows
 up as `(unchanged — idempotent re-load)` rather than being asserted.
 
+Idempotence, from the second run of the same command on the same tree:
+
+```
+  ok    mlops-taxi-worker2: sha256:65c9b2b49163…  (unchanged — idempotent re-load)
+  ok    mlops-taxi-control-plane: sha256:65c9b2b49163…  (unchanged — idempotent re-load)
+  ok    mlops-taxi-worker: sha256:65c9b2b49163…  (unchanged — idempotent re-load)
+```
+
 One thing to know before comparing numbers: **the id containerd prints is not the
 id docker prints.** Docker names a BuildKit build by its manifest-list digest;
 containerd names the image by its config digest. Both are in
 `automation/runs/m4-image/image.json` (`image_id` and `containerd_image_id`).
+
+And the distinction is load-bearing, not pedantry — observed across the two runs
+above: **docker's manifest-list digest changed** (`bf82ba68…` → `3e5066b4…`) for a
+byte-identical tree, because BuildKit's provenance attestation carries build
+metadata, **while containerd's config digest stayed `65c9b2b49163…` on all three
+nodes.** An idempotence check written against docker's id would have reported a
+change on every rebuild and meant nothing by it. This is why the comparison is
+node-id against node-id.
 
 ## 3. D-004 — the shim proven dead, with the transcript
 

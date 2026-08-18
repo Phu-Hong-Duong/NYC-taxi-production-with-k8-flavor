@@ -114,7 +114,9 @@ else
 fi
 
 echo ""
-echo "-- 5. F-024: the `-c` form must REFUSE, not exec a broken argv ---"
+# Single quotes: backticks inside a double-quoted echo are command substitution,
+# which printed `-c: command not found` above its own header on the first run.
+echo '-- 5. F-024: the `-c` form must REFUSE, not exec a broken argv ---'
 dash_c_out="$(masked python -c \
   'from taxi_mlops.training.openmp import ensure_openmp; ensure_openmp()' 2>&1 || true)"
 sed 's/^/     /' <<<"$dash_c_out"
