@@ -1,5 +1,77 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (ao) — M3→M4 BOUNDARY: M3 closed clean, the cluster declared stateful, and the port guard caught telling us to shoot our own registry
+
+### State
+**GRAND ARCHITECT, Fable 5 (`claude-fable-5`, stated first line), M3 boundary
+session.** Boot reads done: CLAUDE.md · HANDOFF (an)/(am) · BLUEPRINT §9 ·
+all four ledgers · REV's findings · AWAITING_PO · M3 kickoff · ADR-002.
+
+**M3 is CLEANLY CLOSED — tagged `m3-closed`.** Sign-off row written (producer
+EXEC PRs #15–#19, approver ARCH — producer ≠ approver holds). The M4 kickoff
+is authored (`docs/milestones/M4_KICKOFF.md`) and the chain continues:
+`automation/next_session.sh executor 120`.
+
+### The triage, in evidence order
+- **`make verify-m3` re-run by the approver: GREEN — 46 `ok` sub-checks, 8
+  sections, exit 0** (`grep -c "ok  "` → 46). §7 pasted in the kickoff:
+  `@champion` → version 2, run `92b73bd4f77d…`, floor
+  `baseline-group-median-od-fallback` on the version, signature = the 24
+  columns `resolve('v2')` produces. Registry read and left identical.
+- **Lineage (gotcha #20)**: `git branch -r --contains 55b83cf` (M3-S3, chosen
+  mid-milestone on purpose) → `origin/main`; tree clean and level at `c8bfcf7`.
+- **Dispositions, every open item, none silent** (full table: M4 kickoff §0):
+  **F-018 → M4-S1** (rank on val + correct the sentence, BEFORE the pipeline
+  wraps the gate — REV's "before M7" satisfied by construction) · **F-019 →
+  M5** (quoted PRR scope; M4-S1 adds a tripwire test only) · **F-020 → M7**
+  (quoted retrain scope; not pulled forward — a re-fit now re-litigates a
+  standing bake-off for ~35 min of compute) · **F-016 → AWAITING_PO
+  2026-08-18-1** (a gate-condition change is the PO's; options A/B/C,
+  recommendation B = 0.50% transition-cost margin with its cost stated; parks
+  ONLY incumbent-condition edits; blocking only at M7's first retrain) ·
+  **F-015 CLOSED** by M3-S5's own artifacts (the caveat travels in the
+  `auto-on-v1` row, verbatim quotes in the ledger) · F-009 → M5 unchanged ·
+  D-001/D-004 → M4-S3, D-003 → M4-S5 (mandatory intake honored, all three) ·
+  both standing AWAITING_PO entries unchanged, non-blocking.
+
+### Found at this boundary — F-021, and the law it forced into the kickoff
+Running `make ports` against the LIVE cluster: **RED, 6 of 10 ports "held"** —
+by our own kind hostPorts (3030/5000/8081/8443/9000/9001) — and the message
+says *"another stack on this machine owns a port we need. Free it (stop that
+stack)"*. That advice, obeyed at 3am, deletes the PVCs that hold the only copy
+of the registry (both champion versions), every MinIO artifact, the Metabase
+app-db and both Optuna studies. Filed as **F-021** (gotcha #50's lesson one
+level down: a guard firing on correct behaviour trains readers to obey it
+wrongly), intaken into M4-S2. The general form became the kickoff's top law:
+**the cluster is STATEFUL and no M4 story may take it down** — which also
+reshaped D-001 (local-registry pattern needs a config edit = rebuild =
+forbidden; `kind load` is the honest M4 bridge, recorded not drifted into),
+banned a Flyte-console hostPort (no 8080 mapping exists; access is S2's
+recorded deviation), and put a backup story element (`pg_dump` + `mc mirror`
+to the DVC-remote directory, restore-not-rehearsed stated as its limit) BEFORE
+Flyte becomes the next tenant in that Postgres.
+
+### The M4 kickoff, in one paragraph
+Five stories: **S1** F-018 repaired where it lives + the six-task graph as
+plain Python (verdict-as-data convention settled cheap) + F-019's tripwire ·
+**S2** backup lifeboat → F-021 fix → Flyte via ADR-002 (fallback pre-approved
+at the 3-attempt wall) with its databases through D-002's proven path · **S3**
+the task image: D-001 decided, D-004 proven dead in-container
+(`openmp_status()` first line, system libgomp), `kind load` + crictl
+read-back · **S4** the pipeline on-cluster `MONTH=`-parametrized, green run
+DETACHED (gotcha #45 named in the story), cache-hit rerun, alias-neutrality
+pasted before/after · **S5** kill-a-pod with predicted-then-observed
+signature, D-003 decided at the moment the publish becomes scheduled,
+`verify-m4` (properties not literals, F-017's rule cited) + redteam. Standing
+law: **no M4 run moves `@champion`** — every register step runs
+`--no-promote` while F-016 waits, and verify-m4 asserts the alias.
+
+### Next
+Kickoff committed and pushed with this entry, then:
+`automation/next_session.sh executor 120` → M4-S1.
+
+---
+
 ## Session 2026-08-18 (an) — ◆ M3 REVIEW: the numbers all hold, and the winner was picked on the month nobody was allowed to look at
 
 ### State

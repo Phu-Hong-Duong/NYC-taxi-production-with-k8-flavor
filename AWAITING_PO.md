@@ -8,6 +8,64 @@ then resume the chain (`automation/next_session.sh executor` — or `architect`
 if the answer changes the plan). Direction decisions WAIT here; nothing
 auto-proceeds on a recommendation (ADR-010).
 
+## 2026-08-18-1 · raised by ARCH/Fable (M3 boundary triage, from REV finding F-016) · NON-BLOCKING until M7: should the serving pointer be allowed to move on 1.2 seconds?
+
+**The fork in plain language.** The promotion gate has two conditions. The
+FLOOR condition demands a challenger beat the group-median baseline by
+**≥2.00%** KPI-09 — a maintenance-cost bar you approved by construction (~4 s
+of mean error; a model that close to a `GROUP BY` doesn't earn a booster).
+The INCUMBENT condition (added M3-S1, F-011) only demands a challenger not be
+WORSE than what is serving — no margin at all. At M3-S5 that asymmetry decided
+a real promotion: `auto-lgbm-v2` took `@champion` at **+0.63%** over the
+serving model — **1.2 seconds** of mean error, a delta smaller than the
+program's own ≥0.50% bar for keeping a single feature *group* — and every
+alias move drags a real tail: predictions re-scored, marts republished, boards
+refreshed, memo re-argued (~17 min measured), plus (from M5 on) a serving
+cutover and a rollback surface. M7's scheduled retrains will face this gate
+monthly. Changing a gate condition is yours by constitution (gates loosen OR
+tighten only via PO fork), and the executor correctly refused to touch it
+after seeing the number it would have changed.
+
+**Option A — keep the gate as pre-registered (no incumbent margin).** Honest
+cost: the pointer can churn on noise-sized deltas — M4's pipeline re-fit of
+the same config would produce a near-identical model that could legally take
+the alias (M4 works around this by running its demos `--no-promote`), and M7's
+monthly retrains could move the pointer on hundredths of a percent, each move
+spending the full transition tail for no rider-visible gain. Honest benefit:
+zero risk of refusing a genuinely better model, and the bar stays exactly what
+was pre-registered before any number existed.
+
+**Option B (Recommended) — add a small TRANSITION-COST margin to the incumbent
+condition, sized to what a transition actually costs, not to what owning a
+booster costs.** Concretely: incumbent KPI-09 margin **≥0.50%** (the program's
+own smallest pre-registered materiality bar, DR-02's keep threshold), KPI-10
+non-regression unchanged. M3-S5's own promotion (+0.63%) would still have
+PASSED this margin, so B rewrites no history. Honest cost, stated plainly: a
+model genuinely 0.3–0.4% better (~0.7 s of mean error) will not ship under B —
+that is a real refusal of a real improvement, accepted because the transition
+it saves costs more than 0.7 s buys. And B cannot be pre-registered anymore:
+any number chosen now is chosen AFTER seeing +0.63%, which is exactly why it
+is your call and not ours.
+
+**Option C — full symmetry: the incumbent margin equals the floor's 2.00%.**
+Honest cost: the pointer nearly never moves again — 2.00% over a
+well-tuned incumbent is a bar M3's entire two-track, 12,447-second campaign
+cleared by 0.63% — so this is close to freezing the champion until a feature
+epoch or a drift event. Defensible only if you want promotions to be rare,
+deliberate events.
+
+**What is parked:** ONLY edits to the incumbent gate condition. **What
+continues meanwhile:** everything — M4 does not promote (its kickoff
+legislates `--no-promote` on all pipeline demo runs and `verify-m4` asserts
+`@champion` is unchanged), so the chain runs M4 in full without this answer.
+**When it becomes blocking:** M7's first retrain that faces the gate. If
+unanswered by the M6→M7 boundary, M7 proceeds with the gate AS PRE-REGISTERED
+(option A is the standing status quo, not an auto-adopted recommendation).
+
+**Answer by editing this entry with A / B / C (and the margin if B).**
+
+---
+
 ## 2026-08-17-1 · raised by EXEC/Opus (M2-S2) · NON-BLOCKING: one apt package would delete a workaround from the training path
 
 **Not a direction fork — a friction report with a fix only your hands can apply**
