@@ -356,12 +356,26 @@ def test_marts_target_is_real_and_has_a_red_team_twin():
 
 
 def test_publish_reads_marts_from_one_list():
-    """The published set is one list, so a new model cannot be half-added."""
-    script = read(REPO / "scripts" / "marts.sh")
-    (line,) = [ln for ln in script.splitlines() if ln.startswith("MARTS=(")]
-    published = set(line[len("MARTS=(") : line.index(")")].split())
+    """The published set is one list, so a new model cannot be half-added.
+
+    The list moved out of `marts.sh` at M4-S5: the pipeline's tail task publishes
+    the same marts from a pod that cannot use `kubectl exec`, so both publishers now
+    read `MARTS` in `scripts/marts_publish.py` and neither keeps a copy. A shell
+    array and a Python tuple naming the same five tables would be twins, and the
+    first thing they would disagree about is a mart somebody added.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO / "scripts"))
+    import marts_publish
+
+    published = set(marts_publish.MARTS)
     on_disk = {p.stem for p in MODELS.glob("*.sql")}
     assert published == on_disk, f"models and published set disagree: {published ^ on_disk}"
+    # And the shell must not have grown its own copy back.
+    script = read(REPO / "scripts" / "marts.sh")
+    assert "MARTS=(" not in script, "marts.sh has a second list of marts again"
+    assert "marts_publish.py" in script, "marts.sh no longer delegates the publish"
 
 
 def test_dbt_artifacts_are_gitignored():

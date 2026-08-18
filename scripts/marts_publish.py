@@ -418,7 +418,8 @@ def reconcile(
 
 
 def publish(transport: Transport, duckdb_path: Path, *, owner: str,
-            months: tuple[str, ...] | None = None) -> dict:
+            months: tuple[str, ...] | None = None,
+            marts: tuple[str, ...] = MARTS) -> dict:
     """Publish every mart. `months=None` is a full refresh; otherwise month-scoped.
 
     **D-003's DECISION, AND ITS EVIDENCE.** The debt row asked for one of two
@@ -460,7 +461,7 @@ def publish(transport: Transport, duckdb_path: Path, *, owner: str,
         )
     }
 
-    for mart in MARTS:
+    for mart in marts:
         scoped = months is not None and mart == INCREMENTAL_MART and mart in existing
         if scoped:
             assert months is not None
@@ -495,7 +496,7 @@ def publish(transport: Transport, duckdb_path: Path, *, owner: str,
         print(f"  [marts] ok  {len(reconciled)} month(s) reconcile")
 
     seconds = time.monotonic() - started
-    print(f"\n[marts] published {len(MARTS)} mart(s) into '{SCHEMA}' via {transport.describe()} "
+    print(f"\n[marts] published {len(marts)} mart(s) into '{SCHEMA}' via {transport.describe()} "
           f"in {seconds:.1f}s")
     approx_rows = {}
     for name, approx in transport.query(
@@ -505,7 +506,7 @@ def publish(transport: Transport, duckdb_path: Path, *, owner: str,
         approx_rows[str(name)] = int(approx)
         print(f"[marts]   {name:<20} ~{int(approx):,} rows")
     return {
-        "marts": list(MARTS),
+        "marts": list(marts),
         "months": list(months or ()),
         "mode": "month-scoped" if months else "full-refresh",
         "seconds": round(seconds, 1),

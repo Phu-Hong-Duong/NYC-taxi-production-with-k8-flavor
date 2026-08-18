@@ -219,11 +219,14 @@ max_stage_ratio = float(sys.argv[9])
 a1 = json.loads((run_dir / "run1.actions.json").read_text())["actions"]
 a2 = json.loads((run_dir / "run2.actions.json").read_text())["actions"]
 
-# `main` and `register` are uncached BY DESIGN and each argues its own case in
-# pipelines/flyte/workflows.py. They are NAMED here rather than derived as
-# "whatever came back disabled": if a stage silently loses its cache, this list is
-# what turns that into a FAIL instead of into a quietly smaller expectation.
-UNCACHED = {"main", "register"}
+# `main`, `register` and `publish_marts` are uncached BY DESIGN and each argues its
+# own case in pipelines/flyte/workflows.py. They are NAMED here rather than derived
+# as "whatever came back disabled": if a stage silently loses its cache, this list
+# is what turns that into a FAIL instead of into a quietly smaller expectation.
+# `publish_marts` does not RUN in this drill (it is launched with PUBLISH_MARTS=0),
+# and the loop below only asserts over the intersection with what run 2 actually
+# did — so naming it here costs nothing and keeps the twin test honest.
+UNCACHED = {"main", "register", "publish_marts"}
 
 def by_stage(rows):
     return {(r["short_name"] or "main"): r for r in rows}
