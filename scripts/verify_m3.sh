@@ -488,7 +488,7 @@ try:
     else:
         no(f"the bake-off table does not name {missing}")
 except Exception as exc:  # noqa: BLE001
-    print(f"FAIL|the bake-off replay itself raised {type(exc).__name__}: {exc}")
+    print(f"FAIL|the bake-off replay check itself raised {type(exc).__name__}: {exc}")
 PY
 )
 expect_verdicts 8 "the bake-off replay"
