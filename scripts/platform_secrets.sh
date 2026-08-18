@@ -186,5 +186,21 @@ apply_secret metabase metabase-marts-db \
 # where `ps` would show it).
 apply_secret platform minio-flyte-user \
   "secretKey=$FLYTE_S3_SECRET_KEY"
+# The credential a TASK POD writes its outputs with (M4-S4). A separate Secret in
+# a separate namespace from the one above because Secrets do not cross
+# namespaces, and it holds ONLY the secret half: the endpoint and the access key
+# id are not secret and live in the PodTemplate that consumes this
+# (infra/manifests/flyte-task-podtemplate.yaml), where they can be read in a diff
+# and are pinned as twins of infra/helm/flyte/values.yaml by a test.
+#
+# Why a task pod needs its own copy at all, which is not obvious: the flyte-binary
+# config configures the SERVER's storage client, and the co-pilot Secret
+# configures the co-pilot sidecar — but the Flyte 2 python runtime inside the task
+# container builds its own `flyte.storage.S3` from the environment. With none set
+# it falls through to the default AWS credential chain and tries to read an EC2
+# instance-metadata endpoint that does not exist here, so a task RUNS and then
+# dies uploading its outputs to `http://169.254.169.254/latest/api/token`.
+apply_secret flyte flyte-task-storage \
+  "FLYTE_AWS_SECRET_ACCESS_KEY=$FLYTE_S3_SECRET_KEY"
 
-echo "[secrets] 9 secrets converged from $ENV_FILE (no values printed, by design)"
+echo "[secrets] 10 secrets converged from $ENV_FILE (no values printed, by design)"

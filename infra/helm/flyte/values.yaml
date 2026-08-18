@@ -125,6 +125,23 @@ configuration:
       signedUrl:
         stowConfigOverride:
           endpoint: "http://localhost:9000"
+    # The OTHER half of the same split horizon, and it is the half that surprises.
+    # The three storage configurations above (server config, copilot Secret, this
+    # values file) all miss the process that actually writes a task's outputs: the
+    # Flyte 2 python runtime INSIDE the task container, which builds its S3 client
+    # from its own environment. Unset, it falls through to the default AWS
+    # credential chain and dies against the EC2 metadata address — a task that ran
+    # perfectly and then could not put its result anywhere.
+    #
+    # `default-pod-template-name` makes the k8s plugin merge a named PodTemplate
+    # into EVERY task pod, so the wiring lives with the cluster instead of in each
+    # `flyte.TaskEnvironment`. The object is
+    # infra/manifests/flyte-task-podtemplate.yaml (applied by deploy_flyte.sh) and
+    # it carries the in-cluster endpoint plus a secretRef; the argument for that
+    # shape, and for the container having to be named `default`, is in its header.
+    plugins:
+      k8s:
+        default-pod-template-name: "flyte-task-defaults"
 
 # --- the pod ------------------------------------------------------------------
 deployment:

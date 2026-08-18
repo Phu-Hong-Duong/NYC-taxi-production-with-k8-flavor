@@ -68,14 +68,22 @@ echo "   $FLYTE_CHART $FLYTE_CHART_VERSION (fallback $FLYTE_FALLBACK_CHART_VERSI
 if [[ "$DRY_RUN" == "1" ]]; then
   echo "== [2/6] namespaces ==            DRY_RUN — WOULD apply infra/manifests/namespaces.yaml"
   echo "== [3/6] secrets from .env ==     DRY_RUN — WOULD run scripts/platform_secrets.sh"
+  echo "== [3b/6] task pod defaults ==    DRY_RUN — WOULD apply infra/manifests/flyte-task-podtemplate.yaml"
   DRY_RUN=1 bash "$REPO_ROOT/scripts/postgres_databases.sh"
   echo "== [5/6] MinIO ==                 DRY_RUN — WOULD helm upgrade minio $MINIO_CHART_VERSION (bucket flyte-data, user flyte)"
 else
   echo "== [2/6] namespaces =="
   "${KUBECTL[@]}" apply -f "$REPO_ROOT/infra/manifests/namespaces.yaml"
 
-  echo "== [3/6] secrets from .env (adds minio-flyte-user) =="
+  echo "== [3/6] secrets from .env (adds minio-flyte-user, flyte-task-storage) =="
   bash "$REPO_ROOT/scripts/platform_secrets.sh"
+  # The defaults every task pod inherits — how the SDK runtime inside a task
+  # container reaches the blob store. Applied here rather than by the chart
+  # because it is ours, not the chart's, and it must exist BEFORE the first task
+  # pod is built (the k8s plugin reads it by name at pod-construction time).
+  # `apply` converges, so a re-run is a no-op; it references the Secret above and
+  # contains no secret itself.
+  "${KUBECTL[@]}" apply -f "$REPO_ROOT/infra/manifests/flyte-task-podtemplate.yaml"
 
   echo "== [4/6] the 'flyte' database in the one Postgres (D-002) =="
   bash "$REPO_ROOT/scripts/postgres_databases.sh"

@@ -1,0 +1,64 @@
+# flyte-task-podtemplate.yaml — the defaults every Flyte TASK POD inherits (M4-S4).
+#
+# WHAT PROBLEM THIS SOLVES, because the symptom points somewhere else entirely.
+# A Flyte 2 task pod runs the SDK's own runtime, and that runtime builds its
+# storage client from `flyte.storage.S3.auto()` — i.e. from ITS OWN environment
+# (FLYTE_AWS_ENDPOINT / FLYTE_AWS_ACCESS_KEY_ID / FLYTE_AWS_SECRET_ACCESS_KEY).
+# Three other places in this program configure MinIO for Flyte and NONE of them
+# reaches that process: the flyte-binary ConfigMap configures the SERVER, the
+# copilot Secret configures the co-pilot SIDECAR, and the values overlay
+# configures helm. So with nothing here a task pod pulls its image, starts, runs
+# our code to completion, and then dies uploading its outputs against
+# `http://169.254.169.254/latest/api/token` — the EC2 instance-metadata address,
+# reached because obstore fell through to the default AWS credential chain.
+# Observed exactly that way on 2026-08-18 (run rb2pzmghlfd4d6mxr8kl): the task
+# was fine, the write had no credentials.
+#
+# WHY A PodTemplate RATHER THAN PUTTING IT IN THE TASK CODE. `flyte.TaskEnvironment`
+# can carry env vars and secrets, and that would work — for the environment that
+# remembered to declare it. How a pod reaches the blob store is a property of THIS
+# CLUSTER, not of any task, and `pipelines/flyte/workflows.py` should no more
+# carry a MinIO endpoint than `taxi_mlops` should import an orchestrator. Flyte's
+# k8s plugin reads a PodTemplate by name (`plugins.k8s.default-pod-template-name`,
+# set in infra/helm/flyte/values.yaml) and merges it into every task pod it
+# builds, so a task defined tomorrow inherits this without knowing it exists.
+#
+# THE CONTAINER MUST BE NAMED `default`. That is the flyte k8s plugin's contract:
+# a container named `default` supplies DEFAULTS merged into the primary container
+# whatever that container ends up being called (task pods are named after their
+# action, e.g. `rb2pzmghlfd4d6mxr8kl-a0-0`). A container named anything else is
+# merged as a literal sidecar of that name, which is not what is wanted here.
+#
+# THE ENDPOINT IS THE IN-CLUSTER NAME AND MUST STAY THAT WAY. A pod cannot reach
+# `localhost:9000` — that is its own loopback. This is the OTHER half of the split
+# horizon F-023 named: the same MinIO is `minio.platform.svc.cluster.local:9000`
+# from in here and `localhost:9000` from the host, and both names are configured,
+# each on the side that can resolve it. See the `signedUrl.stowConfigOverride`
+# block in infra/helm/flyte/values.yaml for the host side.
+#
+# TWINS: `FLYTE_AWS_ENDPOINT` and `FLYTE_AWS_ACCESS_KEY_ID` below must equal
+# `configuration.storage.providerConfig.s3.endpoint` and `.accessKey` in
+# infra/helm/flyte/values.yaml — the server and the tasks writing to two different
+# buckets or as two different users is a failure that shows up as a 403 hours
+# downstream. tests/unit/test_platform_scripts.py fails if they drift, the same
+# way it pins the hostPort/nodePort pairs.
+#
+# NO SECRET IS IN THIS FILE. The secret half arrives by reference from
+# `flyte-task-storage`, which scripts/platform_secrets.sh converges out of .env.
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: flyte-task-defaults
+  namespace: flyte
+template:
+  spec:
+    containers:
+      - name: default
+        env:
+          - name: FLYTE_AWS_ENDPOINT
+            value: "http://minio.platform.svc.cluster.local:9000"
+          - name: FLYTE_AWS_ACCESS_KEY_ID
+            value: "flyte"
+        envFrom:
+          - secretRef:
+              name: flyte-task-storage
