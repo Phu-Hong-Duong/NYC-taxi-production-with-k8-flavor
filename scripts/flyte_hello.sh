@@ -98,8 +98,16 @@ fi
 # inside `$( )` exits the script THERE, so the output that says why is discarded
 # at exactly the moment it is wanted. Observed here on the first run — exit 2,
 # not one line of diagnosis.
+# `--follow` (`-f`) is what makes this an ACCEPTANCE test rather than a launch.
+# Without it `flyte run` uploads, creates the run, prints its URL and exits 0 —
+# so the script's own grep for the greeting was the only thing standing between
+# "the orchestrator ran our work" and "the orchestrator accepted our work",
+# which are different claims and the second one is cheap. With `--follow` the
+# CLI waits for the run to reach a terminal state and prints its output, so a
+# task that fails on-cluster fails this script.
 rc=0
-out="$("${FLYTE[@]}" run "${SCOPE[@]}" "$REPO_ROOT/pipelines/flyte/hello.py" main --name "$NAME" 2>&1)" || rc=$?
+out="$("${FLYTE[@]}" run --follow "${SCOPE[@]}" \
+       "$REPO_ROOT/pipelines/flyte/hello.py" main --name "$NAME" 2>&1)" || rc=$?
 echo "$out"
 if [[ "$rc" != "0" ]]; then
   echo "[flyte-hello] FAIL: \`flyte run\` exited $rc (output above)" >&2
