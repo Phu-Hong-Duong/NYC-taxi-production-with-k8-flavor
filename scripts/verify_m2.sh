@@ -82,6 +82,11 @@ expect_verdicts() {
 # --------------------------------------- 1. the registry holds the champion ---
 section "1. registry: the champion exists, with a signature and the verdict it was promoted on"
 consume < <(uv run python - 2>/dev/null <<'PY'
+import json
+import re
+from pathlib import Path
+
+
 def ok(m): print(f"PASS|{m}")
 def no(m): print(f"FAIL|{m}")
 
@@ -109,13 +114,50 @@ try:
     tags = dict(mv.tags or {})
     # The verdict travels ON the version: "what was this measured against?" is a
     # question the registry answers, not one you answer from a transcript.
-    expected = {"gate_verdict": "PROMOTE", "gate_floor": "baseline-group-median",
-                "gate_holdout_split": "test"}
+    #
+    # M3-S5 note — why the FLOOR is asserted by property and not by name. Until
+    # this story these three were literals, and `gate_floor` read
+    # "baseline-group-median". That was the M2 floor; M3-S1 replaced it with a
+    # NEW name (F-010, `…-od-fallback`) precisely because the config legislated
+    # that a floor change is a new name and never an edit — so the first
+    # legitimate champion transition turned this leg RED for doing the right
+    # thing. A literal that goes red on every correct promotion teaches the next
+    # session to edit assertions, which is how a guard becomes a formality (the
+    # same argument M3-S5 applied to the two feature tests). What holds at EVERY
+    # champion is the property below, and it is stricter than the literal was:
+    # the name must be one `baselines.fit_floor` can actually rebuild — a floor
+    # nobody can re-fit is a number, not a bar — which also excludes
+    # `baseline-constant-median`, the flattering floor `gate.decide` refuses.
+    expected = {"gate_verdict": "PROMOTE", "gate_holdout_split": "test"}
     wrong = {k: (tags.get(k), v) for k, v in expected.items() if tags.get(k) != v}
+    from taxi_mlops.training.baselines import GroupMedian, GroupMedianODFallback
+    honest_floors = {GroupMedian.name, GroupMedianODFallback.name}
+    floor_name = tags.get("gate_floor")
+    if floor_name not in honest_floors:
+        wrong["gate_floor"] = (floor_name, f"one of {sorted(honest_floors)}")
     if wrong:
         no(f"the champion's gate tags are wrong or missing: {wrong}")
     else:
-        ok("the version carries its verdict: PROMOTE, floor=baseline-group-median, holdout=test")
+        ok(f"the version carries its verdict: PROMOTE, floor={floor_name} "
+           f"(re-fittable by baselines.fit_floor), holdout=test")
+
+    # ...and the floor named on the VERSION must be the floor the published rows
+    # were actually scored beside. F-012 makes `make predictions` re-fit the
+    # champion's own `gate_floor` rather than the config's; this is the other end
+    # of that wire, and it is a cross-system check the literal could not make.
+    try:
+        manifest = json.loads(Path("data/predictions/predictions.json").read_text())
+        published_floor = manifest["floor"]["name"]
+        stamped_floor = manifest["model"]["gate_tags"]["gate_floor"]
+    except (OSError, KeyError, ValueError) as exc:
+        no(f"predictions.json does not name the floor it published against ({exc})")
+    else:
+        if published_floor == stamped_floor == floor_name:
+            ok(f"the published rows were scored beside the champion's OWN floor: "
+               f"{floor_name} on the version, in the manifest, and re-fitted (F-012)")
+        else:
+            no(f"floor mismatch — version says {floor_name!r}, the manifest stamped "
+               f"{stamped_floor!r} and published {published_floor!r}")
 
     try:
         challenger = float(tags["gate_challenger_mae"])
@@ -162,24 +204,45 @@ try:
 
     run = client.get_run(mv.run_id)
     exp = client.get_experiment(run.info.experiment_id)
-    if run.info.status == "FINISHED" and exp.name == cfg["mlflow"]["experiment"]:
-        ok(f"the champion's run is FINISHED and lives in experiment {exp.name!r}")
+    # Also a property since M3-S5, and for the same reason as the floor above:
+    # the champion legitimately came from `m3-automl` (M3-S4's full-data refit),
+    # not from `configs/train.yaml`'s current `experiment`. What gotcha #17
+    # actually demands is that the run be FINISHED and live in a NAMESPACED
+    # experiment — never MLflow's `Default`, where a collision has no name.
+    namespaced = re.fullmatch(r"m\d+-[a-z0-9-]+", exp.name or "") is not None
+    if run.info.status == "FINISHED" and namespaced:
+        ok(f"the champion's run is FINISHED and lives in a namespaced experiment "
+           f"{exp.name!r} (gotcha #17)")
     else:
-        no(f"the champion's run is {run.info.status} in experiment {exp.name!r}")
+        no(f"the champion's run is {run.info.status} in experiment {exp.name!r} "
+           f"(namespaced={namespaced})")
 
     # The one thing that must never be true of a champion.
-    hobbled = [k for k in ("red_team", "hobbled", "do_not_promote") if k in run.data.tags]
+    #
+    # Read by VALUE, not by presence — M3-S5's finding. Every run this program
+    # writes carries `do_not_promote`, and the value is what says which way:
+    # `"yes — 15% sample (F-008)"` on a scout trial, `"no — full-data fit; the
+    # gate sees it at M3-S5"` on the four bake-off contenders. A presence test
+    # read the second one as a refusal and called the legitimately promoted
+    # champion hobbled. `red_team` and `hobbled` carry descriptive values
+    # (`"M2-S3"`, `"shuffled-target"`), so one rule covers both families: a mark
+    # counts unless its value says no.
+    hobbled = [k for k in ("red_team", "hobbled", "do_not_promote")
+               if k in run.data.tags
+               and not str(run.data.tags[k]).strip().lower().startswith("no")]
     if hobbled:
-        no(f"the CHAMPION run is marked {hobbled} — a hobbled model is aliased as champion")
+        marks = {k: run.data.tags[k] for k in hobbled}
+        no(f"the CHAMPION run is marked {marks} — a hobbled model is aliased as champion")
     else:
-        ok("the champion's run carries no red_team/hobbled/do_not_promote mark")
+        ok(f"the champion's run carries no live red_team/hobbled/do_not_promote mark "
+           f"(do_not_promote={run.data.tags.get('do_not_promote')!r})")
 except SystemExit:
     raise
 except Exception as exc:  # noqa: BLE001 — a broken check must fail loudly, not silently
     print(f"FAIL|the registry check itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 7 "the registry check"
+expect_verdicts 8 "the registry check"
 
 # ------------------------------ 2. the gate can say no, and has not been loosened
 section "2. the gate: M2-S3's transcripts replayed through the gate code on disk NOW"
@@ -402,8 +465,12 @@ try:
            "who was not watching")
     else:
         for r in hobbled:
+            # Value-aware for the same reason §1 is: a run tagged
+            # `do_not_promote: "no — …"` is NOT marked, and counting it would be a
+            # false GREEN in the leg whose whole job is to prove the refusal was kept.
             marks = {k: r.data.tags[k] for k in ("red_team", "hobbled", "do_not_promote")
-                     if k in r.data.tags}
+                     if k in r.data.tags
+                     and not str(r.data.tags[k]).strip().lower().startswith("no")}
             verdict = r.data.tags.get("gate_verdict")
             if len(marks) == 3 and verdict == "REFUSE":
                 ok(f"the refused challenger is KEPT and marked {sorted(marks)} with gate_verdict=REFUSE")
