@@ -861,7 +861,7 @@ the seed line are earned by THIS project.
     (`flyteidl2.workflow.run_definition_pb2.ActionStatus`) calls that field
     **`attempts`**, plural. Nothing raised, nothing warned, and the reader reported
     `attempts: 0` for every action of every run it was ever pointed at — including
-    the cache drill's committed evidence — because `0` is exactly what an
+    the cache drill's recorded evidence — because `0` is exactly what an
     un-retried action should say. It surfaced only when something was SUPPOSED to
     be non-zero: a task with `retries=2` that raises on its first line still read
     `attempts: 0` while kubernetes had a pod named `…-a0-2` and the server said

@@ -671,7 +671,9 @@ The test pins the reader against `ActionStatus.DESCRIPTOR` rather than against t
 string `"attempts"`, so it fails on the next typo in the next field.
 
 *Honest consequence, not quietly corrected:* the historical `attempts: 0` values in
-M4-S4's committed cache evidence are defaults, not measurements. Those runs really
+M4-S4's recorded cache evidence are defaults, not measurements — that file lives
+under `automation/runs/`, which is gitignored, so it is on this machine and not in
+git, which is also why a gate reading it must treat it as state. Those runs really
 were not retried (every pod is `…-0`), so no claim made from that file is wrong —
 but `verify-m4` must not treat the old values as evidence.
 
