@@ -1,5 +1,189 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (as) — M4-S4: the split horizon had a lever, and four of five defects were in the checkers
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLOps (A) · MLE (R)** —
+charter read (`docs/org/ROLES.md` §MLOps; its refusals include manual deploys and
+hand-edits to cluster state the recipe cannot reproduce — every deploy, stage,
+build and run this session went through a `make` target, and the one object I
+first wrote as a shell heredoc became a committed manifest for exactly that
+reason). Boot reads: CLAUDE.md · HANDOFF (ar) · `docs/milestones/M4_KICKOFF.md` ·
+AWAITING_PO.
+
+**M4-S4 landed as a VERIFIED SLICE, not complete — PR #23 MERGED (`fb57324`),
+reachable from origin/main.** The plumbing is done and proven; the kickoff's
+**full-data green run** and **cache-hit rerun** are not. The full-data run is
+hours-class and was LAUNCHED DETACHED at the end of this session — see Next.
+
+**Staleness check before anything**: cluster 3/3 Ready v1.36.1 (age 29h), every
+platform pod Running (flyte ×3, minio, postgres, mlflow, metabase),
+`automation/STOP` absent, tree clean at `f59bc26`, no detached job pending.
+Reality matched (ar)'s Next; nothing to reconcile.
+
+**The statefulness law held.** No `kind delete`/`create`, no kind-config edit, no
+new hostPort. `@champion` read before and after every run — by the runner itself,
+which exits 2 if it moved: **version 2**, unchanged throughout.
+
+### Done (each with the command and what it printed)
+- **F-023 CLOSED — `make flyte-hello` completes.**
+  `ActionOutputs(o0="HELLO CROSSTOWN FROM A FLYTE TASK")`, three pods `Completed`
+  (`a0` plus two child actions), the second task's input being the first's output
+  **through the `flyte-data` bucket** — the seam test the finding's close
+  condition asks for, not a pod-ran test.
+- **`make stage-data` — 1.8G onto PVC `taxi-data`**, `tar | kubectl exec -i`, then
+  verified by per-tree **FILE COUNTS**: `raw: 8 == 8 · processed: 16 == 16 ·
+  rejected: 8 == 8`. The stager pod deletes itself; the volume and its data
+  remain. `DRY_RUN=1` measures and transfers nothing.
+- **`make pipeline MONTH=2019-01 TRAIN_MONTHS=2019-01` — six stages on-cluster,
+  run `r5kzpr785rt8m6tn9b7l`.** ingest **7,696,617 → 7,584,656 rows, 1.4547%
+  rejected** · validate 20 columns through the output contract · features set
+  **v2**, 24 features · train `lightgbm-v1` run `e17ce5846aaf4f90bee8a2609b208c94`
+  in **869.7 s** · evaluate reporting the ONE evaluator's numbers · register
+  **`decision=NO_VERDICT promoted=false`** as DATA. `@champion` **2 → 2**.
+- **F-025 filed and CLOSED** (see Defects). Both MLflow routes verified after the
+  fix: host `GET /api/2.0/mlflow/experiments/search -> 200`, in-cluster
+  `wget http://mlflow.mlflow.svc.cluster.local:5000/health -> OK`.
+- **492 unit tests green (+13**, `tests/unit/test_flyte_task_wiring.py`), ruff
+  clean across `src tests pipelines scripts`, CI `lint-test` pass 1m11s.
+  **`make verify-m2` GREEN 55/55 and `make verify-m3` GREEN 46/46 re-run in the
+  story** — this story changed `src/taxi_mlops/training/tracking.py` and the
+  MLflow release, so both gates had to be asked again.
+- Ledgers: **F-023 closed, F-025 filed+closed**, deployments row written. Field
+  note written. CLAUDE.md: new section, 2 pin rows, 2 command rows + 1 rewritten
+  (the BLOCKED flyte-hello row), gotchas **#59/#60/#61**.
+
+### The strongest single number
+`ingest 2019-01: 7,696,617 -> 7,584,656 rows, 1.4547% rejected` — **M4-S1's
+plain-Python host rehearsal reproduced to the row and to four decimals**, by the
+same code in a container, on a kind node, reading a staged volume. That is what
+the data-delivery decision was FOR: `taxi_mlops` reads `data/...` in a pod exactly
+as it does on the laptop, which is the property that makes an on-cluster number
+comparable to a host number at all.
+
+### Defects/Surprises
+- **`make pipeline` printed `ok  run … completed; six stages on-cluster` over a
+  DEAD run** (gotcha **#59**, and the worst thing I found). `flyte run --follow`
+  **exits 0 when the run it followed FAILED**. Every other signal agreed with the
+  green line — exit code 0, a run name parsed out of the output, a readable
+  outputs blob from `flyte get io`. The only difference was that blob's CONTENT:
+  `ActionOutputs(o0=None)`, because a failed workflow returns nothing. Fixed with
+  a POSITIVE assertion on the artifact the pipeline exists to produce (the outputs
+  must carry a `"decision"`), which is strictly stronger than a phase check — and
+  it then caught the next three distinct failures on sight instead of painting
+  them green. Gotcha #51's question asked of a checker that was minutes old.
+- **F-023's diagnosis was right and one of its recorded probes was impossible.**
+  Probe 1 paid immediately: the client never BUILDS an upload URL, it PUTs to a
+  `signed_url` the SERVER mints — which explains M4-S2's most confusing
+  observation, that setting `FLYTE_AWS_ENDPOINT` "did not change the symptom". Of
+  course not; nothing client-side can change a URL the server already signed.
+  Probe 2 ("point both sides at `<node-ip>:30900`, one name both can resolve") has
+  **no answer on this machine**: from WSL `172.19.0.3:30900` → 000 and even the
+  apiserver at `172.19.0.3:6443` → 000, because kubectl reaches the cluster
+  through a docker-PUBLISHED loopback port (`127.0.0.1:35553`). A session
+  following the recorded plan in order would have spent its budget disproving it.
+- **F-025 — MLflow refused every in-cluster client, and had since M0.**
+  `403 'Invalid Host header - possible DNS rebinding attack detected'`, mid-fit,
+  from `experiments/get-by-name` — an endpoint that reads like an application
+  fault and is a network-policy one. MLflow 3.x's uvicorn allow-list is derived
+  from an ingress this release deliberately does not have. Latent for four
+  milestones because every client until now was host-side, and a pod cannot use
+  `localhost`. **The first fix broke the host route** (gotcha **#61**): setting
+  `serverAllowedHosts` REPLACES MLflow's default, and the middleware compares the
+  whole Host header **including the port**, so bare hostnames repaired the pod and
+  gave every host-side client the identical 403. Found by two commands that
+  disagreed — `curl -H 'Host: localhost' 127.0.0.1:5000/health` → OK while
+  `curl localhost:5000/api/...` → 403.
+- **Three storage configurations existed and none reached the process that runs
+  our code.** The flyte-binary ConfigMap configures the server, the copilot Secret
+  the sidecar, the values overlay helm — while the Flyte 2 python runtime inside
+  the task container builds its own `flyte.storage.S3` from ITS environment and,
+  unset, fell through to the default AWS credential chain:
+  `PUT http://169.254.169.254/latest/api/token`. A task that ran perfectly and had
+  nowhere to put its result.
+- **Backticks in an unquoted heredoc are command substitution** (gotcha **#60**).
+  The stager pod's own explanatory comments named `tar`, `du` and a docker command
+  in backticks; the shell RAN them and spliced their output into the YAML, which
+  then failed to parse on a line unrelated to the cause. #35 and #53 a third time.
+  The pod is a committed manifest now — which is where the MLOps charter wanted
+  it.
+- **`KPI-10 7917.017%`** — `:.3%` applied to a rate the evaluator already
+  multiplies by 100. Nothing was wrong with the model; the log claimed the
+  pipeline quoted 79× more trips correctly than there were trips.
+- **`tracking.configure`'s docstring had promised something no code ever
+  exercised.** Since M2-S2 it has said "an in-cluster caller (M4's Flyte task)
+  exports the cluster DNS names and needs no code change" — but `load_env` refused
+  on the file's absence before precedence could apply, and the task image contains
+  no `.env` and must not. A missing file is now an empty source; the refusal moved
+  to a value no source supplies; the banner names the source it actually used (it
+  used to print "set from .env" inside a pod that has none). Two new tests pin it.
+
+### Decisions (craft-level, inside scope, recorded per the protocol)
+- **Data reaches tasks on a staged PVC, mounted by subPath.** Full argument in
+  `infra/manifests/flyte-task-data-pvc.yaml`. The rejected option is NAMED:
+  tasks-read-from-MinIO is what M7 will want, and it is not a platform change but
+  a rewrite of `taxi_mlops`'s IO, in the milestone whose premise is that `src/`
+  does not move. Honest cost: this is a single-machine answer and M7 owns
+  revisiting it. subPath and not `/app/data` because that directory holds the
+  committed `data/reference/` lookup tables — one mount over it rebuilds gotcha
+  #58 exactly.
+- **The wiring lives in a named PodTemplate, not in `TaskEnvironment`s.** How a
+  pod reaches MinIO, MLflow and the data is a property of this cluster, not of any
+  task; `pipelines/flyte/workflows.py` carries no endpoint at all, and a task
+  added at M7 inherits everything by naming one string.
+- **The train→evaluate→register seam carries the manifest's CONTENT, not its
+  path.** M4-S1 wrote a path "because at S4 they are separate pods" — and separate
+  pods is exactly why a path cannot travel. Passing the text puts the dependency
+  in the DAG where retry and cache can see it; a shared writable mount would hide
+  it.
+- **`flyte-task-mlflow` is a THIRD copy of the MLflow credential and stays
+  separate from `flyte-task-storage`.** Secrets do not cross namespaces, and the
+  two identities were split at M4-S2 so a leaked orchestrator credential cannot
+  reach the registry's artifacts. Merging them to save a Secret would have undone
+  that quietly.
+
+### Next
+**The FULL-DATA run is DETACHED and running.** Status:
+`automation/runs/m4s4-pipeline-full.status` · log
+`automation/runs/m4s4-pipeline-full.log`. It carries `--then-schedule executor`,
+so **the job schedules the successor — do not schedule one by hand.**
+
+Read the status file FIRST:
+* **DONE** → the numbers are yours. The run's record is
+  `automation/runs/m4-pipeline/pipeline_run.json` (run name, month, image ref,
+  judged flag, the alias read after it). The M4-S4 leg still owed is the
+  **CACHE-HIT RERUN**: re-invoke the identical `make pipeline MONTH=2019-01` and
+  the evidence wanted is a second transcript whose stages read cached/skipped and
+  whose wall-clock is a fraction of run 1. Then M4-S4 is complete and M4-S5 (kill
+  drill, D-003's marts tail task, `verify-m4`) is next.
+* **FAILED** → the log names the stage. Likeliest causes in order: the tree moved
+  and the image tag with it (`ImagePullBackOff` on `taxi-mlops-pipeline:<sha>` →
+  `make image-load`, ~40 s warm, then re-run); the train task hit its 24Gi limit
+  on six months where one month fit easily (the kickoff pre-authorises tuning
+  `train_env`'s resources by observation and recording it — NEVER `--train-months`
+  for a verdict-bearing run, F-008); or MLflow/MinIO wiring, for which
+  `make flyte-hello` is the 3-minute seam check.
+* **KILLED** → nothing was promoted (nothing in this pipeline can promote), the
+  data on the PVC is unharmed, and re-invoking `make pipeline` is safe: every
+  stage is idempotent by M1/M2 construction.
+
+**A full-data run is the FIRST one that can produce a verdict**, and the standing
+law still holds: it runs with no `TRAIN_MONTHS`, so `judge=true`, and the register
+stage returns PROMOTE or REFUSE **as data** with `promoted=false` — the promoting
+branch raises `NotImplementedError` while F-016 is on the PO's desk. `verify-m4`
+will assert the alias unchanged from both ends.
+
+**What else is ready**: the data is already staged (`make stage-data` skips when
+the volume holds the trees); `make flyte-hello` is the cheap health check;
+`docs/pipeline_m4.md` §8 is the same list with more detail.
+
+`@champion` is version **2** and no M4 story may move it. AWAITING_PO carries
+2026-08-18-1 (F-016, non-blocking until M7), 2026-08-16-2 and 2026-08-17-1 — all
+three unchanged and untouched by this session. Chain: **scheduled by the detached
+job, not by me.**
+
+---
+
 ## Session 2026-08-18 (ar) — M4-S3: the image was plausible, and the tests running inside it were what made it real
 
 ### State
