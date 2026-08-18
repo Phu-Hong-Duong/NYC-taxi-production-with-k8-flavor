@@ -213,7 +213,11 @@ echo "$io"
 # cannot be satisfied by a stage that merely printed something (gotcha #51: ask of
 # any self-assertion whether the component could tell if it were false).
 if ! grep -qF -- '"decision"' <<<"$io"; then
-  echo "[pipeline] FAIL: the run produced no verdict — its outputs are '$io'" >&2
+  # ANSI stripped for the failure message only: the CLI draws its output in a box
+  # with colour, and pasting that raw into an error line makes the one thing the
+  # reader needs (o0=None) unfindable in a wall of escape codes.
+  echo "[pipeline] FAIL: the run produced no verdict — its outputs were:" >&2
+  sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$io" >&2
   echo "[pipeline]       (a FAILED run returns o0=None; \`flyte run\` exits 0 either way)" >&2
   exit 1
 fi
