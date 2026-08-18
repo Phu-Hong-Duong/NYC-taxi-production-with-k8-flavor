@@ -103,21 +103,25 @@ json.dump(
                 "doing work"
             ),
             "orchestrator": (
-                "Flyte marks that attempt failed and starts a second one; a NEW "
-                "pod appears, named <run>-<action-id>-1. The attempt suffix is "
-                "part of the pod name, so the retry is visible with `kubectl get "
-                "pods` and does not depend on this script interpreting anything."
+                "a DIFFERENT pod object runs the stage afterwards — same action, "
+                "new uid. REVISED after the drill's first run on 2026-08-18, and "
+                "the original wording is kept beside its refutation in "
+                "automation/runs/m4-kill/attempt1-prediction-wrong/prediction.json. "
+                "It predicted a pod named `<run>-<action>-1`, on the reasoning that "
+                "Flyte encodes the attempt in the pod name and a retry bumps it. "
+                "Observed instead: the k8s plugin RECREATED the pod under the same "
+                "name `-0` with a new uid 31 seconds after the kill, and the run "
+                "finished. The run survived; the assertion was about a naming "
+                "convention. Identity is the property that holds under both."
             ),
             "control_plane_attempts": (
-                ">= 1 for the killed action. REPORTED RATHER THAN ASSERTED, and "
-                "the reason is recorded here BEFORE the run so neither outcome can "
-                "be presented afterwards as the one that was expected: Flyte "
-                "distinguishes USER retries (governed by the task's `retries=`) "
-                "from SYSTEM retries (network, container, k8s — governed by the "
-                "platform). A pod deleted out from under a healthy container is "
-                "plausibly either, and which counter it increments is a property "
-                "of the platform's classification, not of whether the pipeline "
-                "survived. The second pod and the completed run are the assertions."
+                "0 for the killed action, because recreating a pod is not the same "
+                "event as failing an attempt. REPORTED RATHER THAN ASSERTED: which "
+                "counter a deleted pod increments is a property of the platform's "
+                "classification, not of whether the pipeline survived. The USER "
+                "budget (`retries=`) is measured separately and positively, by "
+                "phase 0 — see pipelines/flyte/retry_probe.py, which exists "
+                "BECAUSE this drill turned out not to spend it."
             ),
             "run_outcome": (
                 "the run reaches SUCCEEDED and its outputs carry a `decision` "
@@ -161,6 +165,64 @@ actions_json() {
     "$1" --endpoint "localhost:${READER_PORT}" --project "$PROJECT" --domain "$DOMAIN" \
     --json 2>/dev/null
 }
+
+# --- 2b. PHASE 0: is the declared retry budget real? --------------------------
+# ~90 seconds, in front of a ~20 minute drill, and it exists because the FIRST
+# run of this drill found that it was measuring something else. Deleting a running
+# task pod is survived by the k8s plugin RECREATING that pod — same action, same
+# attempt, `attempts=0` in the control plane — so the kill drill alone says nothing
+# about `retries=`, and the budget workflows.py declares had never been observed
+# doing anything. A number nobody has watched work is a number nobody should rely
+# on.
+#
+# So: one task that raises, carrying the SAME budget by import, run to exhaustion.
+# The run is EXPECTED TO FAIL; the failure is the measurement (the `marts-redteam`
+# inversion). What it proves is both halves at once — the budget is honoured, and
+# it is FINITE, which is the argument for keeping the number small.
+RETRIES_DECLARED="$(sed -n 's/^_STAGE_RETRIES = \([0-9]\+\)$/\1/p' \
+                    "$REPO_ROOT/pipelines/flyte/workflows.py")"
+[[ -n "$RETRIES_DECLARED" ]] || {
+  echo "[kill-drill] FAIL: workflows.py declares no _STAGE_RETRIES to check" >&2; exit 1; }
+note "phase 0: spending the declared budget (retries=$RETRIES_DECLARED) on a task that always fails"
+
+PROBE_LOG="$RUN_DIR/retry_probe.log"
+uv run --project "$REPO_ROOT" flyte --endpoint "localhost:${READER_PORT}" --insecure \
+  run --follow --project "$PROJECT" --domain "$DOMAIN" \
+  "$REPO_ROOT/pipelines/flyte/retry_probe.py" always_fails >"$PROBE_LOG" 2>&1 || true
+PROBE_RUN="$(sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$PROBE_LOG" \
+             | sed -n 's/.*Created Run:[[:space:]]*\([A-Za-z0-9_-]\+\).*/\1/p' | head -1)"
+[[ -n "$PROBE_RUN" ]] || {
+  echo "[kill-drill] FAIL: the retry probe created no run; see $PROBE_LOG" >&2; exit 1; }
+actions_json "$PROBE_RUN" >"$RUN_DIR/retry_probe.actions.json"
+note "phase 0: run $PROBE_RUN"
+
+python3 - "$RUN_DIR/retry_probe.actions.json" "$RETRIES_DECLARED" <<'PY' || exit 1
+import json, sys
+rows = json.load(open(sys.argv[1]))["actions"]
+declared = int(sys.argv[2])
+task = next((r for r in rows if r["short_name"] == "always_fails"), None)
+if task is None:
+    print("[kill-drill] FAIL: the retry probe's run has no always_fails action")
+    raise SystemExit(1)
+ok = True
+if task["attempts"] != declared:
+    print(f"[kill-drill] FAIL: the probe was attempted with attempt index "
+          f"{task['attempts']}, expected {declared} — the budget workflows.py "
+          f"declares is not the budget the platform honours")
+    ok = False
+else:
+    print(f"[kill-drill] ok  the declared budget is REAL: a task that always raises "
+          f"reached attempt index {task['attempts']} (retries={declared}) before the "
+          f"platform stopped")
+if task["phase"] != "FAILED":
+    print(f"[kill-drill] FAIL: the probe ended {task['phase']}; a task that raises on "
+          f"its first line must not succeed, and a probe that passes here measured nothing")
+    ok = False
+else:
+    print("[kill-drill] ok  the budget is FINITE: retries ran out and the run FAILED, "
+          "which is why the number is small rather than generous")
+raise SystemExit(0 if ok else 1)
+PY
 
 # --- 3. launch the pipeline, in the background --------------------------------
 # Through `run_pipeline.sh` and not around it: that script owns the F-026 image
@@ -235,7 +297,17 @@ if [[ "${phase:-}" != "Running" ]]; then
 fi
 TARGET_NODE="$("${KUBECTL[@]}" -n "$NAMESPACE" get pod "$TARGET_POD" \
                -o jsonpath='{.spec.nodeName}' 2>/dev/null || echo unknown)"
-note "pod $TARGET_POD is Running on node $TARGET_NODE — letting it work for ${KILL_AFTER}s"
+# THE POD'S UID, READ BEFORE IT IS KILLED, and it is what the verdict compares
+# against. The first run of this drill asserted on the pod NAME — it expected the
+# replacement to be `…-1`, because Flyte names a task pod
+# `<run>-<action>-<attempt>` and a retry ought to bump the attempt. What actually
+# happened is that the k8s plugin recreated the pod under the SAME name with a new
+# UID and `attempts` stayed 0, so a correct survival was reported as a failed
+# drill. The property that survives both classifications is identity: a DIFFERENT
+# pod object ran this stage after the kill.
+TARGET_UID="$("${KUBECTL[@]}" -n "$NAMESPACE" get pod "$TARGET_POD" \
+              -o jsonpath='{.metadata.uid}' 2>/dev/null || echo unknown)"
+note "pod $TARGET_POD is Running on node $TARGET_NODE (uid $TARGET_UID) — letting it work for ${KILL_AFTER}s"
 sleep "$KILL_AFTER"
 
 # --- 5. the kill --------------------------------------------------------------
@@ -260,11 +332,12 @@ note "run_pipeline.sh exited $pipeline_rc"
 grep -E "^\[pipeline\] (ok|FAIL|@champion)|^\[flyte\] " "$RUN_LOG" | sed 's/^/[kill-drill]   /' || true
 
 # --- 7. what the cluster and the control plane saw ----------------------------
-# The pods are listed by NAME, and the name is the evidence: Flyte names a task
-# pod `<run>-<action>-<attempt>`, so a `-1` next to a `-0` is the retry, said by
-# kubernetes rather than inferred from a log line.
+# Name, phase AND UID. The UID is the one that carries the verdict: a task pod is
+# named `<run>-<action>-<attempt>`, and the platform may either bump the attempt
+# (a new name) or recreate the same attempt (the same name, a new object). Both are
+# a stage that ran again; only the UID says so in both cases.
 ATTEMPT_PODS="$("${KUBECTL[@]}" -n "$NAMESPACE" get pods \
-  -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{"\n"}{end}' \
+  -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{" "}{.metadata.uid}{" "}{.metadata.creationTimestamp}{"\n"}{end}' \
   | grep "^${RUN_NAME}-${TARGET_ACTION}-" || true)"
 echo "$ATTEMPT_PODS" | sed 's/^/[kill-drill]   pod /'
 printf '%s\n' "$ATTEMPT_PODS" >"$RUN_DIR/attempt_pods.txt"
@@ -277,13 +350,15 @@ uv run --project "$REPO_ROOT" python "$REPO_ROOT/scripts/flyte_run_actions.py" \
 # --- 8. the verdict -----------------------------------------------------------
 set +e
 python3 - "$RUN_DIR" "$RUN_NAME" "$TARGET_ACTION" "$KILL_STAGE" "$TARGET_POD" \
-         "$TARGET_NODE" "$KILL_AT" "$pipeline_rc" "$MONTH" "$TRAIN_MONTHS" <<'PY'
+         "$TARGET_NODE" "$KILL_AT" "$pipeline_rc" "$MONTH" "$TRAIN_MONTHS" \
+         "$TARGET_UID" "$RETRIES_DECLARED" "$PROBE_RUN" <<'PY'
 import json, pathlib, re, sys
 
 run_dir = pathlib.Path(sys.argv[1])
 run_name, action_id, stage, pod, node, kill_at = sys.argv[2:8]
 pipeline_rc = int(sys.argv[8])
 month, train_months = sys.argv[9], sys.argv[10]
+killed_uid, retries_declared, probe_run = sys.argv[11], int(sys.argv[12]), sys.argv[13]
 
 actions = json.loads((run_dir / "actions.json").read_text())["actions"]
 by_stage = {(r["short_name"] or "main"): r for r in actions}
@@ -292,6 +367,7 @@ pods = [ln.split() for ln in (run_dir / "attempt_pods.txt").read_text().split("\
 attempt_suffixes = sorted(
     {int(m.group(1)) for m in (re.search(r"-(\d+)$", p[0]) for p in pods) if m}
 )
+replacements = [p for p in pods if len(p) > 2 and p[2] != killed_uid]
 transcript = (run_dir / "pipeline.log").read_text()
 
 verdicts = []
@@ -308,15 +384,18 @@ check(target.get("cache_status") in {"CACHE_POPULATED", "CACHE_MISS", "CACHE_DIS
       f"so nothing was killed and this drill tested nothing. Use a month these stages "
       f"have never seen.")
 
-# THE ASSERTION THE DRILL EXISTS FOR, and it is made by kubernetes: a second
-# attempt's pod. Flyte encodes the attempt in the pod name, so this needs no
-# interpretation of a status field whose semantics vary by failure class.
-check(max(attempt_suffixes, default=-1) >= 1,
-      f"a SECOND attempt pod exists: {', '.join(p[0].rsplit('-', 1)[1] for p in pods)} "
-      f"(attempt suffixes {attempt_suffixes}) — the orchestrator re-ran '{stage}' "
-      f"after the kill",
-      f"only attempt(s) {attempt_suffixes} ever existed for '{stage}': the pod was "
-      f"deleted and no retry was started")
+# THE ASSERTION THE DRILL EXISTS FOR, and it is made by kubernetes: a pod object
+# that is NOT the one that was killed ran this stage. Identity, not name — the
+# first run of this drill asserted a `…-1` pod and went red on a run that had
+# survived perfectly, because the platform recreated the same attempt under the
+# same name with a new UID. Both classifications are "the stage ran again"; only
+# the UID is true under both.
+check(replacements,
+      f"a DIFFERENT pod object ran '{stage}' after the kill: "
+      f"{', '.join(f'{p[0]} (uid {p[2][:8]}…, created {p[3]})' for p in replacements)} "
+      f"— the killed pod was uid {killed_uid[:8]}…",
+      f"every pod for '{stage}' is still the one that was killed (uid "
+      f"{killed_uid[:8]}…): the pod was deleted and nothing replaced it")
 
 check(target.get("phase") == "SUCCEEDED",
       f"'{stage}' ended SUCCEEDED despite losing its pod mid-work",
@@ -346,6 +425,15 @@ check(not bad,
 
 record = {
     "run_name": run_name,
+    "retry_budget": {
+        "declared_in_workflows_py": retries_declared,
+        "probe_run": probe_run,
+        "note": (
+            "phase 0 proved the budget by exhausting it on a task that always "
+            "raises; the kill below is survived by pod RECREATION, which does not "
+            "spend it. Two different mechanisms, both measured."
+        ),
+    },
     "month": month,
     "train_months": [m for m in train_months.split(",") if m],
     "sampled": bool(train_months),
@@ -353,9 +441,20 @@ record = {
     "target_action": action_id,
     "killed_pod": pod,
     "killed_pod_node": node,
+    "killed_pod_uid": killed_uid,
     "killed_at": kill_at,
-    "attempt_pods": [{"pod": p[0], "phase": p[1] if len(p) > 1 else ""} for p in pods],
+    "attempt_pods": [
+        {
+            "pod": p[0],
+            "phase": p[1] if len(p) > 1 else "",
+            "uid": p[2] if len(p) > 2 else "",
+            "created": p[3] if len(p) > 3 else "",
+            "is_the_killed_pod": len(p) > 2 and p[2] == killed_uid,
+        }
+        for p in pods
+    ],
     "attempt_suffixes": attempt_suffixes,
+    "replacement_pods": [p[0] for p in replacements],
     "control_plane_attempts": target.get("attempts"),
     "target_duration_s": round(target.get("duration_ms", 0) / 1000.0, 1),
     "pipeline_exit": pipeline_rc,

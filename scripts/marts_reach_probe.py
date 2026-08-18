@@ -56,7 +56,8 @@ def main() -> int:
             "        \"select pg_size_pretty(pg_total_relation_size('marts.trips_clean'))\"",
             "    ).fetchone()",
             "    kpis = conn.execute('select count(*) from marts.monthly_kpis').fetchone()",
-            "print('PROBE-OK', who, 'trips_clean total size', size[0], 'monthly_kpis rows', kpis[0])",
+            "print('PROBE-OK', who, 'trips_clean total size', size[0],",
+            "      'monthly_kpis rows', kpis[0])",
         ]
     )
 

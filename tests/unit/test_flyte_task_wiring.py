@@ -476,18 +476,32 @@ def test_the_kill_drill_refuses_a_cached_target_stage():
     assert "runs in no pod" in text
 
 
-def test_the_kill_drill_launches_through_the_runner_and_never_around_it():
+def test_the_kill_drill_launches_the_pipeline_through_the_runner_and_never_around_it():
     """One definition of "running this pipeline".
 
     `run_pipeline.sh` owns the F-026 image check, the PVC precondition, the alias
     read-back and the positive verdict assertion. A drill with its own launch path
-    would be a second copy of all four, and the copy is always the one that drifts.
+    for the PIPELINE would be a second copy of all four, and the copy is always the
+    one that drifts.
+
+    The drill does launch exactly one run directly — phase 0's retry probe, which
+    is a bare failing task with none of those concerns. So the check is on WHICH
+    workflow file the drill hands to `flyte run`, not on whether it ever calls it:
+    an earlier version asserted the string "flyte run" was absent and passed only
+    because the invocation happens to be split across two lines, which is a check
+    that had already stopped checking.
     """
     text = KILL_DRILL.read_text()
     assert "scripts/run_pipeline.sh" in text
-    launcher_free = text.replace("`flyte run --follow`", "").replace("`flyte run`", "")
-    assert "flyte run" not in launcher_free, (
-        "the kill drill launches its own run instead of going through the runner"
+    assert "pipelines/flyte/retry_probe.py" in text, "phase 0's probe is no longer run"
+    # `workflows.py` is allowed to appear, but only as something the drill READS:
+    # phase 0 greps `_STAGE_RETRIES` out of it so the probe checks the number this
+    # repo declares rather than a number the drill restates.
+    mentions = [m.start() for m in re.finditer(r"pipelines/flyte/workflows\.py", text)]
+    assert len(mentions) == 1, f"workflows.py is named {len(mentions)} times in the drill"
+    assert "sed" in text[max(0, mentions[0] - 200):mentions[0]], (
+        "the drill hands workflows.py to something other than sed — the pipeline "
+        "itself must be launched through run_pipeline.sh"
     )
 
 
