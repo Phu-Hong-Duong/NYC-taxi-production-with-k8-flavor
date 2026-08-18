@@ -52,6 +52,10 @@ metadata:
   namespace: flyte
 template:
   spec:
+    volumes:
+      - name: taxi-data
+        persistentVolumeClaim:
+          claimName: taxi-data
     containers:
       - name: default
         # Required by the PodTemplate schema and never used: the API server
@@ -65,6 +69,52 @@ template:
             value: "http://minio.platform.svc.cluster.local:9000"
           - name: FLYTE_AWS_ACCESS_KEY_ID
             value: "flyte"
+          # --- how a task reaches MLflow (M4-S4) --------------------------------
+          # `taxi_mlops.training.tracking.configure()` takes an already-exported
+          # environment variable over the config file, and configs/train.yaml says
+          # so in its own comment ("in-cluster callers (M4's Flyte tasks) override
+          # this"). This is that override. The checked-in defaults are the HOST
+          # routes (localhost:5000 / localhost:9000), which inside a pod are the
+          # pod's own loopback — the same split horizon as F-023, one layer up.
+          # The image carries no `.env` (M4-S3), so without these the train stage
+          # would fall back to a config default that cannot resolve.
+          - name: MLFLOW_TRACKING_URI
+            value: "http://mlflow.mlflow.svc.cluster.local:5000"
+          # The tracking server does NOT proxy artifacts
+          # (infra/helm/mlflow/values.yaml: proxiedArtifactStorage false), so the
+          # CLIENT writes to MinIO itself — gotcha #5. A task that has the tracking
+          # URI and not this one logs metrics happily and 404s on the model.
+          - name: MLFLOW_S3_ENDPOINT_URL
+            value: "http://minio.platform.svc.cluster.local:9000"
         envFrom:
+          # TWO identities in one pod, deliberately. `flyte-task-storage` is
+          # Flyte's own MinIO user, which may touch `flyte-data` (task inputs and
+          # outputs); `flyte-task-mlflow` is MLflow's, which may touch
+          # `mlflow-artifacts` (models and their signatures). They were separated
+          # at M4-S2 so a leaked orchestrator credential could not reach the
+          # registry's artifacts, and merging them here to save a Secret would
+          # quietly undo that.
           - secretRef:
               name: flyte-task-storage
+          - secretRef:
+              name: flyte-task-mlflow
+        # --- the data, mounted by SUBPATH and not at `/app/data` ----------------
+        # Three mounts rather than one, and the reason is a trap M4-S3 already
+        # paid for once (gotcha #58). `/app/data` in the image is not empty: it
+        # holds `data/reference/` — zone centroids, the TLC lookup, the pinned
+        # shapefile, the holiday table — the committed lookup layer
+        # `taxi_mlops.features` reads. Mounting the PVC at `/app/data` would MASK
+        # all of it, producing an image that imports every module perfectly and
+        # cannot build a feature. Mounting the three data trees individually
+        # leaves `data/reference` as the image shipped it, which is also the only
+        # way it stays pinned by git.
+        volumeMounts:
+          - name: taxi-data
+            mountPath: /app/data/raw
+            subPath: raw
+          - name: taxi-data
+            mountPath: /app/data/processed
+            subPath: processed
+          - name: taxi-data
+            mountPath: /app/data/rejected
+            subPath: rejected

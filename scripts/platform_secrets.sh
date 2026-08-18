@@ -202,5 +202,13 @@ apply_secret platform minio-flyte-user \
 # dies uploading its outputs to `http://169.254.169.254/latest/api/token`.
 apply_secret flyte flyte-task-storage \
   "FLYTE_AWS_SECRET_ACCESS_KEY=$FLYTE_S3_SECRET_KEY"
+# The MLflow identity a task pod logs runs and writes model artifacts with
+# (M4-S4). A THIRD copy of the same value, and the duplication is the design:
+# Secrets do not cross namespaces, so `mlflow/mlflow-s3` cannot be read from
+# `flyte`. Deliberately NOT the flyte identity above — the two were separated at
+# M4-S2 so a leaked orchestrator credential cannot reach the registry's
+# artifacts, and one shared key in the task pod would undo that quietly.
+apply_secret flyte flyte-task-mlflow \
+  "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
 
-echo "[secrets] 10 secrets converged from $ENV_FILE (no values printed, by design)"
+echo "[secrets] 11 secrets converged from $ENV_FILE (no values printed, by design)"

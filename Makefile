@@ -106,7 +106,7 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam pipeline pipeline-local verify-m4
+.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam pipeline pipeline-local stage-data verify-m4
 MONTH ?= 2019-01
 image-build: ## build the task image only; the cluster is not touched (M4-S3)
 	@bash scripts/image_build_load.sh --build-only
@@ -122,8 +122,10 @@ deploy-flyte: ## Flyte on kind: databases via D-002, blob store in the existing 
 	@bash scripts/deploy_flyte.sh
 flyte-console: ## forward the Flyte API to localhost:8090 (port-forward, NOT a declared route — see scripts/flyte_console.sh for why)
 	@bash scripts/flyte_console.sh
-flyte-hello: ## BLOCKED (F-023): reaches the control plane, fails uploading the code bundle to MinIO — see docs/platform_flyte_m4.md §5
+flyte-hello: ## two tasks on-cluster, the second consuming the first's output through MinIO (F-023 closed at M4-S4)
 	@bash scripts/flyte_hello.sh
+stage-data: ## put the DVC-pinned data trees on the PVC task pods mount (M4-S4; RESTAGE=1 forces, DRY_RUN=1 previews)
+	@bash scripts/stage_pipeline_data.sh
 pipeline-local: ## rehearse the six-stage graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1)
 	@uv run python pipelines/tasks.py --month $(MONTH)
 pipeline: ## full workflow for MONTH=$(MONTH) on-cluster

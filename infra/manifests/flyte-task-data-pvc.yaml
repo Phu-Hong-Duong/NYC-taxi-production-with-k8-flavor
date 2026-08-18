@@ -1,0 +1,65 @@
+# flyte-task-data-pvc.yaml — how the pipeline's DATA reaches a task pod (M4-S4).
+#
+# THE DECISION, and the two options it was chosen against (M4 kickoff, S4: "data
+# reaches tasks the honest way for THIS cluster … executor's craft call, recorded
+# with the trade-off").
+#
+# The trip data lives on the host under `data/`, DVC-pinned. It is NOT in the task
+# image and must not be (M4-S3: the image contains what git contains — 1.1 MB of
+# committed lookup tables, no trip data). `kind extraMounts` would be the obvious
+# answer and is FORBIDDEN: it is a kind-config edit, and a kind-config edit means
+# `kind delete` + `kind create`, which since M2 would destroy the only copy of the
+# MLflow registry. Same reason the local-registry pattern was deferred at D-001.
+#
+# Option considered and rejected — TASKS READ FROM MinIO (`s3://`). It is the
+# option M7's scheduled runs would eventually want, and it is rejected HERE for a
+# specific reason rather than a vague one: every path in `taxi_mlops.data` and
+# `taxi_mlops.training` is a local filesystem path, so this option is not a
+# platform change at all — it is a rewrite of the data layer's IO, in the
+# milestone whose entire premise is that `src/` does not move (ADR-001; the six
+# stages "ONLY wrap existing entrypoints, no logic moves"). Cost of NOT choosing
+# it, stated honestly: this PVC is a single-machine answer, and the day the
+# pipeline runs somewhere with more than one node's worth of data, it has to be
+# revisited. That day is M7's, and it now has a name.
+#
+# Option chosen — A PVC, STAGED ONCE, MOUNTED READ-WRITE INTO EVERY TASK POD.
+# `taxi_mlops` keeps reading `data/...` exactly as it does on the laptop, so the
+# in-pod code path and the host code path are the same code path — which is the
+# property that makes an on-cluster number comparable to a host number at all.
+#
+# WHAT LIVES ON IT AND WHY BOTH TREES. `data/raw` (800 MB, sha256-pinned) is the
+# pipeline's real input: the ingest stage re-derives its month from it in-cluster,
+# which is what makes the stage a stage rather than a file copy. `data/processed`
+# (988 MB) and `data/rejected` (27 MB) are staged too because TRAIN is not
+# parametrized by month the way ingest is — it fits the six train months named in
+# configs/train.yaml and scores against val and test, so a full-data run needs all
+# eight months present no matter which one the run was asked for.
+#
+# THE STORAGE CLASS IS `standard` (rancher.io/local-path), which is ReadWriteOnce
+# and `WaitForFirstConsumer`. Both matter: the volume binds to whichever node
+# first mounts it (the stager), and the PV then carries a nodeAffinity that pins
+# every later task pod to that node automatically — no scheduling hints needed
+# here, and none should be added, because the scheduler already knows. RWO is not
+# a constraint the six stages feel: they run in sequence, and RWO permits many
+# pods on the ONE node the volume is bound to.
+#
+# Staged by `make stage-data` (scripts/stage_pipeline_data.sh), never by hand.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: taxi-data
+  namespace: flyte
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # 1.82 GB of data today (raw 800M + processed 988M + rejected 27M) with room
+  # for the ingest stage to rewrite a month in place and for M7 to add months.
+  # local-path does not support expansion (`ALLOWVOLUMEEXPANSION false`), so the
+  # only way to grow this is delete-and-restage — which is cheap (the source is
+  # DVC-pinned on the host) and is why the number is generous rather than tight.
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: standard
