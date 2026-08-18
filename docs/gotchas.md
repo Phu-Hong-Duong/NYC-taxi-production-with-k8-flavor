@@ -855,3 +855,27 @@ the seed line are earned by THIS project.
     touching its threshold — the two are different questions and only one of them
     is about the bar.
 
+64. **A protobuf answers `getattr` for its own fields only — so a misspelled
+    field name is not an error, it is a confident default.** `flyte_run_actions.py`
+    collected `int(getattr(status, "attempt", 0) or 0)`. The message
+    (`flyteidl2.workflow.run_definition_pb2.ActionStatus`) calls that field
+    **`attempts`**, plural. Nothing raised, nothing warned, and the reader reported
+    `attempts: 0` for every action of every run it was ever pointed at — including
+    the cache drill's recorded evidence — because `0` is exactly what an
+    un-retried action should say. It surfaced only when something was SUPPOSED to
+    be non-zero: a task with `retries=2` that raises on its first line still read
+    `attempts: 0` while kubernetes had a pod named `…-a0-2` and the server said
+    `attempts: 3`. This is gotcha #59's family one layer down — a signal
+    consistent with success no matter what happened — and the defence is the same
+    shape: pin the reader against the message's own DESCRIPTOR, so the test fails
+    on the next typo in the next field rather than on this one only (F-027).
+
+65. **`--follow` follows the LOG STREAM, and the stream ends when the first
+    attempt's container exits.** `flyte run --follow` on a task with retries
+    returned after **7 seconds** with the action still `RUNNING` and two retries
+    still to come — so a check that read the action's state the moment the CLI
+    returned saw `attempts=0, phase=RUNNING` and reported that the declared retry
+    budget was not being honoured. It was; the observation was early. Sibling of
+    #59 (`--follow` also exits 0 for a run that FAILED): the CLI's return is not a
+    statement about the run's outcome OR about its completeness. Poll the server
+    for a terminal phase and assert on that.

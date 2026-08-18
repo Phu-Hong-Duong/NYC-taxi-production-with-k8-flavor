@@ -188,6 +188,35 @@ _ENV_VARS = {"TAXI_PIPELINE_IMAGE": _IMAGE_REF, "TAXI_DATA_PIN": _DATA_PIN}
 # wrong answer served fast. Rule 2 costs `register` its cache — see its docstring.
 _STAGE_CACHE = flyte.Cache(behavior="auto", salt=_DATA_PIN)
 
+# THE RETRY BUDGET, and what a retry is allowed to mean here (M4-S5).
+#
+# A retry is a fresh attempt at a stage whose ATTEMPT failed — a pod evicted, a
+# node pressured, a container killed. It is not a second opinion about a number.
+# Two properties make it safe to attach one to every stage of this pipeline:
+#
+#   1. EVERY STAGE IS IDEMPOTENT, and each was proved so by an earlier story
+#      rather than assumed here. `ingest` re-derives a month from sha256-pinned
+#      raw and M1-S2's `make rebuild-proof` showed the outputs byte-identical
+#      (16/16 at M2-S1); `validate` and `evaluate` only read; `build_features`
+#      is the one transform path and holds no state; `train` re-fits from the
+#      same data with the same config; `register` reads the live registry and,
+#      under M4's `--no-promote` law, writes nothing at all.
+#   2. THE PROGRAM'S ONE "NO" IS A RETURN VALUE, NOT AN EXCEPTION. M4-S1 decided
+#      that a refused challenger is a SUCCESSFUL run of a working gate, so
+#      `register` returns the verdict as data and never raises. That decision is
+#      what makes this line safe: there is no code path by which a retry could
+#      re-run a refusal until it turned into a promotion, because a refusal is
+#      not a failure and never reaches the retry machinery.
+#
+# TWO, not more. A stage that fails twice in a row on this cluster is failing for
+# a reason another attempt will not fix, and a generous budget converts a
+# systematic fault into a slow success — the train stage is 31 minutes, so
+# `retries=5` would be two and a half hours of hiding it. `train`'s honest cost is
+# stated where it is paid: a killed attempt leaves its MLflow run behind (see the
+# kill drill, docs/pipeline_m4.md §13), because the run is minted at fit start and
+# the pod that would have closed it is gone.
+_STAGE_RETRIES = 2
+
 # The light stages: read a manifest, report a verdict. Nothing loads a dataframe.
 light_env = flyte.TaskEnvironment(
     name="taxi-pipeline-light",
@@ -228,7 +257,7 @@ train_env = flyte.TaskEnvironment(
 # whole design, including why the data is mounted by subPath.
 
 
-@data_env.task(cache=_STAGE_CACHE)
+@data_env.task(cache=_STAGE_CACHE, retries=_STAGE_RETRIES)
 async def ingest(month: str) -> str:
     """Re-derive one month from the sha256-pinned raw parquet. Idempotent.
 
@@ -248,7 +277,7 @@ async def ingest(month: str) -> str:
     return result.processed_path
 
 
-@data_env.task(cache=_STAGE_CACHE)
+@data_env.task(cache=_STAGE_CACHE, retries=_STAGE_RETRIES)
 async def validate(month: str, ingested: str) -> int:
     """Re-read what ingest wrote and put it back through the OUTPUT contract.
 
@@ -269,7 +298,7 @@ async def validate(month: str, ingested: str) -> int:
     return result.rows
 
 
-@data_env.task(cache=_STAGE_CACHE)
+@data_env.task(cache=_STAGE_CACHE, retries=_STAGE_RETRIES)
 async def build_features(month: str, validated: int) -> int:
     """Build the configured feature set through the ONE feature path.
 
@@ -288,7 +317,7 @@ async def build_features(month: str, validated: int) -> int:
     return result.rows
 
 
-@train_env.task(cache=_STAGE_CACHE)
+@train_env.task(cache=_STAGE_CACHE, retries=_STAGE_RETRIES)
 async def train(train_months: str, judge: bool, featured: int) -> str:
     """Fit the floors and the challenger, score them, ask the gate. Promote NEVER.
 
@@ -320,7 +349,7 @@ async def train(train_months: str, judge: bool, featured: int) -> str:
     return manifest
 
 
-@light_env.task(cache=_STAGE_CACHE)
+@light_env.task(cache=_STAGE_CACHE, retries=_STAGE_RETRIES)
 async def evaluate(manifest: str) -> str:
     """Report what the ONE evaluator measured. Compute nothing (gotcha #15)."""
     from pipelines import tasks
@@ -345,7 +374,7 @@ async def evaluate(manifest: str) -> str:
     return manifest
 
 
-@light_env.task(cache="disable")
+@light_env.task(cache="disable", retries=_STAGE_RETRIES)
 async def register(manifest: str) -> str:
     """The gate's verdict, as the pipeline's output. A REFUSE is not a failure.
 
@@ -387,7 +416,7 @@ async def register(manifest: str) -> str:
     )
 
 
-@light_env.task(cache="disable")
+@light_env.task(cache="disable", retries=0)
 async def main(month: str = "2019-01", train_months: str = "", judge: bool = True) -> str:
     """ingest -> validate -> build_features -> train -> evaluate -> register.
 
@@ -398,6 +427,14 @@ async def main(month: str = "2019-01", train_months: str = "", judge: bool = Tru
     refuses a sampled run that asks for a verdict, in the one place that owns that
     rule, and a second copy of it in an orchestrator wrapper is exactly the kind
     of duplicated law this program keeps deleting.
+
+    **AND `retries=0`, which is the one stage that gets none.** A parent retry
+    re-invokes the children, and the children that already succeeded would come
+    back from the cache in milliseconds — so the only thing a parent attempt can
+    actually re-run is the child that just exhausted its OWN budget, at three
+    times the cost and for the same answer. Worse, it would print a second and
+    third failure for one fault, which is how an incident report stops naming the
+    stage that broke. The stages carry the budget; the graph does not.
 
     **UNCACHED ON PURPOSE, for a reason that has nothing to do with correctness.**
     A cached parent would be a perfect cache hit and useless evidence: the rerun

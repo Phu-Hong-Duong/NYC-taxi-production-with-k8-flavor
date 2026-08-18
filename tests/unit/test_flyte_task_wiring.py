@@ -360,3 +360,195 @@ def test_the_runner_refuses_an_image_older_than_the_source_it_would_run():
     )
     assert "exit 3" in text, "the drift refusal needs its own exit code"
     assert "IMAGE_DRIFT_OK" in text, "the waiver must exist and must announce itself"
+
+
+# --- M4-S5: the retry budget, and the drill that spends it --------------------
+
+KILL_DRILL = REPO / "scripts" / "pipeline_kill_drill.sh"
+RUNNER = REPO / "scripts" / "run_pipeline.sh"
+
+
+def _retries_arg(call: ast.Call | None) -> str | None:
+    """What a task decorator says about retries: a literal, a name, or None."""
+    if call is None:
+        return None
+    for kw in call.keywords:
+        if kw.arg == "retries":
+            if isinstance(kw.value, ast.Constant):
+                return str(kw.value.value)
+            if isinstance(kw.value, ast.Name):
+                return kw.value.id
+    return None
+
+
+def test_every_pipeline_task_declares_its_retry_budget_explicitly():
+    """Same rule as the cache: no stage may INHERIT how many times it is retried.
+
+    The SDK's default is 0 today. A stage that says nothing therefore has a retry
+    policy that is a fact about the pinned `flyte` version rather than about this
+    repo — and unlike the cache, the difference is invisible until the day a pod
+    dies, which is the day nobody is watching.
+    """
+    tasks = _tasks()
+    assert tasks, "no @env.task decorators found — the parser, not the pipeline, broke"
+    silent = [n for n, call in tasks.items() if _retries_arg(call) is None]
+    assert not silent, f"these tasks inherit their retry budget instead of declaring it: {silent}"
+
+
+def test_the_retry_budget_is_one_number_shared_by_every_stage_except_the_parent():
+    """One budget for the work, and none for the graph.
+
+    Per-stage numbers would be five places to check and five places to drift, and
+    the argument for the value — and for it being small — lives beside the
+    constant. `main` is the deliberate exception at 0: a parent attempt can only
+    re-run the child that just exhausted its own budget, for the same answer at
+    three times the cost, while printing three failures for one fault.
+    """
+    budgets = {name: _retries_arg(call) for name, call in _tasks().items()}
+    assert budgets.pop("main") == "0", (
+        f"the parent declares retries={budgets.get('main')}; a retried graph "
+        f"multiplies one fault into several reports of it"
+    )
+    assert set(budgets.values()) == {"_STAGE_RETRIES"}, budgets
+    match = re.search(r"^_STAGE_RETRIES = (\d+)$", WORKFLOWS.read_text(), re.M)
+    assert match, "workflows.py no longer defines _STAGE_RETRIES as a plain int"
+    count = int(match.group(1))
+    assert 1 <= count <= 3, (
+        f"retries={count}: a generous budget turns a systematic failure into a slow "
+        f"success — the train stage is ~31 minutes, so each extra attempt is half an "
+        f"hour of hiding it"
+    )
+
+
+def test_a_refusal_is_a_return_value_and_therefore_cannot_be_retried():
+    """The property that makes a retry budget safe on the stage holding the gate.
+
+    M4-S1 decided that a refused challenger is a SUCCESSFUL run of a working gate,
+    so `register` returns its verdict as data. That is what stops a retry from ever
+    re-running the program's one "no": a refusal never reaches the retry machinery,
+    because it is not a failure. If this stage ever starts raising on a decision,
+    this test is what says the retry budget above needs re-arguing.
+    """
+    tree = ast.parse(WORKFLOWS.read_text())
+    register = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)) and node.name == "register"
+    )
+    raises = [n for n in ast.walk(register) if isinstance(n, ast.Raise)]
+    assert not raises, (
+        "the register stage raises; a raised refusal would be retried like an "
+        "infrastructure failure"
+    )
+
+
+def test_the_action_reader_asks_for_fields_the_proto_actually_has():
+    """F-027, pinned against the message definition rather than against a string.
+
+    `getattr(status, "attempt", 0)` on a protobuf message does not raise — it
+    returns the default — so a misspelled field name becomes a plausible zero. That
+    is exactly what happened: the reader asked for `attempt`, `ActionStatus` calls
+    it `attempts`, and every run this program has ever inspected was recorded with
+    `attempts: 0`, including the cache drill's committed evidence. Nothing was
+    wrong except the number nobody had a reason to doubt.
+
+    So this test reads the field names OFF THE PROTO and requires every field the
+    reader pulls out of a status to be one of them. A test written against the
+    literal "attempts" would go green on the next typo in the next field.
+    """
+    pb2 = pytest.importorskip("flyteidl2.workflow.run_definition_pb2")
+    real = {f.name for f in pb2.ActionStatus.DESCRIPTOR.fields}
+    source = (REPO / "scripts" / "flyte_run_actions.py").read_text()
+    asked = set(re.findall(r'getattr\(\s*(?:action\.pb2\.)?status,\s*"(\w+)"', source))
+    assert asked, "the reader no longer pulls any status field by name"
+    assert asked <= real, (
+        f"the reader asks {sorted(asked - real)} of ActionStatus, which has "
+        f"{sorted(real)} — a protobuf answers getattr with a default, so this "
+        f"reads as a confident zero rather than as an error"
+    )
+
+
+def test_the_kill_drill_writes_its_prediction_before_it_kills():
+    """The gameday discipline, pinned by ORDER and not by presence.
+
+    A prediction written after the observation is a description. The check is
+    positional on purpose: "the script mentions a prediction" stays true if somebody
+    moves the write below the kill, which is exactly the edit that would hollow it
+    out (gotcha #50's shape).
+
+    Both anchors are EXECUTABLE lines, not prose. The first draft compared the
+    substrings "prediction written" and "delete pod" and went red on this script's
+    own header comment, which explains the kill three paragraphs before performing
+    it — gotcha #53 for the fourth time, caught here by a test instead of at 3am.
+    """
+    text = KILL_DRILL.read_text()
+    write_line = re.search(r'^python3 - "\$PREDICTION"', text, re.M)
+    kill_line = re.search(r'^"\$\{KUBECTL\[@\]\}".*delete pod "\$TARGET_POD"', text, re.M)
+    assert write_line and kill_line, "the drill no longer writes a prediction or no longer kills"
+    assert write_line.start() < kill_line.start(), (
+        "the prediction is written after the kill — that is a description of what "
+        "happened, not a pre-registration of what was expected"
+    )
+    assert "BEFORE the kill" in text
+
+
+def test_the_kill_drill_refuses_a_cached_target_stage():
+    """A cached stage runs in NO POD, so a drill against one kills nothing and still
+    goes green. This refusal is the mirror of the cache drill's "run 1 executed no
+    stage", and both exist because a drill that cannot fail proves nothing."""
+    text = KILL_DRILL.read_text()
+    assert "cache_status" in text, "the drill no longer inspects the target's cache status"
+    assert "CACHE_POPULATED" in text
+    assert "runs in no pod" in text
+
+
+def test_the_kill_drill_launches_the_pipeline_through_the_runner_and_never_around_it():
+    """One definition of "running this pipeline".
+
+    `run_pipeline.sh` owns the F-026 image check, the PVC precondition, the alias
+    read-back and the positive verdict assertion. A drill with its own launch path
+    for the PIPELINE would be a second copy of all four, and the copy is always the
+    one that drifts.
+
+    The drill does launch exactly one run directly — phase 0's retry probe, which
+    is a bare failing task with none of those concerns. So the check is on WHICH
+    workflow file the drill hands to `flyte run`, not on whether it ever calls it:
+    an earlier version asserted the string "flyte run" was absent and passed only
+    because the invocation happens to be split across two lines, which is a check
+    that had already stopped checking.
+    """
+    text = KILL_DRILL.read_text()
+    assert "scripts/run_pipeline.sh" in text
+    assert "pipelines/flyte/retry_probe.py" in text, "phase 0's probe is no longer run"
+    # `workflows.py` is allowed to appear, but only as something the drill READS:
+    # phase 0 greps `_STAGE_RETRIES` out of it so the probe checks the number this
+    # repo declares rather than a number the drill restates.
+    mentions = [m.start() for m in re.finditer(r"pipelines/flyte/workflows\.py", text)]
+    assert len(mentions) == 1, f"workflows.py is named {len(mentions)} times in the drill"
+    assert "sed" in text[max(0, mentions[0] - 200):mentions[0]], (
+        "the drill hands workflows.py to something other than sed — the pipeline "
+        "itself must be launched through run_pipeline.sh"
+    )
+
+
+def test_the_runner_streams_the_follow_transcript_instead_of_buffering_it():
+    """Regression pin, M4-S5.
+
+    Capturing `flyte run --follow` into a command substitution holds the entire
+    transcript until the command exits — so for the 31 minutes of a full-data run it
+    exists nowhere anybody can read, which is the absence docs/pipeline_m4.md §9 had
+    to recover from the server after the fact. The kill drill made it load-bearing:
+    it cannot delete a pod belonging to a run it cannot name, and the name appears
+    only in that output.
+    """
+    text = RUNNER.read_text()
+    buffered = re.search(r"out=\"[$][(][^)]*flyte[^)]*run", text)
+    assert buffered is None, (
+        "the follow output is captured into a variable again; nothing can read it "
+        "while the run is still going"
+    )
+    assert "FOLLOW_LOG=" in text
+    assert "run --follow" in text
+    assert re.search(r"--train_months[^\n]*\n[^\n]*FOLLOW_LOG", text), (
+        "the flyte run invocation no longer redirects to the follow log"
+    )
