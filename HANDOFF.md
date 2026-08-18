@@ -1,5 +1,190 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (ar) — M4-S3: the image was plausible, and the tests running inside it were what made it real
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLOps** — charter read
+(`docs/org/ROLES.md` §MLOps; its refusals include hand-typed `psql` and manual
+deploys — nothing in this story touched a database, and every build, load and
+check went through a `make` target). Boot reads: CLAUDE.md · HANDOFF (aq) ·
+`docs/milestones/M4_KICKOFF.md` · AWAITING_PO.
+
+**M4-S3 COMPLETE — PR #22 merged (merge commit `6a43498`), reachable from
+origin/main.** All four Do-items green, both debt rows closed with evidence, one
+new finding found and closed in the same session. Two stories remain in M4
+(S4, S5).
+
+**Staleness check before anything**: cluster 3/3 Ready v1.36.1 (age 28h), every
+platform pod Running (flyte ×3, minio, postgres, mlflow, metabase),
+`automation/STOP` absent, tree clean at `6ab0497`, no detached job pending.
+Reality matched (aq)'s Next; nothing to reconcile.
+
+**The statefulness law held.** No `kind delete`/`create`, no structural
+kind-config edit (the only change there is a comment replacing the `TODO(M4)`
+with D-001's decision), no new hostPort. `@champion` read after everything:
+**version 2, run `92b73bd4f77d4a05b92472bfcfb3cccf`, versions [1, 2]** —
+unchanged. `make ports`: `4 free, 6 held by us, 0 foreign`.
+
+### Done (each with the command and what it printed)
+- **`make image-load` — the task image on every node.**
+  `taxi-mlops-pipeline:82bd2cc`, base `python:3.12.14-slim-trixie@sha256:2c941e86…`
+  (tag AND digest), uv 0.12.5 by digest, `uv sync --frozen`, `libgomp1` as a real
+  package, non-root uid 1000. **737 MiB content / ~1,898 MB unpacked**, built in
+  352 s cold, `kind load` in 25–28 s, then **read back with the nodes' own tool**:
+  `ok mlops-taxi-{worker2,control-plane,worker}: sha256:abe090c28e55…`.
+  **Idempotence proved by re-running it**: all three nodes printed
+  `(unchanged — idempotent re-load)`. `DRY_RUN=1` prints the exact tag it would
+  build and `nothing was built, nothing was loaded`.
+- **`make image-smoke` → GREEN 10/10**, every check INSIDE the container, nothing
+  inferred from the Dockerfile: `libgomp1 14.2.0-19 install ok installed` ·
+  `libgomp.so.1 => /lib/x86_64-linux-gnu/libgomp.so.1` (a system path, not a
+  wheel) · `openmp_status() -> (True, 'system libgomp.so.1')` **on the first
+  line** · `python -m taxi_mlops.training.openmp_probe` → one line, **no
+  `[openmp]` announcement anywhere** · lightgbm 4.7.0 / xgboost 3.4.1 / flaml
+  2.6.0 / pandas 3.0.5 / sklearn 1.9.0 / pyarrow 25.0.1 / mlflow 3.15.1 / flyte
+  all import clean · **215 host / 215 image packages, 0 disagreements** ·
+  `tests/unit` **471 passed, 6 skipped IN-IMAGE** ·
+  `pipelines.tasks.validate('2019-01')` → **7,584,656 rows, contract_year 2019,
+  20 columns** through the output contract · `/app/.venv/lib/openmp` absent and no
+  `libgomp.so.1` SONAME anywhere in the venv.
+- **`make image-smoke-redteam` → GREEN 6/6.** Bind-mounts an **empty file** over
+  `/lib/x86_64-linux-gnu/libgomp.so.1` in ONE `--rm` container — image, nodes and
+  cluster untouched, the same break-the-pointer shape as `verify-m2-redteam`
+  deleting an alias — and all three D-004 checks flip: probe → `(False, 'not
+  loadable yet; a vendored copy exists at …scikit_learn.libs/libgomp-e985bcbb.so.1.0.0')`,
+  the shim ANNOUNCES itself, `/app/.venv/lib/openmp` APPEARS; then a fresh
+  container from the same image reads `absent` again. Exit code inverted like
+  `marts-redteam`'s: a check that stays green under the mask FAILS the drill.
+- **D-001 CLOSED** — `kind load docker-image`, decided in
+  `docker/DECISION-D001-image-delivery.md` with both options' honest costs. The
+  local-registry pattern is named as the better END-STATE, deferred **with a date**
+  (the next PO-sanctioned rebuild — the same event that owes Flyte its declared
+  8080 route) and **a trigger** (image churn). `infra/kind/kind-config.yaml`'s
+  `TODO(M4)` is replaced by a pointer to the note. The forgetting hazard gotcha #3
+  names is closed by construction: the tag is the git short sha, so a stale node
+  is a MISSING image (loud `ImagePullBackOff`) rather than older bytes under the
+  right name; `:latest` is refused by a test.
+- **D-004 CLOSED** by in-container evidence AND by evidence that the evidence can
+  fail (above). The shim REMAINS as the laptop path; AWAITING_PO 2026-08-17-1 is
+  still open, still non-blocking, and now carries a dated note saying exactly that.
+- **F-024 filed and CLOSED the same session** (see Defects).
+- 477 unit tests green on the host (**+20**), ruff clean across
+  `src tests pipelines scripts`. CI `lint-test` pass 1m13s. Ledgers: D-001 and
+  D-004 closed, F-024 filed+closed. Field note written. CLAUDE.md: new section,
+  **4 pin rows**, **3 command rows**, gotchas **#56/#57/#58**.
+
+### Defects/Surprises
+- **`chown -R` at the end of a Dockerfile duplicated the entire venv: a 1.7 GB
+  layer costing 139 s** (gotcha **#57**). The tutorial ordering — build as root,
+  chown, then `USER` — was built and MEASURED first. Creating the user before
+  installing anything produced the same image at **736 MiB content instead of
+  1408**. It hid because `docker image inspect --format '{{.Size}}'` is the number
+  everyone quotes, and under Docker 29's containerd store that is the CONTENT
+  size, not the unpacked one; the script now prints both, which is the only reason
+  this was seen at all.
+- **`.dockerignore` excluded 1.1 MB of COMMITTED lookup tables, and the in-image
+  unit suite is what said so** (gotcha **#58**). Excluding `data/` wholesale is
+  right for the 2.0 GB DVC trees and wrong for `data/reference/` — zone centroids,
+  the TLC lookup, the pinned `taxi_zones.zip`, the holiday table — which is the
+  lookup layer `taxi_mlops.features` reads. Result: an image that imports every
+  module perfectly and cannot build a feature. **28 failed + 10 errors against 452
+  passed** on the first in-image run. The same draft's `.env.*` glob ate the
+  committed `.env.example`, taking `test_marts.py` with it. Rule adopted and
+  asserted both ways: *the image contains what git contains*. **What caught it was
+  running the project's own tests inside the artifact — not reading the
+  Dockerfile.**
+- **Three wrong REDs from the verifier's own bugs — gotcha #55, paid a third and a
+  fourth time** (now also **#56**): an inner `bash -lc` expanded `${Package}` to
+  empty, so `dpkg-query` printed blanks and the check blamed the image; a bare
+  `ldconfig` is `command not found` for a non-root user (`/sbin` is not on uid
+  1000's PATH); and asserting the library resolves under `/usr/lib` is RED on a
+  correct Debian image, where `/lib` is a symlink and ldconfig prints the former.
+  **The tell every time: the checks measuring BEHAVIOUR (2, 3, 8) stayed green.**
+  Then `bash -lc` bit once more in the drill — a LOGIN shell rebuilds PATH and
+  drops `/app/.venv/bin`, so `python` became the base interpreter, the resulting
+  `ModuleNotFoundError` went to /dev/null, and the drill reported "the shim left no
+  directory": a red verdict about the wrong thing.
+- **F-024, and its shape matters more than its size.** Making the shim fire (with
+  `python -c`) exposed that it can never re-exec that form: CPython keeps no `-c`
+  source string, so `_relaunch_argv()` returned `["-c"]` and `execv` ran `python
+  -c` with no code. Observed: `[openmp] … re-executing once with LD_LIBRARY_PATH
+  set` immediately followed by `Argument expected for the -c option`. **The visible
+  story was "the fix worked", followed by noise about argument parsing.** Present
+  since M2-S2 and reproduced ON THE HOST, so four milestones old; blast radius is
+  ad-hoc probes only, because every real entry point is `python -m` or a file (both
+  pinned by tests since M2-S2). Fixed by REFUSING that form before any mutation,
+  naming the three ways out, plus `src/taxi_mlops/training/openmp_probe.py` as the
+  `-m`-runnable probe the smoke and the drill now both use.
+- **Four of `test_task_image.py`'s assertions went red on the prose in my own
+  comments** — gotcha **#53**, biting a third time (`":latest" not in text` matches
+  the comment explaining why `:latest` is not used). Fixed with a `code_only()`
+  helper that strips whole-line comments before asserting; the helper's own first
+  user then failed for the same reason (it sliced on a `# ---` rule that
+  `code_only` had just removed).
+- **Only containerd's digest is stable across identical rebuilds.** Observed across
+  two consecutive builds of a byte-identical tree: docker's manifest-list digest
+  changed (`bf82ba68…` → `3e5066b4…`) because BuildKit's provenance attestation
+  carries build metadata, while containerd's config digest stayed `65c9b2b49163…`
+  on all three nodes. An idempotence check written against docker's id would report
+  a change on every rebuild and mean nothing by it — which is why the comparison is
+  node-id against node-id. Both ids are in the manifest.
+
+### Decisions (craft-level, inside scope, recorded per the protocol)
+- **The tag is the git short sha, `-dirty` when the tree is not clean.** k8s pulls
+  `IfNotPresent` for any non-`:latest` tag and `kind load` writes into containerd
+  BY TAG, so a mutable tag is what makes "some nodes hold last week's bytes under
+  this week's name" possible at all. Honest cost: the tag moves with every commit,
+  so M4-S4 must read the current ref from `automation/runs/m4-image/image.json` (or
+  just re-run `make image-load`) rather than hardcoding one.
+- **pytest is installed in the image on purpose.** A separate test stage would
+  prove the suite passes in an image that is not the one that ships. Cost: a few MB
+  of dev dependencies in a task image, against the 241 MB of `nvidia-nccl-cu13`
+  that xgboost drags in and never loads (noted, not fought — slimming is out of
+  M4's scope).
+- **The image contains no data, and the smoke bind-mounts the host's DVC-pinned
+  tree READ-ONLY to run one real stage.** That bind mount is NOT an answer to how
+  data reaches tasks on-cluster — that is M4-S4's decision (MinIO or a staged PVC);
+  `kind extraMounts` is a config edit and forbidden for the same reason the
+  registry pattern is.
+- **Debian's python, not a uv-managed one**, so the image carries one interpreter
+  rather than two. Honest non-identity recorded and PRINTED by the smoke: the host's
+  3.12.14 is `[Clang 22.1.3]`, the image's is `[GCC 14.2.0]`. What determines the
+  numbers is the dependency graph, and check 5 proves that identical at 215/215.
+
+### Next
+**M4-S4 — the pipeline on-cluster (role:MLOps A, MLE R) — and it is STILL BLOCKED
+ON F-023**, exactly as (aq) left it. Nothing in M4-S3 touched the Flyte API, so
+the block is unchanged: the CLI cannot upload a run's code bundle because the blob
+store is one MinIO with two names. **F-023 records the next probes in order** and
+`docs/platform_flyte_m4.md` §5 holds the full trail — the wall was recorded at 5
+attempts by a PREVIOUS session, so a fresh session arrives with a full attempt
+budget and should spend it on those recorded probes rather than restarting the
+search. ADR-002's fallback (`flyte-binary` v1.5.1 / appVersion 1.16.0) stays armed
+with its trigger unmet: deployment succeeded, so swapping charts to fix a URL is
+not yet licensed. Note the datum in F-023 — **1.x ships
+`storage.signedUrl.stowConfigOverride` for exactly this split-horizon case and 2.x
+renders no equivalent**, which is either the reason to fall back or the hint for
+where 2.x hides it.
+
+**What S4 inherits from this story**, so it does not re-derive it: an image on all
+three nodes under an immutable tag (current ref in
+`automation/runs/m4-image/image.json`, which also holds BOTH image ids and the node
+list); `imagePullPolicy` must be `IfNotPresent` (kubernetes' default for a
+non-`:latest` tag) or `Never`, and `ImagePullBackOff` on
+`taxi-mlops-pipeline:<sha>` almost always means the tree moved and the tag with it
+→ re-run `make image-load`; the image contains `pipelines/`, `src/`, `configs/`,
+`analytics/`, `data/reference/` and **no** trip data and **no** `.env`.
+**M4-S5 is blocked transitively** (its kill drill and `verify-m4` both read a
+completed pipeline run) — but its D-004 leg is ready to wire: `make image-smoke` is
+the check and `make image-smoke-redteam` is what keeps it honest.
+
+No detached job is running. `@champion` is version 2 and no M4 story may move it.
+AWAITING_PO carries F-016 (non-blocking until M7) and 2026-08-17-1 (now annotated:
+D-004 is closed, the laptop shim is not). Chain:
+`automation/next_session.sh executor 120`.
+
+---
+
 ## Session 2026-08-18 (aq) — M4-S2: the lifeboat launched before the new tenant, the guard that stopped telling us to shoot our own registry, and a hello that never landed
 
 ### State

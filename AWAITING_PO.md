@@ -68,6 +68,22 @@ unanswered by the M6→M7 boundary, M7 proceeds with the gate AS PRE-REGISTERED
 
 ## 2026-08-17-1 · raised by EXEC/Opus (M2-S2) · NON-BLOCKING: one apt package would delete a workaround from the training path
 
+*(EXEC note 2026-08-18, M4-S3 — **debt D-004 is now CLOSED and this entry is
+still open and still yours.** The M4 task image installs `libgomp1` as a real apt
+package, and `make image-smoke` proves the shim never fires inside it —
+`openmp_status()` returns `(True, 'system libgomp.so.1')`, no `[openmp]` line, no
+`/app/.venv/lib/openmp`, with `make image-smoke-redteam` proving those checks can
+go red. So the CONTAINER path is fixed by construction. What is unchanged is
+**this laptop**: every host-side `make train`, `make ablation`, `make tune` still
+re-execs through the shim, and the one-liner below still deletes that. One new
+datum in favour of running it, found by M4-S3's drill: the shim could never
+re-exec a `python -c` invocation at all — it announced success and then printed
+`Argument expected for the -c option` (**F-024**, present since M2-S2, fixed this
+session to refuse legibly instead). That is the shape of failure a workaround in a
+hot path produces: a message about argument parsing for a problem about a shared
+library. Option A is unchanged, still ~20 seconds, still recommended, and the
+chain remains unaffected either way.)*
+
 **Not a direction fork — a friction report with a fix only your hands can apply**
 (same class as 2026-08-16-2 below, and equally non-blocking: M2-S2 shipped, the
 model trained, nothing is parked).
