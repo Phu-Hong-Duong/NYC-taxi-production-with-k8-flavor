@@ -46,6 +46,22 @@ M3-S1 added two more, both of them refusals the gate could not make before:
    while its margin ROSE from 7.07% to 16.85%. A sampled transcript looks better,
    not worse, which is the shape of trap that gets promoted.
 
+M4-S1 added a seventh, and it is about what the gate is allowed to CLAIM:
+
+7. **The gate does not assert that the holdout is untouched by SELECTION — the
+   caller does** (F-018). `verdict_lines()` used to print "untouched by training
+   and by selection" on every verdict. Training-purity the gate can vouch for:
+   the split is named in config and `decide()` refuses metrics from any other
+   one. Selection-purity is a property of the *caller's* process — of how the
+   challenger being judged was chosen — and this module cannot see it. It was
+   false for the whole of M3-S5: `scripts/bakeoff_m3.py` ranked five contenders
+   by their HOLDOUT MAE and handed the winner to this function, which then
+   printed that the holdout had not been used for selection. So the strong claim
+   must now be EARNED: `holdout_untouched_by_selection` defaults to False and
+   prints the weaker sentence that is always true. A caller that knows it chose
+   its challenger without reading the holdout says so explicitly, and is the one
+   accountable for saying it.
+
 The decision is a pure function of `Metrics` objects and the config: no MLflow,
 no filesystem, no cluster. Promotion — the part with side effects — is
 `taxi_mlops.training.registry`'s, and it only ever runs on a decision that
@@ -322,11 +338,22 @@ def decide(
     )
 
 
-def verdict_lines(decision: Decision) -> str:
-    """The transcript. Both numbers, on a pass and on a refusal alike."""
+def verdict_lines(decision: Decision, *, holdout_untouched_by_selection: bool = False) -> str:
+    """The transcript. Both numbers, on a pass and on a refusal alike.
+
+    `holdout_untouched_by_selection` is the caller's claim, not the gate's
+    (property 7 / F-018). Pass True only when the challenger being judged was
+    chosen without reading a single number from this split — a single-challenger
+    run (`make train`) may; a bake-off that ranks its arms on the holdout may
+    not, and a bake-off that ranks on val should say where it ranked instead.
+    The default is the weaker sentence because a claim nobody made must not be
+    printed as if somebody had.
+    """
+    purity = "untouched by training and by selection" if holdout_untouched_by_selection else (
+        "untouched by training (the caller states how its challenger was selected)"
+    )
     lines = [
-        f"[gate] holdout   : {decision.split} — {decision.n:,} rows, untouched by "
-        "training and by selection",
+        f"[gate] holdout   : {decision.split} — {decision.n:,} rows, {purity}",
         f"[gate] challenger: {decision.challenger:<28} KPI-09 {decision.challenger_mae:.4f} min"
         f"  ·  KPI-10 {decision.challenger_within:.3f}%",
         f"[gate] floor     : {decision.floor:<28} KPI-09 {decision.floor_mae:.4f} min"

@@ -5,7 +5,7 @@ TUNING, or from both?* — and four cells of that square were measured on VAL by
 M2-S2, M3-S3 and M3-S4. None of them has faced the gate. This is where the fifth
 row (the floor) joins them and where all five are read on the TEST month, once.
 
-Three properties are deliberate:
+Four properties are deliberate:
 
 1. **NOTHING IS RE-FITTED HERE.** Every model contender is LOADED from the MLflow
    artifact its val number describes — `scripts/automl_refit.py` says so in its
@@ -26,7 +26,16 @@ Three properties are deliberate:
    (M2-S4) applied to four contenders instead of one, and it is what makes the
    test numbers below evidence rather than output.
 
-3. **All five verdicts are printed, the floor's against itself included.** A gate
+3. **The winner is chosen on VAL, and the holdout only pronounces on it** (F-018,
+   repaired M4-S1). The ranking happens inside the val pass, before the holdout
+   split has been loaded — see `SELECTION_SPLIT`. Until M4-S1 this script ranked
+   five contenders by their holdout MAE and then gated the winner on the same
+   month, while `gate.verdict_lines` printed that the holdout was "untouched by
+   … selection". The M3 record stands as it was measured (val and holdout
+   rankings were identical, so the same model wins either way); the method is
+   what changed, and it changed before M7's retrain loop inherited it.
+
+4. **All five verdicts are printed, the floor's against itself included.** A gate
    that is only ever shown passing is a gate nobody has watched work. The floor
    as its own challenger is an expected REFUSE at exactly +0.00%, and printing it
    is the cheapest possible demonstration that the bar is a bar.
@@ -66,6 +75,24 @@ DEFAULT_OUT = "automation/runs/m3s5/bakeoff.json"
 #: they were RECORDED at. These are recorded at full float64, so they may be
 #: compared there.)
 VAL_REPRODUCTION_TOLERANCE = 1e-9
+
+#: The split the WINNER is ranked on (F-018, filed by REV at the M3 review and
+#: repaired at M4-S1). Until M4-S1 this was the holdout: five contenders were
+#: read on the test month and the lowest took the alias, while the gate's own
+#: transcript printed that the holdout was "untouched by … selection". Two
+#: reasons that is wrong and one reason it was cheap to fix:
+#:   * the max-of-five on the holdout biases the promoted verdict upward by an
+#:     amount nobody measured — the same structure `gate.py` property 1 refuses
+#:     one level up when it will not judge on val;
+#:   * it decided a real identity — the two v2 arms finished 0.0022 min (0.069%)
+#:     apart on test, far below any selection-free resolution;
+#:   * and every contender already had a val number in hand, re-verified here to
+#:     1e-9, so ranking there costs nothing. `docs/bakeoff_m3.md` §3 records that
+#:     the val and holdout rankings were IDENTICAL in M3-S5, which is why the
+#:     champion survives the defect in the method that chose it.
+#: The holdout keeps exactly one job: pronouncing the verdict on what was chosen
+#: elsewhere.
+SELECTION_SPLIT = "val"
 
 
 @dataclass(frozen=True)
@@ -221,11 +248,16 @@ def main() -> int:
     loaded[0].predictor = floor.predict
     loaded[0].name = floor.name
 
-    # ---- val: the admission check. Nothing is judged on val (gate.py property 1);
-    # it is read to prove that the artifact loaded is the artifact that was
-    # measured, and a contender that fails is not admitted to the test table.
+    # ---- val: the admission check AND the ranking (F-018). Nothing is JUDGED on
+    # val (gate.py property 1); it is read to prove that the artifact loaded is
+    # the artifact that was measured, and a contender that fails is not admitted
+    # to the test table. Since M4-S1 it is also where the winner is CHOSEN, and
+    # the choice is made inside this loop — before the holdout split has been
+    # loaded, let alone scored. That ordering is the fix: not "we rank on val by
+    # convention" but "no holdout number exists yet to rank on".
     sets_needed = tuple(sorted({spec.feature_set for spec in CONTENDERS}))
     all_metrics = []
+    winner: Loaded | None = None
     for split in ("val", holdout):
         splits = _load_split(split, data_cfg, train_cfg, sets_needed, args.smoke_rows)
         y = splits[sets_needed[0]].y.to_numpy()
@@ -242,6 +274,8 @@ def main() -> int:
         del splits
         if split == "val":
             _assert_val_reproduced(loaded, smoke)
+            winner = _select_winner(loaded, holdout)
+    assert winner is not None  # the val branch above always runs first
 
     print("\n[evaluate] every number below came from taxi_mlops.training.evaluate")
     print("[evaluate] (gotcha #15: nothing else in this program may report one)\n")
@@ -268,15 +302,24 @@ def main() -> int:
             print("[gate] this row is the FLOOR judged against ITSELF — an expected REFUSE "
                   "at +0.00%, printed because a gate only ever shown passing is a gate "
                   "nobody has watched work")
-        print(gate.verdict_lines(decision))
+        # False, deliberately, and not because this bake-off ranks on the holdout
+        # (since M4-S1 it does not): FIVE contenders are read on this month and
+        # only one of them is the run's subject, so "untouched by selection" is
+        # not a sentence this transcript may print unqualified. The bake-off
+        # states its own selection basis on the line below instead (F-018).
+        print(gate.verdict_lines(decision, holdout_untouched_by_selection=False))
         for caveat in item.spec.caveats:
             print(f"[gate] caveat    : {caveat}")
+    print(f"[gate] selection : the winner was chosen on VAL before any {holdout} number "
+          f"existed — {SELECTION_SPLIT} MAE, ranked above")
     print("=" * 78)
 
-    winner = min(loaded[1:], key=lambda item: item.metrics[holdout].mae)
     _print_square(loaded, holdout)
-    print(f"\n[bakeoff] WINNER on {holdout} by KPI-09: {winner.spec.label} "
-          f"({winner.name}) at {winner.metrics[holdout].mae:.4f} min · "
+    print(f"\n[bakeoff] WINNER (selected on {SELECTION_SPLIT}): {winner.spec.label} "
+          f"({winner.name}) — {SELECTION_SPLIT} KPI-09 {winner.metrics[SELECTION_SPLIT].mae:.4f} "
+          f"min")
+    print(f"[bakeoff] its {holdout} numbers, measured AFTER it was chosen: KPI-09 "
+          f"{winner.metrics[holdout].mae:.4f} min · "
           f"{winner.metrics[holdout].within_tolerance_rate:.3f}% KPI-10")
     print(f"[bakeoff] its verdict: {decisions[winner.spec.label].verdict}")
 
@@ -535,6 +578,30 @@ def _print_declaration(train_cfg: dict[str, Any]) -> None:
           "(what is SERVING; it moves only as part of a promotion)")
 
 
+def _select_winner(loaded: list[Loaded], holdout: str) -> Loaded:
+    """Rank the model contenders on `SELECTION_SPLIT` and name the winner (F-018).
+
+    Called from inside the split loop, on the val iteration, so that it is
+    physically impossible for a holdout number to influence it: none has been
+    measured yet. `loaded[0]` — the floor — is excluded from the ranking because
+    it is the BAR, not a candidate to serve; it still gets a holdout number and a
+    verdict of its own further down, which is how the gate is watched refusing
+    something.
+    """
+    models = loaded[1:]
+    ranked = sorted(models, key=lambda item: item.metrics[SELECTION_SPLIT].mae)
+    print(f"\n[bakeoff] SELECTION on {SELECTION_SPLIT} — the holdout has not been loaded "
+          "yet, let alone scored (F-018)")
+    for position, item in enumerate(ranked, start=1):
+        print(f"  {position}. {item.spec.label:<14} KPI-09 "
+              f"{item.metrics[SELECTION_SPLIT].mae:.4f} min  ·  KPI-10 "
+              f"{item.metrics[SELECTION_SPLIT].within_tolerance_rate:.3f}%")
+    winner = ranked[0]
+    print(f"[bakeoff] chosen: {winner.spec.label}. The {holdout} month's only job is to "
+          "pronounce a verdict on it.")
+    return winner
+
+
 def _print_square(loaded: list[Loaded], holdout: str) -> None:
     """The arithmetic the 2x2 exists to do: features, tuning, or both?
 
@@ -580,6 +647,12 @@ def _payload(loaded, decisions, winner, train_cfg, floor, train_months, train_ro
             "train_rows": train_rows,
         },
         "winner": winner.spec.label,
+        # F-018: WHERE the winner was ranked, recorded beside who won, so a later
+        # reader of this file never has to infer it from the code that wrote it.
+        # `automation/runs/m3s5/bakeoff.json` — the M3 record — predates this key
+        # and is deliberately NOT regenerated: its absence is the honest marker
+        # of a run that ranked on the holdout.
+        "winner_selected_on": SELECTION_SPLIT,
         "contenders": [
             {
                 "label": item.spec.label,

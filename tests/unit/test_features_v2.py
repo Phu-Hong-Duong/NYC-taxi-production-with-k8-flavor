@@ -500,6 +500,44 @@ def test_month_is_a_join_key_and_never_reaches_the_matrix():
     assert not (set(matrix.columns) & EXCLUDED_COLUMNS)
 
 
+# --------------------------------------------------------------------------
+# F-019 (REV, M3 review): the promoted champion cannot answer a request dated
+# outside the holiday table's years. This is a TRIPWIRE, not a fix — it pins the
+# CURRENT behaviour so M5 changes it deliberately instead of meeting it as a 500
+# from a KServe pod. The decision (extend the table vs a policy for uncovered
+# dates, and degrade-vs-refuse) is M5's, in the PRR minutes.
+# --------------------------------------------------------------------------
+
+
+def test_the_configured_feature_set_refuses_a_request_dated_outside_the_table():
+    """Prevents F-019 going quiet. v2 admitted g1, so the SERVED feature set now
+    needs `is_holiday`; the committed table holds ten rows and all of them are
+    2019. `features/` is the ONE path for training and for serving, so at M5 this
+    is a 500 per quote — and the dossier row that argued for the feature says the
+    opposite ("a calendar is knowable years ahead"). v1 had none of these columns:
+    the dependency entered the served model at M3-S5's promotion.
+
+    The assertion is on the SHAPE of the refusal, not on the year: it must raise
+    loudly and name the table a reader has to edit. If M5 makes uncovered dates
+    legal, this test is the thing that has to be changed on purpose."""
+    configured = load_train_config()["features"]
+    today_shaped = frame([132], [138], month="2026-08")
+
+    with pytest.raises(ValueError) as excinfo:
+        build_features(today_shaped, configured)
+
+    message = str(excinfo.value)
+    assert calendar.HOLIDAY_TABLE in message, "the refusal must name the file to edit"
+    assert "2026" in message and "2019" in message, (
+        "the refusal must say what was asked for and what is covered"
+    )
+
+    # …and the same frame inside the covered years builds the full set, so the
+    # test is about the DATE and not about some other defect in the frame.
+    assert list(build_features(frame([132], [138], month="2019-08"), configured).columns) == \
+        quote_time.feature_names(configured)
+
+
 def test_calendar_near_window_excludes_the_holidays_themselves():
     loaded = calendar.load_calendar()
     assert not (loaded.holidays & loaded.near)

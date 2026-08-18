@@ -88,6 +88,37 @@ rows**, untouched by training and by selection. The floor was fitted on the six
 train months (**43,987,422 rows**, 1,610,050 groups + 46,938 backoff cells); the
 four models were LOADED.
 
+> **CORRECTION — 2026-08-18 (M4-S1, finding F-018, filed by REV at the M3
+> review).** The five words "**and by selection**" in the paragraph above are
+> **FALSE of the run this document reports**, and they are left standing rather
+> than edited so that what was claimed and what was true can both be read. When
+> this bake-off ran, `scripts/bakeoff_m3.py` chose its winner with
+> `min(contenders, key=… metrics["test"].mae)` — the five arms were ranked on
+> the very month the sentence calls selection-free, and `gate.verdict_lines`
+> then printed the same claim on all five verdicts. The holdout was untouched by
+> **training**; it was not untouched by **selection**.
+>
+> **What this costs the result, honestly.** A max-of-five taken on the holdout
+> biases the winner's margin over the floor (+3.33%) upward by an amount nobody
+> measured. And the choice was not academic: the two v2 arms finished **0.0022
+> min apart** (§3, below), so which of them serves was settled on the test
+> month. **What it does not cost**: the identity of the champion. §3's own
+> paragraph — "the val ranking and the test ranking are the same ranking" —
+> reports that auto-on-v2 leads on val as well (3.3823 vs 3.3905), so selecting
+> on val would have chosen the same model. That is why `automation/runs/m3s5/
+> bakeoff.json` and every number in this document **stand as measured and were
+> not re-run**: re-running would spend hours re-litigating verdicts that do not
+> change, and silently rewriting them would destroy the record of a real defect.
+>
+> **What was repaired instead (M4-S1, before M7's retrain loop inherits the
+> shape):** the script now ranks on **val**, inside the val pass, before the
+> holdout split is loaded — so there is no holdout number in existence to rank
+> on — and it records `winner_selected_on` in its JSON. `gate.verdict_lines`
+> no longer asserts selection-purity on its own authority: the claim is a
+> caller-supplied argument that defaults to the weaker, always-true sentence,
+> and a bake-off does not pass it (`gate.py` property 7). Ledger:
+> `ledgers/findings.md` F-018.
+
 | contender | family | trees | test KPI-09 (min) | test KPI-10 | vs floor | vs champion v1 |
 |---|---|---:|---:|---:|---:|---:|
 | **auto-on-v2** — `auto-lgbm-v2` | lgbm | 791 | **3.2403** | 81.577% | **+3.33%** | **+0.63%** |
@@ -114,7 +145,11 @@ failure this program was structured to catch, and it did not occur.
 134 milliseconds** of mean error, 0.069% relative — while artisan v2 is ahead on
 KPI-10 by **0.005 points**. The ranking rule is KPI-09, declared in
 `scripts/bakeoff_m3.py` before any number existed, so the winner is auto-on-v2.
-It is a win, and it is a win of that size; §5 refuses to inflate it.
+It is a win, and it is a win of that size; §5 refuses to inflate it. *(2026-08-18
+correction, F-018: the ranking METRIC was pre-registered, the ranking SPLIT was
+the holdout — see the note in §3. On val the same two arms sit in the same order,
+3.3823 vs 3.3905, so the winner is unchanged; since M4-S1 the script ranks
+there.)*
 
 ## 4. The five gate verdicts
 

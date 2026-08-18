@@ -12,12 +12,16 @@ dangerous half is exercised against a fake that records what was called.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from taxi_mlops.data.config import load_yaml
 from taxi_mlops.training import gate, registry
 from taxi_mlops.training.evaluate import Metrics
 
+REPO = Path(__file__).resolve().parents[2]
 TRAIN_CFG = load_yaml("configs/train.yaml")
 GATE_CFG = TRAIN_CFG["gate"]
 
@@ -360,6 +364,42 @@ def test_both_numbers_are_printed_on_a_pass_and_on_a_refusal_alike(mae, expected
     assert "baseline-group-median" in text
     if expected == "REFUSE":
         assert "Nothing was registered" in text
+
+
+def test_the_selection_purity_claim_must_be_earned_by_the_caller():
+    """F-018 / property 7. The gate can vouch for training-purity — it refuses
+    metrics from any split but the configured holdout. It cannot see how the
+    challenger it was handed was CHOSEN, and for the whole of M3-S5 it printed
+    that claim on behalf of a bake-off that had ranked five arms on this very
+    month. So the strong sentence is now an argument, and the DEFAULT is the
+    weaker one: a claim nobody made must not be printed as if somebody had."""
+    decision = gate.decide(metrics("c", mae=V1_TEST_MAE, within=99.0), floor(), GATE_CFG)
+
+    default = gate.verdict_lines(decision)
+    assert "untouched by training" in default
+    assert "by selection" not in default
+
+    earned = gate.verdict_lines(decision, holdout_untouched_by_selection=True)
+    assert "untouched by training and by selection" in earned
+
+    # Both forms keep the shape `verify-m2` parses out of the committed M2/M3
+    # transcripts — a repaired claim must not orphan the record it was made in.
+    for text in (default, earned):
+        assert re.search(r"holdout\s+: \w+ — [\d,]+ rows", text)
+
+
+def test_the_single_challenger_paths_are_the_ones_that_claim_selection_purity():
+    """Prevents the fix being cosmetic: `make train` and the incumbent red team
+    fit or construct exactly ONE challenger, so they earn the claim; the bake-off
+    ranks contenders and must not. Checked in the source because the alternative
+    is running three cluster-bound commands to read one keyword argument."""
+    run_src = (REPO / "src/taxi_mlops/training/run.py").read_text()
+    redteam_src = (REPO / "scripts/gate_redteam_incumbent.py").read_text()
+    bakeoff_src = (REPO / "scripts/bakeoff_m3.py").read_text()
+
+    assert "verdict_lines(decision, holdout_untouched_by_selection=True)" in run_src
+    assert "verdict_lines(decision, holdout_untouched_by_selection=True)" in redteam_src
+    assert "verdict_lines(decision, holdout_untouched_by_selection=False)" in bakeoff_src
 
 
 # ------------------------------------------------------------------ promotion ---

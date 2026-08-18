@@ -318,7 +318,11 @@ def run(
         )
         print("\n" + "=" * 78)
         print("[gate] PROMOTION GATE — configs/train.yaml: gate (loosening it is a PO fork)")
-        print(gate.verdict_lines(decision))
+        # This command fits ONE challenger and judges it. There is no ranking
+        # step, so nothing here could have read the holdout to choose what to
+        # submit — which is what earns the strong purity claim (F-018,
+        # gate.py property 7). A caller that ranks contenders may not pass True.
+        print(gate.verdict_lines(decision, holdout_untouched_by_selection=True))
         print(
             f"[gate] context   : the FLATTERING floor (baseline-constant-median) is "
             f"{flattering.mae:.4f} min on {holdout} and is NOT the bar — against it "
