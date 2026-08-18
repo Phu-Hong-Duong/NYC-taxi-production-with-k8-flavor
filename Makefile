@@ -114,7 +114,7 @@ deploy-flyte: ## Flyte on kind: databases via D-002, blob store in the existing 
 	@bash scripts/deploy_flyte.sh
 flyte-console: ## forward the Flyte API to localhost:8090 (port-forward, NOT a declared route — see scripts/flyte_console.sh for why)
 	@bash scripts/flyte_console.sh
-flyte-hello: ## run pipelines/flyte/hello.py ON the cluster: two tasks, the second consuming the first's output (M4-S2)
+flyte-hello: ## BLOCKED (F-023): reaches the control plane, fails uploading the code bundle to MinIO — see docs/platform_flyte_m4.md §5
 	@bash scripts/flyte_hello.sh
 pipeline-local: ## rehearse the six-stage graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1)
 	@uv run python pipelines/tasks.py --month $(MONTH)

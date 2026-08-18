@@ -135,7 +135,15 @@ fi
   --namespace "$NAMESPACE" \
   -f "$REPO_ROOT/infra/helm/flyte/values.yaml" \
   -f "$OVERLAY" \
-  --wait --timeout 10m
+  --wait --timeout 20m
+# 20m, not the 10m every other release here uses, and the number was MEASURED
+# rather than guessed: the first install of this chart failed with
+# `Error: context deadline exceeded` while all three pods were healthy — the
+# console image (ghcr.io/unionai-oss/flyteconsole-v2, 99 MB) took **9m49s** to
+# arrive on this connection, so the wait expired ~10 seconds after the container
+# finally started. Nothing was wrong with Flyte, and helm marked the release
+# `failed` anyway. A first install on a fresh clone pulls this image plus the
+# flyte binary's; the timeout has to cover a cold pull, not a warm one.
 
 # `kubectl rollout status` takes one named resource — it has no --selector — so
 # the deployments are enumerated and waited on by name. Enumerating rather than

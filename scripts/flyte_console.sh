@@ -53,22 +53,22 @@ if [[ "$MODE" == "--check" ]]; then
   code=000
   for _ in $(seq 1 20); do
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
-      "http://127.0.0.1:${LOCAL_PORT}/healthcheck" || true)"
+      "http://127.0.0.1:${LOCAL_PORT}/healthz" || true)"
     [[ "$code" == "200" ]] && break
     sleep 2
   done
   if [[ "$code" != "200" ]]; then
-    echo "[flyte-console] FAIL: /healthcheck through the forward returned '$code' (expected 200)" >&2
+    echo "[flyte-console] FAIL: /healthz through the forward returned '$code' (expected 200)" >&2
     sed -n '1,20p' /tmp/flyte-portforward.log >&2 || true
     exit 1
   fi
-  echo "[flyte-console] ok  API answers: GET /healthcheck -> 200 (svc ${SERVICE}:${REMOTE_PORT})"
+  echo "[flyte-console] ok  API answers: GET /healthz -> 200 (svc ${SERVICE}:${REMOTE_PORT})"
   exit 0
 fi
 
 cat <<EOM
 [flyte-console] forwarding the Flyte API to http://127.0.0.1:${LOCAL_PORT}
-[flyte-console]   health:  curl http://127.0.0.1:${LOCAL_PORT}/healthcheck
+[flyte-console]   health:  curl http://127.0.0.1:${LOCAL_PORT}/healthz
 [flyte-console]   the SDK/CLI endpoint for M4-S4's \`make pipeline\`
 [flyte-console] the BROWSER console is not forwarded and would not work if it were
 [flyte-console]   (same-origin SPA; needs an ingress, and no ingress controller

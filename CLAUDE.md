@@ -103,6 +103,10 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | XGBoost | **3.4.1** | 2026-08-17 | `uv add "xgboost>=3"` (M3-S4). The second OpenMP consumer the kickoff named as a risk: **discharged** — it trains under the shim's `LD_LIBRARY_PATH` with no extra work (proved live). It drags **`nvidia-nccl-cu13` 2.31.2 (241 MB)** in as a hard dep on linux — no GPU here, and it is never loaded |
 | psycopg | **3.3.4** (`psycopg[binary]`) | 2026-08-17 | `uv add "psycopg[binary]>=3"` (M3-S4). Optuna's Postgres driver. SQLAlchemy's bare `postgresql://` still means psycopg**2**, so every DSN this repo builds says `postgresql+psycopg://` explicitly (pinned by a test) |
 | **The M3-S4 add touched pandas/numpy not at all** | pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 unchanged | 2026-08-17 | Checked at add time against gotcha #36's silent-downgrade shape. Four packages requested, 12 installed, 1 uninstalled (the project itself, rebuilt) — no core downgrade |
+| Flyte chart | **`flyteorg/flyte-binary` v2.0.42** — and the name inverts the intuition: THIS is the Flyte **2.x** line (unified `flyte-core-components` manager), while `flyteorg/flyte-core`/`flyteorg/flyte` are **1.16.x**. ADR-002's pre-approved fallback is `flyte-binary` **v1.5.1** (appVersion 1.16.0) | 2026-08-18 | `helm search repo flyteorg --versions` (M4-S2), read back with `helm -n flyte list`. Pinned in `scripts/deploy_flyte.sh` beside the fallback version |
+| Flyte server image | `cr.flyte.org/flyteorg/flyte-binary-v2:v2.0.42` | 2026-08-18 | chart-pinned (M4-S2); one Deployment, plus `flyteconnector` (chart default, unused here — left on deliberately, see the values file) |
+| Flyte console image | `ghcr.io/unionai-oss/flyteconsole-v2:latest@sha256:3cea5ec7ea1ebb2d2b392d60988c028ff45965e3a7eecb0e1ba51d7ec81e6cdb` — TAG AND DIGEST, the Metabase precedent | 2026-08-18 | `docker buildx imagetools inspect` (M4-S2). The chart's default is the bare tag `latest`, which is not a pin at all. **99 MB, and it took 9m49s to pull** — which is why `deploy_flyte.sh` waits 20m, not 10m |
+| Flyte SDK / CLI | **`flyte` 2.6.1** (brings `flyteidl2` **2.0.42** — an exact match to the chart) | 2026-08-18 | `uv add "flyte>=2.6,<3"` (M4-S2). **Gotcha #36 checked at add time: 29 packages installed, only the project rebuilt, and pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 · mlflow-skinny 3.15.1 · lightgbm 4.7.0 · xgboost 3.4.1 all unchanged.** The CLI is `flyte` (verb/noun), NOT `pyflyte`/`flytectl` — those are the 1.x tools |
 
 ## The data contract (M1-S1) — where the rules actually live
 Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT
@@ -792,6 +796,51 @@ can never disagree (the port-family twins lesson, applied before it bit).
   repaired script. Nothing re-runs a bake-off, and `verify-m3` §5 REPLAYS the
   recorded verdicts rather than re-running it, so nothing caught it.
 
+## The lifeboat, the holder-aware port guard, and Flyte on the cluster (M4-S2)
+- **`make backup` is the platform's only copy that survives the cluster**, and it
+  ran BEFORE Flyte became the fifth tenant. It **enumerates its targets from the
+  server** — every non-template database, every bucket — because a hardcoded list
+  is a twin of `postgres_databases.sh` and a backup whose target list drifts
+  succeeds, prints a size, and omits what somebody added last month. This story
+  is its own proof: `flyte` and `flyte-data` are covered by the next run because
+  nobody had to remember them. Observed: 5 databases + 105 objects, **1.5 GiB**.
+- **Every dump is proven COMPLETE, host-side, over every byte**: `gzip -t` (CRC)
+  plus pg_dump's own `-- PostgreSQL database dump complete`. Both legs were
+  proven against a **deliberately truncated copy** before being trusted. The
+  first design — `-Fc` + `pg_restore --list` over `kubectl exec -i` — was
+  replaced, not tuned: a custom archive's TOC is at the FRONT, so `--list`
+  succeeds on a file whose tail was never written (gotcha #54), and it hung on a
+  1 MB dump having worked on a 1.2 GB one.
+- **RESTORE IS NOT REHEARSED and every artifact says so** (script header, every
+  `MANIFEST.txt`, the ledger row). It is a lifeboat, not a DR program; the
+  rehearsal is a named M6-gameday candidate. Same-disk limit as the DVC remote.
+- **Honest cost passed to M7**: `marts` is 1.2 GiB and **210 s** of the ~4 minute
+  run and is the ONE database already provably rebuildable from DVC pins
+  (M1-S5's fresh-volume proof); the other four total **377 KiB, under 2 s**, and
+  are the irreplaceable ones. Every database is dumped as the kickoff specifies.
+- **Flyte 2 is `flyteorg/flyte-binary` v2.0.42** — the chart names invert the
+  intuition (`flyte-core`/`flyte` are the 1.16.x line). It needs **ONE** database,
+  not the two the kickoff budgeted: the unified binary reads a single
+  `runs.database`, so D-002 gained one line and held a **fourth** time. Its blob
+  store is the existing MinIO in a NEW bucket under a NEW identity — a leaked
+  orchestrator credential must not reach the registry's artifacts.
+- **The first install failed for a reason that was not Flyte**: `context deadline
+  exceeded` at `--wait --timeout 10m` while all three pods were healthy — the
+  99 MB console image took **9m49s** to pull. Timeout is now 20m with the
+  measurement beside it. The re-run is the idempotence evidence: all three
+  deployments "successfully rolled out" while every pod was **17 minutes old**.
+- **No secret reaches a command line**: the chart renders its DB password and S3
+  key out of VALUES, so the deploy writes a mode-600 temp overlay and deletes it
+  on EXIT. `DRY_RUN=1` mutates nothing, helm upgrades included (gotcha #30).
+- **The hello-workflow does NOT complete — F-023, wall recorded at 5 attempts.**
+  The CLI reaches the control plane (project created, image resolved, bundle
+  built) and dies uploading the bundle: the blob store is ONE MinIO with TWO
+  names, and the client is handed the in-cluster one. Setting the SDK's
+  documented `FLYTE_AWS_ENDPOINT` did not change the symptom. **ADR-002's
+  fallback is NOT executed** — its trigger is "deployment or MLflow interop", and
+  deployment succeeded (`/healthz` 200, helm `deployed`). Next probes, in order,
+  are recorded in the finding so nobody restarts the search.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -799,6 +848,22 @@ Enforced by `make ports` (`scripts/port_precheck.sh`), which checks this family
 PLUS every `hostPort:` in `infra/kind/kind-config.yaml` (adds 8443, the ingress
 TLS mapping). This list and the `PURPOSE` map in that script are twins — change
 both together. Known limit (F-002): `ss` sees only inside the WSL VM.
+**The check now resolves the HOLDER (F-021 CLOSED, M4-S2).** `ss` cannot answer
+"whose?" — a published port is held by docker-proxy, not by the workload — so the
+script reads `docker ps` and keeps the containers whose name starts with the
+cluster name parsed out of the kind config. A busy port published by one of OUR
+node containers prints `held by US — the 'mlops-taxi' cluster is up, which is
+expected` and the check exits **0**; a foreign holder still gets the unchanged
+gotcha #10 refusal at exit 2. Observed live: `10 required port(s): 4 free, 6 held
+by us, 0 foreign`. Both states are pinned by tests that differ ONLY in the
+container name. If `docker` is absent, every busy port reads foreign — the
+pre-F-021 behaviour, which is the safe direction to fail in.
+**Port 8080 is RESERVED, not used (M4-S2).** Flyte gets NO hostPort while the
+cluster is stateful (adding one means a rebuild) and there is no ingress
+controller until KServe at M5, so the console/API is reached with
+`make flyte-console` — a recorded deviation from the declared-route doctrine,
+with its reason, not a drift. The declared route lands at the next PO-sanctioned
+rebuild.
 
 **How a host port reaches a service (M0-S3).** kind publishes host ports at
 cluster-CREATE time only, so the route is declared, never port-forwarded:
@@ -846,6 +911,11 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Gate check M3 | `make verify-m3` | VERIFIED 2026-08-18 (M3-S5): **GREEN 46/46 in 4.7 s, exit 0**, 8 sections — dossier (20 candidates, source + leakage note each, all 3 HIGH-risk rows constrained to TRAIN months) · ablation (5 groups, both deltas, **DR-02's 0.50% bar RE-APPLIED to the table's own numbers reproduces all five verdicts**, 3 drops present, v2 == the survivors) · leakage drill (three numbers parse AND reconcile, `point_in_time=True` still the default, exactly one CALLER may flip it) · tuning (both sniper studies in Postgres at the count their JSON records, 6 PRUNED, the resume drill's kill survived) · **the five bake-off verdicts replayed through `gate.decide` on disk** · the four guards (F-011 both halves, val, flattering floor, F-008) · registry coherent with `bakeoff.json`'s recorded winner · F-013's one home. **Re-fits NOTHING** (M3 cost 12,447 s of fitting) and leaves the registry identical — checked: alias 2, versions [1,2]. No skip flag, no fast mode. Transcript: `docs/verify_m3_transcripts.md` §1 |
 | Prove the M3 gate can go RED | `make verify-m3-redteam` (`bash scripts/verify_m3_redteam.sh`) | VERIFIED 2026-08-18 (M3-S5): rewrites ONE contender's measured KPI-09 in `automation/runs/m3s5/bakeoff.json` (`auto-on-v1` 3.5038 → 3.2000) and leaves its recorded verdict at REFUSE → **RED exit 1**, naming the row AND both verdicts, **the four UNTAMPERED replays still passing** (what separates a replay from a checksum: red on a WRONG number, not on any edit), **44 of 46 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`c4a323ea072a…` before and after) → **GREEN 46/46**. Touches no model, no run, no registry, no study |
 | Rehearse the M4 graph locally (M4-S1) | `make pipeline-local MONTH=2019-01` (`uv run python pipelines/tasks.py --month …`; `--gate` exists only so the F-008 refusal can be watched) | VERIFIED 2026-08-18 (M4-S1): six stages composed on one month, **exit 0** — ingest 7,584,656/7,696,617 rows (1.4547% rejected, tracked tree unchanged in git) · validate re-read the parquet through the 2019 output contract, 20 columns · build_features set **v2**, 24 columns · train `lightgbm-v1` run `27aa90597f61…`, 265.8 s, sampled=True judged=False · evaluate reported the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=False`, CLI exit-code class 3** and `@champion is version 2 — read, never written`. **No orchestrator, no verdict, no result** — one train month against the champion's six (F-008). Transcript: `docs/pipeline_graph_m4.md` §4 |
+| Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS NOT REHEARSED** — said in the header, in every `MANIFEST.txt` and in the ledger; an M6-gameday candidate. Same-disk limit, identical to the DVC remote's |
+| Port pre-check, now holder-aware (F-021, M4-S2) | `make ports` | RE-VERIFIED 2026-08-18 (M4-S2) against the LIVE cluster: `6 port(s) held by US — the 'mlops-taxi' cluster is up, which is expected`, each naming port, purpose and `-> container mlops-taxi-control-plane`, then `OK — 10 required port(s): 4 free, 6 held by us, 0 foreign.` **exit 0** — where it used to refuse and advise stopping the stack that holds the registry. The foreign refusal is UNSOFTENED: two unit tests use the same bound port and the same fake `docker ps`, differing only in the container NAME (`mlops-taxi-control-plane` → exit 0 · `somebody-elses-stack-web-1` → exit 2), and M0-S2's fake-listener red-team (no docker shim) still goes red |
+| Flyte on the cluster (M4-S2) | `make deploy-flyte` (`scripts/deploy_flyte.sh`; `DRY_RUN=1` mutates NOTHING, helm included) | VERIFIED 2026-08-18 (M4-S2): `STATUS: deployed REVISION: 2`, all three deployments rolled out, `[pg-db] flyte: before = role absent, database absent` → `ok flyte owner=flyte` (`5 database(s) converged`). **Idempotence proved by pod AGE**: the re-run reported every deployment rolled out while all three pods were **17 minutes old** — a clean upgrade that restarted nothing. First install FAILED `context deadline exceeded` with all pods healthy (the 99 MB console image took **9m49s** to pull); `--wait` is now 20m with that measurement written beside it. Self-sufficient (re-runs namespaces/secrets/D-002/MinIO, the M1-S5 rule). No secret on a command line — mode-600 overlay deleted on EXIT. Cluster never went down |
+| Reach Flyte from the host (M4-S2) | `make flyte-console` (blocking forward) · `bash scripts/flyte_console.sh --check` (one-shot, tears the tunnel down) | VERIFIED 2026-08-18 (M4-S2): `ok  API answers: GET /healthz -> 200 (svc svc/flyte-flyte-binary-http:8090)`. The path was ASKED of the server, not remembered — `/healthcheck` (the 1.x path) returns 404, `/healthz` and `/readyz` return 200. **A port-forward, not a declared route, and that is recorded**: no hostPort exists for Flyte, adding one means a rebuild the statefulness law forbids, and there is no ingress controller until KServe at M5 — so the browser console is deliberately NOT forwarded (same-origin SPA; it would render and then fail every request) |
+| Hello-workflow on the cluster (M4-S2) | `make flyte-hello` (`scripts/flyte_hello.sh`) | **NOT VERIFIED — BLOCKED, F-023, wall recorded at 5 attempts.** It reaches the control plane and gets far (project `nyc-taxi` created · image `ghcr.io/flyteorg/flyte:py3.12-v2.6.1` resolved, no build · code bundle built) then fails at `Uploading code bundle...` with `ConnectError: [Errno -2] Name or service not known`: the blob store is ONE MinIO with TWO names and the client is handed the in-cluster one. Exporting the SDK's own `FLYTE_AWS_ENDPOINT`/key vars did NOT change it. **ADR-002's fallback is NOT executed** — its trigger is deployment or MLflow interop, and deployment succeeded. Next probes recorded in F-023; full trail in `docs/platform_flyte_m4.md` §5. The Makefile help text says BLOCKED so the target cannot look healthy |
 | Gate check M2 / M3, re-run after the F-018 repair | `make verify-m2` · `make verify-m3` | RE-VERIFIED 2026-08-18 (M4-S1): **GREEN 55/55** and **GREEN 46/46**, both exit 0, **neither verify script touched by the diff** — including verify-m3 §5, which replays the bake-off's five recorded verdicts through `gate.decide` as it exists on disk, and verify-m2 §2, which parses the OLD holdout line out of the committed promotion transcripts (the repaired `verdict_lines` keeps the shape they are parsed with, on both forms of the sentence, pinned by a test) |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
@@ -922,4 +992,12 @@ changes a VALUE leaves the hazard in scope, the fix that changes the ORDER
 removes it — and a regression test built from the real run passes under both
 rules (#52)**; and **two tests went red for finding a module name in a DOCSTRING,
 in one file, minutes apart (#53 — in a repo where prose is load-bearing, a check
-about code structure must parse code)**.
+about code structure must parse code)**. Newest (M4-S2), both about VERIFIERS:
+**a backup's readability check could not detect the truncation it named (a `-Fc`
+archive's TOC is at the front, so `pg_restore --list` passes on a half-written
+file) and hung on a 1 MB dump having worked on a 1.2 GB one — #51's question
+asked of a verifier (#54)**; and **the replacement then went red twice for its
+own reasons: the completion marker is not the LAST line (Postgres 16.11 appends
+`\unrestrict <token>` after it) and `grep -qF "$MARKER"` read the marker's
+leading `--` as a flag — a verifier that fails for its own reasons and blames the
+artifact is #50 one layer down (#55)**.

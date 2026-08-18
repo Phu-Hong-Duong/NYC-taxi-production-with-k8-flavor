@@ -9,6 +9,91 @@ months from now.
 
 ## M4
 
+### M4-S2 — the lifeboat, the guard that stopped telling us to shoot ourselves, and a verifier that could not see the thing it named (2026-08-18, role:MLOps)
+
+**What was built.** Three things and one honest hole. (1) **`make backup`** — the
+platform's first copy that survives the cluster: every database and every MinIO
+bucket, landing outside the repo beside the DVC remote. (2) **F-021 closed** —
+`make ports` resolves who holds a port, so our own running cluster reads as
+`held by US` and exits 0 instead of advising you to stop the stack that holds
+the only copy of the registry. (3) **Flyte 2.0.42 on the cluster**, reachable
+from WSL. And the hole: **the hello-workflow does not complete** — walled at five
+attempts, filed as F-023, with the trail written down so nobody restarts the
+search.
+
+**Why this way.** The backup came FIRST, before Flyte became the fifth tenant of
+the one Postgres, because a lifeboat launched after the new cargo is aboard is a
+lifeboat for a different ship. It **enumerates its targets from the server**
+rather than from a list — every non-template database, every bucket — and this
+story is its own argument: Flyte's `flyte` database and `flyte-data` bucket are
+covered by the next run because nobody had to remember to add them. A backup
+whose target list can drift is worse than no backup, because it succeeds, prints
+a reassuring size, and omits what somebody added last month.
+
+Flyte got **no hostPort**, and that is the interesting choice. Everywhere else in
+this program a route is DECLARED — kind hostPort onto a fixed nodePort, twins
+across two files, checked by a test. But kind publishes host ports at
+cluster-CREATE time only, and since M2 this cluster's PVCs hold the only copy of
+the registry, both Optuna studies and the Metabase app-db. So the doctrine was
+*deferred with a date and a reason* rather than either repealed or obeyed into a
+rebuild: 8080 stays reserved, access is `make flyte-console`, and the declared
+route lands free at the next sanctioned rebuild.
+
+**The concept underneath.** *A verifier deserves the same scepticism as the thing
+it verifies — including the same negative control.* The backup's first
+readability check was `pg_dump -Fc` streamed back through `pg_restore --list`,
+and it was wrong in the way that is hardest to notice: a custom-format archive
+keeps its table of contents at the **front**, so `--list` succeeds happily on a
+file whose tail was never written — which is precisely the truncation the check
+existed to catch. It would have gone green forever on a broken backup. That is
+gotcha #51's question ("could this component tell if it were false?") asked of a
+*checker* rather than a claim, and the answer was no. (It also hung on a 1 MB
+dump after working on a 1.2 GB one, which is its own lesson about building on
+`kubectl exec` stdin.)
+
+The replacement — `gzip -t` over every byte plus pg_dump's own completion
+marker — then went red **twice more for reasons of its own**: the marker is not
+the last line (Postgres 16.11 appends a `\unrestrict` token after it), and
+`grep -qF "$MARKER"` read the marker's leading `--` as an end-of-options flag and
+died with a usage message *while the script announced "the dump was cut short"*.
+Each of those cost a 3.5-minute re-dump of a 13 GB database. A verifier that
+fails for its own reasons and blames the artifact is gotcha #50 one layer down:
+it teaches you to distrust the artifact, and eventually to stop reading the
+check. The fix that mattered was procedural — the final version was proven
+against a **deliberately truncated copy of the real dump** before being wired
+into anything, so "it catches truncation" is an observation and not a hope.
+
+**What was NOT done, and why saying so is the point.** S2's last accept-when leg
+is "ONE hello-workflow runs remotely to completion", and it does not. Five
+attempts, each failing differently and each fix standing, ended at something
+architectural: the blob store is one MinIO with two names, and the CLI — which
+uploads its code bundle directly to object storage — is handed the in-cluster
+one. It would have been easy to call the deployment "green" and let the
+acceptance leg blur; instead the Makefile's own help text for `make flyte-hello`
+says **BLOCKED (F-023)**, because a known-failing target that looks healthy is a
+trap for exactly the person least able to spot it. It was also tempting to fire
+ADR-002's pre-approved fallback and swap to the 1.16.x chart — but that ADR's
+trigger is "Flyte 2.x fights on **deployment or MLflow interop**", and deployment
+succeeded: three pods Running, helm `deployed`, `/healthz` 200, the CLI creating
+projects. Executing a fallback whose condition has not been met would have
+discarded a working control plane to fix a URL. *A pre-approved escape hatch is
+not permission to skip diagnosing which failure you actually have.*
+
+**What to look at.** `scripts/platform_backup.sh` — read the header's two
+paragraphs on why the format changed before reading the code · `scripts/
+port_precheck.sh`'s holder block, and the pair of tests in `tests/unit/
+test_cluster_scripts.py` that differ in exactly one string (the container name) ·
+`infra/helm/flyte/values.yaml`, whose longest comment is about a route it
+deliberately does not create · `docs/platform_flyte_m4.md` §5, the five-attempt
+trail · gotchas **#54** and **#55**.
+
+**What to try yourself.** Truncate a copy of one of the `.sql.gz` files in the
+backup directory and run the two verification legs by hand — then do the same
+against the *old* design (`pg_restore --list` on a `-Fc` dump you truncate) and
+watch it pass. That contrast is the whole field note in thirty seconds. Then run
+`make ports` with the cluster up, stop reading at the sixth line, and notice how
+plausible the old advice sounded.
+
 ### M4-S1 — the winner was picked on the month nobody was allowed to look at, and the fix was one line in the wrong place (2026-08-18, role:MLE)
 
 **What was built.** Three things, in the order the M4 kickoff sequenced them.
