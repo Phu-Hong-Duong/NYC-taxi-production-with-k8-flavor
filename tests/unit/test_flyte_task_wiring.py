@@ -19,6 +19,7 @@ in `docs/pipeline_m4.md` §5.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -32,6 +33,8 @@ STAGER_SCRIPT = REPO / "scripts" / "stage_pipeline_data.sh"
 FLYTE_VALUES = REPO / "infra" / "helm" / "flyte" / "values.yaml"
 SECRETS = REPO / "scripts" / "platform_secrets.sh"
 MLFLOW_VALUES = REPO / "infra" / "helm" / "mlflow" / "values.yaml"
+WORKFLOWS = REPO / "pipelines" / "flyte" / "workflows.py"
+DRILL = REPO / "scripts" / "pipeline_cache_drill.sh"
 
 
 def _yaml(path: Path):
@@ -161,3 +164,173 @@ def test_the_task_pods_mlflow_route_is_the_service_mlflow_actually_allows():
     uri = _env()["MLFLOW_TRACKING_URI"]
     host = uri.split("//", 1)[1]
     assert host in allowed, f"a task pod addresses {host}, which MLflow would refuse"
+
+
+# --- the cache, and the two stages that refuse one (M4-S4, leg 2) --------------
+#
+# All of these parse the AST. `workflows.py` argues its cache design at length in
+# prose, so a check that grepped for the word "cache" would pass on the argument
+# and never look at the decorator — gotcha #53, which cost two red tests in one
+# file for finding a module name in a docstring.
+
+
+def _workflow_tree():
+    return ast.parse(WORKFLOWS.read_text())
+
+
+def _tasks() -> dict[str, ast.Call]:
+    """Every `@<env>.task(...)` in workflows.py, by function name."""
+    found: dict[str, ast.Call] = {}
+    for node in ast.walk(_workflow_tree()):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            call = dec if isinstance(dec, ast.Call) else None
+            attr = call.func if call else dec
+            if isinstance(attr, ast.Attribute) and attr.attr == "task":
+                found[node.name] = call
+    return found
+
+
+def _cache_arg(call: ast.Call | None) -> str | None:
+    """What a task decorator says about caching: a literal, a name, or None."""
+    if call is None:
+        return None
+    for kw in call.keywords:
+        if kw.arg == "cache":
+            if isinstance(kw.value, ast.Constant):
+                return str(kw.value.value)
+            if isinstance(kw.value, ast.Name):
+                return kw.value.id
+    return None
+
+
+def test_every_pipeline_task_declares_its_cache_explicitly():
+    """No stage may INHERIT a caching decision.
+
+    A task that says nothing gets whatever the SDK's default is that release —
+    which makes "is this stage cached?" a question about flyte's version rather
+    than about this repo. Every stage states it, so the answer is always in the
+    diff.
+    """
+    tasks = _tasks()
+    assert tasks, "no @env.task decorators found — the parser, not the pipeline, broke"
+    silent = [name for name, call in tasks.items() if _cache_arg(call) is None]
+    assert not silent, f"these tasks inherit their caching instead of declaring it: {silent}"
+
+
+def test_the_uncached_stages_are_exactly_register_and_main():
+    """Both refusals are deliberate and both are argued in their own docstrings.
+
+    `register` reads the LIVE registry, so a cached verdict answers "what is
+    serving?" with what WAS serving. `main` is uncached so the rerun's evidence
+    stays per-stage — a cached parent returns in one action and proves nothing
+    about the five stages underneath it.
+    """
+    disabled = {n for n, c in _tasks().items() if _cache_arg(c) == "disable"}
+    assert disabled == {"register", "main"}, (
+        f"the set of uncached stages moved to {disabled}; if that is intended, the "
+        f"docstring arguing it must move too, and so must the drill's own list"
+    )
+
+
+def test_the_cached_stages_all_share_one_cache_object():
+    """Five stages, one policy. Per-stage cache settings would be five places to
+    check when the answer to "what invalidates this?" has to be one sentence."""
+    cached = {n: _cache_arg(c) for n, c in _tasks().items() if _cache_arg(c) != "disable"}
+    assert set(cached) == {"ingest", "validate", "build_features", "train", "evaluate"}
+    assert set(cached.values()) == {"_STAGE_CACHE"}, cached
+
+
+def test_the_drill_and_the_workflow_agree_on_which_stages_are_uncached():
+    """A twin, in the shape M0-S3 established for the port pairs.
+
+    The drill asserts CACHE_DISABLED for the stages it lists in `UNCACHED` and
+    CACHE_HIT for every other one. If a stage loses its cache in workflows.py and
+    the drill is not told, the drill goes red for a change somebody made on
+    purpose; if a stage GAINS a cache and the drill still excuses it, the drill
+    silently stops checking it. Neither failure names these files, which is why
+    the pair is pinned here.
+    """
+    text = DRILL.read_text()
+    match = re.search(r"UNCACHED = \{([^}]*)\}", text)
+    assert match, "the drill no longer names an UNCACHED set"
+    listed = {piece.strip().strip('"\'') for piece in match.group(1).split(",") if piece.strip()}
+    disabled = {n for n, c in _tasks().items() if _cache_arg(c) == "disable"}
+    assert listed == disabled, f"drill says {listed}, workflows.py says {disabled}"
+
+
+def test_the_cache_salt_travels_to_the_pod_exactly_like_the_image_ref():
+    """The salt is computed on the host and must be READ in the pod, never recomputed.
+
+    The `.dvc` pins are not in the task image and must not be (they describe the
+    tree a run was launched from, not the tree the image was built from). So the
+    only thing that keeps client and pod on one cache key is this variable being
+    in every TaskEnvironment's env_vars — the same lesson `TAXI_PIPELINE_IMAGE`
+    paid for when the first on-cluster run died at import.
+    """
+    tree = _workflow_tree()
+    env_vars_keys: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "_ENV_VARS" for t in node.targets
+        ):
+            assert isinstance(node.value, ast.Dict)
+            env_vars_keys = {k.value for k in node.value.keys if isinstance(k, ast.Constant)}
+    assert env_vars_keys == {"TAXI_PIPELINE_IMAGE", "TAXI_DATA_PIN"}, env_vars_keys
+
+    environments = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "TaskEnvironment"
+    ]
+    assert len(environments) == 3, "expected the light/data/train environments"
+    for env in environments:
+        passed = {kw.arg for kw in env.keywords}
+        assert "env_vars" in passed, "a TaskEnvironment stopped carrying env_vars"
+        value = next(kw.value for kw in env.keywords if kw.arg == "env_vars")
+        assert isinstance(value, ast.Name) and value.id == "_ENV_VARS", (
+            "an environment builds its own env_vars — then one pod's cache salt "
+            "can differ from another's, and the stages stop sharing a key"
+        )
+
+
+def test_the_data_pin_refuses_rather_than_defaulting():
+    """A salt that falls back to a constant produces the exact failure it exists
+    to prevent — a green transcript over data nobody can identify — and produces
+    it silently. So `_data_pin` raises, and the raise names the remedy."""
+    func = next(
+        node
+        for node in ast.walk(_workflow_tree())
+        if isinstance(node, ast.FunctionDef) and node.name == "_data_pin"
+    )
+    raises = [n for n in ast.walk(func) if isinstance(n, ast.Raise)]
+    assert raises, "_data_pin no longer refuses; it now has a silent default"
+    returns = [n for n in ast.walk(func) if isinstance(n, ast.Return)]
+    constant_returns = [r for r in returns if isinstance(r.value, ast.Constant)]
+    assert not constant_returns, "a constant fallback salt is not a salt"
+
+
+def test_the_action_reader_only_reads():
+    """`verify-m4` (M4-S5) is meant to reuse this, and a gate that can mutate the
+    run it is judging is not a gate. Checked structurally: the module may call
+    listall/get and nothing that launches, aborts or deletes."""
+    tree = ast.parse((REPO / "scripts" / "flyte_run_actions.py").read_text())
+    # Scoped to the FLYTE objects. A blanket ban on the verb `run` fails on
+    # `asyncio.run(...)`, which is how this module has a main at all — and a check
+    # that fires on the wrong thing gets edited rather than heeded (gotcha #50).
+    remote = {"Action", "ActionDetails", "Run", "flyte", "client", "remote"}
+    called = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        base = node.func.value
+        while isinstance(base, ast.Attribute):
+            base = base.value
+        if isinstance(base, ast.Name) and base.id in remote:
+            called.add(node.func.attr)
+    forbidden = called & {"run", "launch", "abort", "delete", "terminate", "create", "deploy"}
+    assert not forbidden, f"the action reader calls {forbidden} — it is supposed to only read"
+    assert called, "the parser found no flyte calls at all — it is checking nothing"
