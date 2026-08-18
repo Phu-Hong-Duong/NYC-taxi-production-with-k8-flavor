@@ -125,6 +125,57 @@ in `automation/runs/` for the `.log.1`. Then read `scripts/automation_track.sh`'
 directory whose contents are the resume points — that question is worth more
 than the one bug it found here.
 
+### M3-S4 (part 3) — the same ceiling bound both arms, and only one of them was truncated (2026-08-18, role:MLE)
+
+**What happened.** The sixth and last phase landed at 02:59:07Z and the story
+closed: `auto-on-v2` (lgbm, 24 features, 21 trials) measured **3.3823** val MAE ·
+**80.552%** KPI-10, against the artisan's hand-held-hyperparameter v2 at
+**3.3905 / 80.506%**. Automation won that arm by **0.2436%** — and lost the other
+by 7.15%. §6 of `docs/automation_track_m3.md` is complete; nothing was refit,
+nothing promoted.
+
+**The question the previous session left, and why its obvious answer was wrong.**
+Part 2 flagged `auto-on-v1` as truncated: 800-round cap, val error still falling.
+The handoff asked the next session to check whether v2 hit the cap too, because
+if it did, "the caveat doubles". It did hit it — `Did not meet early stopping`,
+`best_iteration: 791` of 800 — and the caveat does *not* double. Over its last
+100 rounds v2 gained **0.00034** MAE; v1 gained **0.02808** over its last 99.
+**A cap is a truncation only if the curve is still moving under it**, and an ~82×
+difference in slope at the same iteration is the difference between a model that
+was cut off and one that had arrived. The two facts are identical at the level of
+"did it hit the cap" and opposite at the level that matters. *Reading the ceiling
+alone would have put a caveat on the one row in the table that had earned not
+having one.*
+
+**The number that got smaller when it was finally measured.** §6.5 had projected
+9,400–9,700 s for the track on the assumption that the missing refit would cost
+what its twin cost. It cost 981.5 s against 1,308.1 — lgbm on 24 features is
+cheaper per round than depth-12 xgboost on 5 — so the real total is **9,133.8 s**,
+still over the 9,000 s DR-01 share but by 1.49% rather than by 5–8%. The
+projection was replaced rather than quietly deleted, because it was an argument
+that ran on that number: "the track has already overspent" is the reason a losing
+arm may not be refit, and an honest version of that reason states how much.
+
+**The result underneath both arms, which is worth more than either.** Tuning nine
+hyperparameters with 21 trials bought **+0.24%** on v2. This program's own bar for
+admitting *one feature group* is **≥0.50%** (DR-02). So the entire automation axis
+on the better feature set bought less than half of what a single feature has to be
+worth to get in the door — and it cost 4,247.3 s on that arm alone against the
+artisan track's 3,313.9 s in total. That is one measurement on one dataset with
+one budget, and it is exactly the comparison the 2×2 was built to make available
+rather than assume.
+
+**What to look at.** `docs/automation_track_m3.md` §6.3 (the two contenders),
+§6.4 (both arms, the slope-at-the-cap argument, and a pre-registered prediction
+printed beside its half-refutation), §6.5 (the measured ledger) ·
+`automation/runs/m3s4/refit-v2.json` · F-015 in `ledgers/findings.md`, whose
+addendum narrows it to one row.
+
+**What to try yourself.** Take any two training logs that both ran to their round
+cap and compute the MAE gained over the final 100 rounds of each. That single
+subtraction separates "stopped early" from "finished", and it is the check that
+nothing in a JSON verdict — `best_iteration: 791` vs `800` — can do for you.
+
 ### M3-S3 — the strongest feature in the literature lost, and the sample that lied was the one nobody was allowed to quote (2026-08-17, role:MLE)
 
 **What was built.** Feature set **v2**, earned group by group. Five feature

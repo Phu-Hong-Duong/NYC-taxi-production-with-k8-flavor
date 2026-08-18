@@ -1,6 +1,6 @@
 # The automation track — FLAML scout × Optuna sniper (M3-S4)
 
-*role:MLE · executed 2026-08-17 · Design Review decisions DR-01 (budget), DR-03
+*role:MLE · executed 2026-08-17, resumed and completed 2026-08-18 · Design Review decisions DR-01 (budget), DR-03
 (disjoint axes), DR-05 (full-data contenders) bind every section below.*
 
 This is the automation half of M3's 2×2. Its counterpart is
@@ -47,7 +47,8 @@ Actual per-phase fitting seconds are recorded in **§6.5**, read from each phase
 own JSON in `automation/runs/m3s4/`. (The track also prints a ledger at the end
 of its log, but the log is not the record: it is rotated on every relaunch and a
 resumable track gets relaunched — gotcha #48. The JSONs are.) **The track went
-over: 9,400–9,700 s spent against 9,000 declared, and §6.5 says where.**
+over: 9,133.8 s measured against 9,000 declared — +133.8 s, +1.49% — and §6.5
+says which phases and why.**
 
 ---
 
@@ -267,8 +268,10 @@ and never reads this document.
 
 *Every number below is read from `automation/runs/m3s4/*.json` — one file per
 phase, written by the phase that measured it. This section was deliberately empty
-until the numbers existed; it is filled here from **five of six** landed phases,
-and the one that is still missing says so by name rather than by omission.*
+until the numbers existed; it was first filled from **five of six** landed phases
+with the sixth named as missing rather than omitted, and it is **complete here**:
+all six phases have landed and every `pending` has been replaced by a
+measurement.*
 
 What the run does, in order, so the numbers can be checked against the intent:
 
@@ -340,24 +343,29 @@ end.
 | contender | features | family | val MAE (KPI-09) | val within-5-min (KPI-10) | best iter | fitting s | MLflow run |
 |---|---|---|---:|---:|---:|---:|---|
 | `auto-on-v1` | v1 (5) | xgboost | **3.7245** | **78.003%** | 800 / 800 | 1,308.1 | `ec0eba69389d44bc9f4dadcbad8e4094` |
-| `auto-on-v2` | v2 (24) | lgbm | *pending* | *pending* | — | — | — |
+| `auto-on-v2` | v2 (24) | lgbm | **3.3823** | **80.552%** | 791 / 800 | 981.5 | `92b73bd4f77d4a05b92472bfcfb3cccf` |
 
 Both rows are measured by `taxi_mlops.training.evaluate` on the val month
 (2019-07, 6,189,748 rows) after a full-data fit on 43,987,422 train rows —
 the same evaluator, the same rows and the same month as every artisan number in
 `docs/ablation_m3.md`, which is what makes the 2×2 at M3-S5 a comparison at all.
 
-**`auto-on-v2` is absent because it was never run, not because it failed.** The
-track was stopped by hand at 18:46:00Z on 2026-08-17 — the PO asked for a silent
-machine overnight and this track runs 16 threads flat out — after `refit-v1`
-had written its verdict and before `refit-v2` started. Nothing was frozen,
-throttled or SIGSTOPped, precisely so that `refit-v1`'s 1,308.1 s stays a true
-DR-01 measurement. The phase JSONs are the resume points (`scripts/
-automation_track.sh` skips any phase whose JSON exists), so the resumed run costs
-only the phase that is missing. **The resumed run's status file is the one that
-carries `auto-on-v2`.**
+**`auto-on-v2` was refit on a resume, and the resume cost one phase.** The track
+was stopped by hand at 18:46:00Z on 2026-08-17 — the PO asked for a silent machine
+overnight and this track runs 16 threads flat out — after `refit-v1` had written
+its verdict and before `refit-v2` started. Nothing was frozen, throttled or
+SIGSTOPped, precisely so that `refit-v1`'s 1,308.1 s stays a true DR-01
+measurement. The phase JSONs are the resume points (`scripts/automation_track.sh`
+skips any phase whose JSON exists), so relaunching the identical command on
+2026-08-18 at 02:40:26Z **skipped all five completed phases by name** and ran only
+the missing refit, which finished at 02:59:07Z with `0 phase(s) failed`. Neither
+number in that table was fitted twice.
 
-### 6.4 The result that must not be smoothed: automation LOST on v1, and its own budget says why
+**Both refits ran to the 800-round cap without early stopping, and only one of
+them was hurt by it.** That distinction is §6.4's, and it is a measurement, not a
+reading of the same fact twice.
+
+### 6.4 The result that must not be smoothed: automation LOST on v1 by 7.15% and WON on v2 by 0.24%
 
 `auto-on-v1` measures **3.7245** val MAE against hand-tuned v1's **3.4760** —
 the automation track's v1 contender is **7.15% WORSE** than the model M2-S2 fitted
@@ -379,14 +387,61 @@ The log says why, and it is a budget cause rather than an algorithmic one:
 steeply**, i.e. it is not a converged model, it is a truncated one. The scout had
 already said as much: it proposed `n_estimators: 1635`, and the sniper's cap —
 set at 800 as a DR-01 *budget* decision (§7, first bullet) — is less than half
-of that. The v2 study's best trial early-stopped at **iteration 351 of 800**, so
-the same ceiling is unlikely to have bound v2.
+of that.
 
 M3-S5 must read that row as "xgboost, eta 0.062, stopped at 800 rounds", never
 as "xgboost cannot do better than 3.7245". Whether the honest fix is a bigger
 rounds cap (which costs DR-01 budget the track has already overspent — §6.5) is
 **S5's call with the full table in front of it**, and it is named in §7 rather
 than taken here.
+
+**The v2 arm reached the same ceiling and it did not matter — and the prediction
+this section made about that was half wrong, which is worth more than quietly
+correcting it.** Written before `refit-v2` ran, the paragraph above said: *"the
+v2 study's best trial early-stopped at iteration 351 of 800, so the same ceiling
+is unlikely to have bound v2."* What the full-data refit actually printed:
+
+```
+Training until validation scores don't improve for 30 rounds
+[600]	val's l1: 3.38314
+[700]	val's l1: 3.38266
+[800]	val's l1: 3.38232        <- the cap again; early stopping never fired
+Did not meet early stopping. Best iteration is:
+[791]	val's l1: 3.38228
+```
+
+So the ceiling **did** bind v2 in the literal sense — 800 rounds ran, the run
+never early-stopped, and `best_iteration` is 791 only because the last nine
+rounds were a rounding wobble rather than an improvement. But the two arms are
+not in the same situation, and one number says so: v1 gained **0.02808 MAE**
+between iterations 700 and 799, v2 gained **0.00034** between 700 and 800 — an
+**~82× difference in slope at the cap**, measured off the two printed curves.
+v1 was cut off mid-descent; v2 had flattened onto its floor and would
+have bought roughly a thousandth of a minute for another 800 rounds. **A cap is
+only a truncation if the curve is still moving under it**, and the same cap is a
+truncation for one arm and a formality for the other. F-015's caveat therefore
+does **not** double: it belongs in the `auto-on-v1` row and nowhere else.
+
+**On v2, tuning won — narrowly, and the size of the win is the finding.**
+`auto-on-v2` measures **3.3823 val MAE · 80.552% KPI-10** against the artisan's
+hand-held-hyperparameter v2 at **3.3905 · 80.506%**: **+0.2436%** relative MAE
+and **+0.046 points** of KPI-10, from a 21-trial search over nine hyperparameters
+that cost **4,247.3 s** of DR-01 budget on this arm alone (scout v2 1,853.0 +
+sniper v2 1,412.8 + refit v2 981.5) — more than the artisan track spent in total
+across all six of its arms (3,313.9 s, §6.5). Set beside DR-02's own keep threshold
+for a feature group — **≥0.50% relative val MAE** — the whole tuning axis on v2
+buys **less than half of what this program requires of a single feature group
+before it is allowed into the model.** Against the same v1 baseline both tracks
+started from, features bought **+2.46%** and tuning bought **+2.70%** on top of
+nothing (`auto-on-v2` vs hand-tuned v1, +0.859 KPI-10 points) — but the overlap
+is what matters and §6.3's four rows are what let M3-S5 separate them. The
+arithmetic of "features or tuning?" is S5's; this section reports its inputs.
+
+Two more things are true of the v2 arm and neither is flattering to automation:
+the tuner's winning family (**lgbm**) is the family the artisan was already
+using, and its winning configuration needed **791 rounds where v1's hand-set 500
+sufficed** — most of what it found was permission to run longer at a higher
+learning rate.
 
 ### 6.5 The DR-01 budget ledger — measured, and over
 
@@ -401,14 +456,18 @@ declared before any result existed (§0) against what was spent:
 | sniper on v1 | 1,500 | 1,623.9 | **+123.9** |
 | sniper on v2 | 1,500 | 1,412.8 | −87.2 |
 | refit auto-on-v1 | ~1,700 (both refits) | 1,308.1 | — |
-| refit auto-on-v2 | *(same line)* | *pending* | — |
-| **five phases** | **8,300 declared total** | **8,152.3** | — |
+| refit auto-on-v2 | *(same line)* | 981.5 | **+589.6** on the pair |
+| **six phases** | **8,300 declared total** | **9,133.8** | **+833.8 vs §0** |
+| **the DR-01 share** | **9,000** | **9,133.8** | **+133.8 (+1.49%)** |
 
-**The track will exceed its 9,000 s DR-01 share.** Five phases have spent
-8,152.3 s, leaving **847.7 s** in the envelope, and the missing phase is a
-full-data refit — its twin took 1,308.1 s. Unless `refit-v2` comes in under
-848 s, which nothing suggests, the automation track finishes at roughly
-**9,400–9,700 s against 9,000 declared**.
+**The track exceeded its 9,000 s DR-01 share by 133.8 s — 1.49%.** The earlier
+draft of this section, written with five phases landed, projected
+**9,400–9,700 s** on the assumption that `refit-v2` would cost about what
+`refit-v1` cost (1,308.1 s). It cost **981.5 s**, 25% less, because lgbm on 24
+features is cheaper per round than depth-12 xgboost on 5 — so the projection was
+wrong in the direction that flatters the track, and the measured total is
+recorded here in its place. The overrun is real either way; it is smaller than
+the guess.
 
 Two things follow, and neither is a knob turned after the fact:
 
@@ -423,11 +482,18 @@ Two things follow, and neither is a knob turned after the fact:
 - **No phase was re-run and no budget was moved.** The overrun is reported at the
   size it happened. What it costs is a real asymmetry in M3-S5's 2×2 — the
   artisan track spent **3,313.9 s** and stopped on its own stop rule, the
-  automation track spent ~**2.9×** that and stopped because its clock ran out
-  mid-search on both studies. DR-01 condition 2 makes an unequal-but-reported
-  race a result, so S5 reports it: *the automation track was given the same
-  budget, spent nearly three times as much of it, ran out anyway, and still lost
-  on v1.*
+  automation track spent **9,133.8 s = 2.76×** that and stopped because its clock
+  ran out mid-search on both studies. DR-01 condition 2 makes an
+  unequal-but-reported race a result, so S5 reports it: *the automation track was
+  given the same budget, spent 2.76 times as much of it as the artisan did, ran
+  out anyway, lost on v1 by 7.15% and won on v2 by 0.24%.*
+- **The two tracks did not stop for the same kind of reason, and that is the
+  asymmetry that survives normalisation.** The artisan stopped because its own
+  keep rule said the next group was not worth having; the automation track
+  stopped because a clock expired mid-search on both studies. Handing the second
+  more seconds would change its numbers and handing the first more seconds would
+  not — which is why DR-01 measured *seconds* but S5 must read *what ended each
+  track*, not just what each spent.
 
 ### The one refusal path this track has
 
@@ -449,7 +515,9 @@ would be a finding and a decision taken in the open, not a number.
   as measured, labelled as truncated, and the choice belongs to the bake-off
   session with the whole table in front of it. The cheap-looking option (refit
   it bigger and quote the better number) is the one that costs the 2×2 its
-  meaning.
+  meaning. **This applies to `auto-on-v1` alone**: `auto-on-v2` reached the same
+  cap with its curve flat (§6.4, ~82× less slope at iteration 800), so it is
+  capped but not truncated and needs no caveat in its row.
 - **The v1 study is thin: 9 trials over an 8-dimensional space** (§6.2), all
   bound by the clock rather than by `n_trials: 60`. "Automation lost on v1" is
   therefore a statement about *this budget*, not about the method, and M3-S5's
@@ -468,7 +536,10 @@ would be a finding and a decision taken in the open, not a number.
   resolution path (F-009's localized workaround) has only ever been exercised
   against a LightGBM flavor. The model is logged under its own flavor here and
   `mlflow.pyfunc` reads both, but that is an argument, not a measurement. Named
-  for S5 rather than assumed.
+  for S5 rather than assumed. Now narrower than it was: **the only xgboost row in
+  the 2×2 is `auto-on-v1`, which is also its worst row** (3.7245), so the flavor
+  path is unlikely to be exercised by a promotion at M3 — and "unlikely" is why
+  it stays on this list instead of being struck off it.
 - **`make train` still cannot fit a set that uses the point-in-time aggregates**
   (carried from M3-S3, `docs/ablation_m3.md` §7). v2 needs no fitted tables, so
   this track is unaffected.

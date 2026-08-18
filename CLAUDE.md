@@ -638,7 +638,7 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **Anything long runs detached.** `automation/run_detached.sh` + `watchdog.sh` on
   cron; ending a turn kills every background task the session started (gotcha #45).
 
-## The automation track (M3-S4) — what tuning bought, what it cost, and the row that lost
+## The automation track (M3-S4) — what tuning bought, what it cost, and the two rows it produced
 - **`make automation-track` is the whole path**, six phases in one order: scout ×2
   (FLAML, 5% sample) → sniper ×2 (Optuna TPE + MedianPruner, 15% sample, studies in
   the ONE Postgres) → full-data refit ×2 (DR-05). **Every phase is skipped if its
@@ -664,13 +664,26 @@ can never disagree (the port-family twins lesson, applied before it bit).
   would spend budget the track already overspent, on the losing arm, which is what
   DR-01 condition 2 forbids — so the row stands as measured and labelled, and the
   call is M3-S5's.
+- **Automation WON on v2, by 0.24%.** `auto-on-v2` (lgbm, 21 trials) measured
+  **3.3823 val MAE · 80.552% KPI-10** against the artisan's v2 at **3.3905 /
+  80.506%** — **+0.2436%** relative MAE, **+0.046** KPI-10 points. That is **less
+  than half of DR-02's ≥0.50% keep bar for a single feature group**, bought with
+  4,247.3 s on that arm alone. Against the same v1 baseline both tracks started
+  from: features **+2.46%**, tuning-on-top-of-features **+2.70%**.
+- **Both refits hit the 800-round cap; only v1 was hurt by it.** v2 never
+  early-stopped either (best iteration 791/800) but its curve was flat —
+  **0.00034** MAE over its last 100 rounds against v1's **0.02808**, ~**82×** less
+  slope. A cap is a truncation only if the curve is still moving under it, so
+  **F-015's caveat is v1's row and does not double**.
 - **The track went OVER its DR-01 share and the overrun is per-phase and
-  mechanical**: 8,152.3 s across five phases against 9,000 declared, with a
-  full-data refit still owed (its twin cost 1,308.1 s) → ~**9,400–9,700 s**.
-  FLAML's `time_budget_s` bounds its search loop and not the retrain after it;
-  Optuna checks its cap BETWEEN trials, so the trial in flight overruns. Against
-  the artisan's 3,313.9 s that is ~**2.9×** — an unequal race, reported at the
-  size it happened (DR-01 condition 2), never re-run.
+  mechanical**: **9,133.8 s measured across six phases against 9,000 declared
+  (+133.8 s, +1.49%)**. FLAML's `time_budget_s` bounds its search loop and not the
+  retrain after it; Optuna checks its cap BETWEEN trials, so the trial in flight
+  overruns. Against the artisan's 3,313.9 s that is **2.76×** — an unequal race,
+  reported at the size it happened (DR-01 condition 2), never re-run. **The two
+  tracks also stopped for different KINDS of reason** — the artisan on its own
+  keep rule, the automation on a clock that expired mid-search on both studies —
+  which is the asymmetry that survives normalising the seconds.
 - **Nothing here promotes.** The registry API appears in none of this story's
   scripts, and a test keeps it out.
 
@@ -730,7 +743,7 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
 | Exercise the F-008 sampled-run guard (M3-S4) | `make f008-guard` | VERIFIED 2026-08-17 (M3-S4): `--train-months 2019-01 --no-promote` → **exit 2** (gate-disqualified) and `--train-months 2019-01 --no-gate` → **exit 3** (`[promote] SKIPPED — no verdict was issued`). PASS 2/2 |
-| The whole automation track (M3-S4) | `make automation-track` — scout ×2 → sniper ×2 → full-data refit ×2, budget DECLARED in the script header before any result exists; **run it detached**; every phase SKIPS if its JSON exists | VERIFIED 2026-08-18 (M3-S4): five phases ran 2026-08-17 16:26→18:46Z (scout v1/v2, sniper v1/v2, refit v1) and the PO stopped the machine for the night; the SAME command on 2026-08-18 skipped all five and resumed at the missing refit. Numbers in `docs/automation_track_m3.md` §6, one JSON per phase in `automation/runs/m3s4/`. **8,152.3 s of fitting across five phases against a 9,000 s DR-01 share** — it goes over, and §6.5 says which phase and why |
+| The whole automation track (M3-S4) | `make automation-track` — scout ×2 → sniper ×2 → full-data refit ×2, budget DECLARED in the script header before any result exists; **run it detached**; every phase SKIPS if its JSON exists | VERIFIED END TO END 2026-08-18 (M3-S4): five phases ran 2026-08-17 16:26→18:46Z (scout v1/v2, sniper v1/v2, refit v1) and the PO stopped the machine for the night; the SAME command on 2026-08-18 02:40Z skipped all five BY NAME and ran only the missing refit → `[track] finished 2026-08-18T02:59:07Z; 0 phase(s) failed`. **The resume cost one phase, not six.** Numbers in `docs/automation_track_m3.md` §6, one JSON per phase in `automation/runs/m3s4/` (six files). **9,133.8 s of fitting across six phases against a 9,000 s DR-01 share** — it goes over by 1.49%, and §6.5 says which phases and why |
 | Run something that must OUTLIVE the session | `make detach NAME=<slug> ROLE=executor\|rev\|architect TARGET=<make target>` | VERIFIED 2026-08-17 (M3-S4): launched the automation track under `setsid`, `--then-schedule executor`. It is a make target because `run_detached.sh` is not on the session allowlist (F-001) and `make` is — an unattended session must never have to reach past the Makefile to obey gotcha #45 |
 | Destroy | `make destroy` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M0-S4): full destroy→rebuild→`verify-m0` GREEN cycle, both helm releases back at REVISION 1. `.env` sha256 identical across the cycle (same credentials); the cluster's DATA is gone by design (pre-destroy MLflow experiment → `RESOURCE_DOES_NOT_EXIST`; PVCs die with the cluster). **`DRY_RUN=1` deleted the cluster until this story** — fixed and regression-pinned (F-004, gotcha #30); the preview now leaves a live cluster untouched |
 | Chain kill switch | `touch automation/STOP` | VERIFIED 2026-08-16 (M0-S4 drill): scheduler refuses, exit 0, daily counter unmoved, no log created, no residue after `rm`. The harder half — STOP written AFTER a session is scheduled, and the daily cap — is covered by `tests/unit/test_chain_script.py` against a sandboxed scheduler with a fake `claude` |
