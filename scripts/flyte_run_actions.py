@@ -80,7 +80,17 @@ def collect(run_name: str) -> list[dict]:
                     # took. A cache hit's is near zero, which is the corroborating
                     # evidence — corroborating, never the claim itself.
                     "duration_ms": int(getattr(action.pb2.status, "duration_ms", 0) or 0),
-                    "attempts": int(getattr(status, "attempt", 0) or 0),
+                    # `attempts`, PLURAL, and the singular spelling that used to be
+                    # here is F-027: `ActionStatus` has no field called `attempt`,
+                    # so `getattr(..., "attempt", 0)` fell through to the default
+                    # and this reader reported `attempts: 0` for every action of
+                    # every run it had ever been pointed at — including the whole
+                    # cache drill's record. A protobuf message answers `getattr`
+                    # for its own fields only; a typo becomes a plausible zero
+                    # rather than an AttributeError, which is why it survived a
+                    # review and a milestone. Measured after the fix: a task with
+                    # `retries=2` that always raises reports `attempts: 3`.
+                    "attempts": int(getattr(status, "attempts", 0) or 0),
                 }
             )
         return rows

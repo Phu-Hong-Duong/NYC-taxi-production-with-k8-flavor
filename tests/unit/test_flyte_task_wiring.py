@@ -442,6 +442,32 @@ def test_a_refusal_is_a_return_value_and_therefore_cannot_be_retried():
     )
 
 
+def test_the_action_reader_asks_for_fields_the_proto_actually_has():
+    """F-027, pinned against the message definition rather than against a string.
+
+    `getattr(status, "attempt", 0)` on a protobuf message does not raise — it
+    returns the default — so a misspelled field name becomes a plausible zero. That
+    is exactly what happened: the reader asked for `attempt`, `ActionStatus` calls
+    it `attempts`, and every run this program has ever inspected was recorded with
+    `attempts: 0`, including the cache drill's committed evidence. Nothing was
+    wrong except the number nobody had a reason to doubt.
+
+    So this test reads the field names OFF THE PROTO and requires every field the
+    reader pulls out of a status to be one of them. A test written against the
+    literal "attempts" would go green on the next typo in the next field.
+    """
+    pb2 = pytest.importorskip("flyteidl2.workflow.run_definition_pb2")
+    real = {f.name for f in pb2.ActionStatus.DESCRIPTOR.fields}
+    source = (REPO / "scripts" / "flyte_run_actions.py").read_text()
+    asked = set(re.findall(r'getattr\(\s*(?:action\.pb2\.)?status,\s*"(\w+)"', source))
+    assert asked, "the reader no longer pulls any status field by name"
+    assert asked <= real, (
+        f"the reader asks {sorted(asked - real)} of ActionStatus, which has "
+        f"{sorted(real)} — a protobuf answers getattr with a default, so this "
+        f"reads as a confident zero rather than as an error"
+    )
+
+
 def test_the_kill_drill_writes_its_prediction_before_it_kills():
     """The gameday discipline, pinned by ORDER and not by presence.
 
