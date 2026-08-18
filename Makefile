@@ -73,7 +73,7 @@ verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, exp
 	@bash scripts/verify_m2_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
-.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune tune-resume-drill automl-refit automation-track f008-guard bakeoff verify-m3
+.PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune tune-resume-drill automl-refit automation-track f008-guard bakeoff champion-transition verify-m3
 zones: ## derive the 263 TLC zone centroids from the sha256-pinned shapefile (M3-S2; --refresh re-downloads)
 	@uv run python scripts/derive_zone_centroids.py $(ZONES_ARGS)
 ablation: ## artisan track: one feature GROUP per experiment on a 15% sample, val only, runs in m3-artisan (M3-S3)
@@ -98,6 +98,8 @@ f008-guard: ## exercise M3-S1's F-008 guard on a real sampled run: exit 2 (disqu
 	@uv run python scripts/f008_guard_exercise.py
 bakeoff: ## the M3 bake-off: 5 contenders (4 LOADED, floor fitted) through one evaluator on TEST, 5 gate verdicts; promotes nothing without --promote-winner
 	@uv run python scripts/bakeoff_m3.py $(BAKEOFF_ARGS)
+champion-transition: ## the ordered chain a moved alias owes: promote -> predictions -> duckdb -> marts -> boards -> memo numbers (M3-S5); run it DETACHED
+	@bash scripts/champion_transition.sh
 verify-m3: ## dossier+ablation+leakage red-team; kill/resume; >=1 pruned trial; 5 gate verdicts from our evaluator
 	@echo "TODO(M3)"
 

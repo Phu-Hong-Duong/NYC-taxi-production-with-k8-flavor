@@ -1,8 +1,9 @@
 # The M3 bake-off — five contenders, one evaluator, one untouched month
 
 **Story:** M3-S5 (role:MLE) · **Command:** `make bakeoff` ·
-**Rows:** `automation/runs/m3s5/bakeoff.json` · **Status:** §3–§6 land with the
-detached run named in HANDOFF.
+**Rows:** `automation/runs/m3s5/bakeoff.json` · **Status:** MEASURED 2026-08-18
+(`automation/runs/m3s5-bakeoff.log`, 493 s) — §3–§6 carry the numbers; the alias
+transition they authorise is `make champion-transition`.
 
 ## 0. What this document is, and what it is not
 
@@ -81,11 +82,69 @@ gate nobody has watched work.
 
 ## 3. The results table (test month, 2019-08)
 
-*Pending — filled from the detached run's transcript.*
+Measured 2026-08-18 by `make bakeoff`, detached, **493 s wall-clock end to end**
+(03:24:40 → 03:32:53 Z; `automation/runs/m3s5-bakeoff.log`). **5,950,708 test
+rows**, untouched by training and by selection. The floor was fitted on the six
+train months (**43,987,422 rows**, 1,610,050 groups + 46,938 backoff cells); the
+four models were LOADED.
+
+| contender | family | trees | test KPI-09 (min) | test KPI-10 | vs floor | vs champion v1 |
+|---|---|---:|---:|---:|---:|---:|
+| **auto-on-v2** — `auto-lgbm-v2` | lgbm | 791 | **3.2403** | 81.577% | **+3.33%** | **+0.63%** |
+| artisan v2 — `artisan-v2` | lgbm | 500 | 3.2425 | **81.582%** | +3.26% | +0.56% |
+| champion v1 — `lightgbm-v1` | lgbm | 500 | 3.2608 | 81.480% | +2.71% | — |
+| floor — `baseline-group-median-od-fallback` | group-by | — | 3.3518 | 80.733% | +0.00% | −2.79% |
+| auto-on-v1 — `auto-xgboost-v1` | xgboost | 800 | 3.5038 | 79.747% | −4.54% | −7.45% |
+
+**Every one of the four models re-measured its own recorded val MAE to float64
+before it was allowed a test number** — `3.47603843547682` · `3.3905388307148137`
+· `3.724473218110082` · `3.3822796832477016`, each equal to the value its own
+MLflow run recorded at fitting time, in three cases from a different script on a
+different day. That is what makes this table evidence: the artifact that was
+loaded is provably the artifact that was measured, and this file builds features
+the same way the paths that fitted them did.
+
+**The val ranking and the test ranking are the same ranking.** auto-on-v2 <
+artisan v2 < champion v1 < auto-on-v1 on val (3.3823 · 3.3905 · 3.4760 · 3.7245)
+and in exactly that order on test. Selection pressure on val did not reorder
+anything on the untouched month — worth recording precisely because it is the
+failure this program was structured to catch, and it did not occur.
+
+**The two v2 arms split the two KPIs.** auto-on-v2 wins KPI-09 by **0.0022 min —
+134 milliseconds** of mean error, 0.069% relative — while artisan v2 is ahead on
+KPI-10 by **0.005 points**. The ranking rule is KPI-09, declared in
+`scripts/bakeoff_m3.py` before any number existed, so the winner is auto-on-v2.
+It is a win, and it is a win of that size; §5 refuses to inflate it.
 
 ## 4. The five gate verdicts
 
-*Pending.*
+| contender | KPI-09 vs floor | KPI-10 vs floor | KPI-09 vs incumbent | KPI-10 vs incumbent | verdict |
+|---|---|---|---|---|---|
+| floor | ✗ +0.00% | ✓ −0.000 | ✗ −2.79% | ✗ −0.746 | **REFUSE** |
+| champion v1 | ✓ +2.71% | ✓ +0.746 | ✓ −0.00% | ✓ +0.000 | PROMOTE |
+| artisan v2 | ✓ +3.26% | ✓ +0.849 | ✓ +0.56% | ✓ +0.103 | PROMOTE |
+| auto-on-v1 | ✗ −4.54% | ✗ −0.987 | ✗ −7.45% | ✗ −1.733 | **REFUSE** |
+| auto-on-v2 | ✓ +3.33% | ✓ +0.844 | ✓ +0.63% | ✓ +0.097 | PROMOTE |
+
+**The floor refused itself at exactly +0.00%, on the condition that matters and
+on two more.** It is the cheapest demonstration available that the bar is a bar,
+and it also shows the incumbent condition doing work no floor condition can: the
+floor is 2.79% WORSE than what is serving, and F-011's condition is the only one
+of the four that would have noticed.
+
+**auto-on-v1 failed all four checks.** It is worse than the floor, worse than the
+incumbent, and worse on both KPIs — the one contender in this table that the gate
+would have had to refuse under any reading. Its F-015 caveat travels in its row:
+the 800-round cap bound it **mid-descent** (val still falling 0.02808 MAE over
+its last 100 rounds) after a study that got 9 trials of a configured 60. **That
+caveat explains the size of the loss; it does not convert the row into a pass**,
+and DR-01 condition 2 forbids the obvious repair — refitting the losing arm
+bigger after seeing its number.
+
+**Champion v1 passing against itself is not a tautology worth hiding.** Its
+incumbent deltas read `−0.00%` and `+0.000` because it IS the incumbent; the
+informative half of its row is `+2.71%` over the floor, which is M3-S1's headroom
+number re-measured by a different script and reproduced to the digit.
 
 The bar is quoted from `configs/train.yaml: gate` and never from the minutes
 (DR-06): KPI-09 at least **2.00%** below `baseline-group-median-od-fallback`,
@@ -97,16 +156,74 @@ number **≤ 3.2608**, which is tighter.
 
 ## 5. The 2×2 arithmetic — features, tuning, or both?
 
-*Pending.*
-
 Read against `champion v1`, because that is the cell both tracks started from.
 Any other reference makes the two deltas incomparable.
 
+| cell | what moved | test KPI-09 | vs champion v1 |
+|---|---|---:|---:|
+| champion v1 | — (the origin) | 3.2608 | — |
+| artisan v2 | **features only** (v1 → v2, v1's hyperparameters held fixed) | 3.2425 | **+0.56%** |
+| auto-on-v1 | **tuning only** (v1 features, scout → sniper) | 3.5038 | **−7.45%** |
+| auto-on-v2 | **both** | 3.2403 | **+0.63%** |
+
+**The answer is features.** Features alone bought +0.56%; adding tuning on top of
+them bought **+0.07 percentage points more** — 0.0022 min, 134 ms of mean error,
+**one seventh of DR-02's own ≥0.50% keep bar for a single feature group**. On the
+program's own standard for "worth keeping", the tuning increment does not clear
+it. It is reported as a win because it is one, and at its measured size.
+
+**What it cost to buy those 134 ms**: the automation track spent **9,133.8 s** of
+fitting against the artisan's **3,313.9 s** (§7) — **2.76×** the wall-clock for
+**+0.07 points** on top of what the artisan had already found.
+
+**The square is not additive, and the reason is a confound this table cannot
+remove.** Additivity would predict the "both" cell at 0.56 − 7.45 = −6.89%; it
+measured +0.63%. The tuning axis is not one variable: the tuning-only cell is
+**xgboost truncated mid-descent** (F-015) and the both-cell is **lgbm that
+flattened under the same cap** (0.00034 MAE over its last 100 rounds, ~82× less
+slope). Family, budget and truncation all move along that axis at once, so
+**−7.45% is not a measurement of "what tuning does"** — it is a measurement of
+what this budget did to xgboost on v1. Stated here rather than in a footnote,
+because the 2×2's whole purpose is causal attribution and one of its two axes is
+only partly clean.
+
+**What the square does support, and it is the useful half:** on the features
+axis, both tracks agree. Two independently-searched v2 models land 0.0022 min
+apart (3.2425 and 3.2403) from opposite methods — hand-chosen feature groups with
+fixed hyperparameters, and tuned hyperparameters on feature groups the tuner did
+not invent. The feature set, not the search, is what moved this model.
+
 ## 6. The alias decision
 
-*Pending.*
+**The alias MOVES. `auto-on-v2` (`auto-lgbm-v2`, run
+`92b73bd4f77d4a05b92472bfcfb3cccf`) is the winner by the pre-registered rule
+(lowest test KPI-09) and its verdict is PROMOTE on all four checks** — +3.33%
+over the floor against a required 2.00%, KPI-10 +0.844 over the floor, and
+against incumbent version 1 both KPI-09 (+0.63%) and KPI-10 (+0.097 points)
+improve. `configs/train.yaml: features.version` moves `v1` → `v2` in the same
+change, because `scripts/bakeoff_m3.py` refuses to promote a winner that line
+does not describe.
 
-Whatever it is, it is taken by the S1-hardened gate unchanged, with the incumbent
+**Three things this decision is honest about.**
+
+1. **The winning margin over the runner-up is 134 ms and the runner-up is better
+   on KPI-10.** Had the pre-registered ranking metric been KPI-10, the artisan's
+   hand-built v2 would be the champion instead. The rule was fixed before the
+   numbers existed, which is exactly what stops that observation from becoming a
+   re-ranking.
+2. **The incumbent condition is non-regression, not a margin** — so a **+0.63%**
+   (1.2 s) improvement is enough to move what is served, while the same program
+   demands **2.00%** (~4 s) over the floor before it will own a booster at all.
+   The asymmetry is defensible (the booster is already owned; the marginal cost
+   of a version bump is not the cost of adopting a model class) but it means the
+   champion pointer can churn on differences smaller than the program's own keep
+   bar. Filed as **F-016** rather than acted on: changing a gate condition after
+   seeing the number it would have changed is the one edit this program never
+   makes on its own authority.
+3. **A promotion is not a claim that tuning paid.** §5 is the claim about tuning,
+   and it says +0.07 points for 2.76× the budget.
+
+The verdict is taken by the S1-hardened gate unchanged, with the incumbent
 condition live, and `registry.promote` refuses to move an alias whose current
 version the decision did not read. If the alias moves, `configs/train.yaml:
 features.version` moves in the same change — `scripts/bakeoff_m3.py` refuses to
