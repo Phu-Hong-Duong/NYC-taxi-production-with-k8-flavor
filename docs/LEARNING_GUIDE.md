@@ -9,6 +9,100 @@ months from now.
 
 ## M3
 
+### M3-S5 — the gate went red for doing the right thing, and that is the most dangerous kind of red (2026-08-18, role:MLE + MLOps hat)
+
+**What was built.** The second half of M3-S5, across the story's declared
+mid-session cut: the error memo's dated **§9** describing the champion that is
+actually served (version 2, `auto-lgbm-v2`, feature set v2); three repaired
+assertions in `verify-m2`; **`make verify-m3`** made real — 46 sub-checks in 8
+sections, 4.7 seconds, re-fitting nothing; **`make verify-m3-redteam`**, which
+contradicts one recorded number and watches the gate catch it; and 15 tests on
+the gate itself. Both transcripts are pasted whole in
+`docs/verify_m3_transcripts.md`.
+
+**The thing that happened, and it is the note.** The champion transition
+finished overnight and left exactly one instruction: re-run `make verify-m2`,
+because its *"champion right now"* and memo-twin legs are the tripwires the
+refresh exists to satisfy. It went **RED — three sub-checks**. None of them was
+about anything being wrong.
+
+* `gate_floor` was pinned to the literal `baseline-group-median`. M3-S1 had
+  replaced the floor with a **new name** — `…-od-fallback` — *precisely because*
+  `configs/train.yaml` legislates that a floor change is a new name and never an
+  edit. The tag moved with the promotion, correctly, and the assertion that
+  encoded the old world went red.
+* The champion's experiment was pinned to the config's current `experiment`. The
+  winner is M3-S4's full-data refit and legitimately lives in `m3-automl`.
+* `do_not_promote` was read by **key presence**. Every run this program writes
+  carries that key; the *value* says which way (`"yes — 15% sample (F-008)"` vs
+  `"no — full-data fit; the gate sees it at M3-S5"`). The gate called the
+  legitimately promoted champion **hobbled**.
+
+**Why this way.** The tempting repair is to edit the three literals to the new
+values and move on — thirty seconds, green again. That repair is the disease.
+**A guard that goes red when the program behaves correctly trains the next
+session to edit assertions**, and the session after that inherits a formality
+that has been edited so often nobody believes it. So each literal was replaced
+by the property that holds at *every* champion and is **strictly stronger** than
+the literal was: the floor must be a name `baselines.fit_floor` can actually
+rebuild (which also excludes the flattering constant-median floor — something
+the literal never checked); the run must be FINISHED and in a **namespaced**
+experiment, which is gotcha #17's real invariant, never MLflow's `Default`; and
+one rule covers both tag families — **a mark counts unless its value says no**.
+Plus one sub-check the literal could not make at all: the version's `gate_floor`
+must equal the floor `predictions.json` actually published against — F-012's
+wire seen from the other end. 54 → **55**, one added, none removed.
+
+`verify-m3` was then written under that rule from its first line. The ablation's
+keep/drop verdicts are not read — DR-02's 0.50% bar is **re-applied** to the
+numbers printed beside them. The bake-off's five verdicts are not read — the
+recorded numbers are **replayed** through `gate.decide` as it exists on disk. The
+champion is checked against whatever `bakeoff.json` *recorded* as its winner, not
+against a run id. Change the numbers and the gate changes with them; change the
+**rules** and it goes red. A test now fails if the gate ever pins a run id, an
+experiment name or a floor name.
+
+**The concept underneath.** *There are two ways a check can be wrong, and only
+one of them is loud.* A check that misses a real fault is the failure everyone
+designs against — that is what red-teaming is for, and M3's drill does it by
+contradicting one measured number and confirming the four untampered replays
+still pass (a replay that failed on *any* edit would be a checksum wearing a
+gate's clothes). The other way is a check that fires when nothing is wrong. It
+is loud, it looks like diligence, and it is worse, because its cure is
+indistinguishable from vandalism: the session that "fixes" it by editing the
+assertion has done exactly what the session before it was supposed to prevent.
+The tell is simple and worth carrying: **when a guard goes red, ask first
+whether the thing it names actually changed for the worse.** If the program did
+the right thing and the guard objected, the guard is the defect — and the repair
+is a property, never a new literal.
+
+The same argument had already been made twice this milestone, in smaller print:
+the previous session found two feature tests that pinned the literal `v1` and
+would have gone red on every legitimate champion transition forever, and fixed
+them by asserting the property instead. Three instances in two sessions is a
+pattern, and it is now gotchas **#49** and **#50** and finding **F-017**.
+
+**What to look at.** `docs/verify_m3_transcripts.md` — both runs, whole ·
+`scripts/verify_m3.sh` §2 (the bar re-applied) and §5 (the five verdicts
+replayed) — those two are the file's argument · the commit that repaired
+`verify-m2` §1, whose message is the three literals side by side with the
+properties that replaced them · `docs/error_memo_m2.md` §9.1, where the memo's
+own headline **inverted** (three quarters of the champion's advantage used to be
+bought on 1.48% of rows; it is now 96.9% bought on the ordinary 99.98%) — and the
+section says plainly that F-010 did that, not the model.
+
+**What to try yourself.** Open `docs/ablation_m3.md` and change `g4`'s verdict
+from `drop` to `**KEEP**` without touching its −0.01% delta, then run `make
+verify-m3`. Watch §2 name the row: the bar re-applied to the table's own numbers
+disagrees with the word printed beside them. Restore it, then instead change the
+*number* to +0.90% and leave the verdict at `drop` — same leg, opposite lie,
+same red. Then try the edit that a literal-pinning gate would have missed: move
+`@champion` to version 1 with
+`mlflow.MlflowClient().set_registered_model_alias('nyc-taxi-eta','champion','1')`
+and run `make verify-m3` — §7 names the disagreement between the alias and the
+bake-off's recorded winner, and §2 stays green, because the ablation did not
+change. Put it back to version 2 afterwards.
+
 ### M3-S4 — the drill passed, and the thing it found was a corpse the pass rate could not see (2026-08-17, role:MLE)
 
 **What was built.** The automation half of M3's 2×2: a FLAML **scout** that
