@@ -106,9 +106,12 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: deploy-flyte pipeline verify-m4
+.PHONY: deploy-flyte pipeline pipeline-local verify-m4
+MONTH ?= 2019-01
 deploy-flyte: ## Flyte 2 on kind (ADR-002 fallback: flyte-binary 1.16.x)
 	@echo "TODO(M4)"
+pipeline-local: ## rehearse the six-stage graph on MONTH=$(MONTH) in plain Python, no orchestrator, NO verdict (M4-S1)
+	@uv run python pipelines/tasks.py --month $(MONTH)
 pipeline: ## full workflow for MONTH=$(MONTH) on-cluster
 	@echo "TODO(M4): pyflyte run --remote pipelines/flyte/workflows.py ... month=$(MONTH)"
 verify-m4: ## green run + cache-hit rerun + kill-a-pod retry survives
