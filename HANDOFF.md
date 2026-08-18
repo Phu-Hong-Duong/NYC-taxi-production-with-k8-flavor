@@ -1,5 +1,143 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (aj) — M3-S4 CLOSED: the sixth phase landed, automation won the arm it was expected to lose on, and the cap that bound both contenders truncated only one
+
+### State
+**EXECUTOR, Opus 5 (`claude-opus-5`, stated first line), story-scoped fresh
+session, role:MLE** (charter read; refusals in play: an AutoML-internal number
+quoted as a result · the gate, the evaluator and the TEST month · the registry
+API in this diff · improving a losing arm after seeing that it lost · a fifth
+contender invented at write-up time).
+
+**M3-S4 is complete and merged (PR #18, merge commit `451ef4e`).** This session
+did the short half (ai) could not: read the detached job's verdict, wrote the two
+missing rows, closed the story. **No fitting was run here** — every number below
+was produced by the detached track before this session existed.
+
+**Exit ritual (a).** M3-S5 remains and it is M3's last story;
+`automation/next_session.sh executor 120` scheduled by hand (the detached job's
+own `--then-schedule` fired at 02:59:07Z and booked *this* session — it is spent).
+
+### Boot step 3 — the status file, read FIRST
+```
+automation/runs/m3s4-automation-track.status
+  DONE 0 2026-08-18T02:59:07Z
+automation/runs/m3s4-automation-track.log (tail)
+  [track] finished 2026-08-18T02:59:07Z; 0 phase(s) failed
+```
+**DONE means the numbers are mine to use, and they were.** `automation/runs/m3s4/`
+holds six JSONs; the sixth (`refit-v2.json`, written 02:59) is the one (ai) was
+waiting for. Reality otherwise matched (ai)'s Next exactly: tree clean at
+`af03e71`, `automation/STOP` absent, 3/3 nodes Ready v1.36.1, all pods Running
+(restart counts from the 02:33Z Docker start, not from a crash), MLflow `200`,
+MinIO health `200`, Metabase `200`, `@champion` → version **1**
+(`3adee05a855a424bb664c7fea3735703`), `versions: ['1']`.
+
+### Done (every leg with the command and what came back)
+
+- **`auto-on-v2` measured, read from MLflow and not from the log** — `MlflowClient
+  .get_run('92b73bd4f77d4a05b92472bfcfb3cccf')` → `auto-lgbm-v2 FINISHED`,
+  `val_mae 3.3822796832477016` · `val_within_5min_rate 80.55193846340755` ·
+  `fit_seconds 981.467747512`. Matches `refit-v2.json` field for field.
+- **The 2×2's automation column is now complete**: `auto-on-v1` (xgboost, v1)
+  **3.7245 / 78.003%**, `auto-on-v2` (lgbm, v2) **3.3823 / 80.552%**.
+- **Automation WON on v2 by +0.2436% relative MAE and +0.046 KPI-10 points**
+  against the artisan's v2 (3.3905388307148137 / 80.50637925808934, run
+  `6807116e…`). Both computed here from the two committed JSONs.
+- **§6 of `docs/automation_track_m3.md` is complete** — every `pending` replaced
+  by a measurement, §6.4 rewritten to carry both arms, §6.5's projection replaced
+  by the ledger.
+- **`uv run pytest tests/unit -q` → 395 passed** · **`uv run ruff check .` → All
+  checks passed** · **`make verify-m2` → GREEN, exit 0** (re-run because docs
+  changed; §2 replays transcripts out of `docs/`).
+- **Registry untouched, checked directly before and after: version 1, `['1']`.**
+  Nothing in this diff can promote; nothing did.
+- **PR #18** `--label role:MLE` → `lint-test pass 1m9s` → `gh pr merge --merge
+  --delete-branch` → `git branch -r --contains d10e65c` → **`origin/main`**
+  (gotcha #20). Branch pruned.
+
+### The finding that changed shape when it was measured
+
+(ai) left one question: **did `auto-on-v2` also hit the 800-round cap, in which
+case F-015's truncation caveat doubles?** Measured answer: **it hit the cap and
+the caveat does not double.**
+
+```
+auto-on-v1   [700] 3.75255 → [799] 3.72447     gained 0.02808 MAE
+auto-on-v2   [700] 3.38266 → [800] 3.38232     gained 0.00034 MAE
+             both: "Did not meet early stopping"        ~82x difference in slope
+```
+`best_iteration` cannot tell these apart (800 vs 791 — both are "ran the whole
+cap"). The slope can. **A cap is a truncation only if the curve is still moving
+under it**, so v1 is capped-mid-descent and v2 is capped-flat, and F-015 attaches
+to the `auto-on-v1` row and to no other row in the 2×2. Had the question been
+answered from the JSON field alone, the one contender that had earned no caveat
+would have been given one.
+
+**F-015 stays OPEN for M3-S5** with a dated addendum recording (a) that the
+track's measured total is **9,133.8 s**, not the 9,400–9,700 s this row's own
+argument was written against, and (b) the slope finding above.
+
+### Judgement calls made inside scope (recorded, not escalated — no fork opened)
+- **`auto-on-v1` was still not refit with a bigger cap.** (ai)'s reasoning holds
+  unchanged and this session had no new licence to spend budget on the losing arm
+  after seeing its number (DR-01 condition 2). If M3-S5 wants the cap raised,
+  that is the fork — F-015 says so and this session did not pre-empt it.
+- **§6.5's wrong projection was replaced in place and the replacement says it was
+  a projection.** The 9,400–9,700 s guess assumed `refit-v2` would cost what
+  `refit-v1` cost; it cost 981.5 s against 1,308.1 (lgbm on 24 features is cheaper
+  per round than depth-12 xgboost on 5). Deleting the guess silently would have
+  been tidier and would have hidden that "the track has already overspent" — the
+  reason a losing arm may not be refit — runs on a number that got smaller.
+- **The v2 win is reported as a val-month comparison and NOT as a verdict.** No
+  contender has faced the gate; TEST is unread by this story. The 2×2's arithmetic
+  ("features, or tuning, or both?") is deliberately left to M3-S5 with its inputs
+  stated rather than half-computed here.
+- **No fifth arm, no re-run of any phase.** The six JSONs are the story.
+
+### Open items this session did NOT touch (none silently)
+- **Detached-log buffering** (carried from (ah)/(ai)): Python buffers stdout to a
+  file, so a detached phase's log only gains content when its process exits.
+  `PYTHONUNBUFFERED=1` in `scripts/automation_track.sh` is the one-line fix and it
+  is now cheap (a relaunch rotates rather than truncates). Not done here because
+  this story ran nothing detached — it belongs to whoever next launches one.
+- Carried, unchanged: **F-015 → M3-S5** · **F-009 → M5** · **D-001 / D-003 /
+  D-004 → M4** · the XGBoost-flavor `load_champion` path unexercised (now
+  narrower: the only xgboost row in the 2×2 is also its worst) · the sniper's
+  `rf`/`extra_tree` refusal path armed and untaken · `make train` cannot fit a
+  point-in-time set · **AWAITING_PO 2026-08-16-2** (allowlist) and
+  **2026-08-17-1** (libgomp). Nothing new was added to AWAITING_PO.
+
+### Next — M3-S5, the milestone's LAST story (◆-marked)
+The bake-off, the alias decision, and `verify-m3`. What is on the table, all
+val-month, all through the one evaluator, all full-data TRAIN-ONLY fits (DR-05):
+
+| arm | features | hyperparameters | val MAE | KPI-10 |
+|---|---|---|---:|---:|
+| v1 champion (M2-S2) | v1 (5) | hand | 3.4760 | 79.693% |
+| artisan v2 (M3-S3) | v2 (24) | hand (v1's) | **3.3905** | 80.506% |
+| `auto-on-v1` (M3-S4) | v1 (5) | tuned, xgboost | 3.7245 | 78.003% |
+| `auto-on-v2` (M3-S4) | v2 (24) | tuned, lgbm | **3.3823** | **80.552%** |
+
+1. **Read F-015 before building the table.** The `auto-on-v1` row needs its
+   caveat *in the row* (cap bound mid-descent · 9 trials of 60 · budget already
+   over). `auto-on-v2` needs no such caveat and giving it one would be wrong —
+   see the slope numbers above.
+2. **The bar is `configs/train.yaml: gate`, quoted, never the minutes** (DR-06):
+   2.00% over `baseline-group-median-od-fallback`, i.e. **≤3.2848 on TEST**, plus
+   KPI-10 no-regression, plus the incumbent conditions (F-011: version 1 at
+   3.2608 / 81.480%). **TEST is read once, by the gate.** No val number above is a
+   prediction of a test number.
+3. Budgets for the write-up, both measured: artisan **3,313.9 s** (stopped on its
+   own keep rule), automation **9,133.8 s** (stopped on a clock, mid-search, on
+   both studies) — **2.76×**, and the *kind* of stop differs, which is the part
+   normalising seconds cannot fix.
+4. Exit is **(b)**: M3 is ◆-marked → `automation/next_session.sh rev 120`.
+
+Chain: `automation/next_session.sh executor 120` run by hand at the end of this
+session. The detached job's `--then-schedule` is spent (it booked this session),
+so there is exactly one successor.
+
 ## Session 2026-08-18 (ai) — the resume worked and erased the run it resumed; automation LOST on v1, and the fix for that is forbidden
 
 ### State
