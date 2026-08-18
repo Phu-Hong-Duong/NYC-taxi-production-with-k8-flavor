@@ -446,3 +446,121 @@ rerun-versus-rerun. The drill now names stages that arrived pre-cached, excludes
 them from the saving, still requires them to be `CACHE_HIT` in run 2, and REFUSES
 to be green if run 1 executed nothing at all: a drill that compares two reruns can
 show no saving and must not be allowed to look like one.
+
+### The drill, run for real
+
+`make pipeline-cache-drill MONTH=2019-01`, detached (`automation/runs/m4s4-cache-drill.log`),
+**DONE 0**, **GREEN 19/19**:
+
+```
+[cache-drill] --- run1 (r56p9p7qwfsqgh6qgrlw) ---
+  a0             main             SUCCEEDED  CACHE_DISABLED      1965.9s
+  d5ycofwaj…     ingest           SUCCEEDED  CACHE_POPULATED       13.8s
+  40q2473fk…     validate         SUCCEEDED  CACHE_POPULATED        5.9s
+  5dhua5pl4…     build_features   SUCCEEDED  CACHE_POPULATED        8.9s
+  7pxwkh8n5…     train            SUCCEEDED  CACHE_POPULATED     1935.2s
+  eithh5v6q…     evaluate         SUCCEEDED  CACHE_POPULATED        3.2s
+  4mxq1zfwx…     register         SUCCEEDED  CACHE_DISABLED         3.2s
+[cache-drill] --- run2 (rbbvfb5mhfgz8cngx9rn) ---
+  a0             main             SUCCEEDED  CACHE_DISABLED         7.2s
+  d5ycofwaj…     ingest           SUCCEEDED  CACHE_HIT              0.9s
+  40q2473fk…     validate         SUCCEEDED  CACHE_HIT              1.0s
+  5dhua5pl4…     build_features   SUCCEEDED  CACHE_HIT              1.0s
+  7pxwkh8n5…     train            SUCCEEDED  CACHE_HIT              0.1s
+  eithh5v6q…     evaluate         SUCCEEDED  CACHE_HIT              0.2s
+  4mxq1zfwx…     register         SUCCEEDED  CACHE_DISABLED         3.2s
+
+[cache-drill] ok  train: run 2 CACHE_HIT (run 1 CACHE_POPULATED), 1935.2s -> 0.1s
+[cache-drill] ok  run 1 executed 5 stage(s) for real: build_features, evaluate, ingest, train, validate
+[cache-drill] ok  the executed stages cost 1966.9s -> 3.2s (0.2% of run 1, bar 10%)
+[cache-drill] ok  wall-clock 1974s -> 11s (0.6% of run 1, bar 50%)
+[cache-drill] ok  MLflow gained NO run across run 2 (16 -> 16)
+[cache-drill] ok  run 1 DID fit (12 -> 16 MLflow runs) — run 2's saving is real
+[cache-drill] ok  @champion is version 2 after both runs
+[cache-drill] 19/19 verdicts passed
+[cache-drill] GREEN — the rerun reused run 1, and three systems agree
+```
+
+**Thirty-three minutes to eleven seconds**, and the three legs agree without
+sharing a source: the control plane says `CACHE_HIT` for all five stages, the
+clock says 0.6%, and MLflow — which has never heard of Flyte — went `12 -> 16`
+across run 1 and `16 -> 16` across run 2. Four MLflow runs are what one fit costs
+here (two floors, the challenger, the parent), so "no new runs" is not an absence
+of evidence; it is the positive statement that the fit did not happen twice.
+
+**`register` re-executed both times, at 3.2s, and that is the design working.**
+Run 2's verdict was therefore re-derived from a CACHED manifest and re-read the
+live alias — which is the only reason `@champion is version 2 after both runs`
+means anything. A cached register would have replayed the previous answer to a
+question whose whole point is that it can change.
+
+## 11. F-026 — the image is where the model code comes from, and nothing said so
+
+Found while checking something the drill has to be able to answer before its
+result means anything: *were both runs running the same code?*
+
+They were — but not for any reason the repo could state. `flyte run` defaults to
+`--copy-style loaded_modules`, so the code bundle carries only what is imported at
+REGISTRATION: **22 files**, observed in the transcript, against **36 `.py` files in
+`src/taxi_mlops` alone**. Every stage body imports `pipelines.tasks` (and through
+it `taxi_mlops`) *inside* the function, so the modules that compute every number in
+this pipeline arrive in the **task image** — whose tag is read from
+`automation/runs/m4-image/image.json`, a file only `make image-load` rewrites.
+
+Edit `src/`, commit, run `make pipeline`: the pod runs the previous code and the
+transcript is green.
+
+The line the runner used to print — `a pull error here means the tree moved` —
+described a protection that does not exist. M4-S3's loud-`ImagePullBackOff`
+property fires for a tag **no node holds**; a stale manifest names a tag **every
+node holds**. So the check is now explicit, and scoped to the paths a pod can only
+receive through the image:
+
+```
+[pipeline] ok  image fb57324 carries this tree's src pyproject.toml uv.lock docker (F-026 checked)
+```
+
+**`pipelines/` is deliberately not in that list.** It IS the code bundle, so an
+edit there does reach the pod — guarding it would have refused this story's own
+cache drill, and a guard that fires when nothing is wrong is a guard that gets
+deleted (gotcha #50).
+
+Red-teamed the same session, after the drill so nothing in flight could be
+disturbed: one appended comment line in `src/taxi_mlops/training/evaluate.py`,
+then `make pipeline`:
+
+```
+[pipeline] FAIL: the task image predates the source it would run (F-026).
+[pipeline]       image fb57324 vs HEAD ae8befb, differing under src pyproject.toml uv.lock docker:
+[pipeline]         uncommitted:  M src/taxi_mlops/training/evaluate.py
+[pipeline]       These reach a task pod ONLY through the image, so this run would
+[pipeline]       compute its numbers with the old code. Fix: make image-load
+make: *** [Makefile:132: pipeline] Error 3
+```
+
+Exit 3, in under a second, **before the PVC check, the port-forward or any
+launch** — the refusal costs nothing and happens before anything can be
+half-done. File restored (`git checkout`), tree clean.
+
+## 12. What M4-S5 inherits (supersedes §8)
+
+Both of M4-S4's outstanding legs are landed: the **full-data green run** (§9) and
+the **cache-hit rerun** (§10). M4-S5 is unblocked in full — kill-a-pod, D-003's
+marts tail task, `make verify-m4` and its red team.
+
+* **`scripts/flyte_run_actions.py` is built for `verify-m4` to reuse.** It reads a
+  run's actions, their phases, their `cache_status` and their durations, and it
+  only reads — pinned structurally by a test, because a gate that can mutate the
+  run it judges is not a gate. The cache evidence `verify-m4` owes is
+  `automation/runs/m4-cache/cache_drill.json`, which holds both runs' full action
+  lists, both wall-clocks and the MLflow counts.
+* **The kill-a-pod drill wants an UNCACHED stage to kill**, and after this story
+  five of the six are cached for `MONTH=2019-01`. Either drill a fresh month (a
+  new `ingest` key), or edit nothing and kill the `register` stage — which is
+  uncached by design but lasts 3.2 seconds. The fresh month is the honest one.
+* **One shape not to change without deciding to**: `register`'s output `margins`
+  carries the floor numbers only, so a REFUSE decided by the INCUMBENT condition
+  prints beside a floor margin that passes (§9). `verify-m4` is about to start
+  asserting against that output — fix it *before* pinning it, or pin it and carry
+  the gap, but do not do both in the wrong order.
+* **`@champion` is version 2**, read before and after all four runs this session.
