@@ -786,7 +786,7 @@ if [[ "$FAILS" -eq 0 ]]; then
   printf '            Show: the dossier      docs/feature_dossier.md\n'
   printf '                  the ablation     docs/ablation_m3.md\n'
   printf '                  the bake-off     docs/bakeoff_m3.md (2x2 + floor, five verdicts)\n'
-  printf '                  the leakage dril docs/leakage_redteam_m3.md\n'
+  printf '                  the leakage drill docs/leakage_redteam_m3.md\n'
   exit 0
 fi
 printf '\033[31m[verify-m3] RED — %d sub-check(s) failed.\033[0m\n' "$FAILS"
