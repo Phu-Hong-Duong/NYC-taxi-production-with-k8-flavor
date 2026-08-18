@@ -334,3 +334,29 @@ def test_the_action_reader_only_reads():
     forbidden = called & {"run", "launch", "abort", "delete", "terminate", "create", "deploy"}
     assert not forbidden, f"the action reader calls {forbidden} — it is supposed to only read"
     assert called, "the parser found no flyte calls at all — it is checking nothing"
+
+
+def test_the_runner_refuses_an_image_older_than_the_source_it_would_run():
+    """F-026, pinned. `src/taxi_mlops` reaches a task pod ONLY through the image
+    (flyte's default copy-style bundles the loaded modules, and every stage imports
+    the model code inside its function body), while the image tag comes from a
+    manifest only `make image-load` rewrites. So the runner must diff the image's
+    commit against HEAD — and must do it over the paths the image is the sole
+    carrier of, which pointedly EXCLUDES `pipelines/`: that is what the bundle
+    ships, so refusing on it would refuse a run whose code did reach the pod.
+    """
+    text = (REPO / "scripts" / "run_pipeline.sh").read_text()
+    # Read the array off its own line. `test_cluster_scripts.py` learned at M2-S1
+    # that finding a shell array's end with the next `)` truncates it at the first
+    # paren in a trailing comment (gotcha #35), so this matches the whole line and
+    # the array is deliberately written without one.
+    match = re.search(r"^IMAGE_PATHS=\(([^)\n]*)\)\s*$", text, re.M)
+    assert match, "run_pipeline.sh no longer declares the image-carried paths"
+    paths = set(match.group(1).split())
+    assert paths == {"src", "pyproject.toml", "uv.lock", "docker"}, paths
+    assert "pipelines" not in paths, (
+        "pipelines/ travels in the code bundle; guarding it would refuse runs whose "
+        "code genuinely reached the pod"
+    )
+    assert "exit 3" in text, "the drift refusal needs its own exit code"
+    assert "IMAGE_DRIFT_OK" in text, "the waiver must exist and must announce itself"
