@@ -35,6 +35,13 @@ nodes:
     image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
   - role: worker
     image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
-# TODO(M4): local registry pattern (containerdConfigPatches) OR rely on `kind load`.
-# NOT decided at M0 — M0 runs no image of ours (gotcha #3 bites only when we build
-# one). Carried with a quoted landing in ledgers/debt.md (D-001 → M4).
+# D-001 DECIDED 2026-08-18 (M4-S3): `kind load docker-image`, not the local
+# registry pattern — see docker/DECISION-D001-image-delivery.md for both options
+# with their honest costs. The short reason lives here because this is the file
+# the alternative would have edited: `containerdConfigPatches` is read only at
+# cluster-CREATE, so adopting it means delete+create, and this cluster's PVCs hold
+# the only copy of the MLflow registry, MinIO's artifacts, the Metabase app-db and
+# both Optuna studies. The registry pattern is the better END-STATE and lands at
+# the next PO-sanctioned rebuild — the same event that owes Flyte a declared 8080
+# hostPort (M4-S2). Until then: `make image-load`, which reads the result back off
+# every node with crictl.

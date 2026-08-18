@@ -175,9 +175,15 @@ say "  loaded in ${load_seconds}s"
 # containerd will actually hand a pod. They are different claims.
 say ""
 say "-- read-back (crictl on each node) -----------------------------"
+# NOTE for whoever reads both numbers: the id containerd prints is NOT the id
+# docker printed above. Docker names this build by its manifest-LIST digest;
+# containerd names the image by its CONFIG digest. Both are correct and they
+# differ by construction, so the comparison below is node-id against node-id.
 failures=0
+containerd_id="unknown"
 for node in "${NODES[@]}"; do
   after="$(node_image_id "$node" "$IMAGE_REF")"
+  [[ "$after" != "absent" ]] && containerd_id="$after"
   if [[ "$after" == "absent" ]]; then
     say "  FAIL  $node: $IMAGE_REF is NOT in containerd"
     failures=$(( failures + 1 ))
@@ -196,14 +202,17 @@ done
 # --- record -------------------------------------------------------------------
 mkdir -p "$MANIFEST_DIR"
 python3 - "$MANIFEST" "$IMAGE_REF" "$IMAGE_NAME" "$TAG" "$image_id" "$image_bytes" \
-         "$base_digest" "$dirty" "$build_seconds" "$load_seconds" "$unpacked_bytes" "${NODES[@]}" <<'PY'
+         "$base_digest" "$dirty" "$build_seconds" "$load_seconds" "$unpacked_bytes" \
+         "$containerd_id" "${NODES[@]}" <<'PY'
 import json, subprocess, sys
-(path, ref, name, tag, image_id, size, base, dirty, build_s, load_s, unpacked), nodes = sys.argv[1:12], sys.argv[12:]
+(path, ref, name, tag, image_id, size, base, dirty, build_s, load_s, unpacked,
+ containerd_id), nodes = sys.argv[1:13], sys.argv[13:]
 record = {
     "image_ref": ref,
     "image_name": name,
     "tag": tag,
     "image_id": image_id,
+    "containerd_image_id": containerd_id,
     "content_bytes": int(size),
     "unpacked_bytes_approx": int(unpacked),
     "base_image": base,

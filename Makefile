@@ -106,14 +106,16 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke pipeline pipeline-local verify-m4
+.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam pipeline pipeline-local verify-m4
 MONTH ?= 2019-01
 image-build: ## build the task image only; the cluster is not touched (M4-S3)
 	@bash scripts/image_build_load.sh --build-only
 image-load: ## build the task image + kind load onto every node, read back with crictl (M4-S3, D-001; DRY_RUN=1 previews)
 	@bash scripts/image_build_load.sh
-image-smoke: ## prove the image runs OUR code and that D-004's shim is dead inside it (8 checks, in-container)
+image-smoke: ## prove the image runs OUR code and that D-004's shim is dead inside it (10 checks, in-container)
 	@bash scripts/image_smoke.sh
+image-smoke-redteam: ## mask the system libgomp in ONE container: the D-004 checks must all flip (else they measure nothing)
+	@bash scripts/image_smoke_redteam.sh
 backup: ## the lifeboat: pg_dump every database + mirror every MinIO bucket outside the repo (M4-S2; DRY_RUN=1 previews)
 	@bash scripts/platform_backup.sh
 deploy-flyte: ## Flyte on kind: databases via D-002, blob store in the existing MinIO (idempotent; ADR-002)

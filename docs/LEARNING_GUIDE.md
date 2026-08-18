@@ -9,6 +9,103 @@ months from now.
 
 ## M4
 
+### M4-S3 — the image was plausible, and the tests inside it were what made it real (2026-08-18, role:MLOps)
+
+**What was built.** The task image the pipeline will run in from M4-S4 on:
+`docker/Dockerfile.pipeline` (python 3.12.14 pinned by tag AND digest, `uv sync
+--frozen` off the committed lock, `libgomp1` as a real package, non-root),
+`make image-load` (build → `kind load` → read back off every node with the nodes'
+own `crictl`), `make image-smoke` (10 checks, all inside the container), and
+`make image-smoke-redteam` (the drill that proves those checks can go red). Two
+debt rows closed with evidence — **D-001** (how images reach the nodes) and
+**D-004** (the OpenMP shim must be dead in the image) — and one new finding,
+**F-024**, found by the drill.
+
+**Why this way.** The interesting decisions are all about *what counts as
+evidence*.
+
+D-004 does not ask for `apt-get install libgomp1`. It asks for proof that the
+image's OpenMP is the system's, and that is a subtler thing, because **the
+borrowed one works**. On this laptop `taxi_mlops.training.openmp` symlinks the
+copy scikit-learn's wheel vendors and re-execs, and everything trains fine. If
+the image had quietly kept doing that, every number would still be right and the
+debt would never close — it would just stop being visible. The only externally
+observable difference is one line on stdout. So the closing evidence is
+*negative*: no `[openmp]` announcement, and no `/app/.venv/lib/openmp` directory,
+in an image where both wheels still ship a `libgomp` the shim could borrow.
+
+Negative evidence is worthless unless you can make it flip, which is why the
+drill exists. It bind-mounts an **empty file** over the system library in ONE
+`--rm` container — nothing else touched, the image and the three nodes and the
+cluster all untouched, the same "break the pointer, never the state" shape as
+`verify-m2-redteam` deleting an alias. Inside that one container the world looks
+exactly as it looks on this host, and all three checks flip. Its exit code is
+inverted like `make marts-redteam`'s: a check that stays GREEN under the mask is a
+check that measures nothing, and the script says so.
+
+D-001 went the other way — a decision the constraints had already made. The
+local-registry pattern is genuinely better, and it needs
+`containerdConfigPatches` in the kind config, and the kind config is read only at
+cluster-create. This cluster holds the only copy of the MLflow registry. So the
+decision note records the better option, its cost, and the *event* it lands at
+(the next PO-sanctioned rebuild) with the *trigger* that will make it worth doing
+(image churn). "Deferred with a date and a reason" is a different artifact from
+"we picked the easy one".
+
+**The concept underneath: an artifact you have read is not an artifact you have
+run.** The Dockerfile was correct on every line I could reason about, and the
+image it produced could not build a feature — because `.dockerignore` excluded
+`data/` wholesale, and 1.1 MB of what lives under `data/` is *committed* lookup
+tables (zone centroids, the TLC lookup, the pinned shapefile, the holiday table)
+rather than anything DVC pins. Twenty-eight tests failed and ten errored the
+first time the suite ran **inside** the image, against 452 that passed. No
+review of the Dockerfile would have found that; running the project's own tests
+in the artifact found it in 43 seconds. That is why check 6 exists, why the dev
+group (pytest) is installed in the image on purpose, and why a separate "test
+stage" was rejected — a test stage proves a suite passes in an image that is not
+the one that ships.
+
+The same lesson landed three more times in miniature, and all three are the same
+disease: **a verifier that fails for its own reasons and blames the artifact**
+(gotcha #55, paid again). An inner `bash -lc` expanded `${Package}` to empty and
+the check reported blanks as the image's fault. A bare `ldconfig` is
+`command not found` for a non-root user. Asserting the library resolves under
+`/usr/lib` is red on a correct Debian image, where `/lib` is a symlink and
+ldconfig prints the former. Three wrong REDs about a correct image — and every
+time, the tell was that the checks measuring *behaviour* (2, 3, 8) stayed green.
+When a guard goes red, ask FIRST whether the thing it names actually got worse.
+
+Then the drill found something real. To make the shim fire I ran it with
+`python -c`, and got the announcement followed by `Argument expected for the -c
+option`. CPython does not preserve the `-c` source string, so the re-exec could
+never rebuild its own command line — **since M2-S2, reproducible on the host,
+four milestones old** (F-024). Blast radius: ad-hoc probes only, because every
+real entry point is `python -m` or a file. But look at the failure's *shape*: the
+shim printed that it had linked the library and was re-executing, and then a
+message about argument parsing appeared. The visible story was "the fix worked",
+followed by noise. It is fixed by *refusing* the form it cannot serve, before
+mutating anything, with a message naming the three ways out.
+
+**What to look at.** `docs/task_image_m4.md` — §3 is the smoke transcript, §4 the
+drill, §5 the three things that went wrong with what each cost, §7 F-024.
+`docker/DECISION-D001-image-delivery.md` for the two options side by side.
+`docker/Dockerfile.pipeline` reads as an argument, not a recipe: every pin says
+why it is pinned and the user ordering says what it saved. `tests/unit/
+test_task_image.py`'s `code_only()` helper is gotcha #53 biting a third time —
+four of its assertions went red on the prose in my own comments.
+
+**What to try yourself.** (1) `make image-smoke-redteam` — watch three green
+checks turn red and come back, and read the last step, which proves a fresh
+container from the same image is clean. (2) Delete `libgomp1` from the Dockerfile,
+rebuild, run `make image-smoke`: checks 1, 2, 3 and 8 go red together and 4-7
+stay green, which tells you exactly which checks are load-bearing for D-004.
+(3) Run `docker history` on any image you own and look for a layer that is as big
+as your dependencies but does not install anything — that is a `chown -R`, and it
+cost this story 1.7 GB and 139 s before `docker history` named it. (4) In any
+container, compare `bash -lc 'which python'` with `bash -c 'which python'`.
+
+---
+
 ### M4-S2 — the lifeboat, the guard that stopped telling us to shoot ourselves, and a verifier that could not see the thing it named (2026-08-18, role:MLOps)
 
 **What was built.** Three things and one honest hole. (1) **`make backup`** — the

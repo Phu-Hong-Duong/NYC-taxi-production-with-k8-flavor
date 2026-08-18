@@ -48,7 +48,13 @@ echo "  image : $IMAGE_REF"
 
 # ---------------------------------------------------------------- 1. the package
 head2 "1. libgomp1 is a real apt package inside the image (D-004)"
-if out="$(run bash -lc 'dpkg-query -W -f="${Package} ${Version} ${Status}\n" libgomp1 2>&1')"; then
+# The format string is passed as an ARGUMENT, not through an inner `bash -lc`:
+# the first version of this check wrapped it in `bash -lc '... -f="${Package} …"'`
+# and the INNER bash expanded ${Package} to empty, so the check printed blanks and
+# blamed the image. Gotcha #55 exactly — a verifier that fails for its own reasons
+# and reports it as the artifact's fault. Checks 2, 3 and 8 were green throughout,
+# which is the tell: behaviour is the truth, this line is only its receipt.
+if out="$(run dpkg-query -W -f='${Package} ${Version} ${Status}\n' libgomp1 2>&1)"; then
   echo "     $out"
   if [[ "$out" == *"install ok installed"* ]]; then
     ok "libgomp1 installed by dpkg: ${out%% install*}"
@@ -58,12 +64,19 @@ if out="$(run bash -lc 'dpkg-query -W -f="${Package} ${Version} ${Status}\n" lib
 else
   bad "dpkg-query found no libgomp1: $out"
 fi
-if out="$(run bash -lc 'ldconfig -p | grep -m2 "libgomp\.so\.1"')"; then
+# /sbin/ldconfig by absolute path: the image runs as non-root and /sbin is not on
+# uid 1000's PATH, so a bare `ldconfig` is `command not found` — the second half of
+# the same verifier bug.
+if out="$(run bash -c '/sbin/ldconfig -p | grep -m2 "libgomp\.so\.1"')"; then
   echo "     $out"
-  # The path matters: /usr/lib/... is the system's. Anything under
+  # The path matters: a system multiarch lib dir is the package's. Anything under
   # site-packages or /app/.venv would be a wheel's vendored copy, i.e. the shim.
-  if grep -qE '=> */usr/lib' <<<"$out" && ! grep -q 'site-packages\|/app/\.venv' <<<"$out"; then
-    ok "the loader resolves libgomp.so.1 from /usr/lib — not from a wheel"
+  # Matched as `/lib` OR `/usr/lib` on purpose — on Debian `/lib` is a symlink to
+  # `/usr/lib` and ldconfig prints the former, so an `/usr/lib`-only pattern goes
+  # red on a correct image (the third instance of this check being wrong about
+  # itself; the assertion that carries the meaning is the negative one).
+  if grep -qE '=> +/(usr/)?lib/' <<<"$out" && ! grep -q 'site-packages\|/app/\.venv' <<<"$out"; then
+    ok "the loader resolves libgomp.so.1 from a system lib dir — not from a wheel"
   else
     bad "libgomp.so.1 resolves somewhere other than the system path: $out"
   fi
@@ -83,9 +96,11 @@ else
 fi
 
 head2 "3. ensure_openmp() takes the system path and announces NOTHING"
-ensure_out="$(run python -c '
-from taxi_mlops.training.openmp import ensure_openmp
-print(ensure_openmp())')"
+# Through `python -m taxi_mlops.training.openmp_probe`, not `python -c`: `-m` is
+# the invocation form the shim's re-exec is written for and the form every task
+# entry point uses, so this check exercises the path a real task takes. (`-c`
+# cannot re-exec at all — F-024, and it now refuses; the red team asserts that.)
+ensure_out="$(run python -m taxi_mlops.training.openmp_probe)"
 echo "     $ensure_out"
 if [[ "$ensure_out" == "openmp: system libgomp.so.1" ]]; then
   ok "ensure_openmp() -> $ensure_out"
@@ -206,7 +221,12 @@ head2 "8. the shim's directory does not exist in the image"
 # taxi_mlops.training.openmp._shim_dir() is <repo>/.venv/lib/openmp, created only
 # when the shim fires. Its absence after checks 2-7 is the negative evidence
 # D-004's row asks for.
-trace_out="$(run bash -lc '
+# `bash -c`, never `bash -lc`: a LOGIN shell re-reads /etc/profile, rebuilds PATH
+# and throws away the image's `ENV PATH=/app/.venv/bin:…`, so `python` becomes the
+# base interpreter and every taxi_mlops import fails. That cost this story a wrong
+# red verdict once (gotcha #56) — no python runs in this check any more, but the
+# flag is gone from every container in this file for the same reason.
+trace_out="$(run bash -c '
 test -e /app/.venv/lib/openmp && echo "PRESENT: /app/.venv/lib/openmp" || echo "absent: /app/.venv/lib/openmp"
 find /app/.venv -name "libgomp.so.1" -print 2>/dev/null | sed "s/^/venv-soname: /"
 echo "vendored copies still shipped by wheels (harmless, unused):"

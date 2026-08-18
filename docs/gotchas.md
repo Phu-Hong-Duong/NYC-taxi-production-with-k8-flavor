@@ -727,3 +727,44 @@ the seed line are earned by THIS project.
     the same disease as #50, one layer down. Guard patterns with `grep -- "$pat"`
     whenever the pattern is data, and test a new check against a real artifact
     *before* wiring it into something that takes minutes to reproduce.
+
+56. **A container check reports "the module is missing" / "the shim left no
+    trace" while the image is perfectly correct — because the check used
+    `bash -lc`.** A LOGIN shell re-reads `/etc/profile`, which rebuilds `PATH`
+    from scratch and throws away the image's own `ENV PATH=/app/.venv/bin:…`. So
+    `python` becomes the base interpreter, every `import taxi_mlops` raises
+    `ModuleNotFoundError`, and whatever the check was actually looking for is
+    reported as absent. Cost 2026-08-18 (M4-S3): one wrong RED verdict in the
+    D-004 sensor drill, which "proved" the shim had not fired when in fact its
+    python had never started. Check: `docker run --rm <img> bash -lc 'which
+    python'` vs `bash -c 'which python'` — if they differ, every `-l` in your
+    checks is a lie. Use `bash -c`, or call the interpreter by absolute path.
+    Related: `/sbin` is not on a non-root user's PATH either, so `ldconfig`
+    needs its full path in the same containers.
+
+57. **A `chown -R` at the end of a Dockerfile doubles the image.** The tutorial
+    ordering — build everything as root, then `chown -R app:app /app` before
+    `USER` — costs a full copy of every file it touches, because a layer records
+    new metadata by storing the whole file again. Measured 2026-08-18 (M4-S3):
+    the chown was a **1.7 GB layer** duplicating the venv beneath it and took
+    **139 s**; creating the user BEFORE installing anything (plus
+    `COPY --chown=`) produced the same image at **736 MiB** content instead of
+    1408 MiB. It hid because `docker image inspect --format '{{.Size}}'` is the
+    number everyone quotes and under Docker 29's containerd store it is the
+    CONTENT size, not what the layers occupy unpacked. Check: `docker history
+    <img> --format '{{.Size}}\t{{.CreatedBy}}'` and look for a layer as big as
+    your dependencies that does not install anything.
+
+58. **`.dockerignore` is not hygiene, and `data/` is not one thing.** Excluding
+    `data/` wholesale is right for the trees DVC pins and wrong for anything
+    committed under it: 1.1 MB of `data/reference/` in this repo is the lookup
+    layer the feature path reads (zone centroids, the TLC zone lookup, the pinned
+    shapefile, the holiday table), and a `.env.*` glob eats the committed
+    `.env.example` template too. The resulting image imports every module
+    perfectly and cannot build a feature. Cost 2026-08-18 (M4-S3): **28 failed +
+    10 errors** in the first in-image test run — which is also the lesson: the
+    thing that caught it was running the project's own unit suite INSIDE the
+    artifact, not reading the Dockerfile. Rule adopted: *the image contains what
+    git contains*, and a test asserts the ignore file against `data/.gitignore`
+    in both directions.
+

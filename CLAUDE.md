@@ -106,6 +106,10 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | Flyte chart | **`flyteorg/flyte-binary` v2.0.42** — and the name inverts the intuition: THIS is the Flyte **2.x** line (unified `flyte-core-components` manager), while `flyteorg/flyte-core`/`flyteorg/flyte` are **1.16.x**. ADR-002's pre-approved fallback is `flyte-binary` **v1.5.1** (appVersion 1.16.0) | 2026-08-18 | `helm search repo flyteorg --versions` (M4-S2), read back with `helm -n flyte list`. Pinned in `scripts/deploy_flyte.sh` beside the fallback version |
 | Flyte server image | `cr.flyte.org/flyteorg/flyte-binary-v2:v2.0.42` | 2026-08-18 | chart-pinned (M4-S2); one Deployment, plus `flyteconnector` (chart default, unused here — left on deliberately, see the values file) |
 | Flyte console image | `ghcr.io/unionai-oss/flyteconsole-v2:latest@sha256:3cea5ec7ea1ebb2d2b392d60988c028ff45965e3a7eecb0e1ba51d7ec81e6cdb` — TAG AND DIGEST, the Metabase precedent | 2026-08-18 | `docker buildx imagetools inspect` (M4-S2). The chart's default is the bare tag `latest`, which is not a pin at all. **99 MB, and it took 9m49s to pull** — which is why `deploy_flyte.sh` waits 20m, not 10m |
+| Task image base | `python:3.12.14-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a` — TAG AND DIGEST (the Metabase precedent). `trixie` = Debian 13, which is what the kind nodes already run, so one libc family across node and workload | 2026-08-18 | `docker pull` + `docker image inspect` (M4-S3). Interpreter in-image is CPython 3.12.14 `[GCC 14.2.0]`; the HOST's 3.12.14 is uv-managed python-build-standalone `[Clang 22.1.3]` — same version, different compiler, and the graph is identical package-for-package (215/215, checked), which is what actually determines the numbers |
+| uv (in the task image) | **0.12.5**, `ghcr.io/astral-sh/uv:0.12.5@sha256:e85be844203885286c60ffad8a858d48afb6c5a5c237ca0e67f12e74b8f174b1` — the same version that resolved `uv.lock` on the host | 2026-08-18 | M4-S3. A different uv could legally re-resolve; same binary + `--frozen` means it cannot |
+| libgomp (in the task image) | **libgomp1 14.2.0-19** (Debian trixie), a real apt package — **D-004's closure** | 2026-08-18 | `dpkg-query` INSIDE the image (M4-S3). The shim stays in the code as the laptop path; `make image-smoke` proves it never fires in the container and `make image-smoke-redteam` proves that check can go red |
+| Task image | `taxi-mlops-pipeline:<git-short-sha>` (`-dirty` when the tree is not clean) · **737 MiB** content / **~1,898 MB** unpacked · on all 3 nodes by `kind load` | 2026-08-18 | `make image-load` (M4-S3); current ref + both image ids in `automation/runs/m4-image/image.json`. `nvidia-nccl-cu13` is 241 MB of it (hard dep of xgboost on linux, never loaded) — noted, not fought |
 | Flyte SDK / CLI | **`flyte` 2.6.1** (brings `flyteidl2` **2.0.42** — an exact match to the chart) | 2026-08-18 | `uv add "flyte>=2.6,<3"` (M4-S2). **Gotcha #36 checked at add time: 29 packages installed, only the project rebuilt, and pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 · mlflow-skinny 3.15.1 · lightgbm 4.7.0 · xgboost 3.4.1 all unchanged.** The CLI is `flyte` (verb/noun), NOT `pyflyte`/`flytectl` — those are the 1.x tools |
 
 ## The data contract (M1-S1) — where the rules actually live
@@ -841,6 +845,72 @@ can never disagree (the port-family twins lesson, applied before it bit).
   deployment succeeded (`/healthz` 200, helm `deployed`). Next probes, in order,
   are recorded in the finding so nobody restarts the search.
 
+## The task image (M4-S3) — what it contains, how it reaches the nodes, and how D-004 died
+- **`make image-load` is the whole path**: build → `kind load` → read back off
+  every node with the nodes' OWN tool (`docker exec <node> crictl images`), each
+  node's image id printed BEFORE and after so an idempotent re-load reads
+  `(unchanged)` instead of being asserted. `make image-build` stops before the
+  cluster; `DRY_RUN=1` mutates nothing (gotcha #30's rule, pinned by a test).
+- **The tag is the git short sha, and that is a correctness property.** k8s pulls
+  `IfNotPresent` for any non-`:latest` tag and `kind load` writes into containerd
+  BY TAG, so a mutable tag gives you nodes holding last week's bytes under this
+  week's name with nothing saying so. An immutable tag turns a stale node into a
+  MISSING image — a loud `ImagePullBackOff`, not a wrong number. `-dirty` says
+  the image carries uncommitted work and must not back a verdict. A test refuses
+  `:latest`. **Two ids, both legitimately different**: docker names a BuildKit
+  build by its manifest-LIST digest, containerd by its CONFIG digest; both are in
+  `automation/runs/m4-image/image.json`.
+- **D-001 DECIDED: `kind load`, with the registry pattern deferred WITH a date
+  and a trigger** (`docker/DECISION-D001-image-delivery.md`). `containerdConfig-
+  Patches` lives in the kind config, the kind config is read only at cluster-
+  CREATE, and this cluster's PVCs are the only copy of the registry — so the
+  better option is unavailable at a price M4 may pay. It lands at the next
+  PO-sanctioned rebuild (the same event that owes Flyte its declared 8080 route);
+  the trigger that makes it worth it is **image churn**. `infra/kind/kind-
+  config.yaml`'s `TODO(M4)` is now a pointer to that note.
+- **D-004 CLOSED by evidence, and by evidence that the evidence can fail.**
+  `libgomp1` is a real package; `make image-smoke` runs **10 checks inside the
+  container** — `dpkg-query` says installed, `ldconfig` resolves it from a system
+  lib dir and not a wheel, `openmp_status()` is `(True, 'system libgomp.so.1')`
+  on the FIRST line, `python -m taxi_mlops.training.openmp_probe` prints one line
+  with **no `[openmp]` announcement**, and `/app/.venv/lib/openmp` does not exist
+  even though both the xgboost and scikit-learn wheels still ship a borrowable
+  copy. That last pair is NEGATIVE evidence, which is the only shape that can
+  retire this debt — the shim WORKS, so a debt that keeps working never closes.
+  **`make image-smoke-redteam` masks the system library with an EMPTY FILE in ONE
+  `--rm` container** (image, nodes and cluster untouched — the alias-deletion
+  shape) and all three flip; a check that stays green under the mask fails the
+  drill, exit code inverted like `marts-redteam`'s.
+- **The image contains what git contains.** `.dockerignore` mirrors the repo's own
+  ignore rules and a test asserts it BOTH ways: everything `data/.gitignore` names
+  is excluded, and `data/reference/` is NOT. The first draft excluded `data/`
+  wholesale and produced an image that imports every module and cannot build a
+  feature — 1.1 MB under `data/` is committed lookup tables (zone centroids, TLC
+  lookup, the pinned shapefile, the holiday table). **The in-image unit suite is
+  what caught it: 28 failed + 10 errors against 452 passed.** Same draft's
+  `.env.*` glob ate the committed `.env.example`. Data reaches tasks at RUN time —
+  M4-S4's decision (MinIO or a staged PVC); `kind extraMounts` is a config edit
+  and therefore forbidden, exactly like the registry pattern.
+- **pytest is installed in the image on purpose** — check 6 runs `tests/unit`
+  in-image (452 passed, 5 skipped) and a separate "test stage" would prove a suite
+  passes in an image that is not the one that ships. Check 7 runs a real stage:
+  `pipelines.tasks.validate('2019-01')` puts 7,584,656 rows back through the
+  output contract, reading the host's DVC-pinned tree bind-mounted READ-ONLY.
+- **Two build lessons with numbers.** `chown -R` at the end of a Dockerfile was a
+  **1.7 GB duplicate layer** costing **139 s** (gotcha #57): creating the non-root
+  user BEFORE installing anything gave the same image at 736 MiB instead of 1408.
+  It hid because `docker image inspect .Size` is the CONTENT size under Docker
+  29's containerd store, so the script now prints content AND unpacked. And
+  `bash -lc` in a container is a trap (gotcha #56): a login shell rebuilds PATH
+  and drops `/app/.venv/bin`, so `python` becomes the base interpreter — it cost
+  one wrong RED verdict in the drill.
+- **F-024, found by the drill and fixed the same session**: the shim could never
+  re-exec a `python -c` invocation (CPython keeps no `-c` source string), so it
+  announced success and then printed `Argument expected for the -c option`.
+  Present since M2-S2, reproduced on the host, blast radius = ad-hoc probes only.
+  It now REFUSES that form before mutating anything and names the three ways out;
+  `openmp_probe` is the `-m`-runnable replacement, which is what the smoke uses.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -917,6 +987,9 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Reach Flyte from the host (M4-S2) | `make flyte-console` (blocking forward) · `bash scripts/flyte_console.sh --check` (one-shot, tears the tunnel down) | VERIFIED 2026-08-18 (M4-S2): `ok  API answers: GET /healthz -> 200 (svc svc/flyte-flyte-binary-http:8090)`. The path was ASKED of the server, not remembered — `/healthcheck` (the 1.x path) returns 404, `/healthz` and `/readyz` return 200. **A port-forward, not a declared route, and that is recorded**: no hostPort exists for Flyte, adding one means a rebuild the statefulness law forbids, and there is no ingress controller until KServe at M5 — so the browser console is deliberately NOT forwarded (same-origin SPA; it would render and then fail every request) |
 | Hello-workflow on the cluster (M4-S2) | `make flyte-hello` (`scripts/flyte_hello.sh`) | **NOT VERIFIED — BLOCKED, F-023, wall recorded at 5 attempts.** It reaches the control plane and gets far (project `nyc-taxi` created · image `ghcr.io/flyteorg/flyte:py3.12-v2.6.1` resolved, no build · code bundle built) then fails at `Uploading code bundle...` with `ConnectError: [Errno -2] Name or service not known`: the blob store is ONE MinIO with TWO names and the client is handed the in-cluster one. Exporting the SDK's own `FLYTE_AWS_ENDPOINT`/key vars did NOT change it. **ADR-002's fallback is NOT executed** — its trigger is deployment or MLflow interop, and deployment succeeded. Next probes recorded in F-023; full trail in `docs/platform_flyte_m4.md` §5. The Makefile help text says BLOCKED so the target cannot look healthy |
 | Gate check M2 / M3, re-run after the F-018 repair | `make verify-m2` · `make verify-m3` | RE-VERIFIED 2026-08-18 (M4-S1): **GREEN 55/55** and **GREEN 46/46**, both exit 0, **neither verify script touched by the diff** — including verify-m3 §5, which replays the bake-off's five recorded verdicts through `gate.decide` as it exists on disk, and verify-m2 §2, which parses the OLD holdout line out of the committed promotion transcripts (the repaired `verdict_lines` keeps the shape they are parsed with, on both forms of the sentence, pinned by a test) |
+| Task image: build + reach every node (M4-S3) | `make image-load` (`make image-build` stops before the cluster; `DRY_RUN=1` previews) | VERIFIED 2026-08-18 (M4-S3): `taxi-mlops-pipeline:<git-sha>`, **737 MiB content / ~1,898 MB unpacked**, built in 352s, `kind load` in 26s, then read back with `crictl` on **all 3 nodes** (`ok mlops-taxi-{worker2,control-plane,worker}: sha256:eb6feb2c08ee…`), manifest written to `automation/runs/m4-image/image.json`. `DRY_RUN=1` prints the exact tag and `nothing was built, nothing was loaded`. D-001's decision (kind load, registry pattern deferred to the next sanctioned rebuild) is in `docker/DECISION-D001-image-delivery.md` |
+| Prove the image runs OUR code and that D-004 is dead (M4-S3) | `make image-smoke` (`SKIP_UNIT=1` is a debugging lever that counts as a FAILURE, never a pass) | VERIFIED 2026-08-18 (M4-S3): **GREEN 10/10** — `libgomp1 14.2.0-19 install ok installed` · `libgomp.so.1 => /lib/x86_64-linux-gnu/libgomp.so.1` · `openmp_status() -> (True, 'system libgomp.so.1')` first line · no `[openmp]` line anywhere · lightgbm 4.7.0 / xgboost 3.4.1 / flaml 2.6.0 / pandas 3.0.5 / mlflow 3.15.1 / flyte all import clean · **215 host / 215 image packages, 0 disagreements** · `tests/unit` **452 passed, 5 skipped IN-IMAGE** · `validate(2019-01)` → **7,584,656 rows, 20 columns** through the output contract · no shim directory. Its first two runs were RED for the verifier's own reasons and once for a real `.dockerignore` bug — see `docs/task_image_m4.md` §5 |
+| Prove the D-004 checks can go RED (M4-S3) | `make image-smoke-redteam` | VERIFIED 2026-08-18 (M4-S3): masks `/lib/x86_64-linux-gnu/libgomp.so.1` with an **empty file in ONE `--rm` container** → the probe flips to `(False, 'not loadable yet; a vendored copy exists at …scikit_learn.libs/libgomp-e985bcbb.so.1.0.0')`, the shim **announces itself**, `/app/.venv/lib/openmp` **appears**, F-024's `-c` refusal is asserted, and a fresh container from the same image reads `absent` again. Exit code inverted like `marts-redteam`'s: a check that stays green under the mask FAILS the drill. Touches no image, no node, no cluster |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
@@ -1000,4 +1073,14 @@ asked of a verifier (#54)**; and **the replacement then went red twice for its
 own reasons: the completion marker is not the LAST line (Postgres 16.11 appends
 `\unrestrict <token>` after it) and `grep -qF "$MARKER"` read the marker's
 leading `--` as a flag — a verifier that fails for its own reasons and blames the
-artifact is #50 one layer down (#55)**.
+artifact is #50 one layer down (#55)**. Newest (M4-S3): **`bash -lc` inside a
+container is a LOGIN shell, so it rebuilds PATH, drops the image's own venv, and
+every `ModuleNotFoundError` gets reported as whatever the check was looking for —
+#55 a third time, and it cost one wrong RED verdict (#56)**; **a `chown -R` at the
+end of a Dockerfile duplicates every file it touches (1.7 GB, 139 s here) and
+hides because the size everyone quotes is the CONTENT size, not the unpacked one
+(#57)**; and **`.dockerignore` is not hygiene — `data/` is not one thing, and the
+1.1 MB of COMMITTED lookup tables under it are what the feature path reads, so
+excluding the directory wholesale builds an image that imports perfectly and
+cannot build a feature. What caught it was running the project's own unit suite
+INSIDE the artifact (28 failed + 10 errors), not reading the Dockerfile (#58)**.
