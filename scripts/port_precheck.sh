@@ -63,6 +63,36 @@ mapfile -t PORTS < <(printf '%s\n' "${PORTS[@]}" | sort -n -u)
 
 snapshot="$(ss -tlnp 2>/dev/null || ss -tln)"
 
+# --- WHO holds it (F-021, M4-S2) ----------------------------------------------
+# Until this block existed the check knew only busy/free, and once the platform
+# was deployed it went RED against OUR OWN cluster — 6 of 10 ports "held" by the
+# kind node's hostPorts — while printing "another stack on this machine owns a
+# port we need. Free it (stop that stack)". Obeying that at 3am deletes the PVCs
+# holding the only copy of the MLflow registry, both Optuna studies, the Metabase
+# app-db and every artifact. That is gotcha #50 one level down: a guard that
+# fires on the program's own correct behaviour teaches readers either to obey it
+# wrongly or to ignore it, and both are worse than no guard.
+#
+# `ss` cannot answer "whose?" here — Docker's published ports are held by
+# docker-proxy/dockerd, not by the workload. Docker can: kind publishes a
+# cluster's hostPorts on its NODE CONTAINERS, which are named <cluster>-*. So the
+# holder question is answered where the answer actually lives.
+#
+# If docker is missing or silent, OURS stays empty and every busy port reads as
+# foreign — the pre-F-021 behaviour, which is the safe direction to fail in.
+CLUSTER_NAME="$(awk '/^name:/ {print $2; exit}' "$KIND_CONFIG" 2>/dev/null || true)"
+CLUSTER_NAME="${CLUSTER_NAME:-mlops-taxi}"
+declare -A OURS=()
+if command -v docker >/dev/null 2>&1; then
+  while IFS=$'\t' read -r cname cports; do
+    [[ "$cname" == "$CLUSTER_NAME"-* ]] || continue
+    # "0.0.0.0:8081->80/tcp, 127.0.0.1:35553->6443/tcp" -> the host-side numbers
+    while read -r hp; do
+      [[ -n "$hp" ]] && OURS[$hp]="$cname"
+    done < <(printf '%s\n' "$cports" | tr ',' '\n' | sed -nE 's@.*:([0-9]+)->.*@\1@p')
+  done < <(docker ps --format '{{.Names}}'$'\t''{{.Ports}}' 2>/dev/null || true)
+fi
+
 busy=()
 declare -A HOLDER=()
 for p in "${PORTS[@]}"; do
@@ -73,19 +103,37 @@ for p in "${PORTS[@]}"; do
   fi
 done
 
-if [[ ${#busy[@]} -eq 0 ]]; then
-  echo "[ports] OK — all ${#PORTS[@]} required ports free: ${PORTS[*]}"
+ours=()
+foreign=()
+for p in "${busy[@]}"; do
+  if [[ -n "${OURS[$p]:-}" ]]; then ours+=("$p"); else foreign+=("$p"); fi
+done
+
+if [[ ${#ours[@]} -gt 0 ]]; then
+  echo "[ports] ${#ours[@]} port(s) held by US — the '$CLUSTER_NAME' cluster is up, which is expected:"
+  for p in "${ours[@]}"; do
+    echo "  port ${p} (${PURPOSE[$p]:-kind hostPort}) -> container ${OURS[$p]}"
+  done
+  echo "[ports] Do NOT 'free' these. The cluster is STATEFUL: its PVCs hold the only"
+  echo "[ports] copy of the MLflow registry, the Optuna studies and the Metabase app-db."
+fi
+
+if [[ ${#foreign[@]} -eq 0 ]]; then
+  free=$(( ${#PORTS[@]} - ${#ours[@]} ))
+  echo "[ports] OK — ${#PORTS[@]} required port(s): ${free} free, ${#ours[@]} held by us, 0 foreign."
   exit 0
 fi
 
-echo "[ports] REFUSING: ${#busy[@]} of ${#PORTS[@]} required ports are already in use." >&2
-for p in "${busy[@]}"; do
+echo "[ports] REFUSING: ${#foreign[@]} of ${#PORTS[@]} required ports are held by something that is not us." >&2
+for p in "${foreign[@]}"; do
   echo "  port ${p} (${PURPOSE[$p]:-kind hostPort}) held by:" >&2
   echo "    ${HOLDER[$p]}" >&2
 done
-cat >&2 <<'EOM'
+cat >&2 <<EOM
 [ports] This is gotcha #10: another stack on this machine owns a port we need.
         Free it (stop that stack) and re-run — do NOT renumber our ports, the
         family in CLAUDE.md is what every later milestone and runbook assumes.
+        (Ports published by our own '$CLUSTER_NAME-*' containers are NOT counted
+        here and must never be freed — see F-021.)
 EOM
 exit 2

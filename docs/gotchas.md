@@ -694,3 +694,36 @@ the seed line are earned by THIS project.
     answers a question about documentation while claiming to answer one about
     dependencies** — and it is green or red for reasons unrelated to the property
     either way. Any check whose subject is code structure should parse code.
+
+
+54. **A backup verified itself with a check that could not detect the failure it
+    named — and that hung.** The obvious shape for "prove the dump is readable"
+    was `pg_dump -Fc` streamed back through
+    `kubectl exec -i postgres-0 -- pg_restore --list`. Two things were wrong.
+    First, a custom-format archive keeps its **table of contents at the FRONT**,
+    so `--list` succeeds happily on a file whose tail was never written — i.e. on
+    exactly the truncation the check existed to catch. It was #51's question
+    ("could this component tell if it were false?") asked of a verifier instead
+    of a claim, and the answer was no. Second, it did not terminate: with stdin
+    redirected from a **1 MB** file the exec did not return after 120 s, twice,
+    having worked once on a **1.2 GB** one — so the check was also
+    non-deterministic in wall-clock. The replacement is entirely host-side and
+    reads every byte: `gzip -t` (CRC over the whole archive) plus pg_dump's own
+    `-- PostgreSQL database dump complete` line, and it was **proven against a
+    deliberately truncated copy** before being trusted. **A verification step
+    deserves the same negative control as the thing it verifies.**
+
+55. **The completion marker is not the last line, and the marker starts with
+    `--`.** Two consecutive red runs of the same new check, each costing a
+    3.5-minute re-dump of a 13 GB database. (a) Postgres 16.11's pg_dump closes
+    with a `\unrestrict <token>` psql meta-command and trailing blank lines
+    *after* `-- PostgreSQL database dump complete`, so `tail -n 1` returns an
+    empty string — which is also what a truncated file returns, so the check
+    failed closed rather than passing wrongly, which is the only reason this is a
+    gotcha and not an incident. (b) `grep -qF "$MARKER"` then read the marker's
+    leading `--` as an end-of-options flag and died with a usage message while
+    the script reported "the dump was cut short". **A verifier that fails for its
+    own reasons and blames the artifact teaches you to distrust the artifact** —
+    the same disease as #50, one layer down. Guard patterns with `grep -- "$pat"`
+    whenever the pattern is data, and test a new check against a real artifact
+    *before* wiring it into something that takes minutes to reproduce.

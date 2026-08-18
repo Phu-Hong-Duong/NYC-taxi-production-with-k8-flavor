@@ -50,6 +50,70 @@ def test_port_precheck_passes_once_the_port_is_free():
     assert "OK" in proc.stdout
 
 
+def _precheck_with_fake_docker(tmp_path: Path, container: str, port: int) -> tuple[Path, dict]:
+    """A copy of the pre-check whose `docker ps` reports ONE container publishing `port`.
+
+    F-021: the pre-check must distinguish our own kind node containers from a
+    foreign stack. Both states are exercised by changing only the container NAME,
+    which is exactly the signal the script keys on — so a fix that stopped
+    reading the name would fail one of the two tests.
+    """
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    script = tmp_path / "scripts" / "port_precheck.sh"
+    shutil.copy(PRECHECK, script)
+    (tmp_path / "infra" / "kind").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "infra" / "kind" / "kind-config.yaml").write_text(
+        "kind: Cluster\nname: mlops-taxi\nnodes:\n  - role: control-plane\n"
+    )
+    bindir = tmp_path / "bin"
+    bindir.mkdir(exist_ok=True)
+    fake_docker = bindir / "docker"
+    fake_docker.write_text(
+        "#!/usr/bin/env bash\n"
+        f'printf "%s\\t%s\\n" "{container}" "0.0.0.0:{port}->80/tcp"\n'
+        "exit 0\n"
+    )
+    fake_docker.chmod(0o755)
+    return script, {"PATH": f"{bindir}:/usr/sbin:/usr/bin:/sbin:/bin"}
+
+
+@NEEDS_SS
+def test_port_precheck_says_held_by_us_when_our_own_cluster_holds_it(tmp_path):
+    """F-021: our own kind node publishing a family port is EXPECTED, not a refusal.
+
+    Before this, `make ports` went red against the live platform and told the
+    reader to "stop that stack" — advice that deletes the PVCs holding the only
+    copy of the registry, both Optuna studies and the Metabase app-db.
+    """
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen()
+        port = sock.getsockname()[1]
+        script, env = _precheck_with_fake_docker(tmp_path, "mlops-taxi-control-plane", port)
+        proc = run(str(script), str(port), env=env)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "held by US" in proc.stdout
+    assert "mlops-taxi-control-plane" in proc.stdout
+    assert "REFUSING" not in proc.stderr
+
+
+@NEEDS_SS
+def test_port_precheck_still_refuses_a_genuinely_foreign_holder(tmp_path):
+    """The gotcha #10 refusal survives the F-021 fix — same port, different owner."""
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen()
+        port = sock.getsockname()[1]
+        script, env = _precheck_with_fake_docker(tmp_path, "somebody-elses-stack-web-1", port)
+        proc = run(str(script), str(port), env=env)
+
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert "REFUSING" in proc.stderr
+    assert str(port) in proc.stderr
+    assert "held by US" not in proc.stdout
+
+
 def _sandbox(tmp_path: Path, regenerable: str | None = None) -> Path:
     """Copy the recipe into tmp_path, pointed at a cluster name that cannot exist."""
     (tmp_path / "scripts").mkdir()

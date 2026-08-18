@@ -1,5 +1,152 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-18 (aq) — M4-S2: the lifeboat launched before the new tenant, the guard that stopped telling us to shoot our own registry, and a hello that never landed
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLOps** — charter read
+(`docs/org/ROLES.md` §MLOps; its refusals include hand-typed `psql` and manual
+deploys, and both held: every database statement went through
+`scripts/postgres_databases.sh`, every deploy through a `make` target). Boot
+reads: CLAUDE.md · HANDOFF (ap) · `docs/milestones/M4_KICKOFF.md` · AWAITING_PO.
+
+**M4-S2 landed as a VERIFIED SLICE, not complete — PR #21.** Three of four
+Do-items are green and merged; the fourth (`ONE hello-workflow runs remotely to
+completion`) hit the wall and is filed as **F-023**. Three stories remain in M4
+(S3–S5) and **S3 is unblocked by this** — the task image, `kind load`, D-001 and
+D-004 involve no Flyte API. The chain continues with `executor`.
+
+**Staleness check before anything**: cluster 3/3 Ready v1.36.1 (age 26h→27h),
+every platform pod Running, `automation/STOP` absent, tree clean at `1719365`,
+no detached job pending. Reality matched (ap)'s Next; nothing to reconcile.
+
+**The statefulness law held.** No `kind delete`/`create`, no kind-config edit, no
+new hostPort. `@champion` read before and after: **version 2, run
+`92b73bd4f77d…`, versions [1, 2]** — identical.
+
+### Done (each with the command and what it printed)
+- **`make backup` — the lifeboat, run BEFORE Flyte became the fifth tenant.**
+  5 databases *enumerated from the server* (marts 1.2GiB/**210s** · metabase
+  295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B) + **105 MinIO
+  objects / 352.3 MiB**, **1.5GiB** total, into
+  `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`.
+  Enumerating rather than listing is the design point and this story proved it:
+  Flyte's `flyte` database and `flyte-data` bucket are covered by the next run
+  because nobody had to remember them. **RESTORE IS NOT REHEARSED** — stated in
+  the script header, in every `MANIFEST.txt` and in the ledger row; M6-gameday
+  candidate. Same-disk limit, identical to the DVC remote's.
+- **F-021 CLOSED by its own conditions.** `make ports` against the LIVE cluster:
+  `6 port(s) held by US — the 'mlops-taxi' cluster is up, which is expected`,
+  each line naming port, purpose and `-> container mlops-taxi-control-plane`,
+  then `OK — 10 required port(s): 4 free, 6 held by us, 0 foreign.` **exit 0**.
+  `ss` cannot answer "whose?", so the script reads `docker ps` and matches the
+  cluster name parsed out of the kind config. **The foreign refusal was NOT
+  softened**: two tests, same bound port, same fake `docker ps`, differing only
+  in the container NAME (`mlops-taxi-control-plane` → 0 · `somebody-elses-stack-web-1`
+  → 2), and M0-S2's fake-listener red-team still goes red.
+- **Flyte `flyteorg/flyte-binary` v2.0.42 deployed** — and the chart names invert
+  the intuition: **this** is the 2.x line; `flyte-core`/`flyte` are 1.16.x.
+  `STATUS: deployed REVISION: 2`, three deployments rolled out. **It needs ONE
+  database, not the two the kickoff budgeted** (the unified binary reads a single
+  `runs.database`), so D-002 gained one line and held a **fourth** time:
+  `[pg-db] flyte: before = role absent, database absent` → `ok flyte owner=flyte`.
+  Its blob store is the existing MinIO in a NEW bucket `flyte-data` under a NEW
+  identity `flyte`. **Idempotence proved by pod AGE**: the re-run reported every
+  deployment rolled out while all three pods were **17 minutes old**.
+- **Reachable from WSL**: `bash scripts/flyte_console.sh --check` →
+  `ok  API answers: GET /healthz -> 200`. The path was asked of the server, not
+  remembered (`/healthcheck`, the 1.x path, is 404).
+- 457 unit tests green (2 new), ruff clean across `src tests pipelines scripts`.
+- Ledgers: **F-021 closed**, **F-023 filed**, deployments row written. Field note
+  written. CLAUDE.md: new section, 4 pin rows, 5 command rows, gotchas
+  **#54/#55**, and the port-family block now records both the F-021 fix and why
+  8080 is RESERVED rather than used.
+
+### Not done — the wall, stated precisely
+**`make flyte-hello` does not complete. Wall: "one hello-workflow runs remotely
+to completion", attempts: 5.** It reaches the control plane and gets far —
+project `nyc-taxi` created, task image `ghcr.io/flyteorg/flyte:py3.12-v2.6.1`
+resolved (no build), code bundle built — then dies at `Uploading code bundle...`
+with `ConnectError: [Errno -2] Name or service not known`. **The blob store is
+ONE MinIO with TWO names**: pods reach it as
+`minio.platform.svc.cluster.local:9000` (correct — a pod cannot use
+`localhost:9000`), this host reaches the same server as `localhost:9000` via the
+kind hostPort → nodePort 30900 route. The CLI uploads **directly** to object
+storage and inherits an endpoint that does not resolve on its side. Exporting the
+SDK's own `FLYTE_AWS_ENDPOINT`/`FLYTE_AWS_ACCESS_KEY_ID`/`FLYTE_AWS_SECRET_ACCESS_KEY`
+did **not** change the symptom, so the endpoint arrives from elsewhere
+(server-advertised config, or a dataproxy-issued URL).
+
+**ADR-002's fallback was deliberately NOT executed.** Its trigger is "Flyte 2.x
+fights on **deployment or MLflow interop**", and deployment succeeded: three pods
+Running, helm `deployed`, `/healthz` 200, the CLI demonstrably talking to the
+control plane. Swapping charts on that evidence discards a working control plane
+to fix a URL. The fallback stays armed for the moment its own condition is met.
+Datum for whoever picks it up: Flyte **1.x** ships
+`storage.signedUrl.stowConfigOverride` for exactly this split-horizon case and
+the 2.x chart renders no equivalent — which is either the reason to fall back or
+the hint for where 2.x hides it.
+
+**`make flyte-hello` stays in the tree with `BLOCKED (F-023)` in its own help
+text** — a known-failing target that looks healthy is a trap.
+
+### Defects/Surprises
+- **The backup's first verification design could not detect the failure it
+  named** (gotcha **#54**): `pg_dump -Fc` + `pg_restore --list` — but a custom
+  archive's TOC is at the **front**, so `--list` passes on a file whose tail was
+  never written, i.e. on exactly the truncation it existed to catch. It also
+  **hung**: `kubectl exec -i` with stdin from a **1 MB** dump did not return in
+  120 s, twice, having worked once on a **1.2 GB** one. Replaced by a host-side
+  check that reads every byte (`gzip -t` + pg_dump's completion marker), and
+  **proven against a deliberately truncated copy of the real dump** before being
+  trusted.
+- **That replacement then went red twice for its OWN reasons** (gotcha **#55**),
+  each costing a 3.5-minute re-dump: the marker is not the last line (Postgres
+  16.11 appends `\unrestrict <token>` after it), and `grep -qF "$MARKER"` read
+  the marker's leading `--` as a flag and died with a usage message *while the
+  script reported "the dump was cut short"*.
+- **Flyte's first install failed for a reason that was not Flyte**: `context
+  deadline exceeded` at `--wait --timeout 10m` **with all three pods healthy** —
+  the 99 MB console image took **9m49s** to pull. Timeout now 20m with the
+  measurement written beside it.
+- `flyte` CLI shape, learned the hard way: `--endpoint`/`--insecure` are ROOT
+  options, `--project`/`--domain` are SUBCOMMAND options, and `uv run --project`
+  is a third unrelated flag of the same name. `create project` takes `--id` and
+  `--name`, not a positional — and its swallowed failure surfaced three steps
+  later as a *storage* error.
+
+### Decisions (craft-level, inside scope, recorded per the protocol)
+- **Backup targets enumerated from the server, never from a list** — a list is a
+  twin of `postgres_databases.sh`, and a drifting target list makes a backup that
+  succeeds while omitting things.
+- **Plain SQL + gzip over `-Fc`** so verification can run entirely host-side over
+  every byte. Honest cost: no selective or parallel restore.
+- **`marts` is dumped anyway** though it is the one database provably rebuildable
+  from DVC pins (M1-S5's fresh-volume proof) and costs 1.2GiB + 210s of a
+  ~4-minute run, while the four irreplaceable ones total 377KiB and <2s. The
+  kickoff names every database; the observation is passed to **M7**, where a
+  scheduled backup would start paying it monthly. Scaling the spec down is not
+  this session's call.
+- **No hostPort for Flyte, recorded not drifted**: rebuild forbidden by the
+  statefulness law, and no ingress controller exists until KServe at M5, so
+  `ingress.create: true` would render an Ingress nothing reconciles. 8080 stays
+  RESERVED in the port family.
+- **`flyteconnector` left ON** (chart default, unused). A first install should be
+  the chart's own shape; named so S4 can disable it deliberately if the 24Gi
+  train task collides with it.
+
+### Next
+**M4-S3** (the task image: D-001 decided and recorded, D-004 proven dead
+in-container, `kind load` + `crictl` read-back — role:MLOps). **It is unblocked
+by F-023**: nothing in S3 touches the Flyte API, and S3 is the story that makes
+the real pipeline image exist, which M4-S4 needs anyway. Read the kickoff's S3
+block; the statefulness law still governs (`kind load`, never a containerd config
+patch). **M4-S4 is blocked on F-023** — start it only after the hello-run works;
+F-023 records the three cheapest probes in order so nobody restarts the search.
+No detached job is running. `@champion` is version 2 and no M4 story may move it.
+Chain: `automation/next_session.sh executor 120`.
+
+---
+
 ## Session 2026-08-18 (ap) — M4-S1: the winner had been picked on the forbidden month, and the one-character fix was the wrong fix
 
 ### State

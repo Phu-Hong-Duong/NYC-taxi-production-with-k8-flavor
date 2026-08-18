@@ -1,2 +1,139 @@
-# flyte — helm values. Chart + version chosen at its milestone from live sources,
-# recorded in CLAUDE.md pin table. Keep every override commented with WHY.
+# flyte — helm values for `flyteorg/flyte-binary` (the Flyte **2.x** line).
+#
+# WHICH CHART IS WHICH, read live 2026-08-18 and worth writing down because the
+# names invert the intuition: `flyteorg/flyte-binary` is at **v2.0.42** and ships
+# the unified Flyte 2 manager (`flyte-core-components`, image
+# cr.flyte.org/flyteorg/flyte-binary-v2), while `flyteorg/flyte-core` and
+# `flyteorg/flyte` are the **1.16.x** multi-component line. ADR-002 chose "Flyte
+# 2.x primary, flyte-binary 1.16.x as the pre-approved fallback"; in today's repo
+# that reads as flyte-binary **v2.0.x** primary, flyte-binary **v1.5.x** (whose
+# appVersion is 1.16.0) as the fallback. Same decision, current names.
+#
+# Chart VERSION is the pin (it pins its own images) and lives in
+# scripts/deploy_flyte.sh with the date it was observed, exactly like MinIO's and
+# MLflow's. Every override below says WHY; anything absent is the chart default
+# on purpose.
+#
+# NOTHING SECRET IS IN THIS FILE. The database password and the MinIO secret key
+# reach helm through a mode-600 temporary overlay that deploy_flyte.sh writes and
+# deletes on EXIT — not through `--set`, because a value on a command line is in
+# `ps` output and in every shell history on the machine.
+
+# --- the unified manager ------------------------------------------------------
+flyte-core-components:
+  runs:
+    # Where run metadata, task inputs/outputs and fast-registered code land.
+    # Its own bucket, not a prefix under mlflow-artifacts: see the reasoning in
+    # infra/helm/minio/values.yaml beside the bucket itself.
+    storagePrefix: "s3://flyte-data"
+  actions:
+    kubernetes:
+      # Task pods run in the `flyte` namespace — the same one the control plane
+      # is released into, so the chart's co-pilot storage Secret lands where the
+      # pods that need it can read it. infra/manifests/namespaces.yaml already
+      # declared `flyte` (M0), so nothing new is created here.
+      namespace: "flyte"
+
+configuration:
+  database:
+    postgres:
+      # The ONE Postgres, by in-cluster DNS. No host port is published for 5432
+      # (CLAUDE.md's port family annotates it "in-cluster only"), and that stays
+      # true: Flyte is a pod, so it needs no route off the cluster to reach it.
+      host: postgres.platform.svc.cluster.local
+      port: 5432
+      dbname: flyte
+      username: flyte
+      # password: supplied by the temp overlay, never committed.
+      # The one Postgres runs without TLS inside the cluster (M0 decision); a
+      # driver that silently negotiated TLS here would fail at connect time.
+      options: "sslmode=disable"
+
+  storage:
+    # MinIO bucket, created idempotently by the MinIO chart's post-install Job
+    # (infra/helm/minio/values.yaml `buckets`), so `make deploy-flyte` re-running
+    # that release is what guarantees the bucket exists — not a hand-run `mc mb`.
+    metadataContainer: "flyte-data"
+    provider: s3
+    providerConfig:
+      s3:
+        region: "us-east-1"
+        # In-cluster plaintext to MinIO's ClusterIP service. Nothing leaves the
+        # machine; terminating TLS between two pods on one laptop buys a
+        # certificate to rotate and no confidentiality that matters here.
+        disableSSL: true
+        endpoint: "http://minio.platform.svc.cluster.local:9000"
+        # `iam` (the default) means "find credentials from the instance role",
+        # which on kind means "find nothing" and fails as an opaque 403 on the
+        # first task output write. MinIO is an access-key store.
+        authType: "accesskey"
+        accessKey: "flyte"
+        # secretKey: supplied by the temp overlay, never committed.
+
+  logging:
+    level: 4  # 4 = info. The chart default (1) is error-only, which makes a
+              # first deployment's normal startup indistinguishable from a hang.
+
+# --- the pod ------------------------------------------------------------------
+deployment:
+  # Three kind nodes share a 47Gi VM that also has to hold Postgres, MinIO,
+  # MLflow, Metabase and (from M4-S4) a 24Gi training task. The control plane is
+  # a coordinator, not a worker: it gets a small, explicit budget so it can never
+  # be the reason the train task cannot be scheduled.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+
+console:
+  image:
+    # Pinned by TAG AND DIGEST — the Metabase precedent (M1-S5). The chart's
+    # default is the bare tag `latest`, which is not a pin at all: the same
+    # values file would deploy a different console next week, and `IfNotPresent`
+    # would hide the change on this machine while a fresh clone got something
+    # else. Digest read live 2026-08-18 with `docker buildx imagetools inspect`.
+    tag: "latest@sha256:3cea5ec7ea1ebb2d2b392d60988c028ff45965e3a7eecb0e1ba51d7ec81e6cdb"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# --- how a human reaches it ---------------------------------------------------
+# NO INGRESS, and this is a recorded deviation rather than an oversight.
+#
+# The program's doctrine is "a route is DECLARED, never port-forwarded" (M0-S3):
+# kind hostPort -> Service nodePort, twins across two files. That doctrine
+# predates a STATEFUL cluster. kind publishes host ports at cluster-CREATE time
+# only, so declaring one for Flyte means `kind delete` + `kind create`, and since
+# M2 the cluster's PVCs hold the only copy of the MLflow registry (champion
+# versions 1 and 2), every artifact in MinIO, the Metabase app-db and both Optuna
+# studies. The M4 kickoff's top law is that no M4 story may take the cluster
+# down. A dashboard is not worth the registry.
+#
+# There is also no ingress CONTROLLER in this cluster yet (`kubectl get
+# ingressclass` -> No resources found; it arrives with KServe at M5), so
+# `ingress.create: true` would render an Ingress object nothing reconciles —
+# a route that looks declared and answers nothing, which is worse than an
+# honest port-forward.
+#
+# So: ClusterIP + `make flyte-console` (scripts/flyte_console.sh), and port 8080
+# stays RESERVED in CLAUDE.md's port family for the next PO-sanctioned rebuild,
+# when the declared route can be added for free alongside whatever else needs one.
+ingress:
+  create: false
+service:
+  type: ClusterIP
+
+# --- what is deliberately left at the default ---------------------------------
+# `flyteconnector` (a subchart, on by default) renders a third Deployment. This
+# program has no connector tasks — connectors bridge to external services like
+# BigQuery, and everything here runs in-cluster — so it is dead weight. It is
+# left ON anyway for this first deployment: the value of a first install is that
+# it is the chart's own shape, and switching off a subchart to save one small pod
+# on a 47Gi VM is a trade that buys nothing measurable and risks an unexplained
+# render failure. Named here so M4-S4 can turn it off deliberately if the train
+# task's 24Gi request ever collides with it, rather than discovering it then.

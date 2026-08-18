@@ -55,6 +55,15 @@ buckets:
     policy: none
     purge: false
     versioning: false
+  # Flyte's blob store (M4-S2). Flyte keeps workflow metadata, task inputs and
+  # outputs, and the fast-registered code archives here. It gets its OWN bucket
+  # rather than a prefix inside mlflow-artifacts so a bucket policy, a lifecycle
+  # rule or a `mc rm --recursive` aimed at one orchestrator's scratch can never
+  # reach the registry's artifacts. `purge: false` for the same reason as above.
+  - name: flyte-data
+    policy: none
+    purge: false
+    versioning: false
 
 # The chart ships a default user `console` / `console123` (a published password
 # on an admin policy). Overriding the list removes it. MLflow gets its own
@@ -65,5 +74,15 @@ buckets:
 users:
   - accessKey: mlflow
     existingSecret: minio-mlflow-user
+    existingSecretKey: secretKey
+    policy: readwrite
+  # Flyte's own identity (M4-S2), for the same reason MLflow has one: a leaked
+  # orchestrator credential must not be able to reconfigure the server or read
+  # the registry's artifacts. `readwrite` is MinIO's built-in policy and is
+  # bucket-wide; narrowing it to flyte-data alone needs a custom policy document,
+  # which is a real improvement and NOT free here (the chart has no hook for one)
+  # — recorded as the honest limit rather than claimed as least privilege.
+  - accessKey: flyte
+    existingSecret: minio-flyte-user
     existingSecretKey: secretKey
     policy: readwrite
