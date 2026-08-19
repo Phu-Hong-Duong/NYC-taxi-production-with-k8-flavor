@@ -901,3 +901,53 @@ the seed line are earned by THIS project.
     must hold the image CONSTANT (ours does, deliberately), and a gate must read
     RECORDED cache evidence rather than re-asking the control plane about the latest
     run — whose stages are `CACHE_POPULATED` in any session that rebuilt.
+
+67. **A checker's "every X must have Y" goes red on the one X that was BUILT
+    without Y — and the repair is to derive what counts as an X, never to add an
+    exclusion list.** `verify-m4` §3 asserts that every recorded on-cluster run has
+    a `main` parent action (the stages ran as ONE workflow, not as seven launches).
+    Its first run went RED naming `rklz7vdv2d59bn8kbp8d` — the **retry probe**
+    (`pipelines/flyte/retry_probe.py`), a single task that always raises. It is
+    *supposed* to have no parent and *supposed* to have failed; §5 reads it as the
+    evidence that the retry budget is finite. So a guard fired because a component
+    behaved exactly as designed, which is #50's disease, caught inside the gate
+    written to honour #50. The tempting repair is `if "retry-probe" not in name` —
+    a string match on a naming convention the next probe will not follow. The
+    repair taken instead was to DERIVE the class: a *pipeline* run is one whose
+    actions include at least one stage of this graph (and the stage set is itself
+    derived from `tasks.STAGES` and the task decorators in `workflows.py`), so the
+    probe falls out by what it IS. Sibling of #52 — change the mechanism, not the
+    value. The excluded record is PRINTED rather than silently dropped: a filter
+    nobody can see is how a gate quietly stops checking half its inputs.
+
+68. **A test that forbids RUNNING a command will catch the message that tells a
+    human to run it, and will catch a namespace named after a CLI.** Three
+    assertions in `tests/unit/test_verify_m4.py` went red in one run, all three on
+    the checker rather than the checked: `"make pipeline" not in body` caught the
+    gate's own advice line ``run `make pipeline-cache-drill` `` — exactly what the
+    reader of a RED cache leg needs — and `"flyte get" not in body` caught
+    `kubectl -n flyte get deploy`, two words that are only a Flyte CLI call if you
+    read them without the `kubectl` in front. This is #35's house rule ("match the
+    INVOCATION, never the word") failing in the direction nobody expects: the
+    earlier cases were prose being parsed as code, this one is a TEST parsing prose
+    as code. The fix is a shared `invokes(body, cmd)` helper requiring the needle to
+    sit where a shell would START a command — line start, or after `|`, `&&`, `;`,
+    `$(`. A backtick is deliberately NOT a command position in this repo: backticks
+    appear inside message strings far more often than in command substitutions, and
+    #60 already established which of those two mistakes costs more.
+
+69. **A milestone gate can be replaying evidence that is not in the repository —
+    and say the opposite in its own header.** `automation/runs/` is gitignored
+    wholesale (`git ls-files automation/runs/` is EMPTY), so `verify-m3`'s bake-off
+    replay and every record `verify-m4` reads are MACHINE state: absent from a
+    fresh clone, and — the part that matters — invisible to review, so an edit to
+    one leaves no diff. Both gates' red teams simulate exactly that edit. Two
+    artifacts had already written the false version down: `verify_m3.sh`'s header
+    listed "committed JSON" among its inputs, and its red team's failure path
+    advised `git checkout -- automation/runs/m3s5/bakeoff.json`, a command that
+    cannot restore an untracked file — which is the tell that the belief was held
+    rather than merely mistyped. Run `git check-ignore -v <the file your gate
+    reads>` before writing "committed" anywhere near a verifier. Filed as **F-029**
+    (the policy fork is open to ARCH); the false statements were corrected the day
+    it was found. #51's question — *could this component tell if its own claim were
+    false?* — asked of a gate's INPUTS rather than of its outputs.
