@@ -1192,3 +1192,57 @@ the seed line are earned by THIS project.
     F-033). Before quoting an outage as the cost of a *class* of change, ask what
     the rollout strategy is allowed to do: three numbers agreeing with each other
     is not evidence about a fourth mechanism (docs/slo_serving.md §4.1).
+
+81. **A canary that is configured, linked, logged clean and moving zero traffic
+    looks exactly like a canary at 0%.** ingress-nginx keys backends by
+    `<namespace>-<service>-<port>` and a backend may hold exactly ONE role. Point
+    a canary Ingress at a Service that some *non-canary* Ingress also routes to
+    and the ordinary registration wins: the link is created — the main backend
+    really does list it under `alternativeBackends` — while `noServer` stays
+    false and `trafficShapingPolicy` comes back `{weight: 0, weightTotal: 0}`.
+    Measured at weight 50: **0 of 200 requests moved**, with no error, no warning
+    and no event anywhere. It bites this program specifically because **KServe
+    RawDeployment generates an Ingress for every InferenceService**, so the
+    natural canary target always already has one and the natural implementation
+    is the broken one. The fix is a dedicated Service selecting the same pods and
+    referenced by the canary Ingress alone (**100 of 200 moved**,
+    `noServer: true`, `{weight: 50, weightTotal: 100}`). The rule that generalises:
+    **verify a traffic split from traffic counters, never from its own
+    configuration** — #59 asked of a release mechanism (ADR-011 condition 1).
+
+82. **`kubectl annotate isvc` is not a metadata edit — it rolls the pod.** A
+    spike needed the KServe controller to reconcile and reached for the cheapest
+    "spec-neutral" nudge there is: an annotation on the InferenceService, added
+    and then removed. KServe propagates an isvc's annotations onto its pod
+    template, so both edits were Deployment changes and the champion's only
+    predictor was replaced twice. The probe's own end-state batch caught it —
+    **174 of 200 requests returned 502** — with the controller logging
+    `connect() failed (111: Connection refused)` against the replaced pod's dead
+    IP. Same family as #77 (pod AGE is the one-command answer to "did the thing I
+    changed get replaced?"), and the lesson is narrower and more useful: on a
+    resource an operator templates from, **there is no such thing as a metadata-only
+    field** until you have checked what the operator copies downstream (F-038).
+
+83. **In the Open Inference (V2) protocol the model name is in the URL PATH, so
+    two InferenceServices cannot share a traffic split without extra work.** A
+    canary that correctly moved half the traffic returned **404 on every single
+    canary-routed request** — `/v2/models/nyc-taxi-eta/infer` reaching a backend
+    whose mlserver serves `nyc-taxi-eta-shadow`. It is not the schema mismatch
+    everyone predicts (that wall is real and is *behind* this one, never reached),
+    and it cannot be papered over at the ingress: **ingress-nginx applies only
+    `canary-*` annotations from a canary Ingress and inherits the rest from the
+    main one**, so `rewrite-target` on the canary changed the share by 0 points.
+    Ask of any traffic-split design: do both backends answer to the same NAME, in
+    whatever the protocol makes the routing key? (ADR-011 condition 2.)
+
+84. **A readiness wait can be about a different OBJECT than the thing your next
+    step uses.** A first shadow deploy passed `rollout status` (the ReplicaSet)
+    AND the InferenceService's `Ready` condition (the predictor), and its accept
+    check then got a bare nginx **404** — because KServe creates the Ingress as a
+    separate object and ingress-nginx has to observe it and reload. The Ingress
+    was **6 seconds old** at the 404 and the same quote succeeded on retry. This
+    is #71's family with a genuinely different mechanism: #71 was "a wait the
+    thing you are REPLACING can satisfy", and there is no predecessor on a first
+    deploy. Wait on the route by ASKING it — `/v2/models/<name>/ready` through the
+    real host header is the only instrument that answers the question the accept
+    check is about to ask (F-037).
