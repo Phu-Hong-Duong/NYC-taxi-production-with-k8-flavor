@@ -53,6 +53,18 @@ bake-off: this is a sample, scored on the wire, and `docs/bakeoff_m3.md`'s
 full-holdout numbers remain the measurement of record (gotcha #15's discipline —
 a number from a sample is labelled as one).
 
+--------------------------------------------------------------------------
+WHAT IS TRACKED AND WHAT IS NOT — say it here, because the memo cites both
+--------------------------------------------------------------------------
+`disagreement.json` is **tracked** (F-029's regime: `automation/runs/**/*.json`),
+and it holds every statistic the DA memo quotes and every number
+`tests/unit/test_shadow_and_spike.py` checks the memo against. The row-grain
+`disagreement.csv` beside it is **gitignored and regenerable** by re-running this
+module — it exists so a human can look at individual rows, and nothing reads it
+for a verdict. Said out loud because gotcha #69 is precisely a session writing
+"committed" next to a file `git check-ignore` disagrees about, and the first
+draft of this file made that mistake about a sibling script.
+
 This module is a READER. It resolves nothing that mutates, moves no alias,
 deploys nothing, and writes only its own record.
 """

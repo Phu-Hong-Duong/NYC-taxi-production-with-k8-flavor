@@ -2,7 +2,9 @@
 
 **Author:** DA seat (role block M6-S3; SRE Accountable, DA Responsible for this memo)
 **Date:** 2026-08-19
-**Record:** `automation/runs/m6-shadow/disagreement.json` (+ `.csv`, row grain)
+**Record:** `automation/runs/m6-shadow/disagreement.json` — tracked, and the source of
+every number below. A row-grain `disagreement.csv` sits beside it for reading by eye;
+it is gitignored and regenerable, and nothing reads it for a verdict.
 **Reproduce:** `make shadow-run` — a reader; it deploys nothing and moves no alias.
 
 ## Verdict: **NO-GO for version 1.** Do not shift rider traffic to it.
