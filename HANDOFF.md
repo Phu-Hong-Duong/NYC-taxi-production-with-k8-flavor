@@ -1,5 +1,135 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (be) — M6-S1: the eyes, and three things that looked completely fine
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role blocks SRE (Accountable)
+and MLOps (Responsible)** (charters read at entry; refusals in play: no
+threshold set from a number just measured, no SLO invented outside M6-S2's
+story, `@champion` never read by deployed code, nothing promoted). Boot reads:
+CLAUDE.md · HANDOFF (bd) · M6 KICKOFF · AWAITING_PO. **Staleness check passed**
+— tree clean at `67af035`, no `automation/STOP`, no detached job pending
+(8 `.status` files, all from M3/M4), cluster 3/3 Ready v1.36.1, InferenceService
+`serving/nyc-taxi-eta` Ready True, `@champion` version 2, `monitoring` namespace
+present and EMPTY. **M6-S1 COMPLETE.** PR **#33**, merged, reachable from
+origin/main. The cluster never went down. Nothing promoted, no alias read or
+moved, no model manifest changed.
+
+**The one deliberate mutation of the wire** is the ingress-nginx controller roll
+that `controller.metrics.enabled: true` forces — **15.0 s of route outage,
+measured**, in the deployments ledger. Everything else is additive: two new
+tenants in `monitoring`.
+
+### Done
+- **`make backup` FIRST** (M4-S2/M5-S1 precedent, and the kickoff's first
+  instruction): `2026-08-19T05-59-36Z` — **6 databases + 331 MinIO objects,
+  1.6 GiB**, every dump verified by `gzip -t` over every byte plus pg_dump's own
+  completion marker. Nobody edited a list; the script enumerates from the server,
+  which is why M5-S2's `serving` identity objects are covered. Restore still NOT
+  rehearsed (M6-S5's).
+- **`make deploy-monitoring`** — Prometheus **29.27.0** (v3.14.0) + Alertmanager
+  + kube-state-metrics + Grafana **10.5.15** (12.3.1) into `monitoring`, reached
+  through the **existing** 8081 ingress by host (`prometheus.local`,
+  `grafana.local`). **No new hostPort, no kind-config edit** (M6 law 1); 3000 and
+  9091 stay reserved names. node-exporter and pushgateway OFF with reasons in the
+  values file. Chart choice ARGUED in the script header (plain charts, not
+  `kube-prometheus-stack`; the operator route is the recorded 3-attempt-wall
+  fallback). `DRY_RUN=1` run first and mutated nothing, helm included.
+- **`make monitoring-accept` GREEN 10/10**, and it is a MEASUREMENT not a target
+  list: counter read → **one real `make quote`** (`zone 132 -> 48 -> 39.0019
+  minutes`, the parity record's own value) → scrape → counter **17 → 18**. Then
+  **every panel's PromQL parsed out of `analytics/grafana/dashboards/serving.json`**
+  and executed: **11/11 returned live series**. Targets: `kserve-predictors` 1/1,
+  `kubernetes-service-endpoints` 6/6, `kubernetes-nodes-cadvisor` 3/3 — **none
+  permanently red**.
+- **F-034 CLOSED — the platform advertises a metrics port that 404s.** KServe
+  stamps `prometheus.kserve.io/port: "8080"` on the predictor pod; asked live,
+  8080 returns **404** and **8082** returns **200 with 24 series**. A scrape
+  config written from the platform's own annotation gives a permanently-DOWN
+  target and a board of empty rectangles. `make probe-mlserver-metrics` is the
+  measurement and stays in the repo (a test fails if the values file drifts back
+  to 8080 or the probe is deleted). It also found the two facts M6-S2 needs:
+  `status_code` is a label at source (so 5xx-vs-422 is a selector), and **no
+  mlserver metric carries the model version** (`version="None"`), so A-4 needs the
+  response body.
+- **F-033 CLOSED — the ingress controller could never complete a rolling update**,
+  latent since M5-S1. `hostPort` + `replicaCount: 1` + a single-node nodeSelector
+  vs the chart's default RollingUpdate: the surge pod can never bind port 80. It
+  sat **Pending for 10 minutes** while the old pod served and a 420 s probe read
+  **840/840 ok** — the zero outage was the strongest possible evidence for the
+  wrong conclusion. `updateStrategy: Recreate` now, with the honest and
+  unavoidable cost written into the values file. **Measured 15.0 s** across the
+  real roll (`automation/runs/m6-monitoring/ingress-metrics-roll.json`, anchored
+  first-failure → first-success per gotcha #75), corroborating 14.53 s (killed
+  pod) and 18.24 s (stop/start).
+- **The accept check's first run was GREEN over three real defects** and now
+  cannot be: an empty panel is a FAILURE. The three were an unannotated ingress
+  metrics Service (never *discovered*, so not even a red target), a `rate([1m])`
+  at the chart's 1-minute scrape interval (evaluates to nothing), and a genuinely
+  down rbac-proxy target — fixed respectively by two Service annotations (no pod
+  roll), `global.scrape_interval: 15s`, and a **deep merge onto the chart's own
+  job** (two keys, never a copy of its 12-entry relabel list).
+- **Idempotent re-run proven by pod AGE**: every monitoring pod 9–11 min old with
+  0 restarts after a full third run; the ingress pod likewise. The Prometheus pod
+  does not even restart when its config changes (configmap-reload sidecar) —
+  which makes S2's rules loop minutes rather than tens of minutes.
+- **`make verify-m5` re-run GREEN 49/49 after every mutation** — the served
+  version's `feature_set` still equals the config's, the live answer still
+  reproduces the parity row at 0.000e+00, `@champion` still 2.
+- **716 unit tests pass** (29 new in `tests/unit/test_monitoring.py`), ruff clean.
+  Docs: `docs/monitoring_m6.md` · CLAUDE.md (5 pin rows, a section, 4 command
+  rows, the traps paragraph) · gotchas **#77/#78** · findings **F-033/F-034** ·
+  deployments ledger row · field note.
+
+### Decisions
+- **Plain charts over `kube-prometheus-stack`** — argued in the deploy script
+  header, with the operator route recorded as the fallback. Reasons specific to
+  this program: CRDs are cluster-scoped state on a cluster that must not be
+  rebuilt, and S2's alert rules would otherwise live in the cluster rather than
+  in git.
+- **`deploy_monitoring.sh` re-runs `deploy_serving.sh`** instead of carrying its
+  own copy of the ingress chart pin. ONE file owns the ingress values, ONE script
+  owns the release, so there is no pair to drift; the cost is ~1 min of no-op
+  helm upgrades per run, stated in the header. (Craft-level, verified undo,
+  inside scope.)
+- **Grafana persistence OFF** — the inverse of M1-S5's Metabase decision and for
+  the same reason: Metabase's H2 file held the boards, so losing it lost the
+  work; here the boards and datasource are provisioned from git every start.
+- **Anonymous viewers allowed, editing still needs the admin login** — on a $0
+  single-machine program the alternative is a credential pasted where it should
+  not be. Telemetry off in both places Grafana phones home from (gotcha #32's
+  fourth application).
+- **No threshold anywhere** — not in the board (pinned by a test), not in a rule
+  file. `serverFiles.alerting_rules.yml` exists and is empty ON PURPOSE so S2's
+  diff is about alerts, not plumbing.
+
+### Defects/Surprises
+- The two findings above, both latent, both found by building the thing that
+  would have been silently blind, both closed the same session.
+- **My own checker lied first.** The accept check's first version printed "0
+  series — legal for a counter with no traffic yet" in green over three real
+  defects. That sentence was mine and it was the single most dangerous line in
+  the diff. Recorded as gotcha #78.
+- Killing a timed-out `helm upgrade` leaves the release `pending-upgrade`, which
+  refuses the next one; `helm rollback ingress-nginx 2` cleared it without
+  touching the running pod. Worth knowing before M6-S3/S4 iterate on Ingresses.
+- The ingress values file's own comment — *"Re-enable the admission webhook the
+  day someone hand-writes an Ingress"* — becomes live at **M6-S3**, which
+  hand-authors a canary Ingress. Not acted on here; flagged for that story.
+- No wall hit. Three attempts were not needed on anything.
+
+### Next
+**Executor session → M6-S2** (the SLO document, the alerts A-1…A-7 with one
+FIRED end to end, and the CPU request re-size with before/after p95). Everything
+it needs exists: the scrape is live, `alerting_rules.yml` is present and empty,
+a rules change costs no restart, and `docs/monitoring_m6.md` §8 lists the four
+inherited facts precisely (a histogram not a gauge and a *different* instrument
+from M5-S4's client-side p95 · `status_code` at source · **no model version in
+any mlserver metric** · three measured deployment outages within four seconds of
+each other, which an availability target must price in). Chain scheduled:
+`automation/next_session.sh executor 120`.
+
+
 ## Session 2026-08-19 (bd) — ARCH: M5 boundary triage, CLEANLY CLOSED; M6 kickoff authored (reliability)
 
 ### State
