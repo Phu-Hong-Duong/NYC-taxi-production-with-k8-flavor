@@ -346,3 +346,146 @@ it.
   prediction → inject → observe → clear loop is minutes, not tens of minutes.
 * **The CPU request re-size is still S2's**, and this board's panel 6 is the
   before/after instrument for it.
+
+---
+
+## 9. Judgement (M6-S2) — the SLOs, the alerts, and the one number that was wrong
+
+The document is `docs/slo_serving.md` and it OWNS every serving threshold; this
+section records what was built and what building it found.
+
+### 9.1 The rules, and how they reach the cluster
+
+`infra/monitoring/alerting_rules.yml` is a **plain Prometheus rules file** — the
+format `promtool check rules` reads — and it is the only copy.
+`scripts/render_alert_rules.py` parses it, refuses it if any rule lacks an
+`expr`, a `severity`, a PRR signal id or a written `why`, and nests it under the
+chart's `serverFiles."alerting_rules.yml"` as a second `--values` overlay that
+`deploy_monitoring.sh` passes to helm and deletes on EXIT. The chart's own key
+stays an empty map on purpose, and a test fails if it stops being empty: two
+files that can both hold rules is the twin problem this program has already paid
+for four times.
+
+```
+$ make alert-rules
+[alert-rules] ok  7 rule(s) validated
+[alert-rules]     A-1  PredictorLatencySLOBurning             for=5m   severity=warning
+[alert-rules]     A-2  ServingEdge5xxRateHigh                 for=5m   severity=critical
+[alert-rules]     A-3  PredictorRequestRejectionRateHigh      for=2m   severity=warning
+[alert-rules]     A-5  PredictorNoAvailableReplica            for=2m   severity=critical
+[alert-rules]     A-5  PredictorRestartFlapping               for=0m   severity=warning
+[alert-rules]     A-6  PredictorCpuThrottledSustained         for=10m  severity=warning
+[alert-rules]     A-7  PredictorStorageInitializerNotReady    for=3m   severity=critical
+
+$ (Prometheus /api/v1/rules, read back)
+group crosstown-serving interval 15
+  … all 7 rules, state=inactive, health=ok
+```
+
+§6's promise held exactly: **the Prometheus pod did not restart** for a config
+change that added seven rules (38 m old across the upgrade, 0 restarts).
+
+### 9.2 The alert that fired, and the order it fired in
+
+`make alert-fire-drill` writes its prediction to disk **before** it injects
+anything (`automation/runs/m6-slo/alert-fire-prediction.json`), then sends two
+request shapes the endpoint really produces — a malformed V2 body (**422**,
+F-030's class) and a body the model's logged signature refuses (**500**, F-032's
+class, the half-finished rollback). One injection, two alerts with different
+sustain windows, so the drill must predict a **sequence**:
+
+```
+PREDICT A-3 fires at about T+150s (for=120s)   ->   OBSERVED T+150.5s
+PREDICT A-2 fires at about T+330s (for=300s)   ->   OBSERVED T+330.6s
+PREDICT the order A-3 then A-2                 ->   OBSERVED in that order
+PREDICT A-1/A-5/A-5/A-6/A-7 stay inactive      ->   all five inactive
+Alertmanager holds 2 alert(s): [both]          ->   they reached a receiver, not just a UI
+an ordinary quote DURING the injection: 39.0019 minutes   ->   errors, not an outage
+both cleared -> inactive 315.1s after the injection stopped
+[alert-drill] GREEN — 11 check(s) passed.
+```
+
+Injected: **662 × 422 and 661 × 500**. Nothing was deleted, scaled or promoted;
+`@champion` was read and never written. The five negative predictions are the
+part worth keeping — a drill that predicts only "something fires" cannot be
+wrong, and S5's gameday is graded on **distinguishable** signatures.
+
+### 9.3 F-035 — two of the seven PRR signals cannot be rules here
+
+Both for the same reason: **the fact lives in a client, and no client here is
+scraped.** A-3's client half (F-019's `UncoveredDateError`) was the alert the M6
+kickoff expected to be free — measured, it is not available at all:
+
+```
+sum(rest_server_requests_total{path=~".*infer"})   ->  22
+make quote --at 2031-07-04T09:15:00   ->  REFUSED (422) … covers through 2030, exit 2
+sum(...) after a scrape                            ->  22
+```
+
+A-4 needs `served version != registry @champion`, and no mlserver metric carries
+a version (F-034) while MLflow exports no Prometheus metrics — there are not two
+series to compare. Both are dispositioned in `docs/slo_serving.md` §6 with
+options and costs, both land on M7's pushgateway, and the renderer FAILS if the
+implemented set and the documented absences ever disagree.
+
+### 9.4 The instrument that cannot measure what it looks like it measures
+
+`histogram_quantile(0.95, …)` on mlserver's buckets reported **111.6 ms** for a
+window in which the client — timing the whole round trip, i.e. strictly more —
+measured **84.4 ms**. A quantile over a superset cannot exceed one over a subset,
+so the histogram's number is an interpolation across a bucket 150 ms wide
+(`le` jumps 0.1 → 0.25, and 13 of 259 observations live in that gap). So
+**SLO-L1's target is a bucket EDGE (250 ms) and A-1 counts requests beyond it**
+instead of estimating a quantile. Full working in `docs/slo_serving.md` §2.1.
+
+### 9.5 The CPU request, and the prediction this story got wrong
+
+`200m → 1500m` (limit unchanged, memory request unchanged so the comparison has
+one cause), argued from M5-S4's measured 1.31 cores plus ~15%, deliberately
+below the limit so the pod stays Burstable.
+
+| | p50 | p95 | p99 | max | ≥N of 240 over the 250 ms target |
+|---|---|---|---|---|---|
+| before `200m` | 29.4 ms | 84.4 ms | 433.7 ms | 692.9 ms | 2 |
+| after `1500m` | 29.5 ms | 112.7 ms | 118.9 ms | 142.9 ms | **0** |
+
+The prediction — *a request is not a cap, so p95 should not move materially* —
+holds: p50 moved 0.175 ms, and p95's 28 ms sits inside the run-to-run spread of
+this identical shape (M5-S4 measured 104.2 ms). The tail's improvement is **not**
+claimed as an effect: the before run's slow requests were in its 10th and 11th
+seconds, mid-run, which is host contention and not a scheduler's arithmetic.
+
+**What this story predicted wrong was the cost of applying it.** The SLO
+document's first draft said a re-deploy costs ~15–18 s, by analogy with three
+measured mutations. Measured: **0.5 s, one 502 of 400 samples**. At one replica
+`RollingUpdate`'s `maxUnavailable: 25%` floors to **zero**, so a surge pod must
+be ready before the old one goes — the other three all destroy the only pod
+first. Corrected in §4.1 with the mechanism, and it is M6-S4 that inherits it: a
+canary weight flip or a re-deploy is nearly free, and the ~15 s figure belongs
+only to mutations that destroy the pod first. Gotcha **#80**.
+
+### 9.6 F-036 — the deploy's readiness wait could never succeed
+
+Found by running `make serve`: it hung for **fifteen minutes** and then failed,
+over an InferenceService with every condition `True` and its pod `Running 1/1`.
+kubectl v1.36 ignores conditions while `observedGeneration` trails `generation`,
+and KServe v0.20.0 leaves it behind on every re-deploy (`generation=3` /
+`observedGeneration=2`). Under `set -e` the timeout takes the accept check with
+it, so the single failure mode is a correct deploy reporting as a broken one.
+Fixed to the `--for=jsonpath=` form, verified live; `rollout status` stays FIRST
+(gotcha #71's fix untouched). Gotcha **#79**.
+
+### 9.7 What M6-S3/S4/S5 inherit from this story
+
+* **A deploy costs 0.5 s, not 15 s** (§9.5) — S4's canary and rollback timings
+  should be argued from that, and the ~15 s numbers reserved for pod destruction.
+* **`make serve` works again** (§9.6). S4 runs it at least twice.
+* **A-2 has NOT been fired by a real outage** — only by injected 5xx. Its
+  `for: 5m` means a ~20 s drill cannot fire it, which is why the kickoff routes
+  that proof to S5's gameday kill scenario. A-5 likewise: it is the rule that
+  fires without traffic and it has never fired.
+* **The board draws no threshold line** and S2 did not add one. Now that the SLO
+  numbers exist, a threshold annotation on panel 3 is a legitimate S3+ nicety —
+  and it must read the number from the same place A-1 does, or it becomes a twin.
+* **The error budget arithmetic is in §4** of the SLO doc, so S4's canary shifts
+  and S5's injections can be priced rather than worried about.
