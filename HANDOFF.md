@@ -1,5 +1,148 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (bc) — M5-S5: the rollback nobody could type in one move, and the gate that reads the prose
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role blocks SRE (Accountable)
+and MLOps (Responsible)** (charters read at entry; refusals in play: no SLO
+invented outside M6's own story, no threshold set from a number just measured,
+nothing on the wire reconfigured by a review, `@champion` READ and never
+written). Boot reads: CLAUDE.md · HANDOFF (bb) · M5 KICKOFF · AWAITING_PO.
+**Staleness check passed** — tree clean at `aad639d`, no `automation/STOP`, no
+detached job pending, cluster 3/3 Ready v1.36.1, InferenceService
+`serving/nyc-taxi-eta` **Ready True**, `@champion` version 2. **M5-S5 COMPLETE
+— and it is M5's LAST story.** PR **#32** merged, reachable from origin/main.
+Cluster never went down; nothing was promoted, no alias moved, no manifest
+changed. **The one mutation in the story is a deliberate stop and start of the
+InferenceService** (an annotation added and removed) so the runbook quotes an
+observation instead of a hope — the endpoint is Ready now on
+`mlops-taxi-worker`, 0 restarts.
+
+### Done
+- **`docs/runbooks/serving.md`** — 8 sections: what is on the wire · is it up
+  (ascending order of what each check proves) · deploy/re-deploy · **stop and
+  start, REHEARSED** · **rollback, TYPED and NOT REHEARSED** · a
+  cheapest-causes-first failure table (10 symptoms, each with its first check
+  and the cause seen before) · what the endpoint refuses on purpose · what a
+  lost pod costs · the honest un-rehearsed list.
+- **F-032, the story's real finding, found by typing the rollback and closed the
+  same session by a CHECK: a rollback is THREE moves, and nothing enforced the
+  second.** Version 2 eats 24 features, version 1 eats 5, and the client builds
+  its matrix from `configs/train.yaml: features.version` — so alias-move +
+  `make serve` loads a 5-column model under a 24-column request stream: **500 on
+  every quote from a system whose every condition says `Ready`**, no restart, no
+  event. The config edit is **derivable**, not guessable: every registry version
+  carries a `feature_set` tag (`v1` on 1, `v2` on 2), read live this session.
+  `make verify-m5` §2 now asserts served-version's tag == config's
+  `features.version` and names the shape when it breaks.
+- **`make stop-start-drill` — the runbook's own §3 commands, RUN:** the route
+  stopped answering **3.12 s** after `serving.kserve.io/stop=true` and answered
+  again **18.24 s** after the annotation was removed, on a NEW pod (`…-qrd6f` →
+  `…-xj2q6`). Two things running it corrected: **`spec.replicas` goes ABSENT,
+  not `0`** (so `kubectl scale` is wrong advice and is fought by the controller)
+  and a restart costs MORE than the 14.53 s a killed pod costs. Record:
+  `automation/runs/m5-s5/stop-start.json` (tracked).
+- **The PRR minutes** (`docs/rituals/2026-08-19_prr-m5.md`) — four boxes, every
+  one carrying pasted evidence, §0 saying first what the review could NOT do
+  (the champion was already serving; the rollback could not be rehearsed; no
+  alert can fire because there is no Prometheus). Box 3 is **seven named alert
+  signals**, each with a source that exists today, each with the record its
+  "today" number comes from, and each of which would have caught something that
+  actually happened in M5 — including **A-3, the 422 count**, which is the
+  signal F-019's typed refusal bought. **No thresholds**: those are M6's SLO
+  document. The F-019 policy's SRE half is minuted here (S2's cross-reference).
+- **`make verify-m5` — GREEN 49/49 sub-checks in 7 sections, 5.762 s, exit 0.**
+  It re-runs nothing expensive and mints nothing, but it **does ask the endpoint
+  for ONE prediction**, whose `model_version` must equal what the alias resolves
+  to and whose value must reproduce the parity record's row (0.000e+00) — §9/M5's
+  "Show: parity output", re-shown at the cost of one request.
+- **`make verify-m5-redteam` — PASSED.** One number rewritten
+  (`selfheal.json`'s `recovery.outage_seconds` **14.53 → 14.251**, taken from
+  the record's OWN `error_window.span_s` — gotcha #75's mistake re-made, wrong
+  by 0.28 s) → **RED exit 1 with 2 FAILs from two DIFFERENT artifacts**: the
+  record stops reconciling with its anchors, and the runbook quotes a number no
+  record holds. 47 sub-check lines still passed; sha256-verified byte-identical
+  restore (`f1712acf9f80…`), `git status` clean, GREEN again.
+- **687 host tests passed** (was 671; `tests/unit/test_verify_m5.py` adds 16),
+  ruff clean, **`make verify-m4` GREEN** as a regression check. Ledgers:
+  deployments row + F-032. Docs: `docs/verify_m5_transcripts.md`, field note,
+  CLAUDE.md section and three command rows, gotcha **#76**.
+
+### Decisions
+- **Stop/start was rehearsed; the rollback was not, and the asymmetry is
+  principled.** Stopping touches one annotation and is exactly undone by
+  removing it — no pointer, no config, no registry. A rollback moves
+  `@champion`, which M5 is legislated not to do (kickoff law 2). So the rollback
+  says NOT REHEARSED in its own section, in §8's list, in the PRR and in the
+  ledger — the M4-S2 backup precedent, where an unrehearsed path says so in
+  every artifact rather than in one footnote.
+- **The rollback's step 3 is a raw `set_registered_model_alias`, deliberately
+  not a `make` target.** `registry.promote()` refuses to move an alias without a
+  gate `Decision` and its `incumbent_version` (F-011). A rollback is a human
+  overriding the gate in an incident: it should look unusual, be typed by hand
+  and leave a commit. **Building `make rollback` as a gate bypass is explicitly
+  refused in the PRR** — M6 owns the rehearsed revert.
+- **The gate checks the PROSE against the records**, which is what makes the
+  runbook falsifiable and is also the red team's second witness. A gate that
+  only re-derived the record's own arithmetic would be checking a file against
+  itself.
+- **The CPU request stays at `200m`** — 1.31 cores observed, so it understates
+  by ~6×. Recorded in the PRR as an open recommendation routed to M6 with a
+  re-measurement; a review does not edit what is on the wire (M5-S4 made the
+  same call about the same number).
+- **No AWAITING_PO entry raised, no fork opened.** F-032 was closable inside the
+  story's own scope by a check with verified undo.
+
+### Defects/Surprises
+- **The gate's first run went RED against a perfectly good install** because it
+  read KServe's deployment mode out of `infra/helm/kserve/values.yaml` **with a
+  regex** and matched the comment saying *"The chart's default is
+  `deploymentMode: Knative`"*. Prose where a parser reads it as code — gotchas
+  #53/#60, fifth occurrence in this program. It parses the YAML now.
+- **Two versions of the same mistake in the runbook-quotation leg, and the
+  second was worse (gotcha #76).** Demanding the runbook contain the record's
+  number at FULL precision failed on a document sensibly writing `104.2 ms` for
+  a recorded 104.226 (#42's rule, arriving in prose). The obvious fix — a bare
+  substring search over rendered precisions — would have matched `14` inside
+  `14.53`, i.e. the loosening landed exactly on the fault the red team plants.
+  The match is anchored on both sides now, and the red team is what proved it
+  mattered.
+- **The PRR is held AFTER the champion went on the wire**, while §9/M5 says the
+  checklist is walked "BEFORE the champion serves". Minuted as a deviation in
+  §0 rather than smoothed over: three of the four boxes are only fillable with
+  S3/S4's numbers, there are no users, and **M6 is where the ordering bites** —
+  the canary/shadow work puts a challenger on the wire and its review must come
+  first.
+- **No wall hit.**
+
+### Next
+**M5 is COMPLETE (S1–S5) and is NOT ◆-marked**, so the exit is
+`automation/next_session.sh architect 120` — ARCH does the M5 boundary triage
+and authors the M6 kickoff.
+
+What the boundary inherits, in the order it will matter:
+- **The M5 gate is `make verify-m5` (GREEN 49/49) and its red team PASSED** —
+  both re-runnable in seconds; the approver's own re-run is the sign-off
+  evidence (producer ≠ approver: no sign-off row was written by this session).
+- **F-032 is CLOSED** (the half-rollback coherence check). **F-016 stands
+  parked at AWAITING_PO 2026-08-18-1** and becomes blocking at M7's first
+  retrain, not before. **AWAITING_PO 2026-08-16-2 and 2026-08-17-1** stand,
+  non-blocking. **No new fork.**
+- **Three things M6 is owed by name**, all recorded with numbers rather than
+  intentions: (1) the **CPU request 200m vs ~1.3 cores** observed, to be changed
+  on the wire with a re-measurement; (2) **the rollback rehearsal** and the
+  **platform-restore rehearsal** (un-rehearsed since M4-S2) as gameday
+  candidates; (3) **alert signals A-1…A-7** with their sources, for the SLO
+  document to put numbers on. **ADR-004's canary spike** runs at this boundary:
+  Standard mode has no `canaryTrafficPercent`, and its pre-approved cost is one
+  serving re-deploy.
+- **A trap for whoever writes M6's canary**: every deployment change to this
+  InferenceService is a **full outage of ~15 s** (one replica, an init container
+  that pulls the model from MinIO, no canary). That is measured twice now — 14.53 s
+  on a killed pod, 18.24 s on a stop/start — and it is the argument for the spike
+  rather than a footnote to it.
+
+
 ## Session 2026-08-19 (bb) — M5-S4: p95 with its shape attached, and fifteen seconds without a predictor
 
 ### State
