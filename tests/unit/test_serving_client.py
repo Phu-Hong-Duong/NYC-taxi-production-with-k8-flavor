@@ -8,10 +8,18 @@ red run or would have gone unnoticed until a wrong number reached a rider:
   the endpoint answered 500: MLflow enforces the logged signature and refuses
   `float64 -> int32` as lossy. That refusal is the signature working; the fix was
   to stop lying about the types. A regression here is a 500 on every quote.
-* **the feature ORDER and the feature PATH.** A V2 payload is a list, so a
-  reordering swaps `PULocationID` for `DOLocationID` and returns a plausible
-  number. And if this module ever built a feature itself, train/serve skew would
-  become a matter of luck rather than of construction.
+* **the feature ORDER and the feature PATH.** The order sent is the model's own,
+  because a positional V2 runtime is legal and M7's transformer may be one.
+  (M5-S3's red team measured what this deployment actually does: rotating the
+  order changes the answer by 0.000e+00, because mlserver hands MLflow a NAMED
+  frame and the logged signature reorders it. The ordering is cheap insurance,
+  not the thing standing between us and a mispaired feature — the signature is.)
+  And if this module ever built a feature itself, train/serve skew would become
+  a matter of luck rather than of construction.
+* **NaN cannot travel as JSON (F-030).** `json.dumps` writes it as a bare `NaN`
+  token, which no JSON parser accepts, so every quote whose zone has no centroid
+  — TLC's "Unknown" 264/265, including the largest single OD route in the data —
+  came back HTTP 422 for a whole milestone. Missing goes on the wire as `null`.
 * **F-019's refusal is typed, and it is a TRANSLATION.** The calendar's raise
   must still be a raise; this module turns it into something a caller can act on
   (422, "your date", fixable) instead of something that reads as "the model is
