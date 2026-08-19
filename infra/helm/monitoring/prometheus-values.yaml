@@ -1,0 +1,180 @@
+# prometheus — helm values (M6-S1). Chart: prometheus-community/prometheus 29.27.0
+# (appVersion v3.14.0), read live 2026-08-19 with `helm search repo … --versions`.
+#
+# WHY THE PLAIN CHART AND NOT kube-prometheus-stack. The stack chart installs the
+# prometheus-operator plus ~10 CustomResourceDefinitions whose entire job is to
+# turn ServiceMonitor/PodMonitor objects into the scrape config below. This
+# cluster has exactly two things worth scraping (the predictor and the ingress
+# controller) and one more that annotates itself (kube-state-metrics), so the
+# operator would be a controller and a CRD schema standing between a reviewer and
+# nine lines of YAML. Two further costs specific to THIS program: (a) CRDs are
+# cluster-scoped state on a cluster that is stateful and must not be rebuilt, so
+# a heavy install is a heavy thing to reverse; (b) M6-S2's alert rules would
+# become PrometheusRule CRs — objects that live in the cluster and are edited by
+# `kubectl`, when the program's rule since M1-S5 is that what renders is checked
+# in and converged. The stack chart is the recorded fallback if this one hits its
+# 3-attempt wall; nothing here depends on the operator's features.
+#
+# WHAT THIS SCRAPES, and where each number lands:
+#   * the predictor (mlserver 1.7.1)  -> A-1 latency, A-2 5xx, A-3 422s, A-4 model
+#   * ingress-nginx                   -> A-2 from the edge, the canary split (S4)
+#   * kube-state-metrics              -> A-5 restarts/readiness
+#   * the kubelet's cAdvisor          -> A-6 CPU + throttling (chart default job)
+#
+# WHAT IS TURNED OFF, and why it is not laziness:
+#   * prometheus-node-exporter — a DaemonSet on all 3 nodes for HOST-level
+#     metrics. Nothing in M6's alert plan or serving board reads one: container
+#     CPU and CFS throttling come from the kubelet's cAdvisor endpoint, which the
+#     chart's `kubernetes-nodes-cadvisor` job already scrapes. Footprint with no
+#     reader is footprint.
+#   * prometheus-pushgateway — M7's (drift metrics), and the M6 kickoff's
+#     out-of-scope list names it by port. One value flips it on when M7 needs it.
+#   * alertmanager stays ON: M6-S2 must watch an alert fire end to end, and an
+#     alert with no receiver only ever exists as a row in Prometheus's UI.
+
+scrapeConfigs:
+  # A DEEP-MERGE ONTO THE CHART'S OWN JOB, not a copy of it. Helm merges maps by
+  # key and REPLACES lists, so adding these two scalar/map keys leaves the
+  # chart's 12-entry `relabel_configs` list exactly as the chart ships it —
+  # which is the whole point: a copied relabel list would be right on the day it
+  # was pasted and silently stale at the next chart bump (gotchas #49/#50 in
+  # YAML).
+  #
+  # WHY THEY ARE NEEDED. KServe's controller advertises itself for scraping
+  # (`prometheus.io/scrape: "true"` on kserve-controller-manager-metrics-service)
+  # and then serves those metrics through kube-rbac-proxy over HTTPS with a
+  # cert-manager certificate. Without these two keys the target is permanently
+  # DOWN with `x509: cannot validate certificate`, and a permanently-red target
+  # is worse than an absent one: it is what teaches an on-call to stop reading
+  # the target list. `insecure_skip_verify` is honest here — the CA is
+  # cert-manager's, in-cluster, and the alternative is mounting its root into
+  # Prometheus for a metric nothing in M6 alerts on.
+  kubernetes-service-endpoints:
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      insecure_skip_verify: true
+
+serverFiles:
+  # M6-S2 fills this in. Empty here ON PURPOSE and not omitted: the file must
+  # exist for `rule_files` to load it, and a rules file that appears for the
+  # first time in S2 would make S2's diff about plumbing instead of about alerts.
+  alerting_rules.yml: {}
+
+extraScrapeConfigs: |
+  # ---------------------------------------------------------------------------
+  # The predictor's own metrics. THIS PORT WAS PROBED, NOT READ OFF A DOC.
+  #
+  # KServe stamps its own hint on the predictor pod:
+  #     prometheus.kserve.io/path: /metrics
+  #     prometheus.kserve.io/port: "8080"
+  # …and on THIS runtime 8080/metrics is a 404. `scripts/probe_mlserver_metrics.py`
+  # asked the live pod on 2026-08-19: :8080/metrics -> HTTP 404, :8082/metrics ->
+  # HTTP 200 with 24 series, including model_infer_request_success_total,
+  # model_infer_request_failure_total and rest_server_request_duration_seconds
+  # (a histogram, i.e. a real p95) labelled by method/path/status_code.
+  # A scrape config written against KServe's own annotation would have produced a
+  # target that is permanently DOWN and a serving board that renders empty — the
+  # same picture as "no traffic". Gotcha #70, asked of a second server.
+  #
+  # Discovery is by LABEL, not by pod name: every InferenceService KServe creates
+  # carries `serving.kserve.io/inferenceservice`, so the shadow isvc M6-S3 adds
+  # and the canary isvc M6-S4 adds are scraped the moment they exist, with the
+  # isvc name as a label. Nothing in this file needs editing for them.
+  - job_name: kserve-predictors
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [serving]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_serving_kserve_io_inferenceservice]
+        action: keep
+        regex: .+
+      # One target per pod on the metrics port — NOT on the discovered container
+      # port, which is the inference port and answers 404 here.
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: __address__
+        replacement: $1:8082
+      - source_labels: [__meta_kubernetes_pod_label_serving_kserve_io_inferenceservice]
+        target_label: inferenceservice
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+server:
+  global:
+    # 15s, not the chart's 1m, AND IT WAS A DEFECT BEFORE IT WAS A PREFERENCE.
+    # At a 1-minute scrape interval a `rate(x[1m])` has at most one sample in its
+    # window and evaluates to NOTHING — so the first run of the accept check
+    # reported three container panels with "0 series", which reads exactly like
+    # "this container is idle" and is in fact "this board cannot draw". M6's
+    # windows are minutes (a canary shift, a kill drill, a gameday injection);
+    # a sampling interval of the same order as the event cannot describe it.
+    scrape_interval: 15s
+    evaluation_interval: 15s
+
+  # 15 days is the chart default and it is the right one here: M6's windows are
+  # minutes (a drill, a canary, a gameday) and M7's drift comparisons read MLflow
+  # and the marts, not this TSDB. A longer retention would only buy disk.
+  retention: "15d"
+
+  persistentVolume:
+    # The PVC dies with the cluster, like every other PVC here (M0-S4 proved it).
+    # That is acceptable for a metrics store and would not be for the registry:
+    # what a lost TSDB costs is the ability to re-read a window that has already
+    # been written into a record. Every M6 number that matters is copied into a
+    # tracked JSON at the time it is measured, for exactly this reason.
+    enabled: true
+    size: 8Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+
+  # Reached through the EXISTING 8081 ingress (M6 law 1 — kind publishes host
+  # ports at cluster-CREATE only, and this cluster is not rebuilding). Host-based,
+  # so it shares the port with the predictor's own host without a path prefix
+  # that Prometheus's UI would then have to be told about.
+  #   curl -H 'Host: prometheus.local' http://localhost:8081/-/healthy
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - prometheus.local
+    path: /
+    pathType: Prefix
+
+alertmanager:
+  enabled: true
+  persistence:
+    # Alertmanager's persistence is its silences and notification log. Nothing in
+    # M6 silences anything, and a lost notification log costs one duplicate
+    # notification after a restart.
+    enabled: false
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+kube-state-metrics:
+  # A-5's source (restarts, readiness, replica counts). It annotates its own
+  # Service with prometheus.io/scrape, so the chart's default
+  # `kubernetes-service-endpoints` job finds it without a line here.
+  enabled: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+prometheus-node-exporter:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false

@@ -1118,3 +1118,41 @@ the seed line are earned by THIS project.
     comparison needs a precision policy AND a tokenisation policy, and the second
     one is the easier to get silently wrong.
 
+
+77. **A rollout that can never complete looks exactly like a system with nothing
+    wrong with it.** Enabling metrics on ingress-nginx changed the controller's
+    pod template, and the rollout deadlocked: the values file pins the controller
+    to ONE node (it has to — that is the node whose port 80 kind publishes as
+    8081) with `hostPort` and `replicaCount: 1`, and the chart's default
+    `RollingUpdate` at one replica means *start the new pod, then stop the old
+    one*. The new pod can never bind port 80 while the old one holds it —
+    `0/3 nodes are available: 1 node(s) didn't have free ports for the requested
+    pod ports`. It sat Pending for **10 minutes**. Meanwhile the OLD pod served
+    perfectly, an availability probe recorded **840/840 ok**, and the only thing
+    that would eventually have gone wrong is a `helm upgrade` timing out twenty
+    minutes later with a healthy cluster underneath it. The "zero outage" was the
+    most convincing possible evidence for the wrong conclusion. `hostPort` +
+    `replicaCount: 1` + a single-node `nodeSelector` **forces**
+    `updateStrategy: Recreate`, and the honest cost — every future change to that
+    Deployment is a real outage of the only route in — is not a choice, because
+    no strategy that keeps the old pod alive can schedule the new one. Ask of any
+    green rollout: *did the thing I changed actually get replaced?* Pod AGE
+    answers it in one command (F-033).
+
+78. **A scrape target being `up` says nothing about whether anything is being
+    measured — and a component that was never DISCOVERED is not even a target.**
+    The monitoring accept check's first run was green with every target up, and
+    three of the board's panels returned zero series. Each zero was a different
+    real defect: (a) ingress-nginx's metrics Service exists but the chart
+    annotates it with nothing, and endpoint discovery keys on exactly that
+    annotation — so the component was absent from the target list rather than red
+    in it; (b) the chart's default 1-minute scrape interval makes `rate(x[1m])`
+    evaluate to **nothing at all**, because a rate needs two samples inside its
+    window; (c) a genuinely down target (KServe's controller behind
+    kube-rbac-proxy over HTTPS) that a reader would learn to ignore. What made
+    all three visible was executing **every panel's own query** out of the
+    checked-in dashboard JSON and treating **zero series as a FAILURE**. An empty
+    panel is indistinguishable from a quiet system, which means green must not be
+    the default rendering of "no data" — this is #59 ("assert on the positive
+    artifact") applied to a dashboard, where the artifact is a series and not a
+    rectangle (F-034's neighbourhood).

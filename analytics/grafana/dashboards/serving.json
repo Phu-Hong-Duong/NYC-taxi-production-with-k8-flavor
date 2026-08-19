@@ -1,0 +1,149 @@
+{
+  "uid": "crosstown-serving",
+  "title": "Crosstown ETA · serving (M6-S1)",
+  "tags": ["crosstown", "serving", "m6"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "editable": true,
+  "annotations": { "list": [] },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "What this board is, and what each number's instrument is",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Every panel names the process it was measured **in**, because M5 measured the same quantities from the client side and the two are not the same number.\n\n* **Predictor-side** panels come from mlserver's own `/metrics` on port **8082** (probed, not assumed — KServe's own pod annotation advertises 8080, which 404s on this runtime). They exclude the network and the ingress hop, so they will read *lower* than `make load`'s p95 (M5-S4: p50 17.2 / p95 104.2 ms at 4 req/s, concurrency 8 — the client's number, and the one the SLO document owns).\n* **Edge** panels come from ingress-nginx and include that hop. They are also the only place a request that never reached the pod appears at all.\n* **Container** panels come from the kubelet's cAdvisor. `nr_throttled` is here because a load test run at the CPU limit measures the quota rather than the service (gotcha #74), and that shows up as latency, never as an error.\n\nNo threshold is drawn on this board. Thresholds are the SLO document's (M6-S2), and a bar drawn here would be a bar set from the number just observed."
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Predictor · request rate by status code (mlserver :8082)",
+      "description": "The 5xx/422 split the SLO document separates: a 5xx is ours, a 422 is the request's (F-019's typed refusal past the holiday horizon, and F-030's NaN body before it was fixed).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status_code) (rate(rest_server_requests_total{job=\"kserve-predictors\"}[1m]))",
+          "legendFormat": "{{status_code}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Predictor · inference latency p50/p95/p99 (server-side)",
+      "description": "histogram_quantile over mlserver's own duration histogram. Server-side: it does not include the ingress hop or the client's queueing, which is why the SLO's p95 target names the load shape it holds at.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(rest_server_request_duration_seconds_bucket{job=\"kserve-predictors\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(rest_server_request_duration_seconds_bucket{job=\"kserve-predictors\"}[1m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(rest_server_request_duration_seconds_bucket{job=\"kserve-predictors\"}[1m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Model · successful vs failed inferences, by InferenceService",
+      "description": "Broken out by isvc so the shadow (M6-S3) and canary (M6-S4) services appear here the moment they exist — the scrape job discovers them by label, not by name.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (inferenceservice) (rate(model_infer_request_success_total[1m]))",
+          "legendFormat": "{{inferenceservice}} · success"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (inferenceservice) (rate(model_infer_request_failure_total[1m]))",
+          "legendFormat": "{{inferenceservice}} · failure"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Edge · requests through ingress-nginx by status (per host)",
+      "description": "The only instrument that sees a request which never reached a pod — a 502/503 during a pod loss, and (from M6-S4) the per-backend split a canary weight actually produced, as opposed to the weight that was asked for.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(nginx_ingress_controller_requests{namespace=\"serving\"}[1m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Container · CPU cores used vs the 2-core limit",
+      "description": "M5-S4 measured 1.31 mean cores at 4 req/s against a request of 200m — the ~6x understatement M6-S2 re-sizes. The limit line is the ceiling the next panel says whether we are hitting.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"serving\",container=\"kserve-container\"}[1m]))",
+          "legendFormat": "{{pod}} · cores"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=\"serving\",container=\"kserve-container\",resource=\"cpu\"})",
+          "legendFormat": "{{pod}} · limit"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Container · CFS throttling (nr_throttled), and pod restarts",
+      "description": "Two signals that do not show up as errors. Throttling is what saturation looks like (gotcha #74); a restart count that moves without a deploy is A-5's whole point.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace=\"serving\",container=\"kserve-container\"}[1m]))",
+          "legendFormat": "{{pod}} · throttled periods/s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"serving\"})",
+          "legendFormat": "{{pod}} · restarts (cumulative)"
+        }
+      ]
+    }
+  ]
+}

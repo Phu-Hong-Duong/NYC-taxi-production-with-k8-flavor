@@ -119,6 +119,11 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | Predictor image | `taxi-mlops-predictor:mlserver-1.7.1-lgb-4.7.0` — built from `docker.io/seldonio/mlserver:1.7.1-mlflow@sha256:492c8bbac687b148ad81a57278368f0aaaa2b3f72b09302419258d36058fe000` (TAG AND DIGEST, the Metabase precedent) plus **one** package, `lightgbm==4.7.0`. **720 MB on each node**, delivered by `kind load` (D-001's mechanism) to all 3 — required, not convenient: M5-S4 kills the predictor and the replacement may land elsewhere | 2026-08-19 | `docker image inspect` + `crictl images` on the nodes (M5-S2). KServe's own kustomization pins `mlserver:1.7.1`; the derived image exists because the stock one **cannot load this champion** — `ModuleNotFoundError: No module named 'lightgbm'`, measured in one `docker run` before a manifest was written. Its base carries **Python 3.10.12 · pandas 2.2.3 · numpy 2.2.6** against training's 3.12.14 / 3.0.5 / 2.5.2, unfixable by pinning (mlserver 1.7.1 is a py3.10 conda base and full `mlflow` pins `pandas<3`) — and it does not matter because none of the three is on the numeric path: the matrix is built client-side, the wire carries its dtypes, and **lightgbm is 4.7.0 on both sides**. Measured, not argued: one row matched bit for bit |
 | ClusterServingRuntime | **`taxi-mlserver`, ours** (`infra/manifests/serving-runtime-mlserver.yaml`), ONE supportedModelFormat (`mlflow`), protocol **v2**, `imagePullPolicy: IfNotPresent` | 2026-08-19 | M5-S2. **KServe v0.20.0's `kserve-resources` chart ships NO runtimes** — `kubectl get clusterservingruntimes` said `No resources found` and `helm template … \| grep -c 'kind: ClusterServingRuntime'` returned **0**. Upstream keeps them as plain manifests in `config/runtimes/`, image-substituted at release time, so a runtime is ours to declare either way; declaring it puts the image in the same diff as every other pin instead of arriving through a `newTag: latest` |
 | MinIO serving identity | user `serving`, custom policy **`serving-readonly`** — `GetObject` + `GetBucketLocation` + `ListBucket` on `mlflow-artifacts` ONLY | 2026-08-19 | M5-S2. Not a version pin, but it belongs beside one: MinIO's built-in `readonly` omits **`s3:ListBucket`**, which is what KServe's storage-initializer HEADs the bucket with — so a correct install 403s on a user that exists under a policy called "readonly", and it reads exactly like a wrong password. The custom policy is strictly BETTER than what it replaces: read-only and scoped to one bucket, so a leaked serving credential cannot see `flyte-data` at all |
+| Prometheus chart | **`prometheus-community/prometheus` 29.27.0** (appVersion **v3.14.0**), images `quay.io/prometheus/prometheus:v3.14.0` + `quay.io/prometheus-operator/prometheus-config-reloader:v0.93.1` (chart-pinned). Subcharts: alertmanager **ON**, kube-state-metrics **ON**, **node-exporter OFF**, **pushgateway OFF** | 2026-08-19 | `helm search repo prometheus-community --versions` (M6-S1), read back with `helm -n monitoring list`. **NOT `kube-prometheus-stack`**: that chart brings the operator plus ~10 CRDs whose job is to turn ServiceMonitor objects into the nine-line scrape config this repo carries in a values file — and CRDs are cluster-scoped state on a cluster that must not be rebuilt, while M6-S2's alert rules would become PrometheusRule objects LIVING IN THE CLUSTER when the rule since M1-S5 is that what renders is checked in. It is the recorded 3-attempt-wall fallback. node-exporter is off because nothing in M6 reads a host-level metric (container CPU and CFS throttling come from the kubelet's cAdvisor, already scraped); pushgateway is off because it is M7's |
+| Prometheus `global.scrape_interval` | **15s** (chart default is **1m**) — and it was a DEFECT before it was a preference | 2026-08-19 | M6-S1. A `rate(x[1m])` needs two samples inside its window, so at the chart default both container panels on the serving board evaluated to **nothing** and the accept check reported "0 series", which reads exactly like an idle container. M6's events are minutes long (a canary shift, a kill, a gameday injection); a sampling interval of the same order as the event cannot describe it |
+| Grafana chart | **`grafana/grafana` 10.5.15** (appVersion **12.3.1**) | 2026-08-19 | `helm search repo grafana --versions` (M6-S1). Persistence **OFF** deliberately — the inverse of M1-S5's Metabase decision and for the same reason: Metabase's H2 file held the BOARDS, so losing it lost the work; here the boards and the datasource are provisioned from git on every start, so Grafana's sqlite holds only a human's UI preferences. Admin credential from Secret `monitoring/grafana-admin` (`admin.existingSecret`), never `--set` (readable by `ps`) and never the chart default (a published password) |
+| Predictor metrics endpoint | **`:8082/metrics`, PROBED** — and KServe's own pod annotation says **8080**, which returns **404** on this runtime | 2026-08-19 | `make probe-mlserver-metrics` against the live pod (M6-S1, **F-034**). 24 series, of which the load-bearing ones are `rest_server_requests_total{status_code=…}` (the 5xx-vs-422 split at source), `rest_server_request_duration_seconds_bucket` (a histogram, so a real server-side p95) and `model_infer_request_{success,failure}_total`. **The model VERSION is NOT in any mlserver metric** (`version="None"`) — so M6-S2's A-4 needs another source, and the response body is it |
+| ingress-nginx `updateStrategy` | **`Recreate`, and it is FORCED** (chart default is RollingUpdate) | 2026-08-19 | M6-S1, **F-033**. `hostPort` + `replicaCount: 1` + a single-node `nodeSelector` means the surge pod can never bind port 80 while the old pod holds it, so a RollingUpdate deadlocks — observed Pending for 10 minutes with the route serving 840/840 and the helm upgrade heading for its 20m timeout. Honest cost, unavoidable rather than chosen: every change to that Deployment now costs a real outage of the only route in. **Measured: 15.0 s** |
 | KServe `deploymentMode` | **`RawDeployment`** (ADR-004's Standard mode) — the chart default is `Knative` | 2026-08-19 | `infra/helm/kserve/values.yaml`, and READ BACK off `configmap/inferenceservice-config` by `scripts/deploy_serving.sh` rather than off the values that were submitted. Honest cost, landing on M6: **Standard mode has no canary** — `canaryTrafficPercent` requires Serverless (the prior-art ADOPT) |
 
 ## The data contract (M1-S1) — where the rules actually live
@@ -1530,6 +1535,54 @@ can never disagree (the port-family twins lesson, applied before it bit).
   substring — which would have matched `14` inside `14.53` and let the red
   team's planted number through.
 
+## The eyes (M6-S1) — what is scraped, what it cost the wire, and the three zeros
+- **`make deploy-monitoring` is the whole path**: `make backup` first (M4-S2/M5-S1
+  precedent — 6 databases + 331 objects, 1.6 GiB, `2026-08-19T05-59-36Z`) → the
+  route → namespaces + secrets → Prometheus (+Alertmanager +kube-state-metrics) →
+  the dashboard ConfigMap built FROM `analytics/grafana/dashboards/*.json` →
+  Grafana → the accept check. `DRY_RUN=1` mutates nothing, helm included. It
+  **re-runs `deploy_serving.sh`** rather than carrying a second copy of the
+  ingress chart pin: ONE file owns the ingress values and ONE script owns the
+  release, so there is no pair to drift; the cost is ~1 min of no-op upgrades.
+  **It installs no alert rule and no threshold** — those are S2's, and the board
+  draws no threshold line (pinned by a test).
+- **The UIs ride the EXISTING 8081 route, host-based** (`prometheus.local`,
+  `grafana.local`) — M6 law 1. Ports 3000/9091 stay reserved NAMES in the port
+  family, not routes, until a PO-sanctioned rebuild.
+- **F-034: the platform advertised a metrics port that 404s.** KServe stamps
+  `prometheus.kserve.io/port: "8080"` on the predictor pod; the live pod answers
+  **404** there and **200 with 24 series** on **8082**. A scrape config written
+  from the platform's own annotation — the obvious move — yields a permanently-DOWN
+  target and a board of empty rectangles, with no error anywhere. `make
+  probe-mlserver-metrics` is the measurement and it stays in the repo: a pinned
+  port whose probe has been deleted is a remembered number.
+- **F-033: the ingress controller could never complete a rolling update**, latent
+  since M5-S1. `hostPort` + 1 replica + a single-node selector vs the chart's
+  default RollingUpdate = the surge pod can never bind port 80. It sat Pending
+  **10 minutes** while the old pod served **840/840** and the upgrade headed for a
+  20m timeout — *the zero outage was the strongest evidence for the wrong
+  conclusion* (gotcha #77). `Recreate` now, and the honest cost is unavoidable:
+  every change to that Deployment is a real outage of the only route in.
+  **Measured 15.0 s**, which corroborates 14.53 s (killed pod) and 18.24 s
+  (stop/start) — three mutations, three numbers within four seconds.
+- **The accept check is a MEASUREMENT, not a target list**: it reads a counter,
+  sends ONE real quote (`zone 132 -> 48 -> 39.0019 minutes`, the parity row's own
+  value), waits a scrape, and requires the counter to move — then parses **every
+  panel's PromQL out of the checked-in dashboard JSON** and executes it. Its first
+  run was GREEN with three panels at "0 series" and each zero was a different real
+  defect (ingress metrics Service never *discovered*; `rate([1m])` at a 1m scrape
+  interval evaluates to nothing; one genuinely-down rbac-proxy target). **An empty
+  panel is now a FAILURE** — it is indistinguishable from a quiet system, so green
+  must not be the default rendering of "no data" (gotcha #78).
+- **A scrape/rules change costs NO restart** (configmap-reload sidecar; the
+  Prometheus pod was older than the upgrade that changed its config) — so S2's
+  predict → inject → observe → clear loop is minutes.
+- **What M6-S2 inherits, precisely**: a *histogram* for server-side latency (a
+  different instrument from M5-S4's client-side p95 — the SLO doc must say which)
+  · `status_code` at source, so 5xx-vs-422 is a label selector · **no model
+  version in any mlserver metric**, so A-4 needs the response body ·
+  `serverFiles.alerting_rules.yml` already present and empty on purpose.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1643,6 +1696,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | What a Flyte run's actions actually did (M4-S4) | `uv run python scripts/flyte_run_actions.py <run> [--json]` (needs a route; the drill and `run_pipeline.sh` stand one up) | VERIFIED 2026-08-18 (M4-S4, second session): recovered the full-data run's per-stage detail that `--follow` never logged — **six stages, 1909.7 s, fit 1874.7 s, everything else 34.6 s**. Reads `cache_status`, which the CLI does not render. A READER: pinned by a test that it calls nothing which launches, aborts or deletes, because `verify-m4` is meant to reuse it |
 | Gate check M4 | `make verify-m4` | VERIFIED 2026-08-19 (M4-S5 leg 3): **GREEN 39/39, exit 0**, 7 sections in seconds — control plane `/healthz` 200 + 3 Deployments available + the PodTemplate APPLIED with its container named `default` + its PVC Bound · the image on **all 3 nodes** by each node's own `crictl`, and **D-004 re-observed dead INSIDE the container** (`openmp: system libgomp.so.1` first line, no `[openmp]` anywhere) · all 7 stages of `tasks.STAGES` wrapped (AST), 29 actions across 4 recorded runs all SUCCEEDED, one run covering the whole graph, **28 MLflow runs all FINISHED** · the RECORDED cache drill (gotcha #66 — never the newest run): 5/5 `CACHE_HIT`, 1966.9 s → 3.2 s, MLflow 16 → 16, **and the two witnesses agree** · the kill drill: different pod **uid**, ONE attempt, and the probe at attempt index 3 against a declared budget of 2 · `publish_marts` last, CACHE_DISABLED, **8 months reconciled live, 56,127,878 rows, republishing nothing** · **none of the 28 pipeline runs is a registry version**. **RE-RUNS NOTHING** (no pipeline, no drill, no fit, no publish — pinned by `tests/unit/test_verify_m4.py`), no skip flag, no fast mode. Transcript: `docs/verify_m4_transcripts.md` §1 |
 | Prove the M4 gate can go RED | `make verify-m4-redteam` (`bash scripts/verify_m4_redteam.sh`) | VERIFIED 2026-08-19 (M4-S5 leg 3): flips **ONE field** — run 2's `train` from `CACHE_HIT` to `CACHE_POPULATED` in `automation/runs/m4-cache/cache_drill.json`, leaving duration (140 ms), phase and the MLflow counts (16 → 16) untouched, i.e. a record that is internally well-formed and still describes a green seven-stage run → **RED exit 1 with 2 FAILs**: the CLAIM leg names `train`, and the **CROSS-SYSTEM leg fires** (`the two witnesses CONTRADICT each other … MLflow minted 0 run(s)`) — the leg a gate reading only `cache_status` would not have had. **37 of 39 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`beb10ab49fb0…` before and after) → **GREEN 39/39**. The target is CHOSEN from the record (the cached stage that cost run 1 most), never typed. Touches no pod, no image, no MLflow run, no registry version, no mart row |
+| The monitoring stack (M6-S1) | `make deploy-monitoring` (`scripts/deploy_monitoring.sh`; `DRY_RUN=1` mutates NOTHING, helm included) — Prometheus + Alertmanager + kube-state-metrics + Grafana through the EXISTING 8081 route. **Installs no alert rule and no threshold** | VERIFIED 2026-08-19 (M6-S1): `prometheus 29.27.0` and `grafana 10.5.15` deployed into `monitoring`; the accept check **GREEN 10/10** with targets `kserve-predictors` 1/1, `kubernetes-service-endpoints` 6/6, `kubernetes-nodes-cadvisor` 3/3 (**none permanently red**). **Idempotent re-run = every pod 9–11 min old, 0 restarts** (the M4-S2 shape) — and the Prometheus pod does not restart when its config changes at all (configmap-reload sidecar). `DRY_RUN=1` verified to leave `helm list -A` untouched. Its wire change is the ingress-nginx metrics roll — **F-033**, measured at **15.0 s** — and `make verify-m5` was re-run **GREEN 49/49** after it. Transcript: `docs/monitoring_m6.md` |
+| Prove a rider's request becomes a number (M6-S1) | `make monitoring-accept` (`ACCEPT_ARGS=--json` writes the record) — the accept twin, re-runnable, ~1 min | VERIFIED 2026-08-19 (M6-S1): **GREEN 10/10.** It is not a target list (gotcha #59): it reads the inference counter, sends ONE real quote through the live endpoint (`2019-07-04T09:15:00 zone 132 -> 48 -> 39.0019 minutes` — the parity record's own value), waits 40 s for a scrape, and requires the counter to move (**17 → 18**). Then it parses **every panel's PromQL out of `analytics/grafana/dashboards/serving.json`** and executes all 11 against Prometheus, requiring live series from each — **an empty panel is a FAILURE**, because it is indistinguishable from a quiet system (gotcha #78). Its first run was green over three real defects |
+| Ask the predictor where its metrics really are (M6-S1) | `make probe-mlserver-metrics` | VERIFIED 2026-08-19 (M6-S1, **F-034**): `:8082/metrics -> HTTP 200, 119 lines, 24 series` · `:8080/metrics -> HTTP 404` — against KServe's own pod annotation `prometheus.kserve.io/port: "8080"`. Prints one WHOLE sample per serving-relevant series, because the LABELS are what a board and an alert are written against; that is how `status_code` (the 5xx/422 split) and `version="None"` (no model version in any mlserver metric) were both found before a rule was written |
+| Measure what a wire change costs the route (M6-S1) | `uv run python scripts/route_availability_probe.py --seconds N --rate 2 --out <path> --label "…"` | VERIFIED 2026-08-19 (M6-S1): open-loop, one sample due every 1/rate seconds regardless of whether the last returned; **outage anchored first-failure → first-success** (gotcha #75) with the raw per-sample log kept so a reader can re-derive it differently. Observed **15.0 s / 30 failed of 600** across the ingress metrics roll — and **840/840 ok with `outage=None`** across the deadlocked rollout that never replaced anything, which is exactly why pod AGE and not the probe is what proves a rollout happened |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5 live; M6+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
@@ -1831,6 +1888,20 @@ the easier to get silently wrong — demanding a runbook quote `104.226` failed 
 document sensibly writing `104.2 ms` (#42 in prose), and the obvious fix, a bare
 substring search, would have matched `14` inside `14.53` and let the red team's
 planted number straight through (#76)**.
+Newest (M6-S1), and both are about things that look FINE: **a rollout that can
+never complete is indistinguishable from a system with nothing wrong with it — the
+ingress controller's surge pod sat Pending for 10 minutes unable to bind a hostPort
+the old pod still held, while the route served 840/840 and the helm upgrade headed
+for a silent 20-minute timeout; `hostPort` + 1 replica + a single-node selector
+FORCES `Recreate`, and pod AGE is the one-command answer to "did the thing I
+changed actually get replaced?" (#77, F-033)**; and **a scrape target being `up`
+says nothing about whether anything is measured, and a component that was never
+DISCOVERED is not even a target — three board panels returned zero series with
+every target green, for three different real reasons (an unannotated metrics
+Service, a `rate([1m])` at a 1-minute scrape interval, and one genuinely-down
+rbac-proxy endpoint). Execute every panel's own query and treat ZERO SERIES AS A
+FAILURE: an empty rectangle is what a quiet system looks like, so green must not be
+the default rendering of "no data" (#78, #59 applied to a dashboard)**.
 Newest (M5-S4), and both are the same disease — **measure the quantity you will
 quote**: **a load test run at the CPU limit measures the QUOTA, not the service,
 and "held its rate with no errors" cannot detect that, because saturation shows
