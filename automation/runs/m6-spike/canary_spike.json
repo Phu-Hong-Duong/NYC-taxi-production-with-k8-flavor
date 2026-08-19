@@ -1,0 +1,12 @@
+{
+  "prediction": {
+    "written_before_anything_was_applied": true,
+    "p1_canary_ingress_is_accepted": "A second Ingress named nyc-taxi-eta-canary, sharing the champion's host and carrying nginx.ingress.kubernetes.io/canary=true, is ACCEPTED by the API server and is not deleted by KServe's reconciler. Reason: KServe owns objects it created (ownerReference to the InferenceService); this one has no such reference and a different name, so it is not in the controller's desired state at all. Risk if wrong: the operator garbage-collects it and option (ii) is dead \u2014 the fallback is dual-send from the client.",
+    "p2_weight_10_splits_traffic": "With canary-weight=10, about 10% of 200 requests to the champion's host return 500 (routed to the v1 shadow, whose signature refuses a 24-column matrix) and the rest return 200. Tolerance \u00b18.0 points for binomial noise at n=200.",
+    "p3_weight_50_moves_the_share": "Raising canary-weight to 50 moves the observed 500 share to about 50% of 200. This is the check that the annotation is the KNOB rather than a coincidence: a split that does not track the weight is not a traffic split, it is a broken backend.",
+    "p4_v1_cannot_be_mirrored": "Every request that reaches the shadow with the champion's matrix returns 500 and never a number \u2014 v1 eats 5 features, the wire carries 24. So raw traffic mirroring cannot shadow v1, and the disagreement table must come from dual-send with per-target feature builds. Predicted in the shadow manifest before the first 500 was observed.",
+    "p5_mirror_annotation_is_reverted_or_kept": "UNKNOWN, and deliberately not guessed \u2014 this is the probe's open question. Adding nginx.ingress.kubernetes.io/mirror-target to the Ingress KServe OWNS either survives (the controller does not reconcile annotations it did not set) or is stripped (it does). Both outcomes are informative and the ADR records whichever happens. What IS predicted: even if it survives, it cannot usefully shadow v1, for p4's reason.",
+    "p6_end_state_is_exactly_the_start_state": "After cleanup, 200 requests to the champion's host return 200 with model_version 2 and zero 500s: no canary Ingress, no mirror annotation, the champion serving 100%."
+  },
+  "phases": {}
+}
