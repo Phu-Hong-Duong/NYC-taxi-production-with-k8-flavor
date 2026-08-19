@@ -77,6 +77,25 @@ controller:
   admissionWebhooks:
     enabled: false
 
+  # ENABLED AT M6-S1, and it changes what is on the wire for a few seconds — the
+  # controller Deployment rolls, which is the only route into this cluster. That
+  # cost is recorded in ledgers/deployments.md rather than hidden, because it is
+  # the first of M6's deliberate mutations (law 2).
+  #
+  # What it buys is the one instrument that sees a request which never reached a
+  # pod: `nginx_ingress_controller_requests{status=…}` is counted at the edge, so
+  # a 502/503 during a pod loss appears here and nowhere else (the predictor's own
+  # counters cannot count a request its process never received). It is also the
+  # per-backend counter M6-S4's canary is OBSERVED from — the split that actually
+  # happened, as opposed to the weight that was asked for.
+  #
+  # The chart annotates the metrics Service with `prometheus.io/scrape`, which is
+  # what the prometheus chart's default `kubernetes-service-endpoints` job keys
+  # on, so no scrape config in infra/helm/monitoring/prometheus-values.yaml names
+  # this component at all.
+  metrics:
+    enabled: true
+
   resources:
     requests:
       cpu: 100m

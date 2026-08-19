@@ -1,0 +1,95 @@
+# grafana — helm values (M6-S1). Chart: grafana/grafana 10.5.15 (appVersion
+# 12.3.1), read live 2026-08-19 with `helm search repo … --versions`.
+#
+# THE ONE RULE THIS FILE EXISTS TO ENFORCE: nothing that renders is created by
+# clicking. The datasource is provisioned from this file; the serving board is
+# provisioned from `analytics/grafana/dashboards/*.json` through a ConfigMap the
+# deploy script builds from those files. That is the prior-art ADOPT (dashboards
+# from checked-in JSON), landing for the third time after M1-S5's Metabase boards
+# and M6-S2's alert rules. A board built by clicking exists in one container
+# filesystem, cannot be reviewed in a PR, and cannot be rebuilt.
+#
+# WHY NO PERSISTENCE, when M1-S5 fought hard to give Metabase a real app-db. The
+# two cases look identical and are opposites. Metabase's H2 file held the BOARDS
+# — the artifact itself — so losing the container filesystem lost the work. Here
+# the boards and the datasource are provisioned from git on every start, so the
+# only thing Grafana's sqlite holds that git does not is a human's UI
+# preferences. A PVC to protect a starred-dashboard list is footprint.
+
+# The admin credential comes from a Secret this repo's own secrets script
+# converges from .env (`monitoring/grafana-admin`) — never `--set`, which would
+# put it on a command line where `ps` can read it, and never a chart default
+# (`admin/prom-operator` is a published password).
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+
+# Anonymous VIEWERS are allowed on purpose. This is a single-machine, $0,
+# no-network-egress program; the alternative is that every gameday screenshot and
+# every "look at this panel" costs a login, and the credential then gets pasted
+# somewhere it should not be. Editing still requires the admin login.
+grafana.ini:
+  auth.anonymous:
+    enabled: true
+    org_role: Viewer
+  analytics:
+    # Telemetry off, in both of the two places Grafana phones home from — the
+    # gotcha #32 discipline applied to a third tool (DVC, dbt, Metabase before it).
+    reporting_enabled: false
+    check_for_updates: false
+  news:
+    news_feed_enabled: false
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        # The in-cluster name, not the ingress host: a datasource that left the
+        # cluster to come back in would depend on the very route it is used to
+        # debug.
+        url: http://prometheus-server.monitoring.svc.cluster.local
+        access: proxy
+        isDefault: true
+
+# The sidecar watches for ConfigMaps labelled `grafana_dashboard=1` and drops
+# their contents into the provisioning directory. The deploy script creates
+# exactly one such ConfigMap, from the JSON files in analytics/grafana/dashboards/.
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    searchNamespace: monitoring
+    folderAnnotation: grafana_folder
+    provider:
+      foldersFromFilesStructure: false
+
+persistence:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# Reached through the EXISTING 8081 ingress (M6 law 1). Host-based:
+#   curl -H 'Host: grafana.local' http://localhost:8081/api/health
+# In a browser on this machine, add `127.0.0.1 grafana.local prometheus.local`
+# to the hosts file, or use the port-forward the runbook types.
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - grafana.local
+  path: /
+  pathType: Prefix
+
+testFramework:
+  # A test Pod the chart leaves behind on the cluster; `make verify-m6` and the
+  # accept checks here ask the running server instead.
+  enabled: false

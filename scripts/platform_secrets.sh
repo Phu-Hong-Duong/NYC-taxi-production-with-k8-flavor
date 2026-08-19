@@ -85,7 +85,8 @@ ADDITIVE=(MARTS_DB_USER=marts MARTS_DB_PASSWORD=
           OPTUNA_DB_USER=optuna OPTUNA_DB_PASSWORD=
           FLYTE_DB_USER=flyte FLYTE_DB_PASSWORD=
           FLYTE_S3_ACCESS_KEY=flyte FLYTE_S3_SECRET_KEY=
-          SERVING_S3_ACCESS_KEY=serving SERVING_S3_SECRET_KEY=)
+          SERVING_S3_ACCESS_KEY=serving SERVING_S3_SECRET_KEY=
+          GRAFANA_ADMIN_USER=admin GRAFANA_ADMIN_PASSWORD=)
 for spec in "${ADDITIVE[@]}"; do
   key="${spec%%=*}"; literal="${spec#*=}"
   if ! grep -q "^${key}=" "$ENV_FILE"; then
@@ -115,7 +116,8 @@ REQUIRED=(MINIO_ROOT_USER MINIO_ROOT_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCES
           OPTUNA_DB_USER OPTUNA_DB_PASSWORD
           FLYTE_DB_USER FLYTE_DB_PASSWORD
           FLYTE_S3_ACCESS_KEY FLYTE_S3_SECRET_KEY
-          SERVING_S3_ACCESS_KEY SERVING_S3_SECRET_KEY)
+          SERVING_S3_ACCESS_KEY SERVING_S3_SECRET_KEY
+          GRAFANA_ADMIN_USER GRAFANA_ADMIN_PASSWORD)
 missing=()
 for k in "${REQUIRED[@]}"; do
   [[ -n "${!k:-}" ]] || missing+=("$k")
@@ -236,5 +238,13 @@ apply_secret flyte flyte-task-mlflow \
 # .env uses on the host.
 apply_secret flyte flyte-task-marts \
   "MARTS_DB_USER=$MARTS_DB_USER" "MARTS_DB_PASSWORD=$MARTS_DB_PASSWORD"
+# Grafana's admin login (M6-S1). The chart reads it BY NAME
+# (`admin.existingSecret` in infra/helm/monitoring/grafana-values.yaml), which is
+# the point: the two alternatives are `--set adminPassword=…`, which puts a
+# password where `ps` can read it, and the chart's default `admin/prom-operator`,
+# which is a published password on a UI that can edit what the on-call sees.
+# The key names are the chart's, not ours.
+apply_secret monitoring grafana-admin \
+  "admin-user=$GRAFANA_ADMIN_USER" "admin-password=$GRAFANA_ADMIN_PASSWORD"
 
-echo "[secrets] 12 secrets converged from $ENV_FILE (no values printed, by design)"
+echo "[secrets] 13 secrets converged from $ENV_FILE (no values printed, by design)"
