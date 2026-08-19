@@ -84,7 +84,8 @@ ADDITIVE=(MARTS_DB_USER=marts MARTS_DB_PASSWORD=
           METABASE_ADMIN_EMAIL=mlops@crosstown.local METABASE_ADMIN_PASSWORD=
           OPTUNA_DB_USER=optuna OPTUNA_DB_PASSWORD=
           FLYTE_DB_USER=flyte FLYTE_DB_PASSWORD=
-          FLYTE_S3_ACCESS_KEY=flyte FLYTE_S3_SECRET_KEY=)
+          FLYTE_S3_ACCESS_KEY=flyte FLYTE_S3_SECRET_KEY=
+          SERVING_S3_ACCESS_KEY=serving SERVING_S3_SECRET_KEY=)
 for spec in "${ADDITIVE[@]}"; do
   key="${spec%%=*}"; literal="${spec#*=}"
   if ! grep -q "^${key}=" "$ENV_FILE"; then
@@ -113,7 +114,8 @@ REQUIRED=(MINIO_ROOT_USER MINIO_ROOT_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCES
           METABASE_ADMIN_EMAIL METABASE_ADMIN_PASSWORD
           OPTUNA_DB_USER OPTUNA_DB_PASSWORD
           FLYTE_DB_USER FLYTE_DB_PASSWORD
-          FLYTE_S3_ACCESS_KEY FLYTE_S3_SECRET_KEY)
+          FLYTE_S3_ACCESS_KEY FLYTE_S3_SECRET_KEY
+          SERVING_S3_ACCESS_KEY SERVING_S3_SECRET_KEY)
 missing=()
 for k in "${REQUIRED[@]}"; do
   [[ -n "${!k:-}" ]] || missing+=("$k")
@@ -186,6 +188,14 @@ apply_secret metabase metabase-marts-db \
 # where `ps` would show it).
 apply_secret platform minio-flyte-user \
   "secretKey=$FLYTE_S3_SECRET_KEY"
+# The SERVING identity's secret half (M5-S2). In `platform` because the MinIO
+# chart's user Job reads it there — the third instance of the minio-*-user shape.
+# The predictor's own copy is a DIFFERENT Secret in the `serving` namespace,
+# applied by scripts/deploy_champion.sh together with the annotations KServe's
+# storage-initializer reads the endpoint from; Secrets do not cross namespaces
+# and the endpoint is not secret.
+apply_secret platform minio-serving-user \
+  "secretKey=$SERVING_S3_SECRET_KEY"
 # The credential a TASK POD writes its outputs with (M4-S4). A separate Secret in
 # a separate namespace from the one above because Secrets do not cross
 # namespaces, and it holds ONLY the secret half: the endpoint and the access key

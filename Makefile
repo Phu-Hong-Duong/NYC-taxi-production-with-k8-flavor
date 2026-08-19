@@ -157,11 +157,14 @@ verify-m4-redteam: ## prove verify-m4 goes RED: contradict ONE recorded cache st
 	@bash scripts/verify_m4_redteam.sh
 
 # ---- M5 serving & release (role:MLOPS + role:SRE PRR) ----
-.PHONY: deploy-kserve serve verify-m5
-deploy-kserve: ## KServe Standard mode + storage-config secret -> MinIO
-	@echo "TODO(M5)"
-serve: ## InferenceService from champion alias (mlserver runtime); PRR minutes precede go-live
-	@echo "TODO(M5): kubectl apply -f infra/manifests/inferenceservice.yaml"
+.PHONY: holidays serve quote verify-m5
+HOLIDAYS_TO ?= 2030
+holidays: ## re-derive data/reference/us_federal_holidays.csv from 5 U.S.C. §6103 (M5-S2, F-019; HOLIDAYS_TO=YYYY moves the horizon)
+	@uv run python scripts/derive_us_federal_holidays.py --to $(HOLIDAYS_TO)
+serve: ## the champion on the wire: read-only MinIO identity + ServingRuntime + InferenceService from the ALIAS (M5-S2; DRY_RUN=1 previews)
+	@bash scripts/deploy_champion.sh
+quote: ## ask the live endpoint for one quote through the ONE feature path (M5-S2; QUOTE_ARGS="--at 2019-07-04T09:15")
+	@uv run python -m taxi_mlops.serving $(QUOTE_ARGS)
 verify-m5: ## THE parity test (offline==online 1e-6) + p95 under 60s load + PRR minutes exist
 	@echo "TODO(M5): pytest tests/smoke -m smoke"
 

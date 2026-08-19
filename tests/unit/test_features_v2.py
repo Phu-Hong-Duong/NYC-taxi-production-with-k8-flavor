@@ -329,8 +329,18 @@ def test_a_holiday_is_not_a_business_day_even_on_a_thursday():
 
 
 def test_an_uncovered_year_raises_instead_of_answering_not_a_holiday():
+    """UPDATED 2026-08-19 (M5-S2, F-019): the YEAR moved, the property did not.
+
+    This used to ask for 2021, which was uncovered when the table held ten 2019
+    rows and is covered now that `make holidays` derives 2019..2030 from the
+    statute. The behaviour under test is unchanged and must stay unchanged —
+    F-019 was closed by a LONGER table plus a typed serving boundary, never by
+    making this lenient. So the date is derived from the table's own horizon
+    rather than typed, and this test cannot go stale the next time the horizon
+    moves."""
+    beyond = max(calendar.load_calendar().years) + 1
     df = frame([100], [200])
-    df[quote_time.PICKUP_TIMESTAMP] = pd.to_datetime(["2021-07-04"])
+    df[quote_time.PICKUP_TIMESTAMP] = pd.to_datetime([f"{beyond}-07-04"])
     with pytest.raises(ValueError, match="covers"):
         build_features(df, sets.resolve_set("v1_g1"))
 
@@ -501,41 +511,51 @@ def test_month_is_a_join_key_and_never_reaches_the_matrix():
 
 
 # --------------------------------------------------------------------------
-# F-019 (REV, M3 review): the promoted champion cannot answer a request dated
-# outside the holiday table's years. This is a TRIPWIRE, not a fix — it pins the
-# CURRENT behaviour so M5 changes it deliberately instead of meeting it as a 500
-# from a KServe pod. The decision (extend the table vs a policy for uncovered
-# dates, and degrade-vs-refuse) is M5's, in the PRR minutes.
+# F-019 (REV, M3 review), CLOSED at M5-S2 — and this block is where the tripwire
+# was turned into the pin for the DECIDED behaviour, in the same PR as the fix.
+#
+# It was added at M4-S1 as a tripwire pinning the BROKEN state: the champion
+# raised on any request dated outside 2019, and the point was that M5 should
+# change it on purpose rather than meet it as a 500 from a KServe pod. M5-S2
+# decided BOTH halves — extend the table from the statute (2019..2030) AND refuse
+# an uncovered date in a type at the serving boundary — so the tripwire below is
+# replaced by two assertions that would fail if EITHER half were undone:
+#   * a request dated today builds the full matrix (the table half), and
+#   * a request past the horizon still raises here (the guard half), because the
+#     typed 422 lives one layer up in `taxi_mlops.serving.client` and translating
+#     a raise that no longer happens would silently make every quote answerable.
+# The horizon is READ from the table, never typed, so moving it does not orphan
+# this test (F-017's rule: assert the property, not the literal that was true the
+# day it was written).
 # --------------------------------------------------------------------------
 
 
-def test_the_configured_feature_set_refuses_a_request_dated_outside_the_table():
-    """Prevents F-019 going quiet. v2 admitted g1, so the SERVED feature set now
-    needs `is_holiday`; the committed table holds ten rows and all of them are
-    2019. `features/` is the ONE path for training and for serving, so at M5 this
-    is a 500 per quote — and the dossier row that argued for the feature says the
-    opposite ("a calendar is knowable years ahead"). v1 had none of these columns:
-    the dependency entered the served model at M3-S5's promotion.
-
-    The assertion is on the SHAPE of the refusal, not on the year: it must raise
-    loudly and name the table a reader has to edit. If M5 makes uncovered dates
-    legal, this test is the thing that has to be changed on purpose."""
+def test_the_configured_feature_set_answers_a_request_dated_today():
+    """The table half of F-019's fix. v2 admitted g1, so the SERVED feature set
+    needs `is_holiday`; before M5-S2 the committed table held ten rows and all of
+    them were 2019, which made this exact call a 500 per quote."""
     configured = load_train_config()["features"]
     today_shaped = frame([132], [138], month="2026-08")
 
+    matrix = build_features(today_shaped, configured)
+    assert list(matrix.columns) == quote_time.feature_names(configured)
+
+
+def test_the_configured_feature_set_still_refuses_a_request_past_the_horizon():
+    """The guard half. A table always ends; the day it ends must be a typed
+    refusal (`taxi_mlops.serving.client.UncoveredDateError`, 422) and not an
+    invented 'not a holiday' — so this raise has to survive, and it has to keep
+    naming the file a reader must edit."""
+    configured = load_train_config()["features"]
+    beyond = max(calendar.load_calendar().years) + 1
+    past_horizon = frame([132], [138], month=f"{beyond}-08")
+
     with pytest.raises(ValueError) as excinfo:
-        build_features(today_shaped, configured)
+        build_features(past_horizon, configured)
 
     message = str(excinfo.value)
     assert calendar.HOLIDAY_TABLE in message, "the refusal must name the file to edit"
-    assert "2026" in message and "2019" in message, (
-        "the refusal must say what was asked for and what is covered"
-    )
-
-    # …and the same frame inside the covered years builds the full set, so the
-    # test is about the DATE and not about some other defect in the frame.
-    assert list(build_features(frame([132], [138], month="2019-08"), configured).columns) == \
-        quote_time.feature_names(configured)
+    assert str(beyond) in message, "the refusal must say what was asked for"
 
 
 def test_calendar_near_window_excludes_the_holidays_themselves():
