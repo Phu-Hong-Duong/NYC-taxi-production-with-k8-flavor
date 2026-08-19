@@ -261,6 +261,122 @@ def test_every_hazard_row_encodes_for_the_wire_including_the_no_geometry_ones() 
 # --------------------------------------------------------------------------
 # the drill
 # --------------------------------------------------------------------------
+def _drill():
+    """Import the drill script as a module — it is a script, not a package member."""
+    import importlib.util
+    import sys
+
+    if "serving_load_drill" in sys.modules:
+        return sys.modules["serving_load_drill"]
+    spec = importlib.util.spec_from_file_location("serving_load_drill", DRILL_SOURCE)
+    module = importlib.util.module_from_spec(spec)
+    # registered BEFORE exec: `from __future__ import annotations` makes the
+    # dataclass decorators resolve their annotations through sys.modules.
+    sys.modules["serving_load_drill"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_headline_rate_refuses_a_step_that_sat_on_the_cpu_limit() -> None:
+    """Attempt 1's actual ramp, replayed: the two-clause rule picked the ceiling.
+
+    8 req/s held its rate and returned no errors, and ran at 100.2% of a 2-core
+    limit while being throttled in 601 periods. A capacity headline measured
+    there is a measurement of the quota, not of the service.
+    """
+    drill = _drill()
+    steps = [
+        {"target_rate": 2.0, "achieved_rate": 2.042, "errors": 0, "cpu_saturation": 0.30},
+        {"target_rate": 4.0, "achieved_rate": 4.046, "errors": 0, "cpu_saturation": 0.55},
+        {"target_rate": 6.0, "achieved_rate": 6.039, "errors": 0, "cpu_saturation": 0.78},
+        {"target_rate": 8.0, "achieved_rate": 7.973, "errors": 0, "cpu_saturation": 1.002},
+    ]
+    assert drill.choose_headline_rate(steps) == 6.0
+    # a step that did NOT hold its rate is out for the original reason
+    steps[2]["achieved_rate"] = 5.0
+    assert drill.choose_headline_rate(steps) == 4.0
+    # and errors still disqualify
+    steps[1]["errors"] = 3
+    assert drill.choose_headline_rate(steps) == 2.0
+
+
+def test_the_outage_is_not_the_span_from_first_error_to_last() -> None:
+    """The quantity attempt 1 got wrong, pinned as a regression (gotcha #63's shape).
+
+    The synthetic timeline is attempt 1's: a kill at T+25, ~13 seconds in which
+    nothing succeeds, then a long healthy tail that drops one request now and
+    then because the load is sitting on the CPU limit. `last_error - first_error`
+    calls that a 175-second outage. It was a 14-second outage followed by a
+    background error rate, and conflating them makes the runbook quote a number
+    that never happened.
+    """
+    drill = _drill()
+    attempts: list[load_mod.Attempt] = []
+    index = 0
+    for second in range(0, 200):
+        for slot in range(8):
+            t = second + slot / 8
+            dead = 25.5 <= t < 39.0
+            sporadic = (not dead) and t > 39.0 and slot == 3 and second in (50, 121, 200 - 1)
+            ok = not (dead or sporadic)
+            attempts.append(
+                load_mod.Attempt(index, t, t, t + (0.05 if ok else 0.003), ok,
+                                 None if ok else 503, None if ok else "HTTP 503",
+                                 "2" if ok else None)
+            )
+            index += 1
+    result = _result(attempts, target_rate=8.0, seconds=200.0, wall_seconds=200.0)
+
+    naive = result.error_window()
+    assert naive["span_s"] > 150  # what attempt 1 called "the outage"
+
+    recovery = drill.measure_recovery(result, 25.0, 200.0)
+    # the unavailability itself: first refusal (T+25.5) -> first answer again (T+39.05)
+    assert recovery["outage_seconds"] == pytest.approx(13.55, abs=0.2)
+    # and what the runbook quotes: the kill (T+25) -> quoting again
+    assert recovery["seconds_from_kill_to_recovery"] == pytest.approx(14.05, abs=0.2)
+    assert recovery["fully_unavailable_seconds"] == 13
+    assert recovery["residual_errors"] == 3
+    assert 0 < recovery["residual_error_rate"] < 0.01
+    assert recovery["pre_kill_errors"] == 0
+    # the two are reported separately and neither is folded into the other
+    assert recovery["outage_seconds"] < 20 < naive["span_s"]
+
+
+def test_the_pre_kill_segment_is_the_control_for_the_residual_rate() -> None:
+    """A residual error rate means nothing without the same run's own baseline."""
+    drill = _drill()
+    keys = drill.measure_recovery(_result([]), 5.0, 10.0)
+    assert {"pre_kill_error_rate", "residual_error_rate"} <= set(keys)
+
+
+def test_no_error_rate_THRESHOLD_is_applied_by_the_drill() -> None:
+    """An error-rate objective is an SLO, and the M5 kickoff puts the SLO document in M6.
+
+    The drill measures the residual rate and prints it beside the pre-kill rate.
+    A bar invented here would be a bar set from the number that had just been
+    seen, by an executor, in a milestone whose scope explicitly excludes it.
+    """
+    source = DRILL_SOURCE.read_text()
+    body = source.split('"""', 2)[-1]
+    for forbidden in ("residual_error_rate <", "residual_error_rate >", "error_rate <="):
+        assert forbidden not in body, f"the drill is gating on an error rate: {forbidden}"
+
+
+def test_the_tail_check_asserts_AVAILABILITY_not_a_zero_error_count() -> None:
+    """What the drill tests is self-heal: did the service come back and stay up.
+
+    "Zero errors in the last 30 s" is a statement about the load level, not about
+    recovery — attempt 1 failed it while the endpoint was serving 99.3% of a
+    saturating load perfectly well.
+    """
+    fn = _function(DRILL_SOURCE, "phase_selfheal")
+    source = ast.unparse(fn)  # normalises quotes, so match on the unparsed form
+    assert "b['sent'] > 0 and b['ok'] == 0" in source, "the tail no longer looks for dead seconds"
+    assert "tail_errors == 0" not in source, "the tail is back to counting errors"
+    assert "not tail_dead" in source, "the availability check is gone"
+
+
 def test_the_kill_target_is_asserted_by_uid_never_by_name() -> None:
     """M4-S5's lesson, pinned: a controller may legitimately reuse a name."""
     checks = _function(DRILL_SOURCE, "phase_selfheal")

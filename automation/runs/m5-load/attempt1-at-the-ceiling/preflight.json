@@ -1,0 +1,45 @@
+{
+  "story": "M5-S4",
+  "phase": "preflight",
+  "measured_at": "2026-08-19T04:45:34Z",
+  "pod": {
+    "name": "nyc-taxi-eta-predictor-7ff5ccd649-pxkwr",
+    "uid": "f289b362-e96a-4493-8204-6899dbb2aa51",
+    "node": "mlops-taxi-worker2",
+    "started": "2026-08-19T03:48:16Z"
+  },
+  "deployment": {
+    "container": "kserve-container",
+    "resources": {
+      "limits": {
+        "cpu": "2",
+        "memory": "3Gi"
+      },
+      "requests": {
+        "cpu": "200m",
+        "memory": "1Gi"
+      }
+    },
+    "replicas": 1
+  },
+  "cgroup": {
+    "usage_usec": 77862571.0,
+    "user_usec": 75866300.0,
+    "system_usec": 1996271.0,
+    "nice_usec": 0.0,
+    "nr_periods": 9470.0,
+    "nr_throttled": 276.0,
+    "throttled_usec": 127304620.0,
+    "nr_bursts": 0.0,
+    "burst_usec": 0.0,
+    "mem": 247455744.0,
+    "peak": 298668032.0
+  },
+  "warmup": {
+    "requests": 6,
+    "errors": 0,
+    "served_versions": [
+      "2"
+    ]
+  }
+}

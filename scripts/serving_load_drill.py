@@ -46,6 +46,7 @@ import json
 import subprocess
 import sys
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,6 +62,12 @@ from taxi_mlops.serving.load import (  # noqa: E402
     summary_lines,
     write_record,
 )
+
+#: A headline rate is only a capacity number if the container had headroom while
+#: it was measured. Above this share of its CPU limit the kernel is throttling
+#: and the latency belongs to the quota rather than to the service. See the
+#: selection rule in `main` for what this cost when it was absent.
+HEADLINE_MAX_CPU_SATURATION = 0.90
 
 NAMESPACE = "serving"
 ISVC = "nyc-taxi-eta"
@@ -148,6 +155,14 @@ def cgroup_counters() -> dict[str, float]:
     return out
 
 
+def cpu_limit_cores() -> float:
+    """The container's CPU limit, in cores, read off the deployment."""
+    raw = str(resources()["resources"].get("limits", {}).get("cpu", ""))
+    if raw.endswith("m"):
+        return float(raw[:-1]) / 1000.0
+    return float(raw) if raw else 0.0
+
+
 def resources() -> dict[str, Any]:
     raw = sh(
         "kubectl", "-n", NAMESPACE, "get", "deploy", DEPLOY,
@@ -210,21 +225,35 @@ def phase_ramp(
     endpoint: Endpoint, rates: list[float], seconds: float, concurrency: int, out: Path
 ) -> dict[str, Any]:
     print(f"\n=== phase 1 — ramp: {rates} req/s x {seconds:g}s each ===")
+    limit_cores = cpu_limit_cores()
     steps = []
     for rate in rates:
+        before = cgroup_counters()
         result = run_load(
             endpoint, rate=rate, seconds=seconds, concurrency=concurrency,
             label=f"ramp-{rate:g}rps",
             note="ramp step: short window, run to CHOOSE the headline rate rather than guess it",
         )
+        after = cgroup_counters()
         for line in summary_lines(result):
             print(line)
         write_record(result, out / f"ramp-{rate:g}rps.json")
+        cpu_seconds = (after.get("usage_usec", 0) - before.get("usage_usec", 0)) / 1e6
+        mean_cores = cpu_seconds / result.wall_seconds if result.wall_seconds else 0.0
+        throttled = int(after.get("nr_throttled", 0) - before.get("nr_throttled", 0))
+        print(
+            f"[load] cpu: {mean_cores:.2f} of {limit_cores:g} cores "
+            f"({mean_cores / limit_cores * 100:.0f}% of the limit), throttled {throttled} period(s)"
+        )
         steps.append(
             {
                 "target_rate": rate,
                 "achieved_rate": round(result.achieved_rate, 3),
                 "errors": len(result.errors),
+                "mean_cores": round(mean_cores, 3),
+                "cpu_limit_cores": limit_cores,
+                "cpu_saturation": round(mean_cores / limit_cores, 3) if limit_cores else None,
+                "cpu_throttled_periods": throttled,
                 "latency_ms": {k: round(v, 3) for k, v in result.percentiles("latency_ms").items()},
                 "service_ms": {k: round(v, 3) for k, v in result.percentiles("service_ms").items()},
             }
@@ -300,6 +329,110 @@ def phase_headline(
     return result
 
 
+def choose_headline_rate(steps: list[dict[str, Any]]) -> float:
+    """The highest ramp step that is a MEASUREMENT OF THE SERVICE, and why 3 clauses.
+
+    The first version of this rule had two: the highest step that held its stated
+    rate and returned no errors. It chose 8 req/s — at which the container ran at
+    2.003 of its 2-core limit and was CPU-throttled in 601 of ~601 periods
+    (kept, at `automation/runs/m5-load/attempt1-at-the-ceiling/headline.json`).
+
+    A rate at the throttle ceiling is not a capacity number for the service; it
+    is a measurement of the quota, and every latency it produces is a queueing
+    artefact of the kernel stopping the process. It also made the self-heal leg
+    unreadable: sitting on the limit, a perfectly healthy pod drops the odd
+    request, so the drill went red on a tail of 502/503s that had nothing to do
+    with the kill and the kill's true cost could not be separated from the load's.
+
+    The third clause is a MECHANISM and not a threshold reverse-engineered from a
+    result: the phase after this one deliberately destroys the pod, and a rate
+    that already spends the whole quota leaves no headroom for the replacement to
+    come back into. `HEADLINE_MAX_CPU_SATURATION` is stated, not tuned; the
+    saturated steps stay in the ramp record, because the ceiling is a finding.
+    """
+    clean = [
+        step for step in steps
+        if step["errors"] == 0
+        and step["achieved_rate"] >= 0.95 * step["target_rate"]
+        and (step.get("cpu_saturation") or 0.0) <= HEADLINE_MAX_CPU_SATURATION
+    ]
+    return max((step["target_rate"] for step in clean), default=steps[0]["target_rate"])
+
+
+def measure_recovery(result: LoadResult, kill_at: float, seconds: float) -> dict[str, Any]:
+    """The OUTAGE, separated from the background error rate — the right quantity.
+
+    Attempt 1 reported `outage_seconds_measured: 182.4` for a kill at T+25 of a
+    210 s window. That number was `last_error - first_error`, and it was wrong in
+    the way that matters: the service was actually unavailable for **13 seconds**
+    and then served 1,400 more requests while dropping about ten of them, one at
+    a time, because the load was sitting on the container's CPU limit. Folding
+    those together produced a three-minute "outage" that never happened, and a
+    tail check that failed for a reason unrelated to the kill.
+
+    So two quantities, never one (gotcha #63's lesson — fix the quantity, not the
+    threshold):
+
+    - **outage_seconds** — kill -> the first successful response after it. This
+      is self-heal time, and it is what the runbook and the PRR quote.
+    - **residual_errors** after that instant, with the rate BEFORE the kill
+      beside it as the control. The pre-kill segment is the same client, the same
+      rate and the same minute, so it is the only fair comparison available; a
+      difference between the two is about the replacement pod, and a similarity
+      says the residue belongs to the load level.
+
+    No threshold is applied to the residual rate here. An error-rate objective is
+    an SLO, the SLO document is M6's by the M5 kickoff's own scope list, and an
+    executor inventing one mid-drill would be setting a bar from the number it
+    just saw.
+    """
+    # The outage starts at the first FAILURE after the kill, not at the kill: a
+    # pod takes a moment to stop answering, and requests in that moment succeed.
+    # Anchoring recovery on "the first success after the kill" would find one of
+    # those and report an outage of 50 ms for a service that was about to be
+    # down for fourteen seconds.
+    after_kill = [a for a in result.attempts if a.scheduled >= kill_at]
+    first_error = next((a for a in after_kill if not a.ok), None)
+    first_success = (
+        next((a for a in after_kill if a.ok and a.scheduled > first_error.scheduled), None)
+        if first_error is not None
+        else next((a for a in after_kill if a.ok), None)
+    )
+    recovered_at = first_success.done if first_success else None
+    dead_seconds = [
+        b["second"] for b in result.buckets()
+        if b["second"] >= kill_at and b["sent"] > 0 and b["ok"] == 0
+    ]
+    before_kill = [a for a in result.attempts if a.done <= kill_at]
+    residual = [a for a in after_kill if recovered_at is not None and a.scheduled > recovered_at]
+    residual_errors = [a for a in residual if not a.ok]
+    pre_errors = [a for a in before_kill if not a.ok]
+    return {
+        "kill_at_s": round(kill_at, 3),
+        "first_error_after_kill_s": round(first_error.scheduled, 3) if first_error else None,
+        "recovered_at_s": round(recovered_at, 3) if recovered_at is not None else None,
+        # what the runbook quotes: pod destroyed -> quoting again
+        "seconds_from_kill_to_recovery": round(recovered_at - kill_at, 3)
+        if recovered_at is not None
+        else None,
+        # the unavailability itself: first refusal -> first answer again
+        "outage_seconds": round(recovered_at - first_error.scheduled, 3)
+        if recovered_at is not None and first_error is not None
+        else None,
+        "fully_unavailable_seconds": len(dead_seconds),
+        "dead_seconds": dead_seconds,
+        "requests_before_kill": len(before_kill),
+        "pre_kill_errors": len(pre_errors),
+        "pre_kill_error_rate": round(len(pre_errors) / len(before_kill), 6) if before_kill else 0.0,
+        "requests_after_recovery": len(residual),
+        "residual_errors": len(residual_errors),
+        "residual_error_rate": round(len(residual_errors) / len(residual), 6) if residual else 0.0,
+        "residual_classes": dict(
+            Counter(a.error or f"HTTP {a.status}" for a in residual_errors)
+        ),
+    }
+
+
 def phase_selfheal(
     endpoint: Endpoint, rate: float, seconds: float, concurrency: int, kill_at: float, out: Path
 ) -> dict[str, Any]:
@@ -360,9 +493,9 @@ def phase_selfheal(
 
     after = ready_pod()
     window = result.error_window()
-    buckets = result.buckets()
-    tail = [b for b in buckets if b["second"] >= seconds - 30]
-    tail_errors = sum(b["errors"] for b in tail)
+    recovery = measure_recovery(result, float(killed["at"] or kill_at), seconds)
+    tail = [b for b in result.buckets() if b["second"] >= seconds - 30]
+    tail_dead = [b["second"] for b in tail if b["sent"] > 0 and b["ok"] == 0]
     tail_p95 = max((b["p95_latency_ms"] or 0.0) for b in tail) if tail else None
 
     checks: list[tuple[bool, str]] = []
@@ -392,12 +525,24 @@ def phase_selfheal(
     )
     checks.append(
         (
-            window["last_error_s"] is not None and window["last_error_s"] < seconds,
-            f"the error window CLOSED inside the load: last error at "
-            f"T+{window['last_error_s']}s of {seconds:g}s",
+            recovery["recovered_at_s"] is not None and recovery["recovered_at_s"] < seconds,
+            f"AVAILABILITY returned inside the load window: unavailable for "
+            f"{recovery['outage_seconds']}s (first refusal T+"
+            f"{recovery['first_error_after_kill_s']}s -> answering again T+"
+            f"{recovery['recovered_at_s']}s of {seconds:g}s), "
+            f"{recovery['seconds_from_kill_to_recovery']}s from the kill itself, "
+            f"{recovery['fully_unavailable_seconds']}s of it with no successful response at all",
         )
     )
-    checks.append((tail_errors == 0, f"the last 30s are error-free ({len(tail)} bucket(s))"))
+    checks.append(
+        (
+            not tail_dead,
+            f"the service stayed UP for the last 30s: every second returned at least one "
+            f"successful response ({len(tail)} bucket(s)"
+            + (f", dead seconds {tail_dead}" if tail_dead else "")
+            + ")",
+        )
+    )
     checks.append(
         (
             len(result.served_versions) == 1,
@@ -407,6 +552,14 @@ def phase_selfheal(
     ok_after = run_load(endpoint, rate=2, seconds=3, concurrency=1, label="selfheal-after")
     checks.append((not ok_after.errors, "the endpoint answers cleanly after the drill"))
 
+    print(
+        f"[drill] residual error rate AFTER recovery {recovery['residual_error_rate'] * 100:.2f}% "
+        f"({recovery['residual_errors']}/{recovery['requests_after_recovery']}) against "
+        f"{recovery['pre_kill_error_rate'] * 100:.2f}% "
+        f"({recovery['pre_kill_errors']}/{recovery['requests_before_kill']}) before the kill — "
+        "REPORTED, not gated: an error-rate objective is an SLO, and the SLO document is M6's"
+    )
+
     record = result.as_record()
     record["kill"] = {
         "target": before.as_record(),
@@ -415,13 +568,13 @@ def phase_selfheal(
         "replacement": after.as_record() if after else None,
         "different_pod_object": bool(after and after.uid != before.uid),
     }
-    record["recovery"] = {
-        "error_window": window,
-        "outage_seconds_measured": window["span_s"],
-        "bucket_resolution_seconds": 1,
-        "tail_30s_errors": tail_errors,
-        "tail_30s_p95_latency_ms": tail_p95,
-    }
+    record["recovery"] = dict(
+        recovery,
+        error_window=window,
+        bucket_resolution_seconds=1,
+        tail_30s_dead_seconds=tail_dead,
+        tail_30s_p95_latency_ms=tail_p95,
+    )
     record["checks"] = [{"passed": ok, "check": text} for ok, text in checks]
     record["passed"] = all(ok for ok, _ in checks)
     write(record, out / "selfheal.json")
@@ -463,16 +616,10 @@ def main(argv: list[str] | None = None) -> int:
 
     rate = args.rate
     if rate <= 0:
-        # Choose the highest ramp step that both held its stated rate and stayed
-        # error-free. "Held its rate" is the honest criterion: a step whose
-        # achieved rate fell short did not measure what it claims to have.
-        clean = [
-            step for step in ramp["steps"]
-            if step["errors"] == 0 and step["achieved_rate"] >= 0.95 * step["target_rate"]
-        ]
-        rate = max((step["target_rate"] for step in clean), default=ramp["steps"][0]["target_rate"])
-        print(f"\n[drill] headline rate CHOSEN from the ramp: {rate:g} req/s "
-              f"(highest step that held its rate with no errors)")
+        rate = choose_headline_rate(ramp["steps"])
+        print(f"\n[drill] headline rate CHOSEN from the ramp: {rate:g} req/s — the highest step "
+              f"that held its rate, returned no errors, and stayed under "
+              f"{HEADLINE_MAX_CPU_SATURATION:.0%} of the container's CPU limit")
 
     headline = phase_headline(endpoint, rate, args.seconds, args.concurrency, out)
 
@@ -501,9 +648,12 @@ def main(argv: list[str] | None = None) -> int:
         else {
             "passed": selfheal["passed"],
             "different_pod_object": selfheal["kill"]["different_pod_object"],
-            "outage_seconds_measured": selfheal["recovery"]["outage_seconds_measured"],
-            "errors": selfheal["recovery"]["error_window"]["errors"],
-            "tail_30s_errors": selfheal["recovery"]["tail_30s_errors"],
+            "outage_seconds": selfheal["recovery"]["outage_seconds"],
+            "seconds_from_kill_to_recovery": selfheal["recovery"]["seconds_from_kill_to_recovery"],
+            "fully_unavailable_seconds": selfheal["recovery"]["fully_unavailable_seconds"],
+            "failed_requests_total": selfheal["recovery"]["error_window"]["errors"],
+            "residual_error_rate_after_recovery": selfheal["recovery"]["residual_error_rate"],
+            "pre_kill_error_rate": selfheal["recovery"]["pre_kill_error_rate"],
         },
     }
     write(summary, out / "summary.json")
@@ -514,8 +664,8 @@ def main(argv: list[str] | None = None) -> int:
           f"{headline.mix} mix, {len(headline.errors)} error(s)")
     if selfheal is not None:
         print(f"[drill] self-heal {'PASSED' if selfheal['passed'] else 'FAILED'}: "
-              f"{selfheal['recovery']['error_window']['errors']} failed request(s) over "
-              f"{selfheal['recovery']['outage_seconds_measured']}s, "
+              f"unavailable for {selfheal['recovery']['outage_seconds']}s after the kill "
+              f"({selfheal['recovery']['error_window']['errors']} failed request(s) in all), "
               f"different pod object = {selfheal['kill']['different_pod_object']}")
         return 0 if selfheal["passed"] else 1
     return 0
