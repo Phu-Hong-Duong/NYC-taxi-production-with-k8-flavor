@@ -8,6 +8,59 @@ then resume the chain (`automation/next_session.sh executor` — or `architect`
 if the answer changes the plan). Direction decisions WAIT here; nothing
 auto-proceeds on a recommendation (ADR-010).
 
+## 2026-08-19-2 · raised by EXEC/Opus (M6-S5 leg 1) · NOT A FORK, NOT BLOCKING: your second park today is recorded, and this is what is ready when you lift it
+
+**Nothing here needs a decision.** Same purpose as 2026-08-19-1 and 2026-08-18-2:
+a parked chain with no entry here looks like a crash to the watchdog, and
+`automation/STOP` is gitignored — so without this line the repo would carry no
+record that the stop was deliberate.
+
+**What happened.** `automation/STOP` appeared mid-session (`2026-08-19 23:01:16
++07`, written by `chain_park.sh` — your tooling, not this repo's), saying *"finish
+the running session, schedule NO successor."* The session finished:
+**M6-S5 leg 1 is complete, verified and merged** (PR #38, `5e5a71b`, reachable
+from origin/main). `automation/next_session.sh executor 120` was run at exit and
+correctly refused with `[chain] STOP file present — not scheduling.` No successor
+was scheduled, by your instruction.
+
+**What is ready the moment you lift it.** `rm automation/STOP &&
+automation/next_session.sh executor 120` → **M6-S5 leg 2**: `make verify-m6` +
+`make verify-m6-redteam`, the last work in M6, after which the chain exits to the
+architect for the boundary. HANDOFF (bi)'s Next lists the inheritance in detail —
+every record the gate must read is tracked JSON, and §9/M6's accept-when is quoted
+there line by line with the measured number beside each clause.
+
+**Why the gate is not in this session.** The M6 kickoff names this exact cut:
+*"Safe stopping point: gameday complete, gate unbuilt — that is a legitimate leg
+boundary (the M4-S5 precedent)."* Gameday 1 is four scenarios of real injections
+against the live stack, and it cost about fifty-five minutes of wall clock plus a
+deliberate five-minute outage; the gate is a full section-by-section verifier with
+its own red team. Splitting them is the kickoff's own plan, not a shortfall.
+
+**Nothing is half-done.** Tree clean, `@champion` version **2** (M6 promotes
+nothing; the gameday reads the alias in every scenario and asserts it unmoved),
+`configs/train.yaml: features.version` = v2, the champion serving with
+`make verify-m5` **GREEN 49/49** and `make parity` **0.000e+00** over 16 hazard
+rows, seven alert rules loaded and all `inactive`, no detached job pending, no
+open PR, no scratch database or bucket left by the restore drill.
+
+**The wire mutations this session, all in the deployments ledger.** One predictor
+pod deleted under load (13.75 s); the MinIO serving credential deliberately broken
+and the pod deleted, a **~5 minute outage of the only predictor** held long enough
+for a `for: 3m` rule to fire, with the undo staged before the injection and
+exercised (`make serve`, exit 0); ~25 minutes of a saturated container. Postgres
+and MinIO saw three scratch databases and one scratch bucket, created and dropped;
+no live database or bucket was written.
+
+**One open finding worth your eye, routed to the M6→M7 boundary rather than acted
+on: F-043.** Under sustained saturation the predictor's own `/metrics` endpoint
+starves — scrape duration 4 ms → **4.613 s with one scrape failing outright** —
+so the latency alert cleared itself in the middle of the event it was firing
+about. Nothing was changed on the wire and no threshold moved; the three options
+are costed in `ledgers/findings.md` and the recommendation is the honest cheap one
+(state the limit in the SLO document and lean on the node-side signals), not the
+one that would look like a fix.
+
 ## 2026-08-19-1 · raised by EXEC/Opus (M6-S2) · NOT A FORK, NOT BLOCKING: your park is recorded, and this is what is ready when you lift it
 
 **Nothing here needs a decision.** This entry exists for one reason, the same one

@@ -154,7 +154,16 @@ then the milestone boundary.** What it inherits, precisely:
   remedy (named, UNPROVEN, needs two alias moves) · `docs/error_memo_m2.md` §7
   row 2 (the airport gap, now with two independent measurements) · the v1 shadow
   still running.
-Chain scheduled: `automation/next_session.sh executor 120`.
+
+**CHAIN PARKED — NOTHING SCHEDULED, AND THAT IS THE PO'S INSTRUCTION, NOT A
+WALL.** `automation/STOP` appeared mid-session (`2026-08-19 23:01:16 +07`,
+written by `chain_park.sh`) saying *"finish the running session, schedule NO
+successor."* The session finished and merged; `automation/next_session.sh
+executor 120` was run at exit and correctly refused with `[chain] STOP file
+present — not scheduling.` Recorded at **AWAITING_PO 2026-08-19-2** so the
+watchdog reads the park as deliberate (the 2026-08-18-2 and 2026-08-19-1
+precedents — `automation/STOP` is gitignored, so the entry is the only record).
+To resume: `rm automation/STOP && automation/next_session.sh executor 120`.
 
 
 ## Session 2026-08-19 (bh) — M6-S4: two ways to take a change back, and only one is cheap
