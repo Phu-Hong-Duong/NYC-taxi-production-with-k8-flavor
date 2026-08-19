@@ -172,6 +172,50 @@ _V2_DATATYPES = {
 }
 
 
+def _wire_values(column: pd.Series) -> list[Any]:
+    """A column's values as JSON can carry them — and NaN is the hard case.
+
+    **F-030 (M5-S3): the missing-geometry path could not be quoted at all.**
+    Zones 264/265 are TLC's "Unknown" and carry no centroid, so
+    `quote_time.build_features` produces NaN for all nine geometry columns and
+    `has_geometry = 0` — the named fallback DR-04 condition 1 requires, and
+    LightGBM's documented missing-value path. `np.asarray(col).tolist()` turns
+    those into Python `float('nan')`, and `json.dumps` writes them as the bare
+    token `NaN`, which **is not JSON**. The endpoint answered:
+
+        HTTP 422 {"type":"json_invalid","loc":["body",1241],
+                  "msg":"JSON decode error","ctx":{"error":"unexpected character"}}
+
+    — a parser refusing a malformed document, i.e. an error that names neither
+    the feature nor the zone nor the word NaN. 264->264 is the largest single OD
+    "route" in this data (409,128 trips) and the no-geometry share is ~1.0-1.2%
+    of every split, so this was not an exotic corner: it was a whole class of
+    rider the deployed system returned a parse error for.
+
+    JSON has one spelling for "no value" and it is `null`; mlserver decodes it
+    into the tensor as NaN, which is exactly what the booster was fitted to
+    treat as missing. Measured, not assumed — M5-S3's parity run scores these
+    rows offline against the endpoint and prints the delta.
+
+    An INFINITY is refused rather than encoded. It is equally unrepresentable in
+    JSON, but it is not a missing value: nothing in `quote_time` can produce one,
+    so an inf here means a feature is broken and mapping it to `null` would
+    launder a defect into a plausible quote.
+    """
+    values = np.asarray(column)
+    if not np.issubdtype(values.dtype, np.floating):
+        return values.tolist()
+    finite = np.isfinite(values)
+    if bool((~finite & ~np.isnan(values)).any()):
+        raise ValueError(
+            f"feature {column.name!r} contains an infinity, which JSON cannot carry and "
+            "which no quote-time feature can legitimately produce. Refusing to send it: "
+            "encoding it as null would present a broken feature to the model as a "
+            "missing one."
+        )
+    return [None if np.isnan(v) else float(v) for v in values.tolist()]
+
+
 def v2_payload(matrix: pd.DataFrame, feature_names: list[str]) -> dict[str, Any]:
     """The Open Inference (V2) request body: one input per feature, named + typed.
 
@@ -206,13 +250,12 @@ def v2_payload(matrix: pd.DataFrame, feature_names: list[str]) -> dict[str, Any]
                 f"V2 datatype for (known: {sorted(set(_V2_DATATYPES.values()))}). "
                 "Guessing one would send the model a column it was not fitted on."
             )
-        values = np.asarray(column)
         inputs.append(
             {
                 "name": name,
                 "shape": [rows, 1],
                 "datatype": datatype,
-                "data": values.tolist(),
+                "data": _wire_values(column),
             }
         )
     return {"inputs": inputs}
@@ -244,7 +287,13 @@ class Endpoint:
 
 
 def _post(url: str, host: str, body: dict[str, Any], timeout: float) -> dict[str, Any]:
-    data = json.dumps(body).encode()
+    # `allow_nan=False` is the guard, not the encoding: `_wire_values` has already
+    # turned every missing value into `null`, and this makes the failure mode of a
+    # future path that forgets to a LOUD ValueError here rather than a 422 from the
+    # server about an "unexpected character" at byte 1241 (F-030). Python's json
+    # emits the non-standard tokens NaN/Infinity by DEFAULT; that default is what
+    # let malformed bodies leave this process for a whole milestone.
+    data = json.dumps(body, allow_nan=False).encode()
     request = urllib.request.Request(  # noqa: S310 — a fixed http:// route, not user input
         url, data=data, headers={"Content-Type": "application/json", "Host": host}
     )
@@ -261,6 +310,30 @@ def _get(url: str, host: str, timeout: float) -> dict[str, Any]:
 def served_version(endpoint: Endpoint, *, timeout: float = 30.0) -> dict[str, Any]:
     """What the endpoint says it is serving — asked of the server, not remembered."""
     return _get(endpoint.metadata_url, endpoint.host, timeout)
+
+
+def infer_matrix(
+    matrix: pd.DataFrame,
+    feature_names: list[str],
+    endpoint: Endpoint,
+    *,
+    timeout: float = 60.0,
+) -> dict[str, Any]:
+    """Send an ALREADY-BUILT matrix and return the endpoint's whole answer.
+
+    M5-S3 needs this: parity scores ONE matrix twice, so that the delta it
+    measures is the model + the runtime + the wire, and not two feature builds
+    that could differ. `infer` below is this function plus the feature build, so
+    there is still exactly one place that turns a matrix into a request body.
+    """
+    try:
+        return _post(endpoint.infer_url, endpoint.host, v2_payload(matrix, feature_names), timeout)
+    except urllib.error.HTTPError as exc:  # pragma: no cover — needs a live endpoint
+        body = exc.read().decode(errors="replace")[:500]
+        raise RuntimeError(
+            f"the endpoint answered {exc.code} for {endpoint.infer_url} "
+            f"(Host: {endpoint.host}): {body}"
+        ) from exc
 
 
 def infer(
@@ -280,14 +353,7 @@ def infer(
     cfg = features_cfg if features_cfg is not None else load_train_config()["features"]
     names = quote_time.feature_names(cfg)
     matrix = build_matrix(requests, cfg)
-    try:
-        return _post(endpoint.infer_url, endpoint.host, v2_payload(matrix, names), timeout)
-    except urllib.error.HTTPError as exc:  # pragma: no cover — needs a live endpoint
-        body = exc.read().decode(errors="replace")[:500]
-        raise RuntimeError(
-            f"the endpoint answered {exc.code} for {endpoint.infer_url} "
-            f"(Host: {endpoint.host}): {body}"
-        ) from exc
+    return infer_matrix(matrix, names, endpoint, timeout=timeout)
 
 
 def minutes_of(response: dict[str, Any]) -> np.ndarray:
