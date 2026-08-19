@@ -116,6 +116,9 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | ingress-nginx chart | **4.15.1** (appVersion **1.15.1**), image `registry.k8s.io/ingress-nginx/controller:v1.15.1@sha256:594ceea76b01c592858f803f9ff4d2cb40542cae2060410b2c95f75907d659e1` — the chart pins by TAG AND DIGEST itself | 2026-08-19 | `helm search repo ingress-nginx --versions` (M5-S1), read back with `helm list -A`. **Not** the upstream `deploy/static/provider/kind` manifest: it selects `ingress-ready=true`, a label kind writes only when the kind config asks and ours does not — and the kind config is read at cluster-CREATE only, so the label is unavailable at a price M5 will not pay |
 | cert-manager chart | **v1.21.1** (appVersion v1.21.1), images `quay.io/jetstack/cert-manager-{controller,webhook,cainjector,startupapicheck}:v1.21.1` | 2026-08-19 | `helm search repo jetstack --versions` (M5-S1). It exists for ONE reason: KServe's controller runs admission/conversion webhooks, and a webhook is an HTTPS endpoint the API server calls. `crds.enabled: true` (the release owns them), `crds.keep: false` |
 | KServe charts | **`oci://ghcr.io/kserve/charts/kserve-crd` and `…/kserve-resources`, both v0.20.0** — OCI, so the version IS the tag and there is no repo index to drift. Digests `sha256:92deb742d22a…` (crd) and `sha256:956c4860374f…` (resources) | 2026-08-19 | `helm show chart oci://…` + `curl` against the KServe releases API (M5-S1; v0.20.0 released 2026-08-06). Images: `kserve/kserve-controller:v0.20.0` · `kserve/storage-initializer:v0.20.0` · `quay.io/brancz/kube-rbac-proxy:v0.18.0`. **Six CRDs register cleanly on Kubernetes v1.36.1** — the M5 kickoff's risk R1 did not materialise and ADR-004's plain-mlserver fallback stays armed and unspent |
+| Predictor image | `taxi-mlops-predictor:mlserver-1.7.1-lgb-4.7.0` — built from `docker.io/seldonio/mlserver:1.7.1-mlflow@sha256:492c8bbac687b148ad81a57278368f0aaaa2b3f72b09302419258d36058fe000` (TAG AND DIGEST, the Metabase precedent) plus **one** package, `lightgbm==4.7.0`. **720 MB on each node**, delivered by `kind load` (D-001's mechanism) to all 3 — required, not convenient: M5-S4 kills the predictor and the replacement may land elsewhere | 2026-08-19 | `docker image inspect` + `crictl images` on the nodes (M5-S2). KServe's own kustomization pins `mlserver:1.7.1`; the derived image exists because the stock one **cannot load this champion** — `ModuleNotFoundError: No module named 'lightgbm'`, measured in one `docker run` before a manifest was written. Its base carries **Python 3.10.12 · pandas 2.2.3 · numpy 2.2.6** against training's 3.12.14 / 3.0.5 / 2.5.2, unfixable by pinning (mlserver 1.7.1 is a py3.10 conda base and full `mlflow` pins `pandas<3`) — and it does not matter because none of the three is on the numeric path: the matrix is built client-side, the wire carries its dtypes, and **lightgbm is 4.7.0 on both sides**. Measured, not argued: one row matched bit for bit |
+| ClusterServingRuntime | **`taxi-mlserver`, ours** (`infra/manifests/serving-runtime-mlserver.yaml`), ONE supportedModelFormat (`mlflow`), protocol **v2**, `imagePullPolicy: IfNotPresent` | 2026-08-19 | M5-S2. **KServe v0.20.0's `kserve-resources` chart ships NO runtimes** — `kubectl get clusterservingruntimes` said `No resources found` and `helm template … \| grep -c 'kind: ClusterServingRuntime'` returned **0**. Upstream keeps them as plain manifests in `config/runtimes/`, image-substituted at release time, so a runtime is ours to declare either way; declaring it puts the image in the same diff as every other pin instead of arriving through a `newTag: latest` |
+| MinIO serving identity | user `serving`, custom policy **`serving-readonly`** — `GetObject` + `GetBucketLocation` + `ListBucket` on `mlflow-artifacts` ONLY | 2026-08-19 | M5-S2. Not a version pin, but it belongs beside one: MinIO's built-in `readonly` omits **`s3:ListBucket`**, which is what KServe's storage-initializer HEADs the bucket with — so a correct install 403s on a user that exists under a policy called "readonly", and it reads exactly like a wrong password. The custom policy is strictly BETTER than what it replaces: read-only and scoped to one bucket, so a leaked serving credential cannot see `flyte-data` at all |
 | KServe `deploymentMode` | **`RawDeployment`** (ADR-004's Standard mode) — the chart default is `Knative` | 2026-08-19 | `infra/helm/kserve/values.yaml`, and READ BACK off `configmap/inferenceservice-config` by `scripts/deploy_serving.sh` rather than off the values that were submitted. Honest cost, landing on M6: **Standard mode has no canary** — `canaryTrafficPercent` requires Serverless (the prior-art ADOPT) |
 
 ## The data contract (M1-S1) — where the rules actually live
@@ -1287,6 +1290,60 @@ can never disagree (the port-family twins lesson, applied before it bit).
   by asking the server: `GET /healthz` -> 200 is the controller's OWN endpoint
   (`/nginx-health` 404s), the same shape M4-S2 found for Flyte. **gotcha #70.**
 
+## The champion on the wire (M5-S2) — what serves, what refuses, and the two rows it closed
+- **`make serve` is the whole path** and it never moves the pointer: secrets ->
+  MinIO (the read-only `serving` identity) -> **resolve `@champion`** -> the
+  ServingRuntime -> the credential -> the InferenceService -> ready -> a
+  **PREDICTION**. `@champion` is read BEFORE and AFTER its own mutations and a
+  difference exits 2; a test parses the deploy AND the resolver for mutating
+  registry verbs. Version **2** before and after. `make quote` asks the live
+  endpoint through the ONE feature path; `DRY_RUN=1` mutates nothing.
+- **The accept check is a prediction, not a health probe** (gotcha #59):
+  `2019-07-04T09:15:00, zone 132 -> 48 -> 39.0019 minutes`, with mlserver
+  stamping **`model_version: "2"`** on the response ITSELF — read off the answer
+  being printed, not off a metadata call that could describe a different moment
+  (`GET /v2/models/nyc-taxi-eta` reports `versions: []`; the two are different
+  fields). It matches the locally-loaded champion **bit for bit** (absolute
+  delta 0.000e+00) on ONE row — the 1e-6 gate over the honest hazards is M5-S3's
+  and a spot check must not stand in for it.
+- **F-009 CLOSED by option (b), and (a) is UNAVAILABLE rather than unpreferred.**
+  A version's `source` is set at creation and MLflow cannot change it, so fixing
+  it means a NEW version — what M5 is legislated not to do — and it would leave
+  version 1, **the rollback target M5-S5 depends on**, still broken. The property,
+  now documented: **a version's `source` is a RUN uri while the artifacts live
+  under the LOGGED MODEL's `artifact_location`; every consumer that needs bytes
+  must resolve alias -> logged model -> artifact_location and none may read
+  `source`.** A deploy that trusted `source` would hand KServe an EMPTY prefix,
+  the storage-initializer would download zero objects and **succeed**, and
+  mlserver would fail on a missing `MLmodel` — the artifact-shaped error that
+  blames the wrong thing. Resolved in ONE place
+  (`scripts/resolve_champion_storage.py`, a reader), with gotcha #39's
+  discriminator wired in as `--check`.
+- **F-019 CLOSED, and the decision is BOTH halves because each alone is
+  unshippable.** The table is derived from 5 U.S.C. §6103 to **2030**
+  (`make holidays`), AND an uncovered date is REFUSED in a type
+  (`UncoveredDateError`, `http_status = 422`, `make quote` exits 2) before
+  anything reaches the wire. **Refuse, not degrade-and-flag**: degrading returns
+  a wrong quote nobody can see is wrong, refusing is a countable failure with its
+  fix in the error text — **M6's alert plan gains a named signal, the count of
+  422s per window.** Nothing measured moved: re-deriving 2019 reproduces the ten
+  hand-written rows BYTE FOR BYTE (written by a human months before the deriver,
+  so agreement is evidence about the RULES — Juneteenth is federal only from
+  2021 and is correctly absent), and the holiday/near sets inside
+  2019-01..08 are asserted unchanged. **The M4-S1 tripwire was re-pinned in the
+  same PR** to the DECIDED behaviour, with the horizon READ from the table.
+- **A false green worth remembering**: on a re-deploy the InferenceService's
+  `Ready` condition is satisfied by the pod being REPLACED, so
+  `kubectl wait --for=condition=Ready inferenceservice` returned while the new
+  pod was `Init:0/1` and the accept check interrogated the predecessor — reporting
+  `(unversioned)` when the version stamp was the change under test. **A wait the
+  thing you are replacing can satisfy is not a wait** (gotcha #71). Fixed by
+  waiting on `rollout status deploy/…-predictor` FIRST.
+- **The wire carries the matrix's own dtypes.** Sending `FP64` for all 24
+  features answered **500: Can not safely convert float64 to int32** — MLflow
+  enforcing the logged signature and refusing a lossy cast. The fix was to stop
+  lying about the types, never to strip the signature.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1371,6 +1428,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Prove the M3 gate can go RED | `make verify-m3-redteam` (`bash scripts/verify_m3_redteam.sh`) | VERIFIED 2026-08-18 (M3-S5): rewrites ONE contender's measured KPI-09 in `automation/runs/m3s5/bakeoff.json` (`auto-on-v1` 3.5038 → 3.2000) and leaves its recorded verdict at REFUSE → **RED exit 1**, naming the row AND both verdicts, **the four UNTAMPERED replays still passing** (what separates a replay from a checksum: red on a WRONG number, not on any edit), **44 of 46 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`c4a323ea072a…` before and after) → **GREEN 46/46**. Touches no model, no run, no registry, no study |
 | Rehearse the M4 graph locally (M4-S1) | `make pipeline-local MONTH=2019-01` (`uv run python pipelines/tasks.py --month …`; `--gate` exists only so the F-008 refusal can be watched) | VERIFIED 2026-08-18 (M4-S1): six stages composed on one month, **exit 0** — ingest 7,584,656/7,696,617 rows (1.4547% rejected, tracked tree unchanged in git) · validate re-read the parquet through the 2019 output contract, 20 columns · build_features set **v2**, 24 columns · train `lightgbm-v1` run `27aa90597f61…`, 265.8 s, sampled=True judged=False · evaluate reported the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=False`, CLI exit-code class 3** and `@champion is version 2 — read, never written`. **No orchestrator, no verdict, no result** — one train month against the champion's six (F-008). Transcript: `docs/pipeline_graph_m4.md` §4 |
 | The serving PLATFORM (M5-S1) | `make deploy-serving` (`scripts/deploy_serving.sh`; `DRY_RUN=1` mutates NOTHING, helm included) — ingress-nginx + cert-manager + KServe Standard. **Installs NO model** | VERIFIED 2026-08-19 (M5-S1): four releases at REVISION 1 in **3m13s** — `ingress-nginx 4.15.1` · `cert-manager v1.21.1` · `kserve-crd`/`kserve-resources v0.20.0` — the controller landing on **mlops-taxi-control-plane** (the node whose port 80 kind publishes as 8081; the name is DERIVED from the kind config and the values file asserted against it), `serving-cert True` issued by cert-manager, and `defaultDeploymentMode: RawDeployment` **read back off the live `inferenceservice-config` ConfigMap**, not off the values submitted. **Idempotent re-run = REVISION 2 with every pod 4m44s/3m35s/2m35s old and unrestarted** (the M4-S2 shape). Six KServe CRDs register on **Kubernetes v1.36.1** — risk R1 did not materialise, ADR-004's mlserver fallback armed and unspent. Accept: `GET localhost:8081/` -> **404** (the pass: route up, nothing behind it) AND `GET /healthz` -> **200**. Its FIRST accept check went RED over a perfectly good install by demanding a `Server:` header ingress-nginx suppresses — **gotcha #70**. `DRY_RUN=1` verified to leave `helm list -A` and the namespace list untouched. Transcript: `docs/serving_m5.md` §2 |
+| The champion ON THE WIRE (M5-S2) | `make serve` (`scripts/deploy_champion.sh`; `DRY_RUN=1` mutates NOTHING) — read-only MinIO identity + our ClusterServingRuntime + an InferenceService whose `storageUri` is RESOLVED from the alias | VERIFIED 2026-08-19 (M5-S2): InferenceService **Ready True**, predictor on `mlops-taxi-worker2`, 0 restarts; the accept check is a **PREDICTION** (gotcha #59) — `2019-07-04T09:15:00, zone 132 -> 48 -> 39.0019 minutes` with mlserver stamping **`model_version: "2"`** on the response itself, matching the locally-loaded champion **bit for bit** (absolute delta 0.000e+00, ONE row — the 1e-6 gate is M5-S3's). **Idempotent re-run = `unchanged`/`configured`, the SAME pod uid, 0 restarts, 2m1s old** (the M4-S2 shape). `@champion` version **2** read before AND after, unmoved (a move exits 2). Its first run 403'd on `HeadBucket` because MinIO's built-in `readonly` omits `s3:ListBucket`; its third printed a passing accept check against **the pod it was replacing**, because the InferenceService's Ready condition is satisfied by the predecessor (gotcha #71) — `rollout status` now runs first. Transcript: `docs/champion_on_the_wire_m5.md` §5 |
+| Ask the live endpoint for a quote (M5-S2) | `make quote` (`QUOTE_ARGS="--at YYYY-MM-DDTHH:MM:SS --pu N --do N"`; **exit 0 = quoted · 2 = REFUSED by the typed boundary · 1 = anything else**) | VERIFIED 2026-08-19 (M5-S2): a 2019 request quotes, a **2026** request quotes where it used to raise (F-019's table half), and a **2031** request returns `REFUSED (422) … covers through 2030 … Extend the table: make holidays HOLIDAYS_TO=2031`, exit 2 (F-019's typed half). Builds features through the ONE `features/` path — it reimplements nothing, pinned by an AST test |
+| Re-derive the holiday table (M5-S2, F-019) | `make holidays` (`HOLIDAYS_TO=YYYY` moves the horizon; `--year 2019 --stdout` is the reproduction check) | VERIFIED 2026-08-19 (M5-S2): **146 rows, 2019..2030, 16 observed-day rows**, and re-deriving 2019 alone reproduces the ten hand-written rows **byte for byte** (`diff` silent) — those rows predate this script by two milestones, so agreement is evidence about the RULES, Juneteenth included (federal from 2021, correctly absent from 2019). Idempotent; the human `note` column is preserved by date. 136 insertions, 0 deletions — and the holiday AND near-holiday sets inside 2019-01..08 are asserted unchanged, because a near-day can arrive from another year entirely |
 | Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS NOT REHEARSED** — said in the header, in every `MANIFEST.txt` and in the ledger; an M6-gameday candidate. Same-disk limit, identical to the DVC remote's |
 | Port pre-check, now holder-aware (F-021, M4-S2) | `make ports` | RE-VERIFIED 2026-08-18 (M4-S2) against the LIVE cluster: `6 port(s) held by US — the 'mlops-taxi' cluster is up, which is expected`, each naming port, purpose and `-> container mlops-taxi-control-plane`, then `OK — 10 required port(s): 4 free, 6 held by us, 0 foreign.` **exit 0** — where it used to refuse and advise stopping the stack that holds the registry. The foreign refusal is UNSOFTENED: two unit tests use the same bound port and the same fake `docker ps`, differing only in the container NAME (`mlops-taxi-control-plane` → exit 0 · `somebody-elses-stack-web-1` → exit 2), and M0-S2's fake-listener red-team (no docker shim) still goes red |
 | Flyte on the cluster (M4-S2) | `make deploy-flyte` (`scripts/deploy_flyte.sh`; `DRY_RUN=1` mutates NOTHING, helm included) | VERIFIED 2026-08-18 (M4-S2): `STATUS: deployed REVISION: 2`, all three deployments rolled out, `[pg-db] flyte: before = role absent, database absent` → `ok flyte owner=flyte` (`5 database(s) converged`). **Idempotence proved by pod AGE**: the re-run reported every deployment rolled out while all three pods were **17 minutes old** — a clean upgrade that restarted nothing. First install FAILED `context deadline exceeded` with all pods healthy (the 99 MB console image took **9m49s** to pull); `--wait` is now 20m with that measurement written beside it. Self-sufficient (re-runs namespaces/secrets/D-002/MinIO, the M1-S5 rule). No secret on a command line — mode-600 overlay deleted on EXIT. Cluster never went down |
@@ -1549,4 +1609,12 @@ modern ingress-nginx omits that header on purpose. #59 says assert on a positive
 artifact; it does not say check that the artifact EXISTS. Ask the server:
 `GET /healthz` -> 200 is the controller's own endpoint and `/nginx-health` 404s
 (#70, sibling of #55 — a verifier failing for its own reasons and blaming the
-artifact)**.
+artifact)*.
+Newest (M5-S2): **a wait that the thing you are REPLACING can satisfy is not a
+wait — on a RE-deploy `kubectl wait --for=condition=Ready inferenceservice`
+returns in milliseconds because the OLD predictor is still serving, so the
+accept check interrogated the pod being replaced and printed a pass. Only the
+subject matter made it visible: the change under test was a version stamp, so
+the predecessor answered `(unversioned)`. Ask of any readiness wait, could this
+condition be true right now for a reason that has nothing to do with my change?
+(#71, the third shape of #59/#65)**.

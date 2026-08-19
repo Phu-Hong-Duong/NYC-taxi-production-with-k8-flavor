@@ -9,6 +9,79 @@ months from now.
 
 ## M5
 
+### M5-S2 — the champion answers, and three of the four defects were about what "ready" means (2026-08-19, role:MLOps)
+
+**What was built.** The first model this program has ever served. `make serve`
+resolves `models:/nyc-taxi-eta@champion`, hands KServe the S3 prefix it resolves
+to, and stands up one InferenceService behind M5-S1's route; `make quote` asks it
+for a number through the same `features/` path the trainer used. Two ledger rows
+closed with it: **F-009** (the alias URI that will not load) and **F-019** (the
+champion could not answer any request dated outside 2019).
+
+**Why this way.** Three choices are worth the ink.
+
+*The alias is resolved at deploy time and the S3 path is never committed.* The
+InferenceService in git carries a placeholder that is deliberately not a valid
+URI, so an accidental `kubectl apply -f` fails instead of half-working. The
+reason is F-022's reasoning one layer down: `@champion` is a pointer DESIGNED to
+move, so a committed artifact path is a second address for it that nothing keeps
+in step — and the day the alias moves, that file would still apply cleanly and
+serve the model that used to be champion, with no error anywhere.
+
+*F-019 was decided as BOTH halves, and the argument for each is that the other is
+insufficient.* Extending the holiday table to 2030 fixes today and moves the wall;
+typing the boundary fixes the wall and, alone, would refuse every real request.
+The harder call was inside the second half — refuse, or degrade-and-flag? They
+differ in KIND. Degrading returns a wrong quote: the caller gets a number, the
+rider gets a time, and nothing in the system knows the holiday flags were
+invented. Refusing is a countable, alertable failure confined to dates nobody has
+entered, with its remedy in the error text. A quote-time ETA has one job, and a
+silently wrong number is worse than none.
+
+*The predictor image is derived, and the decision was made by a `docker run`.*
+KServe pins `seldonio/mlserver:1.7.1-mlflow`; that image has no `lightgbm`, so it
+cannot load a LightGBM-flavoured MLflow model at all. One container, thirty
+seconds, before a single manifest existed — the M4-S4 cheap-probe lesson arriving
+a milestone later and saving the same hour.
+
+**The concept underneath.** *"Ready" is a property of some object, and it is
+almost never the object you mean.* Three of this story's four defects were that
+sentence in different clothes. `kubectl wait --for=condition=Ready
+inferenceservice` returned in milliseconds on a re-deploy — truthfully, because
+the InferenceService WAS ready: the old predictor was still serving while the new
+one sat at `Init:0/1`. The accept check then interrogated the pod being replaced
+and printed a pass, and only luck of subject matter exposed it (the change under
+test was a version stamp, so the predecessor said `(unversioned)` instead of
+`2`). A 403 on `HeadBucket` said "Forbidden" about a user that existed under a
+policy literally named `readonly` — the policy was ready, it just lacked
+`s3:ListBucket`. And MLflow answered 500 on a payload that was numerically
+correct, because the signature the model was LOGGED with refuses `float64 ->
+int32` as lossy — the model was ready, the wire was lying about types. In every
+case the signal was true and about the wrong thing. This is #59 and #65's family,
+and the question that catches all three is: **could this be true right now for a
+reason that has nothing to do with my change?**
+
+The corollary is why the accept check is a PREDICTION and not a health probe. A
+ready pod, a 200 on `/v2/health/ready`, and a resolvable route are all true of a
+deployment serving the wrong model. Only a number is about the champion.
+
+**What to look at.** `docs/champion_on_the_wire_m5.md` §3 (F-009's two hops, and
+why the empty prefix would have SUCCEEDED) and §7 (the four defects, ranked by
+how quietly they failed) · `scripts/resolve_champion_storage.py` — one file, and
+the whole reason the alias stays the only address · `infra/helm/minio/values.yaml`
+`policies:` — the custom policy is stricter than the built-in it replaces, which
+is what makes it a fix rather than a workaround · `docker/serving.Dockerfile`,
+whose comments carry the probe output that justified it · gotcha **#71**.
+
+**What to try yourself.** Send the endpoint an `FP64` payload by hand and read
+the 500 — it names the column and the cast, and it is the signature doing its
+job. Then run `make quote QUOTE_ARGS="--at 2031-01-01T09:00:00"` and notice that
+the refusal tells you the exact command that fixes it; compare that with what a
+degrade-and-flag design would have printed, which is nothing at all. Finally,
+`kubectl -n serving delete pod -l serving.kserve.io/inferenceservice=nyc-taxi-eta`
+and re-run `make quote` in a loop — that is M5-S4's drill in miniature, and the
+first thing you will want is a wait that is about the right object.
+
 ### M5-S1 — the evidence entered review, and the accept check went red over a healthy install (2026-08-19, role:MLOps)
 
 **What was built.** Two halves. (1) **F-029's mechanics**: `automation/runs/**/*.json`

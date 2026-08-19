@@ -985,3 +985,27 @@ the seed line are earned by THIS project.
     matching the 404 body's `<center>nginx</center>`, which would pass for any
     nginx anywhere. Sibling of #55: a verifier that fails for its own reasons
     and blames the artifact.
+
+71. **A wait that the thing you are REPLACING can satisfy is not a wait.**
+    M5-S2's deploy applied a changed InferenceService and then waited with
+    `kubectl wait --for=condition=Ready inferenceservice/nyc-taxi-eta`. On a
+    first install that is exactly right. On a RE-deploy it returns in
+    milliseconds — because the condition is about the InferenceService, and the
+    InferenceService is Ready: the OLD predictor is still serving while the new
+    ReplicaSet rolls out. The accept check that follows then interrogates the
+    pod being replaced and passes, and the script's own `get pods` printed the
+    evidence in plain sight (`Init:0/1`, AGE `0s`) without anything reading it.
+    What made it visible at all was luck of subject matter: the change under
+    test was a version stamp, so the predecessor answered `(unversioned)` where
+    the successor would say `2`. Had the change been a resource limit, a
+    tolerance, or a model swap between two artifacts that both load, the deploy
+    would have printed a green line about a pod that no longer exists.
+    The fix is one line and it is about WHICH object: `rollout status
+    deploy/<isvc>-predictor` waits for the new ReplicaSet specifically, and the
+    parent condition stays as a second leg because it is what KServe itself
+    considers serving. Family: #59 ("assert on the artifact this thing exists to
+    produce") and #65 ("`--follow` returns when the FIRST attempt's container
+    exits") — three shapes of one mistake, *the signal I am waiting on is not
+    about the thing I am waiting for*. The general question to ask of any
+    readiness wait: **could this condition be true right now for a reason that
+    has nothing to do with my change?**
