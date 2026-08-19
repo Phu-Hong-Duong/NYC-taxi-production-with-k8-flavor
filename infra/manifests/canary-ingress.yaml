@@ -1,0 +1,61 @@
+# The canary Ingress (M6-S4) — the one object that decides what share of rider
+# traffic leaves the champion.
+#
+# It shares the CHAMPION'S HOST on purpose: `nyc-taxi-eta-serving.local` is the
+# address every rider, drill and gate in this program already uses, so a release
+# rehearsal that moved traffic on some other host would rehearse a different
+# system. ingress-nginx sees two Ingresses claiming one host, notices the
+# `canary: "true"` annotation on this one, and merges it into the other as an
+# alternative backend rather than rejecting it as a conflict.
+#
+# WHAT CHANGES DURING A RELEASE IS ONE ANNOTATION VALUE, AND THAT IS SAFE HERE.
+# `canary-weight` is re-applied at 10 and then 100 by
+# `scripts/canary_release_drill.py`. Editing an INGRESS annotation costs nothing:
+# ingress-nginx reloads its configuration and no pod is touched. That is NOT true
+# of an InferenceService annotation — F-038, measured at M6-S3: KServe copies
+# isvc annotations onto the pod template, so `kubectl annotate isvc` rolled the
+# champion's only predictor twice and cost **174 of 200 requests a 502**. The
+# distinction is the reason the weight lives on this object and nowhere else.
+#
+# `canary-weight-total` is stated EXPLICITLY at 100 even though 100 is the
+# default. The weight is meaningless without it — `{weight: 50, weightTotal: 0}`
+# is the shape a silently-discarded canary reports (ADR-011 condition 1) — so the
+# denominator is written down beside the numerator, in the object a reviewer
+# reads.
+#
+# HOW THE SPLIT IS VERIFIED, AND IT IS NEVER FROM THIS FILE. nginx draws the
+# canary per request; the annotation is an intent. The drill reads
+# `nginx_ingress_controller_requests`, whose canary-routed series carry a
+# `canary="serving-nyc-taxi-eta-canary-backend-80"` label, and corroborates it
+# with the two predictors' OWN `rest_server_requests_total`. Condition 1's
+# failure mode is silent, so a split asserted from its own configuration is not
+# a measurement (gotcha #81).
+#
+# The placeholder is substituted at apply time and is deliberately not a number,
+# so a stray `kubectl apply -f` of this file is rejected by the API server
+# instead of quietly shifting traffic by some remembered amount.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nyc-taxi-eta-canary
+  namespace: serving
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "CANARY-WEIGHT-SET-AT-RUN-TIME"
+    nginx.ingress.kubernetes.io/canary-weight-total: "100"
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+    crosstown.io/serving-role: canary-route
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: nyc-taxi-eta-serving.local
+      http:
+        paths:
+          - backend:
+              service:
+                name: nyc-taxi-eta-canary-backend
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix

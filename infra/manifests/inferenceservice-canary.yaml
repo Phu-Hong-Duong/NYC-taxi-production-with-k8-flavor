@@ -1,0 +1,104 @@
+# The canary (M6-S4) — the champion's OWN bytes, reached through the challenger path.
+#
+# WHY THE CANARY SERVES VERSION 2 AND NOT THE SHADOW'S VERSION 1. M6-S3's DA memo
+# returned **NO-GO for v1** (`docs/shadow_analysis_m6.md`): on 1,016 dual-sent
+# rows the champion is closer on 54.4% and decisively better on long trips, and
+# the 5.9M-row holdout had already answered. Shifting rider traffic to a model a
+# memo has just refused would be a release this program does not want to make.
+#
+# So what is rehearsed here is the **release MECHANISM**, with a challenger whose
+# delta is benign BY CONSTRUCTION: a second InferenceService pointed at the same
+# `@champion` resolution the champion's own deploy uses. Its disagreement table
+# is trivially 0.000 and the memo covers it. Everything the mechanism can get
+# wrong — the split, the reload, the revert, the error window — is exercised in
+# full; the only thing held constant is the thing the memo said no to.
+#
+# THIS IS NOT A SECOND ADDRESS FOR THE CHAMPION. `storageUri` is absent for the
+# champion's own reason (M5-S2): the alias is resolved at deploy time and
+# rendered in, so this file cannot drift into naming yesterday's champion. The
+# placeholder is deliberately not a valid URI, so a stray `kubectl apply -f` of
+# this file fails instead of half-working.
+#
+# ---------------------------------------------------------------------------
+# MLSERVER_MODEL_NAME — ADR-011 CONDITION 2's REMEDY, AND IT WAS UNPROVEN
+# ---------------------------------------------------------------------------
+# The V2 (Open Inference) protocol carries the model name IN THE URL PATH. A
+# canary Ingress does not rewrite paths — ingress-nginx applies only `canary-*`
+# annotations from a canary Ingress, measured at M6-S3 as **0 points of change**
+# from `rewrite-target` — so rider traffic aimed at `/v2/models/nyc-taxi-eta/
+# infer` reaches this pod asking for a model named `nyc-taxi-eta`. KServe injects
+# `MLSERVER_MODEL_NAME` from the InferenceService NAME, which here would be
+# `nyc-taxi-eta-canary`: mlserver would 404 every canary-routed request before a
+# signature was ever consulted. That is exactly what M6-S3 measured (**404, not
+# the 500 everyone predicts**), and ADR-011 recorded `MLSERVER_MODEL_NAME` as the
+# NAMED BUT UNPROVEN remedy that this story must prove.
+#
+# The env below is that remedy. It is an override of a value KServe injects, so
+# it is proved rather than assumed: `scripts/canary_release_drill.py` phase 1
+# asks THIS service's own host for `/v2/models/nyc-taxi-eta/infer` and requires a
+# number back, and asks for `/v2/models/nyc-taxi-eta-canary/infer` and requires
+# the 404 — the negative half, because "it answered" is also true of a service
+# that answers to both names and would tell us nothing about which one carried it.
+#
+# WHAT IS NOT LYING HERE: `MLSERVER_MODEL_VERSION` is rendered from the same
+# single resolution as `storageUri`, so the version stamp on every canary answer
+# is the version this pod actually loaded. A canary that stamped a different
+# number to make itself easy to spot would have made the split easy to measure
+# and the measurement worthless.
+#
+# ---------------------------------------------------------------------------
+# ITS TRAFFIC COMES FROM A DEDICATED SERVICE — ADR-011 CONDITION 1
+# ---------------------------------------------------------------------------
+# KServe generates a Service AND an Ingress per InferenceService, and
+# ingress-nginx keys backends by `<ns>-<svc>-<port>` where a backend holds ONE
+# role. Pointing the canary Ingress at `nyc-taxi-eta-canary-predictor` would
+# therefore register that key as an ordinary backend first and discard the weight
+# **silently** — 0 of 200 moved at weight 50, measured. So the canary Ingress
+# points at `infra/manifests/canary-backend-service.yaml`, a Service that selects
+# these same pods and that no other Ingress names.
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: nyc-taxi-eta-canary
+  namespace: serving
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+    # The monitoring stack discovers predictors BY LABEL (M6-S1), so this pod is
+    # scraped the moment it exists. That is what makes the split observable from
+    # the pods' OWN counters as well as from the ingress's — two witnesses, the
+    # M4-S5 discipline, and the reason a weight can be checked rather than
+    # believed.
+    crosstown.io/serving-role: canary
+spec:
+  predictor:
+    serviceAccountName: taxi-serving
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: mlflow
+      runtime: taxi-mlserver
+      storageUri: RESOLVED-AT-DEPLOY-TIME-FROM-THE-CHAMPION-ALIAS
+      env:
+        - name: MLSERVER_MODEL_VERSION
+          value: CANARY-VERSION-RESOLVED-AT-DEPLOY-TIME
+        # ADR-011 condition 2. See the header — this is the whole reason canary
+        # traffic can reach this pod and come back as a number.
+        - name: MLSERVER_MODEL_NAME
+          value: nyc-taxi-eta
+      # THE CHAMPION'S EXACT RESOURCES, AND THAT IS THE ARGUMENT. At 100% weight
+      # this pod carries precisely the load the champion carries, so a canary
+      # sized differently would rehearse a release whose latency is not the one
+      # that ships. M5-S4 measured 1.31 cores at the SLO's 4 req/s; 1500m is that
+      # plus ~15% (M6-S2's reasoning, copied deliberately rather than re-argued).
+      # Two predictors therefore reserve 3 cores of the node's 20 allocatable,
+      # for the minutes the rehearsal runs.
+      resources:
+        requests:
+          cpu: 1500m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 3Gi

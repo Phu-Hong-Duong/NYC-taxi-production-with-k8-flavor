@@ -29,6 +29,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--route", default=DEFAULT_ROUTE, help="the declared route")
     parser.add_argument("--name", default="nyc-taxi-eta", help="the InferenceService name")
     parser.add_argument("--namespace", default="serving")
+    # M6-S4. The canary answers to the CHAMPION's model name (ADR-011 condition
+    # 2) on its OWN host, so name and host stop being the same fact. Absent this
+    # flag the host is derived exactly as before.
+    parser.add_argument(
+        "--host",
+        default=None,
+        help="Host header override, for a target whose isvc name is not its model name "
+        "(the canary). Default: derived from --name/--namespace.",
+    )
     # M6-S3. A second model is on the wire (the v1 shadow) and it eats a DIFFERENT
     # matrix — 5 columns against the champion's 24. Without this the only way to
     # quote it would be a second client, which is the one thing this module
@@ -56,7 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--passengers", type=float, default=1.0)
     args = parser.parse_args(argv)
 
-    endpoint = Endpoint(name=args.name, namespace=args.namespace, route=args.route)
+    endpoint = Endpoint(
+        name=args.name, namespace=args.namespace, route=args.route, host_override=args.host
+    )
     request = QuoteRequest(
         pickup_datetime=args.at,
         pu_location_id=args.pu,
