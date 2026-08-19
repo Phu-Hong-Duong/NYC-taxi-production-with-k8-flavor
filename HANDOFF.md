@@ -1,5 +1,131 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (az) — M5-S2: the champion answers, and three of four defects were about what "ready" means
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block MLOps — Platform
+Engineer** (charter read at entry; refusals in play: no manual deploys, no
+unpinned versions, no secrets in git or images, no hand-edits to cluster state
+the recipe cannot reproduce). Boot reads: CLAUDE.md · HANDOFF (ay) · M5 KICKOFF ·
+AWAITING_PO. **Staleness check passed** — tree clean at `6b93fb5`, no
+`automation/STOP`, no detached job pending, cluster 3/3 Ready v1.36.1,
+`@champion` version 2, the four M5-S1 helm releases where (ay) left them.
+**M5-S2 COMPLETE.** PR **#29** merged (`3e28a1f`), reachable from origin/main.
+Cluster never went down; `@champion` is version **2** before and after.
+
+### Done
+- **`make serve` — the first model this program has ever served.** One
+  InferenceService `serving/nyc-taxi-eta`, KServe Standard/RawDeployment, **Ready
+  True**, predictor on `mlops-taxi-worker2`, 0 restarts. The accept check is a
+  **PREDICTION and not a health probe** (gotcha #59): `2019-07-04T09:15:00, zone
+  132 -> 48 -> 39.0019 minutes`, with mlserver stamping **`model_version: "2"`**
+  on the response ITSELF (`GET /v2/models/…` reports `versions: []` — different
+  field; the response stamp is the one that cannot describe a different moment).
+  **Idempotent re-run = `unchanged`/`configured`, the SAME pod uid, 0 restarts,
+  2m1s old** (the M4-S2 shape). `DRY_RUN=1` mutates nothing.
+- **It matches the locally-loaded champion BIT FOR BIT** — absolute delta
+  **0.000e+00** on ONE row. Said plainly and repeated in the doc: **this is one
+  row, run once, and it is NOT the parity gate.** `make parity` at 1e-6 over the
+  honest hazards is M5-S3's and this must not stand in for it.
+- **F-009 CLOSED by option (b); option (a) is UNAVAILABLE rather than
+  unpreferred.** A version's `source` is set at creation and MLflow cannot change
+  it, so (a) needs a NEW version — what M5 forbids — and would leave **version 1,
+  M5-S5's rollback target**, still broken. The documented property: *a version's
+  `source` is a RUN uri while the artifacts live under the LOGGED MODEL's
+  `artifact_location`; every consumer that needs bytes must resolve alias ->
+  logged model -> artifact_location and none may read `source`.* A deploy that
+  trusted `source` would hand KServe an EMPTY prefix, the storage-initializer
+  would download zero objects and **succeed**, and mlserver would fail on a
+  missing `MLmodel`. Resolved in ONE place (`scripts/resolve_champion_storage.py`,
+  a reader), with gotcha #39's discriminator wired in as `--check` and run first.
+- **F-019 CLOSED as BOTH halves, because each alone is unshippable.** Table
+  derived from 5 U.S.C. §6103 to **2030** (`make holidays`, 146 rows) AND an
+  uncovered date REFUSED in a type (`UncoveredDateError`, 422, `make quote` exits
+  2) before anything reaches the wire. **Refuse, not degrade-and-flag** — SRE
+  reasoning minuted in `docs/champion_on_the_wire_m5.md` §4.2 for M5-S5's PRR,
+  and it hands M6 a named alert signal: **the count of 422 refusals per window**.
+  Live: 2026 quotes where it used to raise, 2031 refuses naming its own fix.
+  **No measured number moved** — re-deriving 2019 reproduces the ten hand-written
+  rows byte for byte (they predate the deriver by two milestones), and the
+  holiday AND near-holiday sets inside 2019-01..08 are asserted unchanged. The
+  M4-S1 tripwire was re-pinned to the DECIDED behaviour in the same PR.
+- **The credential is least-privilege AND sufficient.** New MinIO identity
+  `serving` under a **custom** `serving-readonly` policy: `GetObject` +
+  `GetBucketLocation` + `ListBucket` on `mlflow-artifacts` only. MinIO's built-in
+  `readonly` omits `ListBucket` and 403s the storage-initializer's HeadBucket —
+  on a user that exists, under a policy called "readonly".
+- **49 cluster-free tests** across three new files; host suite **610 passed**,
+  ruff clean. Regression: `make verify-m0` GREEN and `make verify-m4` GREEN 39/39
+  after the MinIO/secrets change.
+
+### Decisions
+- **The predictor image is DERIVED, and a `docker run` decided it.** KServe
+  v0.20.0's chart ships **no runtimes at all** (`kubectl get
+  clusterservingruntimes` → `No resources found`; `helm template … | grep -c` →
+  0), and the image its kustomization pins, `seldonio/mlserver:1.7.1-mlflow`,
+  **has no `lightgbm`** — measured before a manifest existed. So:
+  `docker/serving.Dockerfile` = that image pinned by tag AND digest + the one
+  package at the champion's own version, and `infra/manifests/serving-runtime-
+  mlserver.yaml` is ours, declaring ONE format. **This is still the kickoff's
+  mlserver/MLflow runtime and ADR-004's fallback was NOT executed** — it stays
+  armed and unspent.
+- **The honest limit, stated because S3 measures it**: the base runs Python
+  3.10.12 / pandas 2.2.3 / numpy 2.2.6 against training's 3.12.14 / 3.0.5 /
+  2.5.2, unfixable by pinning (full `mlflow` pins `pandas<3`). It does not matter
+  because none of the three is on the numeric path — the matrix is built
+  client-side, the wire carries its dtypes, and lightgbm is **4.7.0 on both
+  sides**. The bit-for-bit match is the first evidence. **If S3's parity comes
+  back wide, that paragraph is the first suspect and the honest answer is a
+  predictor on the project's own image — never a looser bar.**
+- **The storageUri is never committed.** The InferenceService in git carries a
+  placeholder that is deliberately not a valid URI, so an accidental
+  `kubectl apply -f` fails instead of half-working. F-022's reasoning one layer
+  down: the alias is a pointer designed to move.
+
+### Defects/Surprises
+- **A FALSE GREEN, and it is the one to remember — gotcha #71.** On a re-deploy
+  `kubectl wait --for=condition=Ready inferenceservice` returns in milliseconds,
+  truthfully: the InferenceService IS ready because the **OLD** predictor is
+  still serving. The accept check then interrogated the pod being replaced and
+  printed a pass, while the script's own `get pods` showed `Init:0/1  AGE 0s` in
+  plain sight. Only luck exposed it — the change under test was a version stamp,
+  so the predecessor answered `(unversioned)`. Fixed by `rollout status
+  deploy/…-predictor` FIRST. **A wait the thing you are replacing can satisfy is
+  not a wait** (#59/#65's third shape).
+- **The wire must carry the matrix's own dtypes.** `FP64` for all 24 features →
+  `500: Can not safely convert float64 to int32`. That is MLflow enforcing the
+  logged signature and refusing a lossy cast — the signature working. The fix was
+  to stop lying about the types, not to strip the signature.
+- **A resolver's banner on stdout killed its caller's `json.load`.** Fixed by
+  sending every human-facing line to stderr: stdout carries the payload.
+- **Gotcha #68 for the FIFTH and SIXTH time, in my own test**: a DRY_RUN check
+  matched the banner's `WOULD helm upgrade …` and then `HELM=(helm …)`. A needle
+  about RUNNING a command must sit where a shell would START one — neither an
+  `echo` nor an assignment is such a place. `invocations_only()` now sits beside
+  `code_only()`.
+- **No wall hit. No fork opened. Nothing new for AWAITING_PO.**
+
+### Next
+**Executor: M5-S3 — THE parity test at 1e-6** (`docs/milestones/M5_KICKOFF.md`).
+The endpoint is up and answering; what does NOT exist is a measured parity claim.
+S3 owns `make parity` (N rows spanning the honest hazards — ordinary trips,
+unseen/fallback OD pairs, airport zones, a boundary-duration trip — built through
+the ONE `features/` path, scored twice, `max |Δ| ≤ 1e-6` with the MEASURED max
+PRINTED) and `make parity-redteam`. Everything it needs exists:
+`taxi_mlops.serving.client` already has `build_matrix`, `v2_payload`, `infer`,
+`minutes_of` and `predict`; `taxi_mlops.training.score.load_champion` +
+`_as_trained` is the offline half; `serving/parity.py` is the home
+`serving/__init__.py` names for it. Reminders that cost time if forgotten:
+**`ensure_openmp()` must run before anything imports lightgbm on this host**
+(gotcha #37) and the shim cannot re-exec a `python -c`, so parity must be a
+`.py`, never a heredoc (F-024); every request needs the `Host:
+nyc-taxi-eta-serving.local` header or the ingress 404s; and the delta to expect
+is **0.000e+00**, not float noise — S2 measured it on one row, so a parity run
+that comes back at 1e-7 is itself worth a sentence. The red team must break the
+TEST without touching the served model (permuted column order, or comparing
+against version 1 loaded locally — version 1 exists). `@champion` is version 2
+and M5 stays alias-neutral.
+
 ## Session 2026-08-19 (ay) — M5-S1: the gates' evidence entered review, and the route went red for a header nobody sends
 
 ### State
