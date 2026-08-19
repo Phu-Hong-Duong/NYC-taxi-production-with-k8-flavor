@@ -15,10 +15,15 @@
 #      remote (/home/longt/dvc-remote/...), outside the repo. It survives
 #      `make destroy`, a wrong `rm -rf` in the repo, and a kind rebuild. It does
 #      NOT survive disk loss. Identical honesty to the DVC remote's own header.
-#   2. RESTORE IS NOT REHEARSED AT M4. This ships the copy, not the drill. An
-#      unrehearsed restore is a hypothesis. Rehearsing it is a named M6-gameday
-#      candidate (M4 kickoff, S2 Do-list) and the deployments ledger row says so.
-#      Until then: this is a lifeboat, not a DR program.
+#   2. RESTORE IS SCRATCH-REHEARSED (2026-08-19, M6-S5) AND NO MORE THAN THAT.
+#      `make restore-drill` loads the three small irreplaceable dumps (mlflow,
+#      optuna, metabase) into SCRATCH databases with ON_ERROR_STOP=1 and checks
+#      what comes out against the live databases AND against records committed
+#      in this repo, then drops them: record automation/runs/m6-restore/
+#      restore_drill.json, GREEN 17/17. What is STILL not rehearsed is a full
+#      restore over a DEAD platform — that needs a PO-sanctioned rebuild, and
+#      until it happens this remains a lifeboat rather than a DR program. The
+#      label moved one notch; it did not go green.
 #   3. IT IS A SNAPSHOT, NOT A POINT-IN-TIME. Databases are dumped one after the
 #      other while the platform runs. Nothing writes to these databases during a
 #      backup on this single-operator machine, but the guarantee is "each dump is
@@ -168,15 +173,26 @@ minio: see minio_summary.json (buckets enumerated from the server)
 
 total on disk: $(human "$total_bytes")
 
-RESTORE IS NOT REHEARSED. Each dump has been proven COMPLETE (gzip CRC over
-every byte, plus pg_dump's own completion marker as the final line) and the
-object mirror has been verified by object count AND byte total — but no restore
-has ever been performed from this directory, so "these files restore a working
-platform" remains a hypothesis. Rehearsing it is an M6-gameday candidate.
-The intended shape when that day comes:
-  zcat <db>.sql.gz | kubectl -n platform exec -i postgres-0 -- psql -U postgres -d <db>
-  # the objects: no restore mode exists yet, by design — writing one before a
-  # rehearsal would be a second untested path, not a safer one.
+RESTORE IS SCRATCH-REHEARSED (2026-08-19, M6-S5) — AND A FULL RESTORE OVER A
+DEAD PLATFORM IS STILL NOT. Each dump is proven COMPLETE (gzip CRC over every
+byte, plus pg_dump's own completion marker in the final lines) and the object
+mirror is verified by object count AND byte total. On 2026-08-19 `make
+restore-drill` additionally LOADED the three small irreplaceable dumps —
+mlflow (2.34s), optuna (0.78s), metabase (7.29s) — into scratch databases with
+ON_ERROR_STOP=1 and checked the result against the live databases and against
+records committed in the repository, and restored the whole mirrored flyte-data
+bucket plus one MLflow artifact byte-identically by sha256. GREEN 17/17;
+record automation/runs/m6-restore/restore_drill.json.
+
+What that does NOT prove: that these files bring a DEAD platform back. Nothing
+has ever been restored OVER anything — the drill creates scratch databases and
+a scratch bucket and drops both. The remaining rehearsal needs a PO-sanctioned
+rebuild. Until then this is a lifeboat with one oar tested, not a DR program.
+The procedure, as run:
+  zcat <db>.sql.gz | kubectl -n platform exec -i postgres-0 -- \
+      psql -v ON_ERROR_STOP=1 -U postgres -d <db>
+  # objects: scripts/restore_rehearsal.py uploads the mirror back with boto3,
+  # the same client that wrote it (see scripts/backup_minio.py's own header).
 EOM
 
 echo
