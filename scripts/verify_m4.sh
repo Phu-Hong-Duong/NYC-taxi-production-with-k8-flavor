@@ -385,17 +385,18 @@ try:
     cfg = load_train_config("configs/train.yaml")
     tracking.configure(cfg["mlflow"])
     client = mlflow.MlflowClient()
-    exp = client.get_experiment_by_name("m4-pipeline")
+    where = tasks.DEFAULT_EXPERIMENT   # read from the source, never typed here
+    exp = client.get_experiment_by_name(where)
     if exp is None:
-        no("MLflow holds no 'm4-pipeline' experiment — the stages logged nowhere")
+        no(f"MLflow holds no {where!r} experiment — the stages logged nowhere")
     else:
         runs = client.search_runs([exp.experiment_id], max_results=50000)
         unfinished = [r.info.run_id[:8] for r in runs if r.info.status != "FINISHED"]
         if runs and not unfinished:
-            ok(f"MLflow's 'm4-pipeline' experiment holds {len(runs)} run(s), every one "
+            ok(f"MLflow's {where!r} experiment holds {len(runs)} run(s), every one "
                f"FINISHED — the fits the control plane recorded really happened")
         elif not runs:
-            no("the 'm4-pipeline' experiment is EMPTY — no stage ever logged a fit")
+            no(f"the {where!r} experiment is EMPTY — no stage ever logged a fit")
         else:
             no(f"MLflow run(s) {unfinished} are not FINISHED — a stage died mid-log")
 except Exception as exc:  # noqa: BLE001
@@ -731,13 +732,18 @@ try:
         no(f"recorded runs left the alias at {sorted(seen)} and it is now "
            f"{live.version} — an M4 run moved the serving pointer")
 
-    # The sharpest form of the law: M4's pipeline fitted 28 runs in its own
-    # experiment. NOT ONE of them is a registry version. A promotion cannot hide
-    # from this — it would have to create a version, and a version carries its run.
-    exp = client.get_experiment_by_name("m4-pipeline")
+    # The sharpest form of the law: M4's pipeline fitted a great many runs in its
+    # own experiment. NOT ONE of them is a registry version. A promotion cannot
+    # hide from this — it would have to create a version, and a version carries
+    # the run that produced it.
+    import sys
+    sys.path.insert(0, ".")
+    from pipelines import tasks
+
+    exp = client.get_experiment_by_name(tasks.DEFAULT_EXPERIMENT)
     versions = client.search_model_versions(f"name='{name}'")
     if exp is None:
-        no("there is no 'm4-pipeline' experiment to check against the registry")
+        no(f"there is no {tasks.DEFAULT_EXPERIMENT!r} experiment to check against the registry")
     else:
         pipeline_runs = {r.info.run_id
                          for r in client.search_runs([exp.experiment_id], max_results=50000)}
