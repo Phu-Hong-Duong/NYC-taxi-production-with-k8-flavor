@@ -1,0 +1,85 @@
+# The shadow (M6-S3) — registry version 1 on the wire, with ZERO rider traffic.
+#
+# WHY A SECOND INFERENCESERVICE AND NOT A MIRROR OF THE FIRST. The only real
+# challenger this program owns is version 1, and it is genuinely different: 5
+# features against the champion's 24, no centroid geometry at all. That is
+# exactly what makes its disagreement table worth a memo — and it is also why
+# raw traffic mirroring CANNOT shadow it. The live wire carries v2's 24-column
+# matrix; v1's logged signature covers 5 columns and refuses the rest, so every
+# mirrored request would 500 at the signature. That is F-032's shape, it is
+# EXPECTED, and it is written down here BEFORE the first 500 was seen (M6-S3's
+# kickoff instruction, taken literally).
+#
+# So the shadow is fed by DUAL-SEND from the client, which builds each target's
+# matrix through the ONE `taxi_mlops.features` path — v1's five columns for this
+# service, v2's twenty-four for the champion. Mirroring stays the mechanism for a
+# SAME-SCHEMA challenger, which this program does not yet have; ADR-011 records
+# the probe that measured the distinction rather than asserting it.
+#
+# THIS SERVICE IS NOT ALIASED AND MUST NEVER BE. It is resolved BY VERSION
+# (`scripts/resolve_champion_storage.py --version 1`) — the same two-hop F-009
+# resolution the champion uses, asked of a version instead of an alias. Pointing
+# an alias at a shadow would be a promotion with extra steps, and M6 law 3 says
+# nothing promotes.
+#
+# WHERE ITS TRAFFIC COMES FROM, AND WHERE IT DOES NOT. KServe generates an
+# Ingress per InferenceService, so this one answers on its OWN host
+# (`nyc-taxi-eta-shadow-serving.local`). The champion's host is untouched and
+# still routes 100% to the champion — the story-exit invariant. Nothing sends a
+# rider here; the dual-send client addresses this host explicitly, by name.
+#
+# `storageUri` is absent for the champion's reason, one story on: what serves is
+# a registry pointer, and a committed S3 path is a second address for the same
+# model that nothing keeps in step. The placeholder is deliberately not a valid
+# URI so a stray `kubectl apply -f` of this file fails instead of half-working.
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: nyc-taxi-eta-shadow
+  namespace: serving
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+    # What this is, in a label, so a human reading `get isvc` does not have to
+    # infer it from the name. The monitoring stack discovers predictors BY
+    # LABEL (M6-S1), so this service is scraped the moment it exists with no
+    # scrape-config edit — which is what makes the disagreement run observable.
+    crosstown.io/serving-role: shadow
+spec:
+  predictor:
+    serviceAccountName: taxi-serving
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: mlflow
+      runtime: taxi-mlserver
+      storageUri: RESOLVED-AT-DEPLOY-TIME-FROM-THE-SHADOW-VERSION
+      env:
+        - name: MLSERVER_MODEL_VERSION
+          value: SHADOW-VERSION-RESOLVED-AT-DEPLOY-TIME
+      # DELIBERATELY SMALLER THAN THE CHAMPION'S, AND THE ARGUMENT IS THE LOAD
+      # SHAPE, NOT THE MODEL SIZE. The champion's 1500m is M5-S4's measured 1.31
+      # cores at 4 req/s sustained — a rider-facing rate this service does not
+      # carry. The shadow is driven by a dual-send batch of a few hundred rows,
+      # in bursts, with nobody waiting on the answer, so reserving a second and
+      # a half of CPU for it would take real capacity out of the scheduler's
+      # hands for a workload that is idle almost all of the time.
+      #
+      # 500m is a reservation for the burst, not a cap on it: the limit stays at
+      # the champion's 2 cores, so the shadow can use what is free while it is
+      # working and gives it back when it is not. The pod stays Burstable for
+      # the champion's reason (request < limit).
+      #
+      # WHAT IS NOT CLAIMED: that v1 is cheaper because it eats 5 features
+      # rather than 24. That is plausible and unmeasured — the disagreement run
+      # records this container's CPU alongside its answers, so a later story can
+      # say it with a number instead of a guess.
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 3Gi

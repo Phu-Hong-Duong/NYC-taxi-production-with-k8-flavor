@@ -49,9 +49,33 @@ tells this apart from its impostor (gotcha #39) costs one call and is run in
 `--check` below: under F-009 `get_model_info` SUCCEEDS on the same uri that
 `load_model` fails on; under missing MinIO credentials both fail.
 
+--------------------------------------------------------------------------
+M6-S3: THE SAME TWO HOPS, ASKED OF A VERSION (`--version N`)
+--------------------------------------------------------------------------
+The shadow serves registry version **1** — a model with no alias on it and no
+alias it should ever acquire (M6 law 3: nothing promotes, and pointing an alias
+at the shadow would be a promotion with extra steps). So the shadow's deploy
+needs "where do version N's bytes live?", which is the identical question this
+file already answers for the champion.
+
+It is the SAME resolution because F-009 is a property of MLflow 3's storage
+layout and not a property of aliases: `source` is a run uri for EVERY version,
+so version 1's `source` points at an empty prefix exactly as version 2's does.
+Resolving a version by any other route would be a second answer to "where are
+the bytes?", which is the one thing this file exists to prevent. `--version N`
+therefore changes ONE call — `get_model_version` instead of
+`get_model_version_by_alias` — and shares every hop after it.
+
+What the payload says about which question was asked: `alias` and `alias_uri`
+are `null` when a version was named, because a version resolution has no alias
+in it and inventing one would let a caller believe the shadow is aliased.
+
 Usage: uv run python scripts/resolve_champion_storage.py            (json)
        uv run python scripts/resolve_champion_storage.py --check    (+ the F-009
                                                                      discriminator)
+       uv run python scripts/resolve_champion_storage.py --version 1
+                                                                    (the shadow's
+                                                                     bytes, M6-S3)
 """
 
 from __future__ import annotations
@@ -69,12 +93,18 @@ class ResolutionError(RuntimeError):
     """The champion cannot be located honestly. Names the reason, never a guess."""
 
 
-def resolve(train_config: str = "configs/train.yaml") -> dict[str, object]:
-    """alias -> {version, run_id, logged_model_id, storage_uri, source}.
+def resolve(
+    train_config: str = "configs/train.yaml", version: str | None = None
+) -> dict[str, object]:
+    """alias (or an explicit version) -> {version, run_id, logged_model_id, storage_uri}.
 
     Reads through `get_model_version_by_alias`, never `search_model_versions` —
     on server 3.15.1 that call returns versions whose `aliases` field is EMPTY
     (M2-S3's finding), so a champion resolved that way is resolved by guessing.
+
+    With `version` set the alias is not consulted at all (M6-S3's shadow). Both
+    routes share every hop after the lookup, because F-009 is a fact about
+    MLflow 3's layout and not about aliases.
     """
     import mlflow
 
@@ -82,14 +112,25 @@ def resolve(train_config: str = "configs/train.yaml") -> dict[str, object]:
     tracking.configure(cfg["mlflow"])
     name, alias = cfg["registry"]["model_name"], cfg["registry"]["champion_alias"]
     client = mlflow.MlflowClient()
-    uri = f"models:/{name}@{alias}"
-    try:
-        version = client.get_model_version_by_alias(name, alias)
-    except Exception as exc:  # noqa: BLE001 — an unset alias is a first-class refusal
-        raise ResolutionError(
-            f"{uri} does not resolve: {exc}. The alias is set by the promotion "
-            "gate and by nothing else — there is no model to serve."
-        ) from exc
+    if version is None:
+        uri = f"models:/{name}@{alias}"
+        try:
+            model_version = client.get_model_version_by_alias(name, alias)
+        except Exception as exc:  # noqa: BLE001 — an unset alias is a first-class refusal
+            raise ResolutionError(
+                f"{uri} does not resolve: {exc}. The alias is set by the promotion "
+                "gate and by nothing else — there is no model to serve."
+            ) from exc
+    else:
+        uri = f"models:/{name}/{version}"
+        try:
+            model_version = client.get_model_version(name, str(version))
+        except Exception as exc:  # noqa: BLE001 — a named version that is absent is a refusal
+            raise ResolutionError(
+                f"{uri} does not resolve: {exc}. A version is named explicitly by "
+                "the caller, so this is a typo or a version that was never "
+                "registered — not a missing alias."
+            ) from exc
 
     logged_model_uri = mlflow.models.get_model_info(uri).model_uri
     logged_model_id = logged_model_uri.rsplit("/", 1)[-1]
@@ -102,11 +143,22 @@ def resolve(train_config: str = "configs/train.yaml") -> dict[str, object]:
         )
     return {
         "model_name": name,
-        "alias": alias,
-        "alias_uri": uri,
-        "version": str(version.version),
-        "run_id": str(version.run_id),
-        "registry_source": str(version.source),
+        # Null when a VERSION was named: a version resolution has no alias in it,
+        # and reporting the champion alias beside version 1's bytes would read as
+        # "version 1 is champion" to anything that skims the payload.
+        "alias": alias if version is None else None,
+        "alias_uri": uri if version is None else None,
+        "resolved_by": "alias" if version is None else "version",
+        "model_uri": uri,
+        "version": str(model_version.version),
+        "run_id": str(model_version.run_id),
+        "registry_source": str(model_version.source),
+        # F-032's tag, written at promotion time and read here rather than typed.
+        # It is what makes the deployed model say WHICH feature set it eats, so a
+        # shadow's client-side feature build is derived from the registry instead
+        # of from a constant in a deploy script (M5-S5's rollback lesson, applied
+        # one story later to a second model on the same wire).
+        "feature_set": model_version.tags.get("feature_set"),
         "logged_model_uri": logged_model_uri,
         "logged_model_id": logged_model_id,
         "storage_uri": location,
@@ -117,7 +169,7 @@ def check(resolved: dict[str, object]) -> int:
     """Run gotcha #39's one-call discriminator and print what it proves."""
     import mlflow
 
-    uri = str(resolved["alias_uri"])
+    uri = str(resolved["model_uri"])
     try:
         mlflow.models.get_model_info(uri)
         info_ok = True
@@ -159,6 +211,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="also run gotcha #39's discriminator")
     parser.add_argument("--train-config", default="configs/train.yaml")
+    parser.add_argument(
+        "--version",
+        default=None,
+        help="resolve this registry VERSION instead of the champion alias (M6-S3's shadow)",
+    )
     args = parser.parse_args(argv)
 
     # STDOUT CARRIES THE PAYLOAD AND NOTHING ELSE. `tracking.configure` prints a
@@ -168,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     # every human-facing line to stderr means a shell can read this script with a
     # plain pipe and a human still sees the banner.
     with contextlib.redirect_stdout(sys.stderr):
-        resolved = resolve(args.train_config)
+        resolved = resolve(args.train_config, version=args.version)
         if args.check and check(resolved) != 0:
             return 1
     print(json.dumps(resolved, indent=2))
