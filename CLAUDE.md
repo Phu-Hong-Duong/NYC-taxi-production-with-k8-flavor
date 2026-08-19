@@ -1825,6 +1825,12 @@ false (this runtime pairs by NAME, via the logged signature). Move the plant to 
 cause the system CAN express, and CORRECT the claim rather than delete it when the
 practice it prescribed is still right for other reasons (#73, F-031 — #51's
 question asked of a drill)**.
+Newest (M5-S5): **a check that compares a machine's number with a human's
+sentence needs a precision policy AND a tokenisation policy, and the second is
+the easier to get silently wrong — demanding a runbook quote `104.226` failed a
+document sensibly writing `104.2 ms` (#42 in prose), and the obvious fix, a bare
+substring search, would have matched `14` inside `14.53` and let the red team's
+planted number straight through (#76)**.
 Newest (M5-S4), and both are the same disease — **measure the quantity you will
 quote**: **a load test run at the CPU limit measures the QUOTA, not the service,
 and "held its rate with no errors" cannot detect that, because saturation shows

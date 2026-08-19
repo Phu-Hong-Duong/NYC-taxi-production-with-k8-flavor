@@ -1100,3 +1100,21 @@ the seed line are earned by THIS project.
     seconds. Both were written and both were caught by replaying the real
     timeline as a test fixture, which is the cheapest way to find out what a
     definition actually computes.
+
+76. **A number quoted in prose exists only at the precision it was written at —
+    and a substring is not a number.** `verify-m5` cross-checks the serving
+    runbook against the records it cites, so that a document an operator acts on
+    at 3 a.m. cannot drift from the measurement it claims to quote. The first
+    version demanded the record's value verbatim and went RED against a runbook
+    sensibly writing **`104.2 ms`** for a recorded **104.226** — #42's rule
+    (a number through a `%.Nf` exists at that precision) arriving in a new place,
+    prose instead of a registry tag. The fix — accept the value rendered at any
+    precision the record can produce — was then written as a bare substring
+    search, which is worse than the bug: `"14"` is a substring of `"14.53"`, so
+    a rewritten `14.251` would have passed against a runbook quoting `14.53`,
+    i.e. the loosening landed exactly on the fault the red team plants. **Anchor
+    the match on both sides** (`(?<![\d.])14(?![\d.]?\d)`). The general shape:
+    when a check compares a machine's number with a human's sentence, the
+    comparison needs a precision policy AND a tokenisation policy, and the second
+    one is the easier to get silently wrong.
+
