@@ -189,7 +189,7 @@ verify-m5-redteam: ## prove verify-m5 goes RED: rewrite ONE recorded number, wat
 
 # ---- M6 reliability (role:SRE) ----
 .PHONY: deploy-monitoring monitoring-accept probe-mlserver-metrics alert-rules alert-fire-drill
-.PHONY: canary-deploy canary rollback gameday verify-m6
+.PHONY: canary-deploy canary rollback gameday restore-drill verify-m6
 deploy-monitoring: ## Prometheus + Alertmanager + kube-state-metrics + Grafana, through the EXISTING 8081 route (M6-S1)
 	@bash scripts/deploy_monitoring.sh
 monitoring-accept: ## the accept twin: targets up, ONE real quote moves a counter, every board query answers
@@ -206,8 +206,10 @@ canary: ## shift 10% -> 100% -> revert under sustained load, split observed from
 	@uv run python scripts/canary_release_drill.py $(DRILL_ARGS)
 rollback: ## F-032's un-rehearsed half, run for real: @champion v2->v1->v2, all three moves, timed (M6-S4)
 	@uv run python scripts/alias_rollback_rehearsal.py $(ROLLBACK_ARGS)
-gameday: ## staged failures w/ predicted signatures; positive control fires first
-	@echo "TODO(M6): see docs/rituals/ gameday template"
+gameday: ## staged failures w/ predicted signatures; positive control fires first (M6-S5; GAMEDAY_ARGS="--scenario predict")
+	@uv run python scripts/gameday_m6.py $(GAMEDAY_ARGS)
+restore-drill: ## restore the newest backup's small dumps into SCRATCH databases and verify them (M6-S5; the live databases are never touched)
+	@uv run python scripts/restore_rehearsal.py $(RESTORE_ARGS)
 verify-m6: ; @echo "TODO(M6): 90/10 observed; rollback <2min under load; alert fired; gameday record complete"
 
 # ---- M7 drift & retrain loop (role:SRE + role:MLE + role:DA) ----

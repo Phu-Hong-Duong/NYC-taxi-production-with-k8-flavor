@@ -1,0 +1,100 @@
+{
+  "story": "M6-S5",
+  "written_at": "2026-08-19T16:03:35Z",
+  "written_before_any_injection": true,
+  "scenario_order": [
+    "control",
+    "kill",
+    "storage",
+    "saturation"
+  ],
+  "positive_control_first": true,
+  "predictions": {
+    "control": {
+      "title": "positive control \u2014 fire A-3 then A-2 end to end",
+      "injection": "malformed bodies (422) and signature-refused bodies (500) at 4 req/s",
+      "must_fire": [
+        "PredictorRequestRejectionRateHigh",
+        "ServingEdge5xxRateHigh"
+      ],
+      "must_not_fire": [
+        "PredictorLatencySLOBurning",
+        "PredictorNoAvailableReplica",
+        "PredictorRestartFlapping",
+        "PredictorCpuThrottledSustained",
+        "PredictorStorageInitializerNotReady"
+      ],
+      "signature": "errors WITHOUT an outage: an ordinary quote succeeds throughout, no pod is replaced, and the two alerts arrive in ascending order of their sustain windows (A-3 at about T+150 s, A-2 at about T+330 s).",
+      "why": "this is M6-S2's measured drill re-run as the control. It proves the whole path \u2014 scrape, rule evaluation, pending, firing, Alertmanager \u2014 before any 'nothing fired' below is read as evidence."
+    },
+    "kill": {
+      "title": "kill the predictor under load",
+      "injection": "4.0 req/s open-loop for 300s, hazard mix, the predictor pod deleted at T+30s from inside the load client's own callback",
+      "must_fire": [],
+      "must_not_fire": [
+        "PredictorCpuThrottledSustained",
+        "PredictorLatencySLOBurning",
+        "PredictorNoAvailableReplica",
+        "PredictorRequestRejectionRateHigh",
+        "PredictorRestartFlapping",
+        "PredictorStorageInitializerNotReady",
+        "ServingEdge5xxRateHigh"
+      ],
+      "signature": "a SHORT burst of 5xx at the edge (about 14-15 s, the number three prior measurements agree on), a DIFFERENT pod uid, zero errors after recovery \u2014 and NO ALERT AT ALL.",
+      "why": "A-2 needs the 5xx SHARE over a 5-minute rate window to exceed 0.10 and hold for 5m. At 4.0 req/s a 300s window carries about 1200 requests and a ~15 s outage costs about 60 of them, i.e. ~5% \u2014 under the bar by about half. A-5 needs NO available replica for 2m and the replacement is ready in well under one. The flapping rule needs 3 restarts of kserve-container in 15m and this is one pod REPLACEMENT, not a container restart, so its counter does not move at all. THIS CONTRADICTS THE M6 KICKOFF, which predicted A-2/A-5 would fire within their windows; the thresholds M6-S2 argued were chosen precisely so that one self-heal cannot page, and if the kickoff is right instead then the 10% bar is reachable by a normal recovery and docs/slo_serving.md \u00a73's arithmetic is wrong.",
+      "quantities": {
+        "expected_outage_seconds_between": [
+          10.0,
+          25.0
+        ],
+        "expected_edge_5xx_share_peak_below": 0.1,
+        "expected_new_pod_uid": true
+      }
+    },
+    "storage": {
+      "title": "break the storage credential, then delete the pod",
+      "injection": "secret/minio-serving's AWS_SECRET_ACCESS_KEY overwritten with a wrong value, then the predictor pod deleted. NO load is applied.",
+      "must_fire": [
+        "PredictorNoAvailableReplica",
+        "PredictorStorageInitializerNotReady"
+      ],
+      "must_not_fire": [
+        "PredictorLatencySLOBurning",
+        "ServingEdge5xxRateHigh",
+        "PredictorRequestRejectionRateHigh",
+        "PredictorRestartFlapping",
+        "PredictorCpuThrottledSustained"
+      ],
+      "signature": "the REPLACEMENT never starts: the pod sits in Init, the route answers 503 with no 5xx RATIO to speak of because nobody is asking, and the two alerts that fire are the two that need no traffic. Utterly unlike scenario 1, which is what makes the pair worth running.",
+      "why": "A-5 is `replicas_available < 1 for 2m` and the replacement cannot become available at all, so it fires at about T+2m plus one scrape. A-7 is `init_container_ready == 0 for 3m` and fires about a minute LATER. NOTE THE ORDER: the A-7 rule's own `why` annotation claims it 'fires before A-5 does', and 2m < 3m says it cannot. If A-7 arrives second, that annotation is wrong and the SLO doc owes a correction. A-2 stays inactive DESPITE a total outage \u2014 the blind spot docs/slo_serving.md \u00a73 documents for it, demonstrated rather than asserted. The flapping rule watches kserve-container, which never starts, so its restart counter never moves.",
+      "quantities": {
+        "expected_a5_fires_before_a7": true,
+        "expected_undo": "make serve re-converges the secret from .env and the pod starts"
+      }
+    },
+    "saturation": {
+      "title": "drive past the measured CPU ceiling",
+      "injection": "8.0 req/s open-loop for 780s \u2014 M5-S4 measured 8 req/s at 101% of the 2-core limit",
+      "must_fire": [
+        "PredictorCpuThrottledSustained"
+      ],
+      "must_not_fire": [
+        "ServingEdge5xxRateHigh",
+        "PredictorRequestRejectionRateHigh",
+        "PredictorNoAvailableReplica",
+        "PredictorRestartFlapping",
+        "PredictorStorageInitializerNotReady"
+      ],
+      "unpredictable": [
+        "PredictorLatencySLOBurning"
+      ],
+      "signature": "latency and throttling with ZERO errors. Nothing crashes, nothing restarts, the route answers every request \u2014 and the service is nonetheless degraded by a factor of about six at the p50. A-6 is the only signal that can see it.",
+      "why": "gotcha #74 as a prediction. M5-S4's ramp measured the throttled fraction at 0.23 / 0.51 / 0.79 / ~1.00 at 2/4/6/8 req/s with ZERO errors on every row, so at 8 req/s the fraction should sit above A-6's 0.90 bar and the rule fires after its 10m sustain \u2014 which is why the window is 780s and not the 180 s a latency measurement would need. A-1 is listed UNPREDICTABLE on purpose: it counts requests slower than 250 ms among status 200, and at saturation the p50 was 115 ms with an unmeasured tail. Predicting it either way would be a guess dressed as a derivation.",
+      "quantities": {
+        "expected_error_count": 0,
+        "expected_throttled_fraction_above": 0.9
+      }
+    }
+  },
+  "note": "Written by `make gameday GAMEDAY_ARGS='--scenario predict'` before anything was injected. The accept bar (\u00a79/M6) is that at least one prediction is WRONG and investigated; nothing here is engineered to be wrong, and two of them deliberately contradict the M6 kickoff's own expectation."
+}
