@@ -72,8 +72,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 from .client import DEFAULT_ROUTE, Endpoint, build_matrix, v2_payload
 from .parity import HAZARDS
 

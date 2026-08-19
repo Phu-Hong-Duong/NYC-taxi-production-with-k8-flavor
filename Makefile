@@ -157,7 +157,7 @@ verify-m4-redteam: ## prove verify-m4 goes RED: contradict ONE recorded cache st
 	@bash scripts/verify_m4_redteam.sh
 
 # ---- M5 serving & release (role:MLOPS + role:SRE PRR) ----
-.PHONY: holidays serve quote parity parity-redteam verify-m5
+.PHONY: holidays serve quote parity parity-redteam load load-drill verify-m5
 HOLIDAYS_TO ?= 2030
 holidays: ## re-derive data/reference/us_federal_holidays.csv from 5 U.S.C. §6103 (M5-S2, F-019; HOLIDAYS_TO=YYYY moves the horizon)
 	@uv run python scripts/derive_us_federal_holidays.py --to $(HOLIDAYS_TO)
@@ -169,6 +169,10 @@ parity: ## THE parity test: one matrix, scored offline AND on the wire, max |del
 	@uv run python -m taxi_mlops.serving.parity $(PARITY_ARGS)
 parity-redteam: ## prove the parity test can go RED without touching the served model (M5-S3)
 	@bash scripts/parity_redteam.sh
+load: ## drive the declared route at a STATED rate for a STATED window; p95 never printed without its shape (M5-S4)
+	@uv run python -m taxi_mlops.serving.load $(LOAD_ARGS)
+load-drill: ## ramp -> headline p95/p99 -> kill the predictor MID-LOAD and measure the outage (M5-S4; ~7 min, run it DETACHED)
+	@uv run python scripts/serving_load_drill.py $(DRILL_ARGS)
 verify-m5: ## THE parity test (offline==online 1e-6) + p95 under 60s load + PRR minutes exist
 	@echo "TODO(M5): pytest tests/smoke -m smoke"
 
