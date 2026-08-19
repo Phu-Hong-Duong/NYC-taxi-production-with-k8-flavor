@@ -155,6 +155,25 @@ measured here and is reached immediately by a service that is simply down. The
 budget is still spent by those blips; it is spent silently, which is what an
 error *budget* is for and what an error *page* is not.
 
+> **CORRECTION, 2026-08-19 (M6-S5, F-041) — the paragraph above is kept
+> UNEDITED because decisions were made from it, and it is wrong about which
+> mechanism protects us.** Gameday 1 killed the predictor under exactly the load
+> shape that arithmetic assumes, and the edge 5xx share **peaked at 0.5000**:
+> `ServingEdge5xxRateHigh` went `pending` at T+89.2 s and back to `inactive` at
+> T+103.2 s, and `PredictorNoAvailableReplica` did the same at T+59.1 s →
+> T+74.1 s. The error is dividing an outage's failures by a FULL window's
+> traffic. `rate(...[5m])` extrapolates from the samples actually inside the
+> window; thirty seconds into a load run that window holds thirty seconds of
+> requests, so immediately after a kill the denominator is small and nearly all
+> of it is the outage. 6.1% is what the ratio decays TO, not what it reaches.
+> **What stops a self-heal from paging is the `for: 5m` sustain, not the 10%
+> threshold** — and the same holds for A-5, whose 2-minute sustain absorbed a
+> 15-second dip. Both thresholds stand: they are not loosened, and no number in
+> this document changes. What changes is the argument, and one operational fact
+> nobody had written down: **during any ordinary self-heal an on-call will see
+> A-2 and A-5 sitting `pending`, in red, and neither will ever fire.** Evidence:
+> `automation/runs/m6-gameday/kill.json`, `docs/gameday_m6.md` §2.1.
+
 **A-2's blind spot, stated because it is real:** a ratio has no value when nobody
 is asking. On an idle service A-2 cannot fire at all. **A-5 is the answer** — it
 reads a replica count from I-4 and needs no traffic. The two are complements, not

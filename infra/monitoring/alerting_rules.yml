@@ -240,12 +240,21 @@ groups:
             `readonly` policy omitting s3:ListBucket (a 403 on HeadBucket,
             M5-S2), and F-009's empty-prefix download that SUCCEEDS and leaves
             mlserver with no MLmodel. A healthy init takes seconds; 3m is a
-            failure, and this alert fires before A-5 does because a pod that
-            never initialises never had a replica to lose.
+            failure. MEASURED 2026-08-19 (Gameday 1, scenario 2 — the first of
+            those two classes injected for real): this alert fires SIXTY SECONDS
+            AFTER A-5, not before it. Both went pending together at T+30.1s;
+            A-5 fired at T+150.2s on its 2m sustain and this one at T+210.2s on
+            its 3m. The sentence that used to sit here claimed the opposite and
+            was never anything but an inference from "a pod that never
+            initialises never had a replica to lose" — true about the CAUSE,
+            silent about the two `for:` windows underneath.
           sustain: >-
-            for 3m, not 5m. A healthy storage-initializer on this cluster
-            completes in seconds (the artifact is ~5 MB from an in-cluster MinIO),
-            so 3m is already two orders of magnitude of slack — and it is set
-            BELOW A-5's 2m-plus-detection so that "the model could not be
-            fetched" arrives distinguishable from "the replica is gone", which is
-            the whole point of having both.
+            for 3m. What the pair actually gives is a distinguishable SIGNATURE
+            rather than an ordering: A-5 alone is "the replica is gone" (a kill,
+            a stop, an eviction), A-5 THEN A-7 sixty seconds later is "the
+            replacement cannot fetch its model" — the credential/prefix class.
+            Gameday 1 got the second shape exactly and no other alert moved.
+            Making A-7 arrive first would mean shortening it to ~1m, which is a
+            threshold change argued from a number just measured; it is written
+            up in docs/gameday_m6.md §3.1 as a recommendation and deliberately
+            NOT taken here.

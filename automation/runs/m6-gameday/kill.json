@@ -1,0 +1,2279 @@
+{
+  "story": "M6-S5",
+  "scenario": "kill",
+  "measured_at": "2026-08-19T16:25:56Z",
+  "prediction": {
+    "title": "kill the predictor under load",
+    "injection": "4.0 req/s open-loop for 300s, hazard mix, the predictor pod deleted at T+30s from inside the load client's own callback",
+    "must_fire": [],
+    "must_not_fire": [
+      "PredictorCpuThrottledSustained",
+      "PredictorLatencySLOBurning",
+      "PredictorNoAvailableReplica",
+      "PredictorRequestRejectionRateHigh",
+      "PredictorRestartFlapping",
+      "PredictorStorageInitializerNotReady",
+      "ServingEdge5xxRateHigh"
+    ],
+    "signature": "a SHORT burst of 5xx at the edge (about 14-15 s, the number three prior measurements agree on), a DIFFERENT pod uid, zero errors after recovery \u2014 and NO ALERT AT ALL.",
+    "why": "A-2 needs the 5xx SHARE over a 5-minute rate window to exceed 0.10 and hold for 5m. At 4.0 req/s a 300s window carries about 1200 requests and a ~15 s outage costs about 60 of them, i.e. ~5% \u2014 under the bar by about half. A-5 needs NO available replica for 2m and the replacement is ready in well under one. The flapping rule needs 3 restarts of kserve-container in 15m and this is one pod REPLACEMENT, not a container restart, so its counter does not move at all. THIS CONTRADICTS THE M6 KICKOFF, which predicted A-2/A-5 would fire within their windows; the thresholds M6-S2 argued were chosen precisely so that one self-heal cannot page, and if the kickoff is right instead then the 10% bar is reachable by a normal recovery and docs/slo_serving.md \u00a73's arithmetic is wrong.",
+    "quantities": {
+      "expected_outage_seconds_between": [
+        10.0,
+        25.0
+      ],
+      "expected_edge_5xx_share_peak_below": 0.1,
+      "expected_new_pod_uid": true
+    }
+  },
+  "observed": {
+    "settle": {
+      "settled": true,
+      "seconds": 0.0
+    },
+    "pod_before": {
+      "name": "nyc-taxi-eta-predictor-84fff9f665-6rvm5",
+      "uid": "f7177380-5e32-4d15-8343-8722af329136",
+      "phase": "Running"
+    },
+    "pod_after": {
+      "name": "nyc-taxi-eta-predictor-84fff9f665-d9ssh",
+      "uid": "3fd7165a-4596-49ce-8b04-50f1f20217ec",
+      "phase": "Running"
+    },
+    "kill": {
+      "at_s": 30,
+      "pod": "nyc-taxi-eta-predictor-84fff9f665-6rvm5",
+      "deleted_at": "2026-08-19T16:15:54Z"
+    },
+    "outage_seconds": 13.75,
+    "error_count": 55,
+    "edge_5xx_share_peak": 0.5,
+    "alertmanager": [],
+    "alias": {
+      "before": "2",
+      "after": "2"
+    },
+    "load": {
+      "story": "M5-S4",
+      "label": "m6-s5 gameday scenario 1 \u2014 kill under load",
+      "measured_at": "2026-08-19T16:15:24Z",
+      "shape": {
+        "target_rate_per_second": 4.0,
+        "window_seconds": 300.0,
+        "concurrency": 8,
+        "mix": "hazards",
+        "rows_per_request": 1,
+        "achieved_rate_per_second": 4.0,
+        "wall_seconds": 299.983
+      },
+      "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta/infer",
+      "host": "nyc-taxi-eta-serving.local",
+      "requests": {
+        "sent": 1200,
+        "ok": 1145,
+        "errors": 55,
+        "error_rate": 0.045833
+      },
+      "latency_ms": {
+        "min": 7.976,
+        "p50": 53.587,
+        "p95": 121.076,
+        "p99": 131.149,
+        "max": 212.949
+      },
+      "service_ms": {
+        "min": 7.883,
+        "p50": 53.503,
+        "p95": 120.983,
+        "p99": 130.98,
+        "max": 212.847
+      },
+      "queue_ms": {
+        "min": 0.032,
+        "p50": 0.085,
+        "p95": 0.2,
+        "p99": 0.301,
+        "max": 4.22
+      },
+      "served_versions": [
+        "2"
+      ],
+      "error_window": {
+        "errors": 55,
+        "first_error_s": 30.5,
+        "last_error_s": 44.001,
+        "span_s": 13.501,
+        "classes": {
+          "HTTP 502": 3,
+          "HTTP 503": 52
+        }
+      },
+      "buckets_per_second": [
+        {
+          "second": 0,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 117.677
+        },
+        {
+          "second": 1,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.905
+        },
+        {
+          "second": 2,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 63.196
+        },
+        {
+          "second": 3,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 72.905
+        },
+        {
+          "second": 4,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 72.372
+        },
+        {
+          "second": 5,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 65.645
+        },
+        {
+          "second": 6,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 63.146
+        },
+        {
+          "second": 7,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 126.012
+        },
+        {
+          "second": 8,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 75.253
+        },
+        {
+          "second": 9,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 73.011
+        },
+        {
+          "second": 10,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 129.687
+        },
+        {
+          "second": 11,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 71.267
+        },
+        {
+          "second": 12,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 145.704
+        },
+        {
+          "second": 13,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 72.969
+        },
+        {
+          "second": 14,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 72.843
+        },
+        {
+          "second": 15,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 71.114
+        },
+        {
+          "second": 16,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 41.274
+        },
+        {
+          "second": 17,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 72.975
+        },
+        {
+          "second": 18,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 74.73
+        },
+        {
+          "second": 19,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 71.07
+        },
+        {
+          "second": 20,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 71.393
+        },
+        {
+          "second": 21,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 62.083
+        },
+        {
+          "second": 22,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 33.541
+        },
+        {
+          "second": 23,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 74.47
+        },
+        {
+          "second": 24,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 72.964
+        },
+        {
+          "second": 25,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 72.99
+        },
+        {
+          "second": 26,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 73.168
+        },
+        {
+          "second": 27,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 30.538
+        },
+        {
+          "second": 28,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 62.493
+        },
+        {
+          "second": 29,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.421
+        },
+        {
+          "second": 30,
+          "sent": 4,
+          "ok": 2,
+          "errors": 2,
+          "p95_latency_ms": 74.181
+        },
+        {
+          "second": 31,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 32,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 33,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 34,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 35,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 36,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 37,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 38,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 39,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 40,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 41,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 42,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 43,
+          "sent": 4,
+          "ok": 0,
+          "errors": 4,
+          "p95_latency_ms": null
+        },
+        {
+          "second": 44,
+          "sent": 4,
+          "ok": 3,
+          "errors": 1,
+          "p95_latency_ms": 35.371
+        },
+        {
+          "second": 45,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 38.879
+        },
+        {
+          "second": 46,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 66.82
+        },
+        {
+          "second": 47,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.836
+        },
+        {
+          "second": 48,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.052
+        },
+        {
+          "second": 49,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.879
+        },
+        {
+          "second": 50,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.336
+        },
+        {
+          "second": 51,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.243
+        },
+        {
+          "second": 52,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.033
+        },
+        {
+          "second": 53,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.967
+        },
+        {
+          "second": 54,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.807
+        },
+        {
+          "second": 55,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.12
+        },
+        {
+          "second": 56,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 40.465
+        },
+        {
+          "second": 57,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 64.494
+        },
+        {
+          "second": 58,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.046
+        },
+        {
+          "second": 59,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 116.896
+        },
+        {
+          "second": 60,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 40.557
+        },
+        {
+          "second": 61,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 36.936
+        },
+        {
+          "second": 62,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 172.158
+        },
+        {
+          "second": 63,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.476
+        },
+        {
+          "second": 64,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.525
+        },
+        {
+          "second": 65,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 133.66
+        },
+        {
+          "second": 66,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.125
+        },
+        {
+          "second": 67,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.991
+        },
+        {
+          "second": 68,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.494
+        },
+        {
+          "second": 69,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.198
+        },
+        {
+          "second": 70,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 117.506
+        },
+        {
+          "second": 71,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.346
+        },
+        {
+          "second": 72,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.361
+        },
+        {
+          "second": 73,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 122.788
+        },
+        {
+          "second": 74,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.368
+        },
+        {
+          "second": 75,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.871
+        },
+        {
+          "second": 76,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 123.624
+        },
+        {
+          "second": 77,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.436
+        },
+        {
+          "second": 78,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.401
+        },
+        {
+          "second": 79,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 116.338
+        },
+        {
+          "second": 80,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.564
+        },
+        {
+          "second": 81,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.21
+        },
+        {
+          "second": 82,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.535
+        },
+        {
+          "second": 83,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.957
+        },
+        {
+          "second": 84,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.136
+        },
+        {
+          "second": 85,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 129.627
+        },
+        {
+          "second": 86,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 104.217
+        },
+        {
+          "second": 87,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.574
+        },
+        {
+          "second": 88,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.088
+        },
+        {
+          "second": 89,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.999
+        },
+        {
+          "second": 90,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.875
+        },
+        {
+          "second": 91,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.654
+        },
+        {
+          "second": 92,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 104.25
+        },
+        {
+          "second": 93,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.615
+        },
+        {
+          "second": 94,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 126.729
+        },
+        {
+          "second": 95,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 116.863
+        },
+        {
+          "second": 96,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.428
+        },
+        {
+          "second": 97,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.957
+        },
+        {
+          "second": 98,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.52
+        },
+        {
+          "second": 99,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 209.209
+        },
+        {
+          "second": 100,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 130.045
+        },
+        {
+          "second": 101,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 108.899
+        },
+        {
+          "second": 102,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.2
+        },
+        {
+          "second": 103,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.281
+        },
+        {
+          "second": 104,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 114.299
+        },
+        {
+          "second": 105,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.063
+        },
+        {
+          "second": 106,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 66.739
+        },
+        {
+          "second": 107,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.09
+        },
+        {
+          "second": 108,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 111.151
+        },
+        {
+          "second": 109,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.654
+        },
+        {
+          "second": 110,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.983
+        },
+        {
+          "second": 111,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 127.001
+        },
+        {
+          "second": 112,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 122.792
+        },
+        {
+          "second": 113,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 70.88
+        },
+        {
+          "second": 114,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 128.744
+        },
+        {
+          "second": 115,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.22
+        },
+        {
+          "second": 116,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.614
+        },
+        {
+          "second": 117,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 39.025
+        },
+        {
+          "second": 118,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.607
+        },
+        {
+          "second": 119,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.711
+        },
+        {
+          "second": 120,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.195
+        },
+        {
+          "second": 121,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.221
+        },
+        {
+          "second": 122,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.216
+        },
+        {
+          "second": 123,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 55.134
+        },
+        {
+          "second": 124,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 111.72
+        },
+        {
+          "second": 125,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.399
+        },
+        {
+          "second": 126,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.91
+        },
+        {
+          "second": 127,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.46
+        },
+        {
+          "second": 128,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 107.407
+        },
+        {
+          "second": 129,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.887
+        },
+        {
+          "second": 130,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 129.151
+        },
+        {
+          "second": 131,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.504
+        },
+        {
+          "second": 132,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.142
+        },
+        {
+          "second": 133,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 122.13
+        },
+        {
+          "second": 134,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.869
+        },
+        {
+          "second": 135,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 107.053
+        },
+        {
+          "second": 136,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.057
+        },
+        {
+          "second": 137,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.122
+        },
+        {
+          "second": 138,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.204
+        },
+        {
+          "second": 139,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.06
+        },
+        {
+          "second": 140,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.717
+        },
+        {
+          "second": 141,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 68.535
+        },
+        {
+          "second": 142,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 165.546
+        },
+        {
+          "second": 143,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 55.706
+        },
+        {
+          "second": 144,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.966
+        },
+        {
+          "second": 145,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.09
+        },
+        {
+          "second": 146,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.828
+        },
+        {
+          "second": 147,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.076
+        },
+        {
+          "second": 148,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.287
+        },
+        {
+          "second": 149,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.167
+        },
+        {
+          "second": 150,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 209.028
+        },
+        {
+          "second": 151,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.518
+        },
+        {
+          "second": 152,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.131
+        },
+        {
+          "second": 153,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 212.008
+        },
+        {
+          "second": 154,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.057
+        },
+        {
+          "second": 155,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.483
+        },
+        {
+          "second": 156,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.253
+        },
+        {
+          "second": 157,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 116.827
+        },
+        {
+          "second": 158,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.518
+        },
+        {
+          "second": 159,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.002
+        },
+        {
+          "second": 160,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.082
+        },
+        {
+          "second": 161,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.394
+        },
+        {
+          "second": 162,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.957
+        },
+        {
+          "second": 163,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 128.479
+        },
+        {
+          "second": 164,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 66.706
+        },
+        {
+          "second": 165,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 65.127
+        },
+        {
+          "second": 166,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 44.577
+        },
+        {
+          "second": 167,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 123.359
+        },
+        {
+          "second": 168,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.141
+        },
+        {
+          "second": 169,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 131.149
+        },
+        {
+          "second": 170,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 39.597
+        },
+        {
+          "second": 171,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 126.04
+        },
+        {
+          "second": 172,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.379
+        },
+        {
+          "second": 173,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.18
+        },
+        {
+          "second": 174,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.494
+        },
+        {
+          "second": 175,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 115.649
+        },
+        {
+          "second": 176,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.03
+        },
+        {
+          "second": 177,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.962
+        },
+        {
+          "second": 178,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 36.264
+        },
+        {
+          "second": 179,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 116.736
+        },
+        {
+          "second": 180,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 107.969
+        },
+        {
+          "second": 181,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.367
+        },
+        {
+          "second": 182,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 111.927
+        },
+        {
+          "second": 183,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.216
+        },
+        {
+          "second": 184,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.254
+        },
+        {
+          "second": 185,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 114.682
+        },
+        {
+          "second": 186,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.415
+        },
+        {
+          "second": 187,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.169
+        },
+        {
+          "second": 188,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.075
+        },
+        {
+          "second": 189,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.839
+        },
+        {
+          "second": 190,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 112.828
+        },
+        {
+          "second": 191,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.032
+        },
+        {
+          "second": 192,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 34.422
+        },
+        {
+          "second": 193,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.006
+        },
+        {
+          "second": 194,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.193
+        },
+        {
+          "second": 195,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 54.952
+        },
+        {
+          "second": 196,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.049
+        },
+        {
+          "second": 197,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 42.625
+        },
+        {
+          "second": 198,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.02
+        },
+        {
+          "second": 199,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 55.223
+        },
+        {
+          "second": 200,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 115.822
+        },
+        {
+          "second": 201,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.331
+        },
+        {
+          "second": 202,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.6
+        },
+        {
+          "second": 203,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.809
+        },
+        {
+          "second": 204,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.56
+        },
+        {
+          "second": 205,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.041
+        },
+        {
+          "second": 206,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 66.882
+        },
+        {
+          "second": 207,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 104.295
+        },
+        {
+          "second": 208,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 108.951
+        },
+        {
+          "second": 209,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 210.554
+        },
+        {
+          "second": 210,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 54.465
+        },
+        {
+          "second": 211,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 70.119
+        },
+        {
+          "second": 212,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.731
+        },
+        {
+          "second": 213,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 31.509
+        },
+        {
+          "second": 214,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 114.499
+        },
+        {
+          "second": 215,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.477
+        },
+        {
+          "second": 216,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 115.052
+        },
+        {
+          "second": 217,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.481
+        },
+        {
+          "second": 218,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.804
+        },
+        {
+          "second": 219,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.334
+        },
+        {
+          "second": 220,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.281
+        },
+        {
+          "second": 221,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.073
+        },
+        {
+          "second": 222,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.883
+        },
+        {
+          "second": 223,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 116.783
+        },
+        {
+          "second": 224,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.544
+        },
+        {
+          "second": 225,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 39.985
+        },
+        {
+          "second": 226,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 132.192
+        },
+        {
+          "second": 227,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.624
+        },
+        {
+          "second": 228,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 112.486
+        },
+        {
+          "second": 229,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.956
+        },
+        {
+          "second": 230,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 68.13
+        },
+        {
+          "second": 231,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.719
+        },
+        {
+          "second": 232,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 112.827
+        },
+        {
+          "second": 233,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 121.149
+        },
+        {
+          "second": 234,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 212.949
+        },
+        {
+          "second": 235,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.423
+        },
+        {
+          "second": 236,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.609
+        },
+        {
+          "second": 237,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 55.08
+        },
+        {
+          "second": 238,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 68.284
+        },
+        {
+          "second": 239,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 112.363
+        },
+        {
+          "second": 240,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.23
+        },
+        {
+          "second": 241,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.983
+        },
+        {
+          "second": 242,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 116.619
+        },
+        {
+          "second": 243,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 107.086
+        },
+        {
+          "second": 244,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.407
+        },
+        {
+          "second": 245,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.507
+        },
+        {
+          "second": 246,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 55.072
+        },
+        {
+          "second": 247,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 117.025
+        },
+        {
+          "second": 248,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.552
+        },
+        {
+          "second": 249,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.326
+        },
+        {
+          "second": 250,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.089
+        },
+        {
+          "second": 251,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 41.409
+        },
+        {
+          "second": 252,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.03
+        },
+        {
+          "second": 253,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 64.485
+        },
+        {
+          "second": 254,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 110.983
+        },
+        {
+          "second": 255,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 67.746
+        },
+        {
+          "second": 256,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 118.731
+        },
+        {
+          "second": 257,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 112.571
+        },
+        {
+          "second": 258,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 70.05
+        },
+        {
+          "second": 259,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.111
+        },
+        {
+          "second": 260,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 37.754
+        },
+        {
+          "second": 261,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 104.298
+        },
+        {
+          "second": 262,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 66.942
+        },
+        {
+          "second": 263,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.63
+        },
+        {
+          "second": 264,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 68.543
+        },
+        {
+          "second": 265,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 122.163
+        },
+        {
+          "second": 266,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.38
+        },
+        {
+          "second": 267,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 108.636
+        },
+        {
+          "second": 268,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.407
+        },
+        {
+          "second": 269,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 114.664
+        },
+        {
+          "second": 270,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 115.198
+        },
+        {
+          "second": 271,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.196
+        },
+        {
+          "second": 272,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 120.188
+        },
+        {
+          "second": 273,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.889
+        },
+        {
+          "second": 274,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.281
+        },
+        {
+          "second": 275,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 115.637
+        },
+        {
+          "second": 276,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 107.965
+        },
+        {
+          "second": 277,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 65.901
+        },
+        {
+          "second": 278,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 113.215
+        },
+        {
+          "second": 279,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.684
+        },
+        {
+          "second": 280,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 53.807
+        },
+        {
+          "second": 281,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 66.017
+        },
+        {
+          "second": 282,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.335
+        },
+        {
+          "second": 283,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 68.493
+        },
+        {
+          "second": 284,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 109.113
+        },
+        {
+          "second": 285,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 125.385
+        },
+        {
+          "second": 286,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 119.339
+        },
+        {
+          "second": 287,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.402
+        },
+        {
+          "second": 288,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 69.144
+        },
+        {
+          "second": 289,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 106.709
+        },
+        {
+          "second": 290,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 112.921
+        },
+        {
+          "second": 291,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 115.325
+        },
+        {
+          "second": 292,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 122.048
+        },
+        {
+          "second": 293,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 103.579
+        },
+        {
+          "second": 294,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 112.995
+        },
+        {
+          "second": 295,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 124.2
+        },
+        {
+          "second": 296,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 66.437
+        },
+        {
+          "second": 297,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 32.077
+        },
+        {
+          "second": 298,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 164.89
+        },
+        {
+          "second": 299,
+          "sent": 4,
+          "ok": 4,
+          "errors": 0,
+          "p95_latency_ms": 105.211
+        }
+      ],
+      "note": "the prediction is on disk; the alerts are watched on the load client's clock"
+    },
+    "alerts": {
+      "timeline": [
+        {
+          "t_plus_s": 59.1,
+          "alert": "PredictorNoAvailableReplica",
+          "state": "pending"
+        },
+        {
+          "t_plus_s": 74.1,
+          "alert": "PredictorNoAvailableReplica",
+          "state": "inactive"
+        },
+        {
+          "t_plus_s": 89.2,
+          "alert": "ServingEdge5xxRateHigh",
+          "state": "pending"
+        },
+        {
+          "t_plus_s": 103.2,
+          "alert": "ServingEdge5xxRateHigh",
+          "state": "inactive"
+        }
+      ],
+      "first_pending_at_s": {
+        "PredictorNoAvailableReplica": 59.1,
+        "ServingEdge5xxRateHigh": 89.2
+      },
+      "first_firing_at_s": {},
+      "ever_fired": []
+    }
+  },
+  "checks": [
+    {
+      "passed": true,
+      "check": "the pod was deleted mid-load at T+30s"
+    },
+    {
+      "passed": true,
+      "check": "a DIFFERENT pod object served afterwards: uid f7177380\u2026 -> 3fd7165a\u2026 (identity, never name)"
+    },
+    {
+      "passed": true,
+      "check": "the outage was 13.75s, inside the predicted [10.0, 25.0]"
+    },
+    {
+      "passed": false,
+      "check": "the edge 5xx SHARE peaked at 0.5000, below A-2's 0.10 bar (predicted: a single self-heal cannot reach it)"
+    },
+    {
+      "passed": true,
+      "check": "NO alert fired: none (predicted none)"
+    },
+    {
+      "passed": true,
+      "check": "Alertmanager holds nothing from this scenario: []"
+    },
+    {
+      "passed": true,
+      "check": "@champion unmoved: 2 -> 2"
+    }
+  ],
+  "verdict": "PREDICTION WRONG",
+  "note": "A FAILED check here does not mean the system misbehaved \u2014 it means the PREDICTION was wrong, which is what \u00a79/M6 grades this gameday on. Read the check text, then the scenario's section in docs/gameday_m6.md."
+}

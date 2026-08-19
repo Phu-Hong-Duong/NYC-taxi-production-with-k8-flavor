@@ -835,9 +835,12 @@ can never disagree (the port-family twins lesson, applied before it bit).
   replaced, not tuned: a custom archive's TOC is at the FRONT, so `--list`
   succeeds on a file whose tail was never written (gotcha #54), and it hung on a
   1 MB dump having worked on a 1.2 GB one.
-- **RESTORE IS NOT REHEARSED and every artifact says so** (script header, every
-  `MANIFEST.txt`, the ledger row). It is a lifeboat, not a DR program; the
-  rehearsal is a named M6-gameday candidate. Same-disk limit as the DVC remote.
+- **RESTORE IS SCRATCH-REHEARSED (2026-08-19, M6-S5) AND NO FURTHER, and every
+  artifact says exactly that** (script header, the `MANIFEST.txt` text, the
+  ledger row, this row). The three small irreplaceable dumps load into SCRATCH
+  databases and check out; a full restore over a DEAD platform has still never
+  been performed and needs a PO-sanctioned rebuild. Same-disk limit as the DVC
+  remote. The label moved one notch — it did not go green.
 - **Honest cost passed to M7**: `marts` is 1.2 GiB and **210 s** of the ~4 minute
   run and is the ONE database already provably rebuildable from DVC pins
   (M1-S5's fresh-volume proof); the other four total **377 KiB, under 2 s**, and
@@ -1791,6 +1794,94 @@ can never disagree (the port-family twins lesson, applied before it bit).
   `git hash-object`, `make verify-m5` **GREEN**, `make parity` **0.000e+00** over
   16 hazard rows. The v1 shadow is deliberately LEFT RUNNING for M6-S5.
 
+## Gameday 1 and the first restore (M6-S5 leg 1) — every alert behaved, and two of our written arguments did not
+- **`make gameday` is four scenarios in one order, and the POSITIVE CONTROL is
+  first because three of the four make a claim of the form "alert X did not
+  fire".** That sentence is worth nothing from an instrument nobody has just
+  watched work — a Prometheus that lost its rules would produce a flawless run of
+  silent alerts. Control (M6-S2's injection, delegated to `alert_fire_drill.py`,
+  not re-implemented): **GREEN 11/11**, A-3 at **T+170.5 s**, A-2 at **T+335.6 s**,
+  both at **Alertmanager**, both clear **330.1 s** after the stop — and that clear
+  time is a floor, not slowness: with no other traffic the ratio holds until the
+  last sample leaves the 5-minute window, at which point the expression is `NaN`.
+- **EVERY prediction was on disk before the first injection**
+  (`automation/runs/m6-gameday/predictions.json`, committed) and a test asserts
+  the committed file still equals the code's `PREDICTIONS` — so amending a
+  prediction to match an outcome is a RED test, not a diff nobody reads.
+- **F-041, the wrong prediction that matters: A-2's and A-5's thresholds were
+  argued from a STEADY-STATE ratio, and the transient crosses them.** The SLO doc
+  computed that a ~15 s outage costs ~60 of the ~1,200 requests in a 5-minute
+  window (~5%) and concluded 10% is "unreachable by any single recovery". The
+  kill measured the edge 5xx share **peaking at 0.5000**, with **A-2 pending
+  T+89.2 → 103.2 s** and **A-5 pending T+59.1 → 74.1 s**. `rate(...[5m])`
+  extrapolates from the samples IN the window, and 30 s into a load run that
+  window holds 30 s of traffic — 6.1% is what the ratio decays TO, not what it
+  reaches. **What stops a self-heal paging is the `for:` sustain, not the
+  threshold.** No number moved; the argument was corrected beside the original
+  (the `error_memo_m2.md` §9 precedent) and one operational fact got written down:
+  **during any ordinary self-heal an on-call sees A-2 and A-5 sitting `pending`,
+  in red, and neither will ever fire.**
+- **The kill itself is the fourth number in a family**: **13.75 s** (55 of 1,200
+  requests, 52×503 + 3×502, a different pod uid) against 14.53 s (killed pod,
+  M5-S4), 15.0 s (ingress roll, M6-S1) and 18.24 s (stop/start, M5-S5).
+- **The storage break went 8/8 and its value is the three rows that are not the
+  pass.** `403 … HeadBucket: Forbidden` — M5-S2's class exactly — then **A-5 at
+  T+150.2 s and A-7 at T+210.2 s**: A-5 FIRST, the opposite of what A-7's own
+  `why` annotation claimed (**F-042**, annotation corrected, threshold
+  deliberately NOT touched). **A-2 stayed inactive through a TOTAL outage** — its
+  documented blind spot demonstrated rather than asserted. And the flapping rule
+  stayed inactive because it counts `kserve-container` restarts while all three
+  restarts were the INIT container: a rule written against "the pod restarted"
+  would have blurred two signatures into one. The undo was staged BEFORE the
+  injection (pinned by a test on line order) and `make serve` cleared both alerts
+  within 30 s.
+- **Saturation fired A-6 at T+844.3 s = 244.1 + 600.2 — the sustain clock starts
+  when the RATIO crosses, not when the load starts.** The throttled fraction
+  climbed 0.414 → 0.686 → 0.826 → 0.927 → 1.000 over five minutes as the window
+  filled (F-041's mechanism with the sign reversed), ending at **0.9996**. Client
+  p50 latency **94,553 ms** against service p50 **1,084 ms** at an achieved
+  **6.775 of 8 req/s** — the open loop showing a backlog a closed one would hide.
+- **The second wrong prediction: saturation DOES produce errors, given time.**
+  **125 × HTTP 502 of 6,240 (2.00%)**, where M5-S4's 60-second ramp measured zero
+  at the same rate. Gotcha #74 is refined by DURATION, not reversed: latency
+  first, errors much later — and at 2.00% nowhere near A-2's bar, so the page a
+  saturated service produces is still A-6's.
+- **F-043 (OPEN, routed to the M6→M7 boundary): the predictor's own exporter
+  starves under the condition it exists to report.** A-1 fired at T+349.3 s and
+  cleared itself at **T+514.3 s while the load was still running**. Measured over
+  the window: the loaded predictor's `/metrics` reached **`scrape_duration`
+  4.613 s with `up == 0`** (a scrape failed outright) while the IDLE v1 shadow,
+  scraped by the same job every 15 s, stayed at **0.004 s / `up == 1`**. A failed
+  scrape makes the series stale and A-1's expression evaluate over nothing. The
+  SLO doc already argues A-2 belongs at the EDGE because a dead predictor cannot
+  report its absence; **a predictor does not have to die to stop reporting, it
+  only has to be busy** — and the signal that held up (A-6) reads the kubelet's
+  cAdvisor, a different process on the node.
+- **The restore is REHEARSED — into SCRATCH state, and the label moved exactly
+  one notch.** `make restore-drill` GREEN **17/17**: mlflow **2.34 s** · optuna
+  **0.78 s** · metabase **7.29 s** into `<db>_restore_drill` databases with
+  `ON_ERROR_STOP=1`, every counted table equal to the LIVE database, the restored
+  registry carrying the same `champion|2` pointer, the restored studies carrying
+  the trial counts `automation/runs/m3s4` recorded (**a second witness that is
+  not the live database** — live-vs-restored alone is also what restoring the
+  wrong backup into the wrong place would show), `flyte-data` restored WHOLE (184
+  objects / 783,327 bytes) and one MLflow artifact **byte-identical by sha256**.
+  Live databases and buckets untouched, no scratch survived. **A full restore
+  over a DEAD platform is still un-rehearsed** and every artifact says so.
+- **The restore drill's first run went RED on a check that was wrong**, and the
+  correction is worth more than the check: it compared the Metabase app-db
+  against `analytics/metabase/boards/*.json` by COUNT (3 dashboards / 28 cards)
+  and found 4 / 67. Nothing had drifted — `metabase_boards.py` converges by name
+  and NEVER deletes (M1-S5's stated asymmetry), and Metabase's setup creates its
+  own `E-commerce Insights` example dashboard. **"The boards are checked-in JSON"
+  is a claim about OUR boards, never that the app-db mirrors the repo.** The
+  check is a subset-by-NAME check now.
+- **`make verify-m6` IS NOT BUILT — that is the declared leg boundary** (the
+  M4-S5 precedent, and the M6 kickoff names it as a legitimate stopping point).
+  End state is exactly M5's: `@champion` **2**, `features.version` **v2**,
+  `make verify-m5` **GREEN 49/49**, `make parity` **0.000e+00** over 16 hazard
+  rows, endpoint answering. The v1 shadow is still up.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1885,7 +1976,8 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Prove the M5 gate can go RED | `make verify-m5-redteam` (`bash scripts/verify_m5_redteam.sh`) | VERIFIED 2026-08-19 (M5-S5): rewrites ONE number in `automation/runs/m5-load/selfheal.json` — `recovery.outage_seconds` **14.53 → 14.251**, taken from the record's OWN `error_window.span_s`, i.e. gotcha #75's mistake re-made and wrong by 0.28 s — leaving the anchors, the pod uids and all 7 recorded checks untouched → **RED exit 1 with 2 FAILs from TWO DIFFERENT ARTIFACTS**: the record stops reconciling with its own anchors, AND the runbook quotes a number no record holds. **47 sub-check lines still ran and passed**; restored under an EXIT trap and verified by sha256 (`f1712acf9f80…` before and after) with `git status` clean → **GREEN again**. Touches no pod, no image, no MLflow run, no registry version, no alias |
 | Prove the parity test can go RED (M5-S3) | `make parity-redteam` (`bash scripts/parity_redteam.sh`) | VERIFIED 2026-08-19 (M5-S3): **PASSED, 7 checks, 0 failures.** Arm A sends every feature under its own name and dtype carrying its NEIGHBOUR's values — every input individually valid, only the pairing wrong → **max delta 4.210e+01 minutes** (a 48-minute trip quoted at 6) and the verdict names it. Arm B loads registry version **1** offline (a READ; moving an alias would be a mutation and a red team never moves the pointer it checks) while the wire serves the champion → refused at the feature-set guard BEFORE a number exists, because v1 eats 5 columns and v2 eats 24. Neither arm deploys, restarts or promotes; `@champion` is version 2 before and after and the untampered run is GREEN again at the end. **Its first arm A went green under its own tampering — that is F-031/gotcha #73** |
 | Re-derive the holiday table (M5-S2, F-019) | `make holidays` (`HOLIDAYS_TO=YYYY` moves the horizon; `--year 2019 --stdout` is the reproduction check) | VERIFIED 2026-08-19 (M5-S2): **146 rows, 2019..2030, 16 observed-day rows**, and re-deriving 2019 alone reproduces the ten hand-written rows **byte for byte** (`diff` silent) — those rows predate this script by two milestones, so agreement is evidence about the RULES, Juneteenth included (federal from 2021, correctly absent from 2019). Idempotent; the human `note` column is preserved by date. 136 insertions, 0 deletions — and the holiday AND near-holiday sets inside 2019-01..08 are asserted unchanged, because a near-day can arrive from another year entirely |
-| Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS NOT REHEARSED** — said in the header, in every `MANIFEST.txt` and in the ledger; an M6-gameday candidate. Same-disk limit, identical to the DVC remote's |
+| Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS SCRATCH-REHEARSED from 2026-08-19 (M6-S5) and no further** — said in the header, in the `MANIFEST.txt` text and in the ledger; a full restore over a dead platform is still un-rehearsed. Same-disk limit, identical to the DVC remote's |
+| Rehearse the restore (M6-S5) | `make restore-drill` (`RESTORE_ARGS="--backup <dir> --keep"`) — the newest backup's three SMALL dumps into `<db>_restore_drill` scratch databases + a scratch MinIO bucket, then dropped | VERIFIED 2026-08-19 (M6-S5): **GREEN 17/17.** mlflow **2.34 s** · optuna **0.78 s** · metabase **7.29 s** through `zcat \| kubectl exec -i psql -v ON_ERROR_STOP=1` (the `make marts` transport, because nothing of ours publishes 5432 and a restore path that needs a port opened is one nobody can run in an incident). Every counted table equals the LIVE database (mlflow experiments=8 runs=101 registered_models=1 model_versions=2 · optuna studies=5 trials=59 · metabase report_card=67 report_dashboard=4 core_user=2), the restored registry carries the same `champion\|2` pointer, and the restored studies carry the trial counts `automation/runs/m3s4/sniper-*.json` recorded (9 and 21) — **a second witness that is not the live database**, because live-vs-restored alone is also what restoring the wrong backup into the wrong place would show. Objects: `flyte-data` restored **WHOLE** (184 objects / 783,327 bytes, 31.7 s) into a scratch bucket and one MLflow `MLmodel` **byte-identical to the live object by sha256**. The live database list and bucket list are unchanged and **no scratch survives**. **`marts` is deliberately excluded** (1.2 GiB of the 1.6 GiB backup, and the ONE database provably rebuildable from DVC pins). Its FIRST run went RED on a check that was wrong, not on a restore that was — see the story section |
 | Port pre-check, now holder-aware (F-021, M4-S2) | `make ports` | RE-VERIFIED 2026-08-18 (M4-S2) against the LIVE cluster: `6 port(s) held by US — the 'mlops-taxi' cluster is up, which is expected`, each naming port, purpose and `-> container mlops-taxi-control-plane`, then `OK — 10 required port(s): 4 free, 6 held by us, 0 foreign.` **exit 0** — where it used to refuse and advise stopping the stack that holds the registry. The foreign refusal is UNSOFTENED: two unit tests use the same bound port and the same fake `docker ps`, differing only in the container NAME (`mlops-taxi-control-plane` → exit 0 · `somebody-elses-stack-web-1` → exit 2), and M0-S2's fake-listener red-team (no docker shim) still goes red |
 | Flyte on the cluster (M4-S2) | `make deploy-flyte` (`scripts/deploy_flyte.sh`; `DRY_RUN=1` mutates NOTHING, helm included) | VERIFIED 2026-08-18 (M4-S2): `STATUS: deployed REVISION: 2`, all three deployments rolled out, `[pg-db] flyte: before = role absent, database absent` → `ok flyte owner=flyte` (`5 database(s) converged`). **Idempotence proved by pod AGE**: the re-run reported every deployment rolled out while all three pods were **17 minutes old** — a clean upgrade that restarted nothing. First install FAILED `context deadline exceeded` with all pods healthy (the 99 MB console image took **9m49s** to pull); `--wait` is now 20m with that measurement written beside it. Self-sufficient (re-runs namespaces/secrets/D-002/MinIO, the M1-S5 rule). No secret on a command line — mode-600 overlay deleted on EXIT. Cluster never went down |
 | Reach Flyte from the host (M4-S2) | `make flyte-console` (blocking forward) · `bash scripts/flyte_console.sh --check` (one-shot, tears the tunnel down) | VERIFIED 2026-08-18 (M4-S2): `ok  API answers: GET /healthz -> 200 (svc svc/flyte-flyte-binary-http:8090)`. The path was ASKED of the server, not remembered — `/healthcheck` (the 1.x path) returns 404, `/healthz` and `/readyz` return 200. **A port-forward, not a declared route, and that is recorded**: no hostPort exists for Flyte, adding one means a rebuild the statefulness law forbids, and there is no ingress controller until KServe at M5 — so the browser console is deliberately NOT forwarded (same-origin SPA; it would render and then fail every request) |
@@ -1918,7 +2010,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Shift traffic 10 → 100 → back, MEASURED (M6-S4) | `make canary` (`DRILL_ARGS=--dry-run` writes the prediction and applies nothing; ~6 min foreground) | VERIFIED 2026-08-19 (M6-S4): **PASS 11/11.** Ingress `canary` counter **0/177 · 41/420 = 9.76% · 301/301 = 100% · 0/300**, the two predictors' own counters **204/0 · 379/39 = 9.33% · 0/240 = 100% · 300/0** — two witnesses from different processes, and a record claiming one without the other is a contradiction. **0 of 1,440 requests failed**, champion pod UID unchanged, revert **0.37 s** against a 120 s budget. **Its first run went RED at 0% for F-039** (the route took a KServe-generated Ingress name) and is kept unedited in `attempt1-ingress-name-collision/` |
 | The split as Prometheus draws it (M6-S4) | `uv run python scripts/canary_split_paste.py [--minutes N]` (a READER — one range query) | VERIFIED 2026-08-19 (M6-S4): prints champion/canary/share per minute; the green run reads `5.9% · 11.1% · 100.0% · 100.0% · 0.0%` at 240 req/min, with the failed attempt's flat `0.0%` visible six minutes above it. It exists so the board and the record are not two different claims |
 | The alias rollback, REHEARSED (M6-S4) | `make rollback` (`ROLLBACK_ARGS=--dry-run` previews; `--rejudge` re-derives the verdict from the record and moves nothing) | VERIFIED 2026-08-19 (M6-S4): **PASS 10/10**, the runbook's §4 three moves run for real BOTH ways. **v2→v1 = 35.35 s of moves and 27.93 s of failing requests (55 of 85 probes, `HTTP 500` at the logged signature); v1→v2 = 34.38 s and 0.501 s (one 502)** — F-040, gotcha #86. `verify-m5` at the half-way state: **RED, 3 FAILs, §2's coherence check GREEN at `v1`**; at the end state GREEN. `configs/train.yaml` byte-identical by `git hash-object`, `@champion` back to 2, the final answer reproducing the parity row at **39.001937**. It REFUSES to start from a half-rolled-back state, and moves the alias with a RAW `set_registered_model_alias` — never `registry.promote`, whose refusal (F-011) is the point |
-| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5 live; M6+ pending each milestone |
+| Gameday 1 — four staged failures, predictions FIRST (M6-S5) | `make gameday` (`GAMEDAY_ARGS="--scenario predict\|control\|kill\|storage\|saturation\|report"`; ~55 min end to end, **scenario 2 is a deliberate ~5 min outage**) | VERIFIED 2026-08-19 (M6-S5): **accept bar MET with TWO wrong predictions, neither engineered.** Control (delegated to `alert_fire_drill.py`) **GREEN 11/11** — A-3 T+170.5 s, A-2 T+335.6 s, both at Alertmanager, cleared 330.1 s after the stop. Kill: **13.75 s**, 55 of 1,200 requests, different pod uid, **nothing fired** — and the edge 5xx share **peaked at 0.5000** with A-2/A-5 flickering `pending` (**F-041**). Storage: **8/8**, `403 HeadBucket`, **A-5 T+150.2 s then A-7 T+210.2 s** (**F-042** — the opposite of A-7's own annotation), A-2 silent through a total outage, undo staged first and `make serve` exit 0. Saturation: **A-6 at T+844.3 s = 244.1 + 600.2**, throttled 0 → **0.9996**, client p50 **94,553 ms** vs service p50 **1,084 ms**, **125 × HTTP 502** (the second wrong prediction), and **F-043** — A-1 cleared itself mid-event because the loaded predictor's exporter hit `scrape_duration` 4.613 s with `up == 0` against the idle shadow's 0.004 s. `@champion` **2** read and asserted in every scenario |
+| Rehearse the restore (M6-S5) | `make restore-drill` (`RESTORE_ARGS="--backup <dir> --keep"`) | VERIFIED 2026-08-19 — see the backup row above for the numbers. The **live** databases and buckets are only counted, never written, and no scratch survives the run |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5 live; **`verify-m6` is M6-S5 leg 2 and is NOT built** — the gameday and the restore rehearsal are leg 1 |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
@@ -2192,3 +2286,25 @@ plus a saturation error tail a 182-second outage, and it was headed for a runboo
 after that; anchoring the start at the event overstates it, and anchoring recovery
 on "the first success after the event" understates it catastrophically. Both were
 caught by replaying the real timeline as a test fixture.**
+Newest (M6-S5), and all three are about the ARGUMENTS written beside correct
+alerts: **a `rate(...[5m])` window is EMPTY when an event begins, so a threshold
+argued from the steady-state ratio is an argument about the wrong quantity — a
+15-second outage 30 seconds into a load run made the edge 5xx share peak at 0.50
+against a 0.10 bar, and what stopped the page was the `for: 5m` sustain, not the
+threshold. The same mechanism runs backwards on the way up: A-6's throttled
+fraction needed 244 s to climb 0.41 → 1.00 as its window filled, so its 10-minute
+sustain started four minutes after the load did. When you write a bar, ask what
+the denominator holds at t=0, and remember an on-call will watch alerts sit
+`pending` through every ordinary self-heal (#87, F-041)**; **two alerts' arrival
+ORDER is decided by their `for:` windows, never by the causal story about which
+condition happens first — A-7's own annotation claimed it fires before A-5
+because "a pod that never initialises never had a replica to lose", and with both
+expressions true in the same scrape the 2m rule beat the 3m rule by exactly sixty
+seconds (#88, F-042)**; and **a component under stress is an unreliable reporter
+of its own stress — the predictor's `/metrics` went from 4 ms to 4.613 s and one
+scrape FAILED under saturation, which made A-1 clear itself in the middle of the
+event it was firing about. "Measure at the edge because a dead predictor cannot
+report its absence" is the loud version; this is the quiet one, and the tell is a
+firing alert going inactive while the symptom persists. An idle second instance
+of the same exporter, scraped by the same job, is the cheapest possible control
+(#89, F-043)**.

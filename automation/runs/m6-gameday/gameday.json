@@ -1,0 +1,23 @@
+{
+  "story": "M6-S5",
+  "assembled_at": "2026-08-19T16:54:56Z",
+  "scenario_order": [
+    "control",
+    "kill",
+    "storage",
+    "saturation"
+  ],
+  "positive_control_first": true,
+  "scenarios_present": {
+    "control": true,
+    "kill": true,
+    "storage": true,
+    "saturation": true
+  },
+  "predictions_that_were_wrong": [
+    "kill: [\"the edge 5xx SHARE peaked at 0.5000, below A-2's 0.10 bar (predicted: a single self-heal cannot reach it)\"]",
+    "saturation: ['ZERO errors across 6240 requests \u2014 saturation shows up as latency, never as failure (gotcha #74)']"
+  ],
+  "accept_bar": "\u00a79/M6: at least one prediction wrong and investigated. A gameday with every prediction right was too easy.",
+  "accept_bar_met": true
+}
