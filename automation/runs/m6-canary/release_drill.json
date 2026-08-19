@@ -11,6 +11,13 @@
     "p6_the_version_stamp_proves_nothing_here": "Every response in every phase carries model_version 2, INCLUDING the fully-shifted window, because the canary is the champion's own bytes under the champion's own model name. This is stated as a prediction so that nobody later reads a constant version stamp in this record as evidence that no traffic moved.",
     "p7_the_champion_pod_is_never_touched": "The champion predictor pod has the same UID at the end of the drill as at the start, and @champion is version 2 throughout. The only mutated object is the canary Ingress (F-038: an isvc annotation would not have been metadata)."
   },
+  "superseded_predictions": {
+    "run1_the_dedicated_service_was_enough": {
+      "predicted": "with ADR-011's two conditions satisfied \u2014 a dedicated backend Service and MLSERVER_MODEL_NAME on the canary \u2014 weight 10 moves about a tenth of the traffic",
+      "observed": "0 of 420 requests at weight 10, and 3 of 300 at weight 100 \u2014 the ingress counter recorded no canary-labelled request at all",
+      "why_it_was_wrong": "F-039, and it is NOT either ADR-011 condition. The canary Ingress was named `nyc-taxi-eta-canary`, which is exactly the name KServe generates for the InferenceService of that name. `kubectl apply` wrote the canary annotations onto the CONTROLLER-OWNED object; KServe reconciled them away seconds later. The three requests that did reach the canary pod at weight 100 are that window. The route is now `nyc-taxi-eta-canary-route`, and this drill refuses to weight any Ingress that carries ownerReferences."
+    }
+  },
   "shape": {
     "rate_per_second": 4.0,
     "concurrency": 8,
@@ -23,12 +30,12 @@
   "phases": {
     "baseline": {
       "ingress": {
-        "requests": 211.0,
+        "requests": 177.0,
         "to_canary": 0.0,
         "canary_share_pct": 0.0
       },
       "pods": {
-        "champion": 220.0,
+        "champion": 204.0,
         "canary": 0.0,
         "canary_share_pct": 0.0
       }
@@ -36,25 +43,25 @@
     "canary_10": {
       "ingress": {
         "requests": 420.0,
-        "to_canary": 0.0,
-        "canary_share_pct": 0.0
+        "to_canary": 41.0,
+        "canary_share_pct": 9.76
       },
       "pods": {
-        "champion": 420.0,
-        "canary": 0.0,
-        "canary_share_pct": 0.0
+        "champion": 379.0,
+        "canary": 39.0,
+        "canary_share_pct": 9.33
       }
     },
     "canary_100": {
       "ingress": {
-        "requests": 300.0,
-        "to_canary": 0.0,
-        "canary_share_pct": 0.0
+        "requests": 301.0,
+        "to_canary": 301.0,
+        "canary_share_pct": 100.0
       },
       "pods": {
-        "champion": 300.0,
-        "canary": 3.0,
-        "canary_share_pct": 0.99
+        "champion": 0.0,
+        "canary": 240.0,
+        "canary_share_pct": 100.0
       }
     },
     "reverted": {
@@ -81,7 +88,19 @@
     },
     {
       "at_s": 60,
-      "action": "canary-weight: 10"
+      "action": "canary-weight: 10",
+      "registered": {
+        "present": true,
+        "noServer": true,
+        "trafficShapingPolicy": {
+          "weight": 10,
+          "weightTotal": 100,
+          "header": "",
+          "headerValue": "",
+          "headerPattern": "",
+          "cookie": ""
+        }
+      }
     },
     {
       "at_s": 75,
@@ -93,7 +112,19 @@
     },
     {
       "at_s": 180,
-      "action": "canary-weight: 100"
+      "action": "canary-weight: 100",
+      "registered": {
+        "present": true,
+        "noServer": true,
+        "trafficShapingPolicy": {
+          "weight": 100,
+          "weightTotal": 100,
+          "header": "",
+          "headerValue": "",
+          "headerPattern": "",
+          "cookie": ""
+        }
+      }
     },
     {
       "at_s": 195,
@@ -118,23 +149,23 @@
   ],
   "revert": {
     "issued_at_s": 270,
-    "api_delete_seconds": 0.153,
-    "nginx_cleared_seconds": 0.45,
+    "api_delete_seconds": 0.145,
+    "nginx_cleared_seconds": 0.37,
     "budget_seconds": 120.0,
     "instrument": "the ingress-nginx controller's own /configuration/backends, polled every 0.25 s from the moment the delete was issued; resolution is bounded by one kubectl exec (~0.5 s), which is stated rather than hidden because the budget it is measured against is 120 s"
   },
   "load": {
     "story": "M5-S4",
     "label": "m6-s4 canary release rehearsal",
-    "measured_at": "2026-08-19T15:15:29Z",
+    "measured_at": "2026-08-19T15:23:48Z",
     "shape": {
       "target_rate_per_second": 4.0,
       "window_seconds": 360,
       "concurrency": 8,
       "mix": "hazards",
       "rows_per_request": 1,
-      "achieved_rate_per_second": 4.001,
-      "wall_seconds": 359.873
+      "achieved_rate_per_second": 4.002,
+      "wall_seconds": 359.79
     },
     "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta/infer",
     "host": "nyc-taxi-eta-serving.local",
@@ -145,25 +176,25 @@
       "error_rate": 0.0
     },
     "latency_ms": {
-      "min": 8.876,
-      "p50": 21.7,
-      "p95": 103.825,
-      "p99": 107.358,
-      "max": 114.655
+      "min": 11.387,
+      "p50": 22.205,
+      "p95": 90.244,
+      "p99": 96.619,
+      "max": 130.858
     },
     "service_ms": {
-      "min": 8.771,
-      "p50": 21.578,
-      "p95": 103.668,
-      "p99": 107.19,
-      "max": 114.567
+      "min": 11.274,
+      "p50": 22.113,
+      "p95": 90.159,
+      "p99": 96.411,
+      "max": 130.753
     },
     "queue_ms": {
-      "min": 0.04,
-      "p50": 0.096,
-      "p95": 0.215,
-      "p99": 0.262,
-      "max": 1.375
+      "min": 0.037,
+      "p50": 0.094,
+      "p95": 0.187,
+      "p99": 0.255,
+      "max": 1.229
     },
     "served_versions": [
       "2"
@@ -180,2520 +211,2520 @@
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.705
+        "p95_latency_ms": 24.971
       },
       {
         "second": 1,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.906
+        "p95_latency_ms": 74.618
       },
       {
         "second": 2,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.049
+        "p95_latency_ms": 71.619
       },
       {
         "second": 3,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.52
+        "p95_latency_ms": 71.778
       },
       {
         "second": 4,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.639
+        "p95_latency_ms": 25.651
       },
       {
         "second": 5,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.085
+        "p95_latency_ms": 26.743
       },
       {
         "second": 6,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.356
+        "p95_latency_ms": 26.856
       },
       {
         "second": 7,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.672
+        "p95_latency_ms": 91.176
       },
       {
         "second": 8,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 88.703
+        "p95_latency_ms": 23.663
       },
       {
         "second": 9,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.159
+        "p95_latency_ms": 72.049
       },
       {
         "second": 10,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.924
+        "p95_latency_ms": 24.703
       },
       {
         "second": 11,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.613
+        "p95_latency_ms": 25.33
       },
       {
         "second": 12,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.722
+        "p95_latency_ms": 91.79
       },
       {
         "second": 13,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 107.358
+        "p95_latency_ms": 25.616
       },
       {
         "second": 14,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.229
+        "p95_latency_ms": 93.962
       },
       {
         "second": 15,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.98
+        "p95_latency_ms": 26.159
       },
       {
         "second": 16,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.797
+        "p95_latency_ms": 91.142
       },
       {
         "second": 17,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.843
+        "p95_latency_ms": 25.542
       },
       {
         "second": 18,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.949
+        "p95_latency_ms": 23.9
       },
       {
         "second": 19,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.491
+        "p95_latency_ms": 25.042
       },
       {
         "second": 20,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.616
+        "p95_latency_ms": 25.313
       },
       {
         "second": 21,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.975
+        "p95_latency_ms": 25.163
       },
       {
         "second": 22,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.079
+        "p95_latency_ms": 28.428
       },
       {
         "second": 23,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.642
+        "p95_latency_ms": 92.241
       },
       {
         "second": 24,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.988
+        "p95_latency_ms": 26.534
       },
       {
         "second": 25,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 90.254
+        "p95_latency_ms": 28.954
       },
       {
         "second": 26,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.954
+        "p95_latency_ms": 76.31
       },
       {
         "second": 27,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.518
+        "p95_latency_ms": 23.665
       },
       {
         "second": 28,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.512
+        "p95_latency_ms": 94.289
       },
       {
         "second": 29,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.628
+        "p95_latency_ms": 24.519
       },
       {
         "second": 30,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.853
+        "p95_latency_ms": 24.215
       },
       {
         "second": 31,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.092
+        "p95_latency_ms": 25.249
       },
       {
         "second": 32,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.981
+        "p95_latency_ms": 24.08
       },
       {
         "second": 33,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 87.912
+        "p95_latency_ms": 90.314
       },
       {
         "second": 34,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.187
+        "p95_latency_ms": 40.087
       },
       {
         "second": 35,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.813
+        "p95_latency_ms": 26.758
       },
       {
         "second": 36,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.859
+        "p95_latency_ms": 91.534
       },
       {
         "second": 37,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.547
+        "p95_latency_ms": 25.311
       },
       {
         "second": 38,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 107.179
+        "p95_latency_ms": 27.49
       },
       {
         "second": 39,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 86.374
+        "p95_latency_ms": 25.198
       },
       {
         "second": 40,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.007
+        "p95_latency_ms": 26.856
       },
       {
         "second": 41,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.154
+        "p95_latency_ms": 23.216
       },
       {
         "second": 42,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.399
+        "p95_latency_ms": 22.822
       },
       {
         "second": 43,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.15
+        "p95_latency_ms": 24.698
       },
       {
         "second": 44,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.525
+        "p95_latency_ms": 24.064
       },
       {
         "second": 45,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.75
+        "p95_latency_ms": 22.034
       },
       {
         "second": 46,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.785
+        "p95_latency_ms": 77.538
       },
       {
         "second": 47,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.413
+        "p95_latency_ms": 25.287
       },
       {
         "second": 48,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.565
+        "p95_latency_ms": 26.5
       },
       {
         "second": 49,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 35.402
+        "p95_latency_ms": 93.402
       },
       {
         "second": 50,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.816
+        "p95_latency_ms": 22.911
       },
       {
         "second": 51,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.395
+        "p95_latency_ms": 23.476
       },
       {
         "second": 52,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.603
+        "p95_latency_ms": 25.017
       },
       {
         "second": 53,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.491
+        "p95_latency_ms": 23.169
       },
       {
         "second": 54,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.57
+        "p95_latency_ms": 27.216
       },
       {
         "second": 55,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 90.418
+        "p95_latency_ms": 90.753
       },
       {
         "second": 56,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.633
+        "p95_latency_ms": 73.373
       },
       {
         "second": 57,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.832
+        "p95_latency_ms": 71.86
       },
       {
         "second": 58,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 110.271
+        "p95_latency_ms": 73.038
       },
       {
         "second": 59,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.352
+        "p95_latency_ms": 92.227
       },
       {
         "second": 60,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 28.787
+        "p95_latency_ms": 76.951
       },
       {
         "second": 61,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.004
+        "p95_latency_ms": 25.526
       },
       {
         "second": 62,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.984
+        "p95_latency_ms": 21.764
       },
       {
         "second": 63,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.834
+        "p95_latency_ms": 90.549
       },
       {
         "second": 64,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.602
+        "p95_latency_ms": 90.287
       },
       {
         "second": 65,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.535
+        "p95_latency_ms": 95.22
       },
       {
         "second": 66,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.575
+        "p95_latency_ms": 124.453
       },
       {
         "second": 67,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.67
+        "p95_latency_ms": 28.999
       },
       {
         "second": 68,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.923
+        "p95_latency_ms": 23.292
       },
       {
         "second": 69,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.416
+        "p95_latency_ms": 23.07
       },
       {
         "second": 70,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.894
+        "p95_latency_ms": 92.913
       },
       {
         "second": 71,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.709
+        "p95_latency_ms": 23.757
       },
       {
         "second": 72,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 90.983
+        "p95_latency_ms": 23.784
       },
       {
         "second": 73,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.455
+        "p95_latency_ms": 90.821
       },
       {
         "second": 74,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.025
+        "p95_latency_ms": 26.797
       },
       {
         "second": 75,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 27.098
+        "p95_latency_ms": 74.885
       },
       {
         "second": 76,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.522
+        "p95_latency_ms": 97.843
       },
       {
         "second": 77,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.406
+        "p95_latency_ms": 71.455
       },
       {
         "second": 78,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.046
+        "p95_latency_ms": 26.702
       },
       {
         "second": 79,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.567
+        "p95_latency_ms": 97.385
       },
       {
         "second": 80,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.477
+        "p95_latency_ms": 28.036
       },
       {
         "second": 81,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 86.725
+        "p95_latency_ms": 77.859
       },
       {
         "second": 82,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.245
+        "p95_latency_ms": 24.054
       },
       {
         "second": 83,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.549
+        "p95_latency_ms": 71.815
       },
       {
         "second": 84,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.125
+        "p95_latency_ms": 26.347
       },
       {
         "second": 85,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.987
+        "p95_latency_ms": 92.943
       },
       {
         "second": 86,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.642
+        "p95_latency_ms": 74.428
       },
       {
         "second": 87,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.813
+        "p95_latency_ms": 92.396
       },
       {
         "second": 88,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.092
+        "p95_latency_ms": 90.701
       },
       {
         "second": 89,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.66
+        "p95_latency_ms": 95.049
       },
       {
         "second": 90,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.931
+        "p95_latency_ms": 23.243
       },
       {
         "second": 91,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.986
+        "p95_latency_ms": 76.15
       },
       {
         "second": 92,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.476
+        "p95_latency_ms": 24.896
       },
       {
         "second": 93,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.122
+        "p95_latency_ms": 72.051
       },
       {
         "second": 94,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.582
+        "p95_latency_ms": 92.527
       },
       {
         "second": 95,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.548
+        "p95_latency_ms": 25.028
       },
       {
         "second": 96,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 19.079
+        "p95_latency_ms": 25.452
       },
       {
         "second": 97,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.362
+        "p95_latency_ms": 71.63
       },
       {
         "second": 98,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 107.287
+        "p95_latency_ms": 22.564
       },
       {
         "second": 99,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.563
+        "p95_latency_ms": 23.144
       },
       {
         "second": 100,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.375
+        "p95_latency_ms": 71.758
       },
       {
         "second": 101,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 114.655
+        "p95_latency_ms": 59.363
       },
       {
         "second": 102,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 109.296
+        "p95_latency_ms": 71.725
       },
       {
         "second": 103,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.193
+        "p95_latency_ms": 94.663
       },
       {
         "second": 104,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.819
+        "p95_latency_ms": 79.232
       },
       {
         "second": 105,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.472
+        "p95_latency_ms": 71.714
       },
       {
         "second": 106,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.311
+        "p95_latency_ms": 23.381
       },
       {
         "second": 107,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.181
+        "p95_latency_ms": 26.418
       },
       {
         "second": 108,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.614
+        "p95_latency_ms": 27.971
       },
       {
         "second": 109,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 108.014
+        "p95_latency_ms": 23.988
       },
       {
         "second": 110,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 108.016
+        "p95_latency_ms": 26.795
       },
       {
         "second": 111,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.862
+        "p95_latency_ms": 72.931
       },
       {
         "second": 112,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.692
+        "p95_latency_ms": 23.893
       },
       {
         "second": 113,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 108.39
+        "p95_latency_ms": 25.918
       },
       {
         "second": 114,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.49
+        "p95_latency_ms": 25.428
       },
       {
         "second": 115,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.827
+        "p95_latency_ms": 91.791
       },
       {
         "second": 116,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 53.607
+        "p95_latency_ms": 26.106
       },
       {
         "second": 117,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.6
+        "p95_latency_ms": 90.731
       },
       {
         "second": 118,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.269
+        "p95_latency_ms": 24.664
       },
       {
         "second": 119,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.825
+        "p95_latency_ms": 22.858
       },
       {
         "second": 120,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.675
+        "p95_latency_ms": 23.368
       },
       {
         "second": 121,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.609
+        "p95_latency_ms": 97.843
       },
       {
         "second": 122,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.353
+        "p95_latency_ms": 25.243
       },
       {
         "second": 123,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.604
+        "p95_latency_ms": 71.642
       },
       {
         "second": 124,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.466
+        "p95_latency_ms": 24.847
       },
       {
         "second": 125,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.649
+        "p95_latency_ms": 20.487
       },
       {
         "second": 126,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.249
+        "p95_latency_ms": 74.633
       },
       {
         "second": 127,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.373
+        "p95_latency_ms": 22.476
       },
       {
         "second": 128,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.983
+        "p95_latency_ms": 91.417
       },
       {
         "second": 129,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.469
+        "p95_latency_ms": 90.688
       },
       {
         "second": 130,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.44
+        "p95_latency_ms": 92.42
       },
       {
         "second": 131,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.423
+        "p95_latency_ms": 19.253
       },
       {
         "second": 132,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.919
+        "p95_latency_ms": 22.199
       },
       {
         "second": 133,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.918
+        "p95_latency_ms": 27.469
       },
       {
         "second": 134,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 87.718
+        "p95_latency_ms": 92.533
       },
       {
         "second": 135,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.329
+        "p95_latency_ms": 25.579
       },
       {
         "second": 136,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.836
+        "p95_latency_ms": 83.133
       },
       {
         "second": 137,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.617
+        "p95_latency_ms": 71.776
       },
       {
         "second": 138,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.862
+        "p95_latency_ms": 24.391
       },
       {
         "second": 139,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.978
+        "p95_latency_ms": 91.828
       },
       {
         "second": 140,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.265
+        "p95_latency_ms": 22.675
       },
       {
         "second": 141,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 14.721
+        "p95_latency_ms": 25.05
       },
       {
         "second": 142,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.702
+        "p95_latency_ms": 95.774
       },
       {
         "second": 143,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.648
+        "p95_latency_ms": 60.771
       },
       {
         "second": 144,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.55
+        "p95_latency_ms": 21.436
       },
       {
         "second": 145,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.058
+        "p95_latency_ms": 24.586
       },
       {
         "second": 146,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.478
+        "p95_latency_ms": 92.202
       },
       {
         "second": 147,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.503
+        "p95_latency_ms": 23.403
       },
       {
         "second": 148,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 88.672
+        "p95_latency_ms": 26.211
       },
       {
         "second": 149,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 34.763
+        "p95_latency_ms": 25.57
       },
       {
         "second": 150,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.643
+        "p95_latency_ms": 24.473
       },
       {
         "second": 151,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 30.528
+        "p95_latency_ms": 59.257
       },
       {
         "second": 152,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.53
+        "p95_latency_ms": 72.177
       },
       {
         "second": 153,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.719
+        "p95_latency_ms": 20.645
       },
       {
         "second": 154,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.351
+        "p95_latency_ms": 25.655
       },
       {
         "second": 155,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.982
+        "p95_latency_ms": 23.657
       },
       {
         "second": 156,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 28.515
+        "p95_latency_ms": 23.898
       },
       {
         "second": 157,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.458
+        "p95_latency_ms": 24.906
       },
       {
         "second": 158,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.451
+        "p95_latency_ms": 22.442
       },
       {
         "second": 159,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.343
+        "p95_latency_ms": 93.081
       },
       {
         "second": 160,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.85
+        "p95_latency_ms": 23.857
       },
       {
         "second": 161,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.715
+        "p95_latency_ms": 71.729
       },
       {
         "second": 162,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 91.713
+        "p95_latency_ms": 24.585
       },
       {
         "second": 163,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.75
+        "p95_latency_ms": 23.351
       },
       {
         "second": 164,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.805
+        "p95_latency_ms": 76.479
       },
       {
         "second": 165,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.643
+        "p95_latency_ms": 93.428
       },
       {
         "second": 166,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.485
+        "p95_latency_ms": 94.713
       },
       {
         "second": 167,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 91.228
+        "p95_latency_ms": 90.55
       },
       {
         "second": 168,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.848
+        "p95_latency_ms": 25.435
       },
       {
         "second": 169,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.587
+        "p95_latency_ms": 108.607
       },
       {
         "second": 170,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.499
+        "p95_latency_ms": 74.473
       },
       {
         "second": 171,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.492
+        "p95_latency_ms": 22.704
       },
       {
         "second": 172,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.489
+        "p95_latency_ms": 24.049
       },
       {
         "second": 173,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 27.089
+        "p95_latency_ms": 23.472
       },
       {
         "second": 174,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.482
+        "p95_latency_ms": 23.257
       },
       {
         "second": 175,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.603
+        "p95_latency_ms": 25.836
       },
       {
         "second": 176,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.157
+        "p95_latency_ms": 23.147
       },
       {
         "second": 177,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.575
+        "p95_latency_ms": 90.266
       },
       {
         "second": 178,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.383
+        "p95_latency_ms": 25.72
       },
       {
         "second": 179,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.508
+        "p95_latency_ms": 24.17
       },
       {
         "second": 180,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.168
+        "p95_latency_ms": 78.857
       },
       {
         "second": 181,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.049
+        "p95_latency_ms": 27.223
       },
       {
         "second": 182,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.963
+        "p95_latency_ms": 78.956
       },
       {
         "second": 183,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 95.398
+        "p95_latency_ms": 59.343
       },
       {
         "second": 184,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.899
+        "p95_latency_ms": 23.416
       },
       {
         "second": 185,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.451
+        "p95_latency_ms": 130.858
       },
       {
         "second": 186,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.738
+        "p95_latency_ms": 30.009
       },
       {
         "second": 187,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.084
+        "p95_latency_ms": 23.665
       },
       {
         "second": 188,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.864
+        "p95_latency_ms": 24.717
       },
       {
         "second": 189,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 28.512
+        "p95_latency_ms": 118.33
       },
       {
         "second": 190,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.375
+        "p95_latency_ms": 24.942
       },
       {
         "second": 191,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.217
+        "p95_latency_ms": 24.466
       },
       {
         "second": 192,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 107.169
+        "p95_latency_ms": 21.182
       },
       {
         "second": 193,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.212
+        "p95_latency_ms": 22.563
       },
       {
         "second": 194,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.608
+        "p95_latency_ms": 23.314
       },
       {
         "second": 195,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.841
+        "p95_latency_ms": 25.379
       },
       {
         "second": 196,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.579
+        "p95_latency_ms": 114.806
       },
       {
         "second": 197,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.748
+        "p95_latency_ms": 25.836
       },
       {
         "second": 198,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 108.512
+        "p95_latency_ms": 24.167
       },
       {
         "second": 199,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 87.924
+        "p95_latency_ms": 21.74
       },
       {
         "second": 200,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.136
+        "p95_latency_ms": 22.978
       },
       {
         "second": 201,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.633
+        "p95_latency_ms": 108.949
       },
       {
         "second": 202,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.491
+        "p95_latency_ms": 23.329
       },
       {
         "second": 203,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.248
+        "p95_latency_ms": 22.287
       },
       {
         "second": 204,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.512
+        "p95_latency_ms": 21.643
       },
       {
         "second": 205,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.446
+        "p95_latency_ms": 79.42
       },
       {
         "second": 206,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 90.558
+        "p95_latency_ms": 24.029
       },
       {
         "second": 207,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.483
+        "p95_latency_ms": 59.339
       },
       {
         "second": 208,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 109.14
+        "p95_latency_ms": 58.946
       },
       {
         "second": 209,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.615
+        "p95_latency_ms": 23.374
       },
       {
         "second": 210,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.772
+        "p95_latency_ms": 110.997
       },
       {
         "second": 211,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.173
+        "p95_latency_ms": 20.527
       },
       {
         "second": 212,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.368
+        "p95_latency_ms": 22.957
       },
       {
         "second": 213,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.972
+        "p95_latency_ms": 17.872
       },
       {
         "second": 214,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.472
+        "p95_latency_ms": 23.161
       },
       {
         "second": 215,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.084
+        "p95_latency_ms": 23.219
       },
       {
         "second": 216,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.176
+        "p95_latency_ms": 24.707
       },
       {
         "second": 217,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.576
+        "p95_latency_ms": 111.553
       },
       {
         "second": 218,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.768
+        "p95_latency_ms": 23.257
       },
       {
         "second": 219,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.109
+        "p95_latency_ms": 21.118
       },
       {
         "second": 220,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 88.024
+        "p95_latency_ms": 21.422
       },
       {
         "second": 221,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.884
+        "p95_latency_ms": 63.094
       },
       {
         "second": 222,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.261
+        "p95_latency_ms": 59.219
       },
       {
         "second": 223,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.04
+        "p95_latency_ms": 21.142
       },
       {
         "second": 224,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.495
+        "p95_latency_ms": 25.37
       },
       {
         "second": 225,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 27.534
+        "p95_latency_ms": 59.273
       },
       {
         "second": 226,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.808
+        "p95_latency_ms": 78.8
       },
       {
         "second": 227,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.264
+        "p95_latency_ms": 23.587
       },
       {
         "second": 228,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 92.386
+        "p95_latency_ms": 23.146
       },
       {
         "second": 229,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.103
+        "p95_latency_ms": 79.119
       },
       {
         "second": 230,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.509
+        "p95_latency_ms": 24.124
       },
       {
         "second": 231,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 86.682
+        "p95_latency_ms": 24.905
       },
       {
         "second": 232,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.738
+        "p95_latency_ms": 109.854
       },
       {
         "second": 233,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.391
+        "p95_latency_ms": 23.291
       },
       {
         "second": 234,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.169
+        "p95_latency_ms": 59.145
       },
       {
         "second": 235,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.45
+        "p95_latency_ms": 59.073
       },
       {
         "second": 236,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.998
+        "p95_latency_ms": 24.784
       },
       {
         "second": 237,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.611
+        "p95_latency_ms": 79.023
       },
       {
         "second": 238,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.177
+        "p95_latency_ms": 22.075
       },
       {
         "second": 239,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.164
+        "p95_latency_ms": 59.576
       },
       {
         "second": 240,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.397
+        "p95_latency_ms": 59.29
       },
       {
         "second": 241,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.295
+        "p95_latency_ms": 23.626
       },
       {
         "second": 242,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.523
+        "p95_latency_ms": 23.487
       },
       {
         "second": 243,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.424
+        "p95_latency_ms": 16.14
       },
       {
         "second": 244,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.594
+        "p95_latency_ms": 23.07
       },
       {
         "second": 245,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.484
+        "p95_latency_ms": 22.012
       },
       {
         "second": 246,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.206
+        "p95_latency_ms": 23.317
       },
       {
         "second": 247,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 86.341
+        "p95_latency_ms": 78.892
       },
       {
         "second": 248,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.223
+        "p95_latency_ms": 59.472
       },
       {
         "second": 249,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.042
+        "p95_latency_ms": 21.801
       },
       {
         "second": 250,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.125
+        "p95_latency_ms": 23.462
       },
       {
         "second": 251,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 88.347
+        "p95_latency_ms": 23.322
       },
       {
         "second": 252,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.36
+        "p95_latency_ms": 23.022
       },
       {
         "second": 253,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.411
+        "p95_latency_ms": 24.493
       },
       {
         "second": 254,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.247
+        "p95_latency_ms": 78.841
       },
       {
         "second": 255,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 109.093
+        "p95_latency_ms": 25.353
       },
       {
         "second": 256,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.971
+        "p95_latency_ms": 27.385
       },
       {
         "second": 257,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.178
+        "p95_latency_ms": 22.654
       },
       {
         "second": 258,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.392
+        "p95_latency_ms": 81.594
       },
       {
         "second": 259,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 109.478
+        "p95_latency_ms": 25.619
       },
       {
         "second": 260,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 87.153
+        "p95_latency_ms": 78.947
       },
       {
         "second": 261,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.146
+        "p95_latency_ms": 81.124
       },
       {
         "second": 262,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 87.384
+        "p95_latency_ms": 59.48
       },
       {
         "second": 263,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.414
+        "p95_latency_ms": 25.843
       },
       {
         "second": 264,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.508
+        "p95_latency_ms": 59.583
       },
       {
         "second": 265,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.436
+        "p95_latency_ms": 78.481
       },
       {
         "second": 266,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.881
+        "p95_latency_ms": 59.483
       },
       {
         "second": 267,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 92.679
+        "p95_latency_ms": 24.399
       },
       {
         "second": 268,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.875
+        "p95_latency_ms": 81.543
       },
       {
         "second": 269,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.29
+        "p95_latency_ms": 24.604
       },
       {
         "second": 270,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.388
+        "p95_latency_ms": 27.704
       },
       {
         "second": 271,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.504
+        "p95_latency_ms": 26.446
       },
       {
         "second": 272,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.657
+        "p95_latency_ms": 22.178
       },
       {
         "second": 273,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.501
+        "p95_latency_ms": 22.723
       },
       {
         "second": 274,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.287
+        "p95_latency_ms": 26.433
       },
       {
         "second": 275,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.348
+        "p95_latency_ms": 26.247
       },
       {
         "second": 276,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.98
+        "p95_latency_ms": 27.299
       },
       {
         "second": 277,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 109.165
+        "p95_latency_ms": 90.505
       },
       {
         "second": 278,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.626
+        "p95_latency_ms": 90.244
       },
       {
         "second": 279,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.949
+        "p95_latency_ms": 24.821
       },
       {
         "second": 280,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 107.101
+        "p95_latency_ms": 25.531
       },
       {
         "second": 281,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 106.454
+        "p95_latency_ms": 71.787
       },
       {
         "second": 282,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.122
+        "p95_latency_ms": 27.65
       },
       {
         "second": 283,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.66
+        "p95_latency_ms": 24.201
       },
       {
         "second": 284,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.772
+        "p95_latency_ms": 23.485
       },
       {
         "second": 285,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 107.648
+        "p95_latency_ms": 24.382
       },
       {
         "second": 286,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.667
+        "p95_latency_ms": 21.38
       },
       {
         "second": 287,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.553
+        "p95_latency_ms": 27.27
       },
       {
         "second": 288,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 88.809
+        "p95_latency_ms": 22.029
       },
       {
         "second": 289,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.387
+        "p95_latency_ms": 96.892
       },
       {
         "second": 290,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.896
+        "p95_latency_ms": 72.005
       },
       {
         "second": 291,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 84.926
+        "p95_latency_ms": 94.386
       },
       {
         "second": 292,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 18.442
+        "p95_latency_ms": 71.738
       },
       {
         "second": 293,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 19.578
+        "p95_latency_ms": 26.216
       },
       {
         "second": 294,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.716
+        "p95_latency_ms": 23.758
       },
       {
         "second": 295,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.573
+        "p95_latency_ms": 74.422
       },
       {
         "second": 296,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.087
+        "p95_latency_ms": 26.477
       },
       {
         "second": 297,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.582
+        "p95_latency_ms": 93.506
       },
       {
         "second": 298,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.972
+        "p95_latency_ms": 25.41
       },
       {
         "second": 299,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 86.847
+        "p95_latency_ms": 25.548
       },
       {
         "second": 300,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.251
+        "p95_latency_ms": 71.88
       },
       {
         "second": 301,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.046
+        "p95_latency_ms": 95.722
       },
       {
         "second": 302,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.805
+        "p95_latency_ms": 97.595
       },
       {
         "second": 303,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 89.143
+        "p95_latency_ms": 21.936
       },
       {
         "second": 304,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.125
+        "p95_latency_ms": 93.092
       },
       {
         "second": 305,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.28
+        "p95_latency_ms": 74.477
       },
       {
         "second": 306,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.498
+        "p95_latency_ms": 24.279
       },
       {
         "second": 307,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.873
+        "p95_latency_ms": 71.529
       },
       {
         "second": 308,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.975
+        "p95_latency_ms": 94.614
       },
       {
         "second": 309,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.688
+        "p95_latency_ms": 22.724
       },
       {
         "second": 310,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.124
+        "p95_latency_ms": 91.305
       },
       {
         "second": 311,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 95.68
+        "p95_latency_ms": 23.127
       },
       {
         "second": 312,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.772
+        "p95_latency_ms": 25.271
       },
       {
         "second": 313,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.253
+        "p95_latency_ms": 74.397
       },
       {
         "second": 314,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.229
+        "p95_latency_ms": 23.255
       },
       {
         "second": 315,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.717
+        "p95_latency_ms": 72.054
       },
       {
         "second": 316,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.427
+        "p95_latency_ms": 26.517
       },
       {
         "second": 317,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.397
+        "p95_latency_ms": 91.495
       },
       {
         "second": 318,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.139
+        "p95_latency_ms": 24.346
       },
       {
         "second": 319,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.955
+        "p95_latency_ms": 24.626
       },
       {
         "second": 320,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 27.332
+        "p95_latency_ms": 90.512
       },
       {
         "second": 321,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.399
+        "p95_latency_ms": 71.768
       },
       {
         "second": 322,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 19.971
+        "p95_latency_ms": 27.579
       },
       {
         "second": 323,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.541
+        "p95_latency_ms": 27.332
       },
       {
         "second": 324,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 28.715
+        "p95_latency_ms": 25.736
       },
       {
         "second": 325,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 88.129
+        "p95_latency_ms": 24.974
       },
       {
         "second": 326,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.246
+        "p95_latency_ms": 24.937
       },
       {
         "second": 327,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 20.504
+        "p95_latency_ms": 24.339
       },
       {
         "second": 328,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 109.297
+        "p95_latency_ms": 23.699
       },
       {
         "second": 329,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 53.493
+        "p95_latency_ms": 23.277
       },
       {
         "second": 330,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.748
+        "p95_latency_ms": 71.784
       },
       {
         "second": 331,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 21.033
+        "p95_latency_ms": 22.576
       },
       {
         "second": 332,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.423
+        "p95_latency_ms": 90.137
       },
       {
         "second": 333,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.54
+        "p95_latency_ms": 19.68
       },
       {
         "second": 334,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.575
+        "p95_latency_ms": 90.792
       },
       {
         "second": 335,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.763
+        "p95_latency_ms": 23.84
       },
       {
         "second": 336,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 86.848
+        "p95_latency_ms": 23.426
       },
       {
         "second": 337,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.584
+        "p95_latency_ms": 72.109
       },
       {
         "second": 338,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.8
+        "p95_latency_ms": 22.687
       },
       {
         "second": 339,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.884
+        "p95_latency_ms": 91.416
       },
       {
         "second": 340,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.662
+        "p95_latency_ms": 91.696
       },
       {
         "second": 341,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.79
+        "p95_latency_ms": 25.239
       },
       {
         "second": 342,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 26.104
+        "p95_latency_ms": 91.465
       },
       {
         "second": 343,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.677
+        "p95_latency_ms": 74.398
       },
       {
         "second": 344,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 24.762
+        "p95_latency_ms": 40.166
       },
       {
         "second": 345,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.719
+        "p95_latency_ms": 72.162
       },
       {
         "second": 346,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 22.248
+        "p95_latency_ms": 92.979
       },
       {
         "second": 347,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.58
+        "p95_latency_ms": 25.346
       },
       {
         "second": 348,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 18.371
+        "p95_latency_ms": 90.203
       },
       {
         "second": 349,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 105.572
+        "p95_latency_ms": 73.061
       },
       {
         "second": 350,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.838
+        "p95_latency_ms": 21.161
       },
       {
         "second": 351,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.232
+        "p95_latency_ms": 71.847
       },
       {
         "second": 352,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 85.336
+        "p95_latency_ms": 71.837
       },
       {
         "second": 353,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 108.784
+        "p95_latency_ms": 25.259
       },
       {
         "second": 354,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 23.016
+        "p95_latency_ms": 71.684
       },
       {
         "second": 355,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 104.12
+        "p95_latency_ms": 24.642
       },
       {
         "second": 356,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 103.529
+        "p95_latency_ms": 22.062
       },
       {
         "second": 357,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 25.405
+        "p95_latency_ms": 26.902
       },
       {
         "second": 358,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 27.301
+        "p95_latency_ms": 92.244
       },
       {
         "second": 359,
         "sent": 4,
         "ok": 4,
         "errors": 0,
-        "p95_latency_ms": 91.737
+        "p95_latency_ms": 91.026
       }
     ],
     "note": "10% -> 100% -> revert, all on the champion's own host"
@@ -2706,9 +2737,9 @@
   },
   "checks": {
     "c1_baseline_moved_nothing": true,
-    "c2_weight_10_observed_from_the_ingress_counter": false,
+    "c2_weight_10_observed_from_the_ingress_counter": true,
     "c3_weight_10_corroborated_by_the_pods_own_counters": true,
-    "c4_weight_100_shifted_everything": false,
+    "c4_weight_100_shifted_everything": true,
     "c5_weight_100_corroborated_by_the_pods_own_counters": true,
     "c6_revert_returned_the_split_to_zero": true,
     "c7_revert_inside_the_budget": true,
@@ -2717,5 +2748,5 @@
     "c10_the_champion_pod_was_never_replaced": true,
     "c11_the_alias_never_moved": true
   },
-  "verdict": "FAIL"
+  "verdict": "PASS"
 }
