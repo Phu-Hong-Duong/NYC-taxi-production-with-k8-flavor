@@ -1,0 +1,101 @@
+{
+  "story": "M5-S4",
+  "phase": "ramp",
+  "measured_at": "2026-08-19T04:58:48Z",
+  "window_seconds": 20.0,
+  "concurrency": 8,
+  "steps": [
+    {
+      "target_rate": 2.0,
+      "achieved_rate": 2.049,
+      "errors": 0,
+      "mean_cores": 0.692,
+      "cpu_limit_cores": 2.0,
+      "cpu_saturation": 0.346,
+      "cpu_throttled_periods": 46,
+      "latency_ms": {
+        "min": 11.256,
+        "p50": 18.474,
+        "p95": 85.495,
+        "p99": 85.963,
+        "max": 85.963
+      },
+      "service_ms": {
+        "min": 11.153,
+        "p50": 18.315,
+        "p95": 85.338,
+        "p99": 85.865,
+        "max": 85.865
+      }
+    },
+    {
+      "target_rate": 4.0,
+      "achieved_rate": 4.046,
+      "errors": 0,
+      "mean_cores": 1.447,
+      "cpu_limit_cores": 2.0,
+      "cpu_saturation": 0.724,
+      "cpu_throttled_periods": 102,
+      "latency_ms": {
+        "min": 13.43,
+        "p50": 19.111,
+        "p95": 108.623,
+        "p99": 113.942,
+        "max": 113.942
+      },
+      "service_ms": {
+        "min": 13.26,
+        "p50": 18.981,
+        "p95": 108.54,
+        "p99": 113.859,
+        "max": 113.859
+      }
+    },
+    {
+      "target_rate": 6.0,
+      "achieved_rate": 6.046,
+      "errors": 0,
+      "mean_cores": 1.92,
+      "cpu_limit_cores": 2.0,
+      "cpu_saturation": 0.96,
+      "cpu_throttled_periods": 158,
+      "latency_ms": {
+        "min": 10.796,
+        "p50": 18.073,
+        "p95": 81.922,
+        "p99": 107.265,
+        "max": 108.784
+      },
+      "service_ms": {
+        "min": 10.68,
+        "p50": 17.979,
+        "p95": 81.821,
+        "p99": 107.129,
+        "max": 108.683
+      }
+    },
+    {
+      "target_rate": 8.0,
+      "achieved_rate": 8.043,
+      "errors": 0,
+      "mean_cores": 2.018,
+      "cpu_limit_cores": 2.0,
+      "cpu_saturation": 1.009,
+      "cpu_throttled_periods": 199,
+      "latency_ms": {
+        "min": 10.418,
+        "p50": 115.548,
+        "p95": 190.14,
+        "p99": 229.985,
+        "max": 241.436
+      },
+      "service_ms": {
+        "min": 10.324,
+        "p50": 115.461,
+        "p95": 190.032,
+        "p99": 229.877,
+        "max": 241.343
+      }
+    }
+  ]
+}

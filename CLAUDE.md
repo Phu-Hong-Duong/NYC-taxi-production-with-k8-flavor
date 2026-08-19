@@ -1397,6 +1397,61 @@ can never disagree (the port-family twins lesson, applied before it bit).
   is**, for the second time this milestone after it refused the lossy
   `float64 -> int32` cast at M5-S2.
 
+## p95 and self-heal (M5-S4) — the shape the number belongs to, and the fifteen seconds
+- **`make load-drill` is the whole path**: preflight (who is answering, with what)
+  → a ramp that CHOOSES the headline rate → the headline window with the
+  container's CPU measured across it → the predictor pod deleted MID-LOAD. The
+  numbers: **p50 17.2 · p95 104.2 · p99 107.2 · max 115.4 ms at 4 req/s for 60 s,
+  concurrency 8, hazard mix, 0 errors in 240 requests**, and **14.53 s of
+  unavailability** when the pod is destroyed. `@champion` version 2, read off the
+  timed responses themselves and never written.
+- **The loop is OPEN, and that is the whole design.** A closed loop (N threads,
+  each firing when the last returns) makes the arrival rate a CONSEQUENCE of the
+  latency, so a slowing server quietly receives less load and the queueing a real
+  arrival stream would cause never happens — coordinated omission, and its p95 is
+  an unloaded server's service time in a load test's clothes. Arrival *k* is due
+  at `t0 + k/rate` regardless; the headline is `latency_ms` (**scheduled** →
+  response), `service_ms` (sent → response) sits beside it, and the GAP between
+  them is the omission made visible. A percentile is never printed without its
+  rate, window, concurrency, mix and ACHIEVED rate.
+- **The measurement excludes the feature build, and says so.** Bodies are encoded
+  before the clock starts, so these percentiles are the wire + the server. M7's
+  transformer moves `build_features` (~30 ms cold, one row) INTO the pod and
+  therefore into this number — written down now so that delta reads as a boundary
+  moving rather than a regression.
+- **Capacity, for the PRR: 1.31 of 2 CPU cores (0.326 core-s/request), 236 MiB
+  against a 1 GiB request — and the CPU REQUEST of `200m` understates real usage
+  by ~6×.** Recorded, deliberately not changed: editing a deployed workload's
+  resources is a change to what is on the wire, and this is a measurement story.
+  Read from the container's own cgroup (`cpu.stat`, differenced across the
+  window) because there is no metrics-server and installing one would be a
+  platform change inside a measurement.
+- **The ceiling is measured: 6 req/s = 96% of the CPU limit, 8 req/s = 101%**,
+  where p50 jumps 18 → 115 ms. **A rate at the ceiling measures the QUOTA, not
+  the service** (gotcha #74) — so the ramp's selection rule has a third clause
+  (stay under 90% of the limit) with a mechanism behind it: the next phase
+  destroys the pod, and a rate that spends the whole quota leaves no headroom for
+  the replacement to come back into.
+- **Self-heal: 14.53 s, one replica, no canary.** 58 failed requests of 720
+  (56×`503`, 2×`502`), then 559 with zero errors against zero in the 100 before
+  the kill. The replacement is a **different pod object by UID** — identity, never
+  name (M4-S5's lesson) — **on a different node**, which is M5-S2's `kind load` to
+  all three nodes paid back exactly as its note predicted. The kill fires from
+  INSIDE the load client's own per-second callback, so the kill and the latencies
+  share one clock. The prediction is written to disk BEFORE the kill.
+- **The residual error rate is REPORTED and deliberately NOT gated.** Its control
+  is the pre-kill segment of the same run (same client, same rate, same minute).
+  An error-rate threshold is an SLO, the SLO document is M6's by the kickoff's own
+  scope list, and a bar set here would be a bar set from the number just seen.
+- **The first attempt went RED and is kept unedited** (`automation/runs/m5-load/
+  attempt1-at-the-ceiling/`). Its two-clause ramp rule chose 8 req/s, so its p95
+  measured the CFS quota; and it reported a **182-second "outage"** computed as
+  `last_error - first_error` when the service was down for **13 seconds** and then
+  served 1,400 requests while dropping ten (gotcha #75). Both fixed as
+  QUANTITIES, never thresholds — gotcha #63's lesson in a new place. The two runs
+  then CORROBORATE: 13 dead seconds at 8 req/s, 14 at 4 req/s, so self-heal costs
+  ~14 s regardless of load and attempt 1's long tail belonged to the saturation.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1484,6 +1539,8 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The champion ON THE WIRE (M5-S2) | `make serve` (`scripts/deploy_champion.sh`; `DRY_RUN=1` mutates NOTHING) — read-only MinIO identity + our ClusterServingRuntime + an InferenceService whose `storageUri` is RESOLVED from the alias | VERIFIED 2026-08-19 (M5-S2): InferenceService **Ready True**, predictor on `mlops-taxi-worker2`, 0 restarts; the accept check is a **PREDICTION** (gotcha #59) — `2019-07-04T09:15:00, zone 132 -> 48 -> 39.0019 minutes` with mlserver stamping **`model_version: "2"`** on the response itself, matching the locally-loaded champion **bit for bit** (absolute delta 0.000e+00, ONE row — the 1e-6 gate is M5-S3's). **Idempotent re-run = `unchanged`/`configured`, the SAME pod uid, 0 restarts, 2m1s old** (the M4-S2 shape). `@champion` version **2** read before AND after, unmoved (a move exits 2). Its first run 403'd on `HeadBucket` because MinIO's built-in `readonly` omits `s3:ListBucket`; its third printed a passing accept check against **the pod it was replacing**, because the InferenceService's Ready condition is satisfied by the predecessor (gotcha #71) — `rollout status` now runs first. Transcript: `docs/champion_on_the_wire_m5.md` §5 |
 | Ask the live endpoint for a quote (M5-S2) | `make quote` (`QUOTE_ARGS="--at YYYY-MM-DDTHH:MM:SS --pu N --do N"`; **exit 0 = quoted · 2 = REFUSED by the typed boundary · 1 = anything else**) | VERIFIED 2026-08-19 (M5-S2): a 2019 request quotes, a **2026** request quotes where it used to raise (F-019's table half), and a **2031** request returns `REFUSED (422) … covers through 2030 … Extend the table: make holidays HOLIDAYS_TO=2031`, exit 2 (F-019's typed half). Builds features through the ONE `features/` path — it reimplements nothing, pinned by an AST test |
 | THE parity test (M5-S3) | `make parity` (`PARITY_ARGS="--tolerance …"`; a READER — no deploy, no registry write, seconds) | VERIFIED 2026-08-19 (M5-S3): **`max \|offline − online\| = 0.000e+00` minutes over 16 hazard rows against a 1e-6 bar** — identical, not merely within tolerance, on every row including the two with no geometry at all. ONE matrix built through `taxi_mlops.features` and scored TWICE (locally-loaded champion vs the live endpoint), so the delta is attributable to the model bytes + runtime + wire and NOT to two feature builds. Rows are declared and committed, each naming its hazard: airports (JFK/LGA/EWR), an OD pair unseen in train (`55 -> 148`, 6 in test / 0 in train), the 100–120 min tail, midnight and week seams, passenger_count 0 and 6, a 2026 date (F-019's extension), and M5-S2's exact spot-check row — which reproduces at **39.001937154**. `@champion` version 2 read, never written. Transcript: `docs/parity_m5.md` §5.1 |
+| One stated load shape (M5-S4) | `make load LOAD_ARGS="--rate 4 --seconds 60 --concurrency 8"` (open-loop; a READER — it POSTs and it times, and it does not judge: the bar lives in the M5 gate) | VERIFIED 2026-08-19 (M5-S4): **p50 17.2 · p95 104.2 · p99 107.2 · max 115.4 ms, 240/240 ok** at 4 req/s for 60 s, concurrency 8, hazard mix, achieved 4.02 req/s. `latency_ms` (scheduled→response) and `service_ms` (sent→response) differ by 0.1 ms — the client kept up, and the run says so rather than leaving it to be assumed. Every response carries `model_version: 2` |
+| Ramp → headline p95 → kill the predictor mid-load (M5-S4) | `make load-drill` (`DRILL_ARGS="--ramp … --seconds … --kill-at …"`; `--skip-selfheal` is the ~40 s probe that kills nothing) | VERIFIED 2026-08-19 (M5-S4): **GREEN, 7/7 self-heal checks.** Ramp measured the ceiling (6 req/s = 96% of the 2-core limit, 8 req/s = 101% with p50 18→115 ms) and CHOSE 4 req/s; headline as above with **1.31 mean cores / 0.326 core-s per request / 236 MiB**; kill at T+25 s of 180 s → **14.53 s unavailable**, 58 failed requests (56×503, 2×502), then **559 with 0 errors**, a **different pod UID on a different node**, same model version throughout. Prediction written BEFORE the kill. **Its first attempt went RED at the CPU ceiling and is kept unedited** in `attempt1-at-the-ceiling/` — gotchas #74/#75 |
 | Prove the parity test can go RED (M5-S3) | `make parity-redteam` (`bash scripts/parity_redteam.sh`) | VERIFIED 2026-08-19 (M5-S3): **PASSED, 7 checks, 0 failures.** Arm A sends every feature under its own name and dtype carrying its NEIGHBOUR's values — every input individually valid, only the pairing wrong → **max delta 4.210e+01 minutes** (a 48-minute trip quoted at 6) and the verdict names it. Arm B loads registry version **1** offline (a READ; moving an alias would be a mutation and a red team never moves the pointer it checks) while the wire serves the champion → refused at the feature-set guard BEFORE a number exists, because v1 eats 5 columns and v2 eats 24. Neither arm deploys, restarts or promotes; `@champion` is version 2 before and after and the untampered run is GREEN again at the end. **Its first arm A went green under its own tampering — that is F-031/gotcha #73** |
 | Re-derive the holiday table (M5-S2, F-019) | `make holidays` (`HOLIDAYS_TO=YYYY` moves the horizon; `--year 2019 --stdout` is the reproduction check) | VERIFIED 2026-08-19 (M5-S2): **146 rows, 2019..2030, 16 observed-day rows**, and re-deriving 2019 alone reproduces the ten hand-written rows **byte for byte** (`diff` silent) — those rows predate this script by two milestones, so agreement is evidence about the RULES, Juneteenth included (federal from 2021, correctly absent from 2019). Idempotent; the human `note` column is preserved by date. 136 insertions, 0 deletions — and the holiday AND near-holiday sets inside 2019-01..08 are asserted unchanged, because a near-day can arrive from another year entirely |
 | Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS NOT REHEARSED** — said in the header, in every `MANIFEST.txt` and in the ledger; an M6-gameday candidate. Same-disk limit, identical to the DVC remote's |
@@ -1687,3 +1744,14 @@ false (this runtime pairs by NAME, via the logged signature). Move the plant to 
 cause the system CAN express, and CORRECT the claim rather than delete it when the
 practice it prescribed is still right for other reasons (#73, F-031 — #51's
 question asked of a drill)**.
+Newest (M5-S4), and both are the same disease — **measure the quantity you will
+quote**: **a load test run at the CPU limit measures the QUOTA, not the service,
+and "held its rate with no errors" cannot detect that, because saturation shows
+up as latency and not as failure — read `cpu.stat`'s `nr_throttled` across the
+window, not just the mean (#74)**; and **an outage is not the span from the first
+error to the last one — `last_error - first_error` called a 13-second downtime
+plus a saturation error tail a 182-second outage, and it was headed for a runbook
+(#75). Anchor the outage on the first FAILURE and close it on the first SUCCESS
+after that; anchoring the start at the event overstates it, and anchoring recovery
+on "the first success after the event" understates it catastrophically. Both were
+caught by replaying the real timeline as a test fixture.**

@@ -1,0 +1,24 @@
+{
+  "story": "M5-S4",
+  "written_at": "2026-08-19T04:59:49Z",
+  "written_before_the_kill": true,
+  "target": {
+    "name": "nyc-taxi-eta-predictor-7ff5ccd649-77b54",
+    "uid": "f6bf83df-e734-42e0-a424-b5714e4c8270",
+    "node": "mlops-taxi-worker",
+    "started": "2026-08-19T04:48:28Z"
+  },
+  "kill_at_seconds": 25.0,
+  "load_shape": {
+    "rate": 4.0,
+    "seconds": 180.0,
+    "concurrency": 8
+  },
+  "expected": [
+    "the deleted pod's UID never serves again; a pod with a DIFFERENT uid does (identity, not name \u2014 the controller is free to reuse a name)",
+    "an error window opens at or shortly after the kill and CLOSES inside this load window, with the load still arriving at the stated rate throughout",
+    "the replacement answers with the SAME model version, because the alias did not move and the pod pulls the same storageUri",
+    "the tail of the window is error-free at a p95 comparable to the headline run"
+  ],
+  "honest_expectation": "one replica plus an init container that downloads the model from MinIO means this is a real outage of tens of seconds, not a blip. The number is the PRR's input, not a result to be flattered."
+}
