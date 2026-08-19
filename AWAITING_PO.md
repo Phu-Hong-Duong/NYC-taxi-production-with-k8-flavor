@@ -8,6 +8,46 @@ then resume the chain (`automation/next_session.sh executor` — or `architect`
 if the answer changes the plan). Direction decisions WAIT here; nothing
 auto-proceeds on a recommendation (ADR-010).
 
+## 2026-08-19-1 · raised by EXEC/Opus (M6-S2) · NOT A FORK, NOT BLOCKING: your park is recorded, and this is what is ready when you lift it
+
+**Nothing here needs a decision.** This entry exists for one reason, the same one
+as 2026-08-18-2: the exit ritual says a parked chain WITHOUT an entry here looks
+like a crash to the watchdog, and `automation/STOP` is gitignored — so without
+this line the repo would carry no record that the stop was deliberate.
+
+**What happened.** `automation/STOP` appeared mid-session (`2026-08-19 14:01:28
++07`, written by `chain_park.sh` — your tooling, not this repo's), saying *"finish
+the running session, schedule NO successor."* The session finished: **M6-S2 is
+complete, verified and merged** (PR #35, `cfc9394`, reachable from origin/main).
+`automation/next_session.sh executor 120` was run at exit and correctly refused
+with `[chain] STOP file present — not scheduling.` No successor was scheduled, by
+your instruction.
+
+**What is ready the moment you lift it.** `rm automation/STOP &&
+automation/next_session.sh executor 120` → **M6-S3** (ADR-004's canary/shadow
+spike, recorded as ADR-011, plus the v1 shadow, its disagreement table and the DA
+memo). HANDOFF (bf)'s Next lists its inheritance; the load-bearing item is that
+**a serving re-deploy costs 0.5 s and not the ~15 s three prior measurements
+implied** (gotcha #80), because M6-S4's canary and rollback timings were about to
+be argued from the wrong number.
+
+**Nothing is half-done.** Tree clean, `@champion` version **2** (M6 promotes
+nothing and none of this story's code can), `configs/train.yaml: features.version`
+= v2, the champion serving 100% with `make verify-m5` GREEN 49/49, seven alert
+rules loaded and all `inactive`, no detached job pending, no open PR. The cluster
+is up and stateful — the statefulness law held all session.
+
+**Two wire mutations happened this session and both are in the deployments
+ledger**, with what they cost measured rather than assumed: the CPU request
+`200m → 1500m` (**0.5 s** of route unavailability) and the alert rules landing
+(**no pod restart at all**).
+
+**The standing non-blocking items below are unchanged** (2026-08-18-1's F-016
+incumbent margin — still yours, still not blocking until M7's first retrain;
+2026-08-17-1's host `libgomp1` one-liner; 2026-08-16-2's allowlist paste).
+
+---
+
 ## 2026-08-18-2 · raised by EXEC/Opus (M4-S5 leg 2) · NOT A FORK, NOT BLOCKING: your park is recorded, and this is what is ready when you lift it
 
 **Nothing here needs a decision.** This entry exists for one reason: the exit ritual
