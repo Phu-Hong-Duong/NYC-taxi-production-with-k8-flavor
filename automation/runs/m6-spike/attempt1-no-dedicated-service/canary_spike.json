@@ -8,5 +8,79 @@
     "p5_mirror_annotation_is_reverted_or_kept": "UNKNOWN, and deliberately not guessed \u2014 this is the probe's open question. Adding nginx.ingress.kubernetes.io/mirror-target to the Ingress KServe OWNS either survives (the controller does not reconcile annotations it did not set) or is stripped (it does). Both outcomes are informative and the ADR records whichever happens. What IS predicted: even if it survives, it cannot usefully shadow v1, for p4's reason.",
     "p6_end_state_is_exactly_the_start_state": "After cleanup, 200 requests to the champion's host return 200 with model_version 2 and zero 500s: no canary Ingress, no mirror annotation, the champion serving 100%."
   },
-  "phases": {}
+  "phases": {
+    "p0_baseline": {
+      "sent": 200,
+      "by_status": {
+        "200": 200
+      },
+      "model_versions_seen": {
+        "2": 200
+      },
+      "a_sampled_prediction": 39.00193715359812,
+      "non_200_share_pct": 0.0
+    },
+    "p1_canary_accepted": {
+      "exists": true,
+      "owner_references": "(none \u2014 KServe does not own it)"
+    },
+    "p2_weight_10": {
+      "sent": 200,
+      "by_status": {
+        "200": 200
+      },
+      "model_versions_seen": {
+        "2": 200
+      },
+      "a_sampled_prediction": 39.00193715359812,
+      "non_200_share_pct": 0.0
+    },
+    "p3_weight_50": {
+      "sent": 200,
+      "by_status": {
+        "200": 200
+      },
+      "model_versions_seen": {
+        "2": 200
+      },
+      "a_sampled_prediction": 39.00193715359812,
+      "non_200_share_pct": 0.0
+    },
+    "p4_mirror_annotation": {
+      "annotation_after_a_forced_reconcile": "http://nyc-taxi-eta-shadow-predictor.serving.svc.cluster.local/v2/models/nyc-taxi-eta-shadow/infer",
+      "survived": true,
+      "champion_batch_while_mirroring": {
+        "sent": 50,
+        "by_status": {
+          "200": 50
+        },
+        "model_versions_seen": {
+          "2": 50
+        },
+        "a_sampled_prediction": 39.00193715359812,
+        "non_200_share_pct": 0.0
+      }
+    },
+    "p5_end_state": {
+      "sent": 200,
+      "by_status": {
+        "200": 26,
+        "502": 174
+      },
+      "model_versions_seen": {
+        "2": 26
+      },
+      "a_sampled_prediction": 39.00193715359812,
+      "non_200_share_pct": 87.0
+    }
+  },
+  "checks": {
+    "p1_canary_ingress_accepted_and_not_gc'd": true,
+    "p2_weight_10_within_tolerance": false,
+    "p3_weight_50_within_tolerance": false,
+    "p3_share_moved_with_the_weight": false,
+    "p4_shadow_never_answered_the_champion's_matrix": true,
+    "p6_end_state_is_100pct_champion": false
+  },
+  "verdict": "FAIL"
 }
