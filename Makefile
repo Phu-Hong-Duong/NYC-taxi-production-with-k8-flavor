@@ -106,7 +106,7 @@ verify-m3-redteam: ## prove verify-m3 goes RED: contradict ONE recorded number, 
 	@bash scripts/verify_m3_redteam.sh
 
 # ---- M4 pipeline on-cluster (role:MLOPS + role:MLE) ----
-.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam flyte-actions marts-peak pipeline pipeline-cache-drill pipeline-kill-drill pipeline-local stage-data verify-m4
+.PHONY: backup deploy-flyte flyte-console flyte-hello image-build image-load image-smoke image-smoke-redteam flyte-actions marts-peak pipeline pipeline-cache-drill pipeline-kill-drill pipeline-local stage-data verify-m4 verify-m4-redteam
 MONTH ?= 2019-01
 MARTS_MONTHS ?=
 # Passed EXPLICITLY into the recipes below rather than relying on make's export
@@ -149,8 +149,10 @@ pipeline-cache-drill: ## run the pipeline TWICE and prove run 2 reused run 1 (M4
 	@bash scripts/pipeline_cache_drill.sh
 pipeline-kill-drill: ## delete the pod a stage is running in and prove the run finishes anyway (M4-S5; prediction written BEFORE the kill)
 	@bash scripts/pipeline_kill_drill.sh
-verify-m4: ## green run + cache-hit rerun + kill-a-pod retry survives
-	@echo "TODO(M4)"
+verify-m4: ## green run + cache-hit rerun + kill-a-pod retry survives + the marts tail; re-runs NOTHING
+	@bash scripts/verify_m4.sh
+verify-m4-redteam: ## prove verify-m4 goes RED: contradict ONE recorded cache status, watch the corroboration catch it, restore
+	@bash scripts/verify_m4_redteam.sh
 
 # ---- M5 serving & release (role:MLOPS + role:SRE PRR) ----
 .PHONY: deploy-kserve serve verify-m5
