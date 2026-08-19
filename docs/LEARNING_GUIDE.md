@@ -9,6 +9,95 @@ months from now.
 
 ## M5
 
+### M5-S5 — a rollback is not a pointer move, and a runbook is only as true as the record it quotes (2026-08-19, role:SRE)
+
+**What was built.** `docs/runbooks/serving.md` (deploy · stop · start ·
+rollback · a cheapest-causes-first failure table · what the endpoint refuses on
+purpose · what is not rehearsed), the **Production Readiness Review** minutes
+(`docs/rituals/2026-08-19_prr-m5.md`, four boxes, each carrying pasted
+evidence), `make stop-start-drill`, and the M5 gate: **`make verify-m5` GREEN
+49/49 sub-checks in 7 sections in 5.8 s**, with `make verify-m5-redteam`
+proving it can go RED.
+
+**Why this way.** Three choices worth the words.
+
+*The rollback got argued, not typed from memory — and that is where the story's
+finding came from.* The obvious rollback is "move `@champion` to version 1,
+re-run `make serve`". Type it out and it does not work: version 2 eats **24**
+features, version 1 eats **5**, and the client builds its matrix from
+`configs/train.yaml: features.version`. An alias-only rollback gives you a
+predictor that loaded a 5-column model while every quote sends 24 — a **500 on
+every request from a system whose every condition says `Ready`**, with no
+restart, no event and no probe to notice. So the runbook types **three** moves
+(pointer, config line, re-deploy), and the config line is *derivable*: every
+registry version carries a `feature_set` tag written at promotion time, so you
+read which feature set the target eats rather than remembering it. Then the gate
+asserts the invariant live — **the served version's `feature_set` tag must equal
+`configs/train.yaml: features.version`** — which turns a half-finished rollback
+into a RED gate that names the shape. Filed and closed as **F-032**: the finding
+is not that something was broken, it is that the one procedure written for the
+worst day had a silent second half.
+
+*Stop and start were REHEARSED; the rollback was not, and both facts are stated
+where they are used.* Stopping touches one annotation and is exactly undone by
+removing it, so it was run: the route stopped answering **3.12 s** after
+`serving.kserve.io/stop=true` and answered again **18.24 s** after the
+annotation was removed. Two things a written-from-docs runbook would have got
+wrong fell out of running it — `spec.replicas` goes **absent**, not `0` (so
+"scale it back to 1" is wrong advice, and `kubectl scale` is fought by the
+controller), and the restart costs **more** than the 14.53 s a killed pod costs,
+because the Deployment's pod is recreated from scratch rather than replaced by a
+ReplicaSet already watching. The rollback could not be rehearsed — it moves
+`@champion`, and M5 is legislated alias-neutral — so it says **NOT REHEARSED**
+in its own section, in §8's list, in the PRR and in the deployments ledger. The
+M4-S2 backup precedent: an unrehearsed path says so in every artifact, not in
+one footnote.
+
+*The gate checks the PROSE against the records.* Every number the runbook quotes
+is compared with the record it cites, and every `make` target it types is
+checked against the Makefile. That is the leg that makes a runbook falsifiable:
+a renamed target turns an incident procedure into a typo at the worst possible
+moment, and a number nobody re-checks becomes a hope within a milestone. It is
+also the second witness the red team needs — see below.
+
+**The concept underneath.** *A verification suite should read at least two
+artifacts that could disagree.* M4 learned this across systems (the control
+plane's cache status vs MLflow's run count). M5 applies it across **kinds** of
+artifact: the machine's record, and the prose a human will act on at 3 a.m. The
+red team plants one number — `recovery.outage_seconds` **14.53 → 14.251**, taken
+from the record's own `error_window.span_s`, i.e. gotcha #75's mistake re-made
+and wrong by 0.28 s — and two legs fire: the record no longer reconciles with
+its own anchors (`recovered_at − first_error`), and the runbook quotes a number
+no record holds. A gate that only re-derived the arithmetic would be checking a
+file against itself.
+
+**What to look at.** `docs/runbooks/serving.md` §4 (the three-move rollback and
+why step 3 is a raw MLflow call rather than a `make rollback` that would bypass
+`registry.promote`'s gate refusal) · `docs/rituals/2026-08-19_prr-m5.md` §0
+(what the review could not do, said first: the champion was already serving, and
+the ordering bites at M6) and its box 3 (seven named alert signals, each with a
+source that exists today and each of which would have caught something that
+actually happened in M5) · `docs/verify_m5_transcripts.md`.
+
+**What went wrong, and it is the repo's own lesson landing on me.** The gate's
+first run went RED against a perfectly good install: it read KServe's deployment
+mode out of `infra/helm/kserve/values.yaml` **with a regex**, and matched the
+comment that says *"The chart's default is `deploymentMode: Knative`"*. Prose
+sitting where a parser reads it as code — gotchas #53/#60, for the fifth time in
+this program — and the fix is that the leg now parses the YAML. Two more:
+demanding the runbook contain the record's number **at full precision** failed
+on a document sensibly writing `104.2 ms` for a recorded 104.226 (gotcha #42's
+rule about precision, applied to prose), and the first fix for THAT accepted a
+bare substring — which would have matched `14` inside `14.53` and let the red
+team's planted number through. The match is now anchored on both sides.
+
+**What to try yourself.** Run `make verify-m5`, then edit one digit of the p95
+in `docs/runbooks/serving.md` and run it again: the gate names the runbook, not
+the record. Then put it back and run `make verify-m5-redteam` to watch the same
+disagreement arrive from the other direction. If you want the un-rehearsed half
+rehearsed, `make stop-start-drill` costs ~20 s of deliberate outage and refuses
+to run against a service that is already down.
+
 ### M5-S4 — a percentile is a fact about a load shape, and an outage is not the span between two errors (2026-08-19, role:SRE)
 
 **What was built.** `make load` — an open-loop load client, stdlib only, that

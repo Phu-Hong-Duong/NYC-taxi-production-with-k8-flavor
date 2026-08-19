@@ -1452,6 +1452,84 @@ can never disagree (the port-family twins lesson, applied before it bit).
   then CORROBORATE: 13 dead seconds at 8 req/s, 14 at 4 req/s, so self-heal costs
   ~14 s regardless of load and attempt 1's long tail belonged to the saturation.
 
+## The runbook, the PRR and the M5 gate (M5-S5) — the rollback nobody could type in one move
+- **A rollback is THREE moves, and nothing enforced the second one — F-032.**
+  `@champion` version 2 eats **24** features, version 1 eats **5**, and the
+  client builds its matrix from `configs/train.yaml: features.version`. So the
+  obvious rollback (move the alias, `make serve`) loads a 5-column model under a
+  24-column request stream: MLflow's logged signature refuses it, the rider gets
+  a **500**, and every condition on the InferenceService still says `Ready` —
+  no restart, no event, no probe. `docs/runbooks/serving.md` §4 types all three
+  moves and makes the config line **derivable**: every registry version carries
+  a `feature_set` tag written at promotion time, so the target says what it
+  eats. **`make verify-m5` §2 asserts the invariant live** (served version's
+  `feature_set` == `configs/train.yaml: features.version`), which turns a
+  half-finished rollback into a RED gate naming the shape instead of a 500
+  nobody can attribute. Step 3 is a raw `set_registered_model_alias` ON PURPOSE:
+  `registry.promote()` refuses to move an alias without a gate `Decision` and
+  its `incumbent_version` (F-011), and a human overriding the gate in an
+  incident should look unusual, be typed by hand and leave a commit — **a `make
+  rollback` that bypasses the gate is explicitly refused here** (M6 owns the
+  rehearsed revert).
+- **Stop/start is REHEARSED; the rollback is NOT, and both say so where they are
+  used.** `make stop-start-drill` runs the runbook's own commands: the route
+  stopped answering **3.12 s** after `serving.kserve.io/stop=true` and answered
+  again **18.24 s** after the annotation was removed, on a new pod. Two things
+  running it corrected: **`spec.replicas` goes ABSENT, not `0`** (so "scale it
+  back to 1" is wrong advice and `kubectl scale` is fought by the controller),
+  and a restart costs **more** than the 14.53 s a killed pod costs, because the
+  Deployment's pod is recreated from scratch rather than replaced by a
+  ReplicaSet already watching. The rollback moves `@champion`, which M5 is
+  legislated not to do — so it is labelled NOT REHEARSED in its own section, in
+  §8's list, in the PRR and in the deployments ledger (the M4-S2 backup
+  precedent).
+- **`make verify-m5` is 49 sub-checks in 7 sections, 5.8 s, and it re-runs
+  nothing expensive — but it DOES ask for one prediction.** A serving gate that
+  never asks the service for the artifact it exists to produce would pass
+  against a dead model with a healthy `Ready` condition (#59/#71). So §2 sends
+  ONE hazard row and requires the answer to (a) carry a `model_version` equal to
+  what the ALIAS resolves to and (b) reproduce the parity record's row for that
+  hazard — §9/M5's "Show: parity output", re-shown at the cost of one request
+  rather than a full sweep. Everything else is read: the tracked records, the
+  live cluster, the registry, the committed docs. No skip flag, no fast mode
+  (M1's rule, fifth inheritance).
+- **The gate checks the PROSE against the records.** Every number
+  `docs/runbooks/serving.md` quotes is compared with the record it cites, and
+  every `make` target it types is checked against the Makefile — a renamed
+  target turns an incident procedure into a typo at the worst possible moment.
+  That leg is also the red team's second witness: **one rewritten number
+  (`recovery.outage_seconds` 14.53 → 14.251, taken from the record's OWN
+  `error_window.span_s` — gotcha #75's mistake re-made, wrong by 0.28 s) makes
+  the record stop reconciling with its anchors AND makes the runbook quote a
+  number no record holds.** A gate that only re-derived the arithmetic would be
+  checking a file against itself. **RED with 2 FAILs, 47 sub-check lines still
+  passing, byte-identical sha256 restore, GREEN again.**
+- **The PRR minutes say first what they could NOT do** (`docs/rituals/
+  2026-08-19_prr-m5.md` §0): the champion was already serving when the review
+  was held (§9/M5 says "BEFORE the champion serves"; three of the four boxes are
+  only fillable with S3/S4's numbers), the rollback could not be rehearsed, and
+  no alert can fire because there is no Prometheus. Box 3 is therefore a PLAN
+  with **seven named signals, each with a source that exists today and each of
+  which would have caught something that actually happened in M5** — including
+  **A-3, the count of 422s per window**, which is the signal F-019's typed
+  refusal bought and the horizon's smoke alarm. **Thresholds are deliberately
+  absent**: a bar set here would be set from the number just measured, and the
+  SLO document is M6's.
+- **Capacity, and the one open recommendation:** 1.31 of 2 cores at 4 req/s ·
+  0.326 core-s/request · 236 MiB of a 1 GiB request · ceiling ~6 req/s per
+  replica. **The CPU REQUEST of `200m` understates real usage by ~6×** — routed
+  to M6 with a re-measurement, because changing it is a change to what is on the
+  wire and a review does not edit the wire (M5-S4 made the same call).
+- **The gate's first run went RED against a correct install** because it read
+  KServe's deployment mode out of the values file **with a regex** and matched
+  the comment "The chart's default is `deploymentMode: Knative`" — prose where a
+  parser reads it as code, gotchas #53/#60 for the fifth time. It parses the
+  YAML now. Two smaller ones: demanding the runbook quote the record's number at
+  FULL precision fails on a document sensibly writing `104.2 ms` for 104.226
+  (gotcha #42 applied to prose), and the first fix for that accepted a bare
+  substring — which would have matched `14` inside `14.53` and let the red
+  team's planted number through.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1541,6 +1619,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | THE parity test (M5-S3) | `make parity` (`PARITY_ARGS="--tolerance …"`; a READER — no deploy, no registry write, seconds) | VERIFIED 2026-08-19 (M5-S3): **`max \|offline − online\| = 0.000e+00` minutes over 16 hazard rows against a 1e-6 bar** — identical, not merely within tolerance, on every row including the two with no geometry at all. ONE matrix built through `taxi_mlops.features` and scored TWICE (locally-loaded champion vs the live endpoint), so the delta is attributable to the model bytes + runtime + wire and NOT to two feature builds. Rows are declared and committed, each naming its hazard: airports (JFK/LGA/EWR), an OD pair unseen in train (`55 -> 148`, 6 in test / 0 in train), the 100–120 min tail, midnight and week seams, passenger_count 0 and 6, a 2026 date (F-019's extension), and M5-S2's exact spot-check row — which reproduces at **39.001937154**. `@champion` version 2 read, never written. Transcript: `docs/parity_m5.md` §5.1 |
 | One stated load shape (M5-S4) | `make load LOAD_ARGS="--rate 4 --seconds 60 --concurrency 8"` (open-loop; a READER — it POSTs and it times, and it does not judge: the bar lives in the M5 gate) | VERIFIED 2026-08-19 (M5-S4): **p50 17.2 · p95 104.2 · p99 107.2 · max 115.4 ms, 240/240 ok** at 4 req/s for 60 s, concurrency 8, hazard mix, achieved 4.02 req/s. `latency_ms` (scheduled→response) and `service_ms` (sent→response) differ by 0.1 ms — the client kept up, and the run says so rather than leaving it to be assumed. Every response carries `model_version: 2` |
 | Ramp → headline p95 → kill the predictor mid-load (M5-S4) | `make load-drill` (`DRILL_ARGS="--ramp … --seconds … --kill-at …"`; `--skip-selfheal` is the ~40 s probe that kills nothing) | VERIFIED 2026-08-19 (M5-S4): **GREEN, 7/7 self-heal checks.** Ramp measured the ceiling (6 req/s = 96% of the 2-core limit, 8 req/s = 101% with p50 18→115 ms) and CHOSE 4 req/s; headline as above with **1.31 mean cores / 0.326 core-s per request / 236 MiB**; kill at T+25 s of 180 s → **14.53 s unavailable**, 58 failed requests (56×503, 2×502), then **559 with 0 errors**, a **different pod UID on a different node**, same model version throughout. Prediction written BEFORE the kill. **Its first attempt went RED at the CPU ceiling and is kept unedited** in `attempt1-at-the-ceiling/` — gotchas #74/#75 |
+| Stop the endpoint and start it again, TIMED (M5-S5) | `make stop-start-drill` (`uv run python scripts/serving_stop_start_rehearsal.py`) | VERIFIED 2026-08-19 (M5-S5): the runbook's own §3 commands, RUN — `serving.kserve.io/stop=true` → the route stopped answering in **3.12 s** (`Stopped` False→True, `spec.replicas` **absent**, the old pod lingering as `Completed`), then `serving.kserve.io/stop-` → **answering again 18.24 s later** on a NEW pod (`…-qrd6f` → `…-xj2q6`). It REFUSES to run against a service that is already down (a stop drill against a stopped service measures nothing) and removes its own annotation. Record: `automation/runs/m5-s5/stop-start.json`. It is a DRILL — ~20 s of deliberate outage — and the gate only ever READS what it writes |
+| Gate check M5 | `make verify-m5` | VERIFIED 2026-08-19 (M5-S5): **GREEN 49/49 sub-checks in 7 sections, 5.762 s, exit 0** — the route (`/healthz` 200, controller on the node DERIVED from the kind config) + KServe's mode read off the live ConfigMap and PARSED (not grepped) out of the values file · the champion on the wire, **asked for ONE prediction** whose `model_version` equals what the alias resolves to and whose value reproduces the parity record at **0.000e+00**, plus the **half-rollback coherence check** (F-032) · parity replayed against `parity.TOLERANCE_MINUTES` and `parity.HAZARDS` **on disk** · the load shape with its rate/window/concurrency/mix, the client's achieved rate, and the 90%-CPU clause (gotcha #74) · self-heal with the **outage re-derived from its anchors** (`40.03 − 25.5 = 14.53`; the error-span anchor would say 14.251 — gotcha #75) and the stop/start rehearsal · the runbook's every quoted number checked against the record it cites and every `make` target against the Makefile · the PRR's four boxes each carrying evidence · the alias equal to the M3 bake-off's recorded winner, every version carrying a gate verdict, and `src/taxi_mlops/serving/` unable to CALL a registry-mutating verb (ast, not grep). **Re-runs nothing expensive and mints nothing** (pinned by `tests/unit/test_verify_m5.py`), no skip flag, no fast mode. Transcript: `docs/verify_m5_transcripts.md` §1 |
+| Prove the M5 gate can go RED | `make verify-m5-redteam` (`bash scripts/verify_m5_redteam.sh`) | VERIFIED 2026-08-19 (M5-S5): rewrites ONE number in `automation/runs/m5-load/selfheal.json` — `recovery.outage_seconds` **14.53 → 14.251**, taken from the record's OWN `error_window.span_s`, i.e. gotcha #75's mistake re-made and wrong by 0.28 s — leaving the anchors, the pod uids and all 7 recorded checks untouched → **RED exit 1 with 2 FAILs from TWO DIFFERENT ARTIFACTS**: the record stops reconciling with its own anchors, AND the runbook quotes a number no record holds. **47 sub-check lines still ran and passed**; restored under an EXIT trap and verified by sha256 (`f1712acf9f80…` before and after) with `git status` clean → **GREEN again**. Touches no pod, no image, no MLflow run, no registry version, no alias |
 | Prove the parity test can go RED (M5-S3) | `make parity-redteam` (`bash scripts/parity_redteam.sh`) | VERIFIED 2026-08-19 (M5-S3): **PASSED, 7 checks, 0 failures.** Arm A sends every feature under its own name and dtype carrying its NEIGHBOUR's values — every input individually valid, only the pairing wrong → **max delta 4.210e+01 minutes** (a 48-minute trip quoted at 6) and the verdict names it. Arm B loads registry version **1** offline (a READ; moving an alias would be a mutation and a red team never moves the pointer it checks) while the wire serves the champion → refused at the feature-set guard BEFORE a number exists, because v1 eats 5 columns and v2 eats 24. Neither arm deploys, restarts or promotes; `@champion` is version 2 before and after and the untampered run is GREEN again at the end. **Its first arm A went green under its own tampering — that is F-031/gotcha #73** |
 | Re-derive the holiday table (M5-S2, F-019) | `make holidays` (`HOLIDAYS_TO=YYYY` moves the horizon; `--year 2019 --stdout` is the reproduction check) | VERIFIED 2026-08-19 (M5-S2): **146 rows, 2019..2030, 16 observed-day rows**, and re-deriving 2019 alone reproduces the ten hand-written rows **byte for byte** (`diff` silent) — those rows predate this script by two milestones, so agreement is evidence about the RULES, Juneteenth included (federal from 2021, correctly absent from 2019). Idempotent; the human `note` column is preserved by date. 136 insertions, 0 deletions — and the holiday AND near-holiday sets inside 2019-01..08 are asserted unchanged, because a near-day can arrive from another year entirely |
 | Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS NOT REHEARSED** — said in the header, in every `MANIFEST.txt` and in the ledger; an M6-gameday candidate. Same-disk limit, identical to the DVC remote's |
@@ -1562,7 +1643,7 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | What a Flyte run's actions actually did (M4-S4) | `uv run python scripts/flyte_run_actions.py <run> [--json]` (needs a route; the drill and `run_pipeline.sh` stand one up) | VERIFIED 2026-08-18 (M4-S4, second session): recovered the full-data run's per-stage detail that `--follow` never logged — **six stages, 1909.7 s, fit 1874.7 s, everything else 34.6 s**. Reads `cache_status`, which the CLI does not render. A READER: pinned by a test that it calls nothing which launches, aborts or deletes, because `verify-m4` is meant to reuse it |
 | Gate check M4 | `make verify-m4` | VERIFIED 2026-08-19 (M4-S5 leg 3): **GREEN 39/39, exit 0**, 7 sections in seconds — control plane `/healthz` 200 + 3 Deployments available + the PodTemplate APPLIED with its container named `default` + its PVC Bound · the image on **all 3 nodes** by each node's own `crictl`, and **D-004 re-observed dead INSIDE the container** (`openmp: system libgomp.so.1` first line, no `[openmp]` anywhere) · all 7 stages of `tasks.STAGES` wrapped (AST), 29 actions across 4 recorded runs all SUCCEEDED, one run covering the whole graph, **28 MLflow runs all FINISHED** · the RECORDED cache drill (gotcha #66 — never the newest run): 5/5 `CACHE_HIT`, 1966.9 s → 3.2 s, MLflow 16 → 16, **and the two witnesses agree** · the kill drill: different pod **uid**, ONE attempt, and the probe at attempt index 3 against a declared budget of 2 · `publish_marts` last, CACHE_DISABLED, **8 months reconciled live, 56,127,878 rows, republishing nothing** · **none of the 28 pipeline runs is a registry version**. **RE-RUNS NOTHING** (no pipeline, no drill, no fit, no publish — pinned by `tests/unit/test_verify_m4.py`), no skip flag, no fast mode. Transcript: `docs/verify_m4_transcripts.md` §1 |
 | Prove the M4 gate can go RED | `make verify-m4-redteam` (`bash scripts/verify_m4_redteam.sh`) | VERIFIED 2026-08-19 (M4-S5 leg 3): flips **ONE field** — run 2's `train` from `CACHE_HIT` to `CACHE_POPULATED` in `automation/runs/m4-cache/cache_drill.json`, leaving duration (140 ms), phase and the MLflow counts (16 → 16) untouched, i.e. a record that is internally well-formed and still describes a green seven-stage run → **RED exit 1 with 2 FAILs**: the CLAIM leg names `train`, and the **CROSS-SYSTEM leg fires** (`the two witnesses CONTRADICT each other … MLflow minted 0 run(s)`) — the leg a gate reading only `cache_status` would not have had. **37 of 39 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`beb10ab49fb0…` before and after) → **GREEN 39/39**. The target is CHOSEN from the record (the cached stage that cost run 1 most), never typed. Touches no pod, no image, no MLflow run, no registry version, no mart row |
-| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4 live; M5+ pending each milestone |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5 live; M6+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
