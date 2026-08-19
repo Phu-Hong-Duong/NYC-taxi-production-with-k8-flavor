@@ -1009,3 +1009,50 @@ the seed line are earned by THIS project.
     about the thing I am waiting for*. The general question to ask of any
     readiness wait: **could this condition be true right now for a reason that
     has nothing to do with my change?**
+
+72. **A NaN cannot travel as JSON, and Python will let you try.**
+    `json.dumps(float('nan'))` returns the bare token `NaN` — valid Python
+    output, invalid JSON, emitted BY DEFAULT because `allow_nan=True` is the
+    default. So a client can serialise a perfectly correct feature matrix into a
+    document no conforming parser will accept, and the failure arrives from the
+    far side as a byte offset: `HTTP 422 {"type":"json_invalid",
+    "loc":["body",1241],"msg":"JSON decode error","ctx":{"error":"unexpected
+    character"}}`. Nothing in that names the feature, the row, the zone, or the
+    word NaN. At M5-S3 this had been live since the endpoint existed: zones
+    264/265 are TLC's "Unknown" and have no centroid by design, so nine geometry
+    features are NaN — LightGBM's documented missing path, exactly what the model
+    was fitted on — and every one of those requests, ~1% of all trips including
+    the single most common OD pair in the data, came back 422. It was latent
+    because every earlier client passed a DataFrame straight to LightGBM (where
+    NaN is ordinary) and because the one accept-check row had full geometry.
+    Missing goes on the wire as `null`, which the runtime decodes back to NaN;
+    an infinity is REFUSED rather than encoded, because it is equally
+    unrepresentable but is not a missing value and mapping it to `null` would
+    launder a broken feature into a plausible quote. Then set
+    `allow_nan=False` on the dump: the encoding is the fix, and that flag is the
+    guard that makes the NEXT such path fail loudly on this side rather than
+    quietly on the other. **The general shape: a serialiser whose permissive
+    default produces output its own format forbids will fail at the receiver, in
+    the receiver's vocabulary, about a byte.** Family with #59 — the error you
+    get is not about the thing that is wrong.
+
+73. **A red team that goes GREEN under its own tampering has found something —
+    read it before you loosen it.** M5-S3's parity drill planted its first cause
+    by rotating the ORDER of the inference request's inputs, on a property the
+    client's docstring had asserted since the previous story: that a V2 payload
+    is positional, so a reordering swaps `PULocationID` for `DOLocationID` and
+    returns a plausible number. The measured delta was `0.000e+00` on all 16
+    rows. The tempting readings are both wrong — "the tampering was too weak, use
+    a bigger one" and "the test is broken". The true reading is that **the
+    documented property was false**: mlserver hands MLflow a NAMED frame and the
+    logged signature reorders it, so wire order is not load-bearing here. Two
+    consequences, and the second is the point. The plant was moved to a cause
+    this runtime CAN express (every feature under its own name and dtype carrying
+    its neighbour's values → 42.10 minutes of skew, every input individually
+    valid). And the false claim was CORRECTED rather than deleted, because the
+    practice it prescribed — send the model's own column order — is still right
+    for reasons that survive: a positional V2 runtime is legal, M7's transformer
+    may be one, and the ordering costs nothing. What changed is what is claimed
+    to be protecting us, which is now known to be the logged signature. Sibling
+    of #51 — *could this component tell if it were false?* — asked of a drill
+    instead of a component.

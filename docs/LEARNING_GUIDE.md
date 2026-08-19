@@ -9,6 +9,78 @@ months from now.
 
 ## M5
 
+### M5-S3 — the number was zero, and the test found a door nobody could walk through (2026-08-19, role:MLE)
+
+**What was built.** `make parity` and `make parity-redteam`. Parity builds one
+16-row feature matrix through the ONE `features/` path and scores it twice — by
+the champion loaded out of the registry into this process, and by the deployed
+InferenceService — then prints every row's delta and asserts the max is within
+1e-6 minutes. The measured max is **0.000e+00**: identical, to every bit a
+float64 holds, on all sixteen rows.
+
+**Why this way.** Three choices are worth the reader's time.
+
+*One matrix, scored twice.* The alternative is to build features on each side and
+compare, which sounds more end-to-end and is worse: when the numbers disagree you
+cannot tell whether the model differs or the feature build does, and when they
+agree you have proved neither cleanly. Sharing the matrix makes the delta
+attributable — model bytes, runtime, wire — and it makes the claim precise enough
+to state what it does *not* cover (M7's transformer, which will build features in
+the pod and needs its own measurement).
+
+*The rows are declared, not sampled.* Sixteen hazards, each committed with the
+reason it is in the set: airports, the 100–120 minute tail, the cyclical
+encodings' seams, an OD pair that appears six times in test and never in train,
+passenger counts at both edges, a 2026 date. Random sampling gives a number that
+changes every run and a red team with nothing to plant a cause in — and the rows
+that break serving are never the average ones. This story is the proof: the
+hazard that mattered was one nobody would have sampled.
+
+*The red team plants its cause inside the test.* Every earlier drill here mutates
+something — an alias, a record, a library file. The obvious lever for parity is to
+point the endpoint at a different model, and that would mean breaking production
+to prove a test works. Both arms stay client-side, and the drill re-runs the real
+test at the end to prove it left nothing behind.
+
+**The concept underneath: a test's job is to send the requests nobody sends.**
+Building the hazard set found **F-030** — since the endpoint existed, every
+request whose pickup or dropoff zone had no centroid came back `HTTP 422`. Zones
+264/265 are TLC's "Unknown"; they have no geometry by design, so nine features
+are NaN, which is exactly what the model was fitted on. But `json.dumps` writes
+NaN as the bare token `NaN` — Python emits it by default, and it is not JSON. The
+endpoint's answer was `{"loc":["body",1241],"error":"unexpected character"}`: a
+byte offset, naming neither the feature nor the zone nor the word NaN. That is
+about 1% of all trips, and 264→264 is the single most common OD pair in the data.
+It stayed invisible because every earlier client handed a DataFrame straight to
+LightGBM, where NaN is ordinary, and because the one accept-check row M5-S2 sent
+had full geometry.
+
+**And the second concept: a drill that goes green under its own tampering has
+found something.** The red team's first arm rotated the ORDER of the request's
+inputs, on a property the client's own docstring had asserted for a milestone —
+that a V2 payload is positional. It measured 0.000e+00. The two tempting readings
+are "the tampering was too weak" and "the test is broken"; both are wrong. The
+documented property was false: mlserver hands MLflow a *named* frame and the
+logged signature reorders it. So the plant moved to a cause this runtime can
+express (every feature carrying its neighbour's values → 42 minutes of skew), and
+the false claim was **corrected rather than deleted**, because the practice it
+prescribed — send the model's own column order — is still right for reasons that
+survive it. What changed is what we believe is protecting us, and the answer is
+the logged signature: the same signature that at M5-S2 refused a lossy
+`float64 → int32` cast. Twice in one milestone, a thing logged at training time
+caught what nothing at serving time would have.
+
+**What to look at.** `src/taxi_mlops/serving/parity.py` (the `HAZARDS` table is
+the most readable part of this story); `client._wire_values` for F-030's fix and
+why an infinity is refused where a NaN is encoded; `scripts/parity_redteam.sh`'s
+header for what a drill must not do; `docs/parity_m5.md` §3 and §4.
+
+**What to try yourself.** Run `make quote QUOTE_ARGS="--pu 264 --do 264"`, then
+`git stash` the `_wire_values` change and run it again — the 422 is the whole
+finding in one command. Then run `make parity-redteam` and read arm A's table:
+every input in that request is individually valid, and a 48-minute trip is quoted
+at 6 minutes. That is what train/serve skew looks like when nothing goes red.
+
 ### M5-S2 — the champion answers, and three of the four defects were about what "ready" means (2026-08-19, role:MLOps)
 
 **What was built.** The first model this program has ever served. `make serve`
