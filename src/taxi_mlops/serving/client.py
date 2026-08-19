@@ -1,0 +1,254 @@
+"""The quote client: a typed request, the ONE feature path, the live endpoint.
+
+M5-S2. This is the only thing in the repo that turns *what a rider asks* — a
+pickup time, two zones, a party size — into *what the wire carries*. Three
+properties it exists to hold, each of which has a failure mode with no other
+symptom:
+
+1. **Features are built by `taxi_mlops.features`, never here.** The predictor
+   behind KServe eats the 24-column matrix the champion was fitted on; something
+   has to build it, and if that something is not the training path then
+   train/serve skew is a matter of luck. `build_features` is imported, not
+   reimplemented, so a change to a feature changes both sides in one commit.
+   M5-S3's parity test measures what this guarantees; it does not create it.
+
+2. **The column ORDER is the model's, not the config's.** The V2 payload is
+   positional — a list of inputs, one per feature — so a reordering that a
+   DataFrame would shrug off silently swaps `PULocationID` for `DOLocationID`
+   and returns a plausible number. The order comes from
+   `quote_time.feature_names(cfg)`, the same call the trainer made.
+
+3. **An uncovered date is REFUSED, in a type, and never guessed.** See below.
+
+--------------------------------------------------------------------------
+F-019 AND WHAT WAS DECIDED (M5-S2, with the runbook in hand)
+--------------------------------------------------------------------------
+The champion eats `is_holiday`/`is_near_holiday`/`is_business_day`, which come
+from a committed table that held ten rows, all 2019. `features/calendar.py`
+raises on an uncovered year — right for training, and from M5 it is a 500 on
+every quote dated outside the table.
+
+**Decided: BOTH halves, because each alone is unshippable.**
+
+- The table was EXTENDED to 2030 from the statute
+  (`scripts/derive_us_federal_holidays.py`, and its 2019 rows re-derive byte for
+  byte, so nothing any milestone measured moves). Extending alone is not a fix:
+  a table always ends, and the day it ends the failure is exactly the one we set
+  out to remove — only later, and to somebody who was not told it could happen.
+- The boundary is TYPED here. An uncovered date raises `UncoveredDateError`, a
+  `QuoteRefused` carrying `http_status = 422`, before a request is built and
+  before anything reaches the wire.
+
+**Refuse, not degrade-and-flag.** The two options differ in KIND, which is why
+the SRE half is minuted in M5-S5's PRR rather than settled by taste: degrading
+returns a WRONG QUOTE — the caller gets a number, the rider gets a time, and
+nothing in the system knows the holiday flags were invented. Refusing is a
+visible, countable, alertable outage confined to the dates nobody has entered
+yet. A quote-time ETA has one job and it is to be a number somebody can rely on;
+a silently-wrong one is worse than none, and it is the failure mode the calendar
+module's own raise was written to prevent. The flag would also have to be
+carried through the V2 payload, the response and every consumer to be worth
+anything, and a flag nobody reads is a degradation with a comment on it.
+
+**Where this boundary lives, honestly.** In M5 the features are built
+client-side, so the refusal happens here and the "422" is a property of this
+type rather than of an HTTP response the cluster emits. M7's KServe transformer
+moves feature building into the pod; `http_status` is carried now so that move
+is a change of transport and not a change of contract.
+"""
+
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from ..features import calendar as calendar_mod
+from ..features import quote_time
+from ..training.run import load_train_config
+
+#: The Host header KServe's generated Ingress matches on, built from the
+#: InferenceService name and namespace by the domainTemplate in
+#: infra/helm/kserve/values.yaml. Requests reach the declared route by NAME, so
+#: this string is part of the contract between the deploy and every curl.
+DEFAULT_HOST_TEMPLATE = "{name}-{namespace}.local"
+DEFAULT_ROUTE = "http://localhost:8081"
+
+
+class QuoteRefused(RuntimeError):
+    """A request this system declines to answer, with the status it would return.
+
+    A refusal is a first-class outcome and not an error in the model: the caller
+    asked something outside what the deployed champion can honestly answer.
+    """
+
+    http_status = 400
+
+
+class UncoveredDateError(QuoteRefused):
+    """F-019: the pickup date is outside the committed holiday table's years."""
+
+    http_status = 422
+
+
+@dataclass(frozen=True)
+class QuoteRequest:
+    """What a rider's question carries at quote time, and nothing else.
+
+    Deliberately the four columns `configs/features.yaml`'s `base` set names as
+    request-time inputs. Anything a trip only has AFTER it happens is refused by
+    `quote_time.EXCLUSIONS` upstream of here — this type simply has nowhere to
+    put it.
+    """
+
+    pickup_datetime: str
+    pu_location_id: int
+    do_location_id: int
+    passenger_count: float = 1.0
+
+    def as_row(self) -> dict[str, Any]:
+        return {
+            quote_time.PICKUP_TIMESTAMP: pd.Timestamp(self.pickup_datetime),
+            "PULocationID": int(self.pu_location_id),
+            "DOLocationID": int(self.do_location_id),
+            "passenger_count": float(self.passenger_count),
+        }
+
+
+def request_frame(requests: list[QuoteRequest]) -> pd.DataFrame:
+    """The raw quote frame `build_features` eats. No feature logic lives here."""
+    if not requests:
+        raise ValueError("no requests — a quote batch of zero rows has no meaning")
+    return pd.DataFrame([r.as_row() for r in requests])
+
+
+def build_matrix(
+    requests: list[QuoteRequest], features_cfg: dict[str, Any] | None = None
+) -> pd.DataFrame:
+    """Requests -> the champion's feature matrix, through the ONE transform path.
+
+    The only thing added on top of `build_features` is F-019's typed refusal: the
+    calendar's `ValueError` is caught HERE and re-raised as a `QuoteRefused`, so a
+    caller can tell "you asked for a date I do not cover" (422, the request's
+    fault, fixable by `make holidays`) from "the model is broken" (500). The
+    underlying raise is left exactly as it is — it is still the guard that keeps
+    training honest, and this is a translation, not a softening.
+    """
+    cfg = features_cfg if features_cfg is not None else load_train_config()["features"]
+    frame = request_frame(requests)
+    try:
+        return quote_time.build_features(frame, cfg)
+    except ValueError as exc:
+        if calendar_mod.HOLIDAY_TABLE in str(exc):
+            years = sorted(pd.DatetimeIndex(frame[quote_time.PICKUP_TIMESTAMP]).year.unique())
+            raise UncoveredDateError(
+                f"this deployment cannot quote for {years}: "
+                f"{calendar_mod.HOLIDAY_TABLE} does not cover "
+                f"{sorted(calendar_mod.load_calendar().years)[-1]} onward, and the "
+                "champion eats holiday flags. REFUSED rather than guessed — a "
+                "quote built on invented holiday flags is a wrong number nobody "
+                "can see is wrong (F-019). Extend the table: `make holidays "
+                f"HOLIDAYS_TO={max(years)}`."
+            ) from exc
+        raise
+
+
+def v2_payload(matrix: pd.DataFrame, feature_names: list[str]) -> dict[str, Any]:
+    """The Open Inference (V2) request body: one input per feature, positional.
+
+    `FP64` for every column because the champion's signature mixes integer and
+    float fields and a V2 input's datatype must match what the runtime casts to;
+    LightGBM predicts on a float matrix regardless, and sending one dtype removes
+    a whole class of "which column was the int one?" mismatch. The names travel
+    WITH the values so the server can rebuild the frame by name.
+    """
+    missing = [name for name in feature_names if name not in matrix.columns]
+    if missing:
+        raise ValueError(f"the matrix is missing {missing} — it cannot be sent positionally")
+    rows = len(matrix)
+    return {
+        "inputs": [
+            {
+                "name": name,
+                "shape": [rows, 1],
+                "datatype": "FP64",
+                "data": [float(v) for v in np.asarray(matrix[name], dtype="float64")],
+            }
+            for name in feature_names
+        ]
+    }
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    """Where the InferenceService answers, and under which Host header."""
+
+    name: str
+    namespace: str
+    route: str = DEFAULT_ROUTE
+
+    @property
+    def host(self) -> str:
+        return DEFAULT_HOST_TEMPLATE.format(name=self.name, namespace=self.namespace)
+
+    @property
+    def infer_url(self) -> str:
+        return f"{self.route}/v2/models/{self.name}/infer"
+
+    @property
+    def ready_url(self) -> str:
+        return f"{self.route}/v2/models/{self.name}/ready"
+
+    @property
+    def metadata_url(self) -> str:
+        return f"{self.route}/v2/models/{self.name}"
+
+
+def _post(url: str, host: str, body: dict[str, Any], timeout: float) -> dict[str, Any]:
+    data = json.dumps(body).encode()
+    request = urllib.request.Request(  # noqa: S310 — a fixed http:// route, not user input
+        url, data=data, headers={"Content-Type": "application/json", "Host": host}
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        return json.loads(response.read())
+
+
+def _get(url: str, host: str, timeout: float) -> dict[str, Any]:
+    request = urllib.request.Request(url, headers={"Host": host})  # noqa: S310
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        return json.loads(response.read() or b"{}")
+
+
+def served_version(endpoint: Endpoint, *, timeout: float = 30.0) -> dict[str, Any]:
+    """What the endpoint says it is serving — asked of the server, not remembered."""
+    return _get(endpoint.metadata_url, endpoint.host, timeout)
+
+
+def predict(
+    requests: list[QuoteRequest],
+    endpoint: Endpoint,
+    *,
+    features_cfg: dict[str, Any] | None = None,
+    timeout: float = 60.0,
+) -> np.ndarray:
+    """Quote requests -> minutes, off the live endpoint. Raises on a refusal."""
+    cfg = features_cfg if features_cfg is not None else load_train_config()["features"]
+    names = quote_time.feature_names(cfg)
+    matrix = build_matrix(requests, cfg)
+    try:
+        response = _post(endpoint.infer_url, endpoint.host, v2_payload(matrix, names), timeout)
+    except urllib.error.HTTPError as exc:  # pragma: no cover — needs a live endpoint
+        body = exc.read().decode(errors="replace")[:500]
+        raise RuntimeError(
+            f"the endpoint answered {exc.code} for {endpoint.infer_url} "
+            f"(Host: {endpoint.host}): {body}"
+        ) from exc
+    outputs = response.get("outputs") or []
+    if not outputs:
+        raise RuntimeError(f"the endpoint returned no outputs: {json.dumps(response)[:500]}")
+    return np.asarray(outputs[0]["data"], dtype="float64")
