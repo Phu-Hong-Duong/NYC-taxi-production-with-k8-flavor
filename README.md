@@ -1,5 +1,8 @@
 # mlops-nyc-taxi — Crosstown Mobility: ETA & Reliability Program
 
+*Fleet codename: **crosstown** — lineage meridian → wrenfield → ashford → crosstown.
+Cross-project lessons cite it as "(crosstown, YYYY-MM-DD)".*
+
 A production-shaped ML platform on a laptop, **run as a simulated enterprise
 organization**. NYC yellow-taxi **trip-duration (ETA) model** through: versioned
 data (DVC + DuckDB analyst layer) → orchestrated pipeline (Flyte) → tracked
@@ -18,18 +21,26 @@ role interplay are the product.**
 
 | Milestone (owner) | State | Evidence |
 |---|---|---|
-| M0 Foundations & org bootstrap (MLOps) | not started | — |
-| M1 Data platform, contracts, prior-art (DE/DA) | not started | — |
-| M2 Modeling I: baseline & gate (MLE) ◆REV | not started | — |
-| M3 Modeling II: AutoML × Optuna (MLE) ◆REV | not started | — |
-| M4 Pipeline on-cluster: Flyte (MLOps) | not started | — |
-| M5 Serving & PRR: KServe (MLOps/SRE) | not started | — |
-| M6 Reliability: SLO, canary, gameday (SRE) | not started | — |
+| M0 Foundations & org bootstrap (MLOps) | **closed 2026-08-16** | tag `m0-closed` · M1 kickoff §0 |
+| M1 Data platform, contracts, prior-art (DE/DA) | **closed 2026-08-17** | tag `m1-closed` · M2 kickoff §0 |
+| M2 Modeling I: baseline & gate (MLE) ◆REV | **closed 2026-08-17** | tag `m2-closed` · M3 kickoff §0 |
+| M3 Modeling II: AutoML × Optuna (MLE) ◆REV | **closed 2026-08-18** | tag `m3-closed` · M4 kickoff §0 |
+| M4 Pipeline on-cluster: Flyte (MLOps) | **closed 2026-08-19** | tag `m4-closed` · M5 kickoff §0 |
+| M5 Serving & PRR: KServe (MLOps/SRE) | **closed 2026-08-19** | tag `m5-closed` · `verify-m5` 49/49 · M6 kickoff §0 |
+| M6 Reliability: SLO, canary, gameday (SRE) | **in progress** | kickoff authored 2026-08-19: `docs/milestones/M6_KICKOFF.md` |
 | M7 Drift & retrain loop (SRE/MLE/DA) ◆REV | not started | — |
 | M8 Feast & side-by-side (DE/MLE) | not started | — |
 | M9 Stretch: Ray, CI smoke, security + demo page (committed) | not started | — |
 
-## Quickstart (real commands land at M0; shape is fixed now)
+Per-milestone direction lives in the ARCH-authored `docs/milestones/M*_KICKOFF.md`
+— one per milestone, and each kickoff's §0 is the closure verdict of the
+milestone before it. Flipping the row above (state + evidence) is a step of the
+Architect's boundary triage (`automation/architect_prompt.md`, kickoff template
+§0), not decoration: a milestone is not closed until the front door says so.
+(Rows backfilled 2026-08-19 by PO audit — the table had sat at "not started"
+through five closes.)
+
+## Quickstart (commands real since M0; each `verify-mN` is that milestone's scripted gate)
 
 ```bash
 cp .env.example .env          # fill locally; .env never enters git
@@ -40,11 +51,13 @@ make verify-m0                # the M0 acceptance gate, scripted
 
 ## Where things live
 
-Spec + reasoning: `docs/BLUEPRINT.md` (v2) · constitution: `docs/org/` · session
+Spec + reasoning: `docs/BLUEPRINT.md` (v3.0) · constitution: `docs/org/` ·
+milestone direction: `docs/milestones/` (ARCH kickoffs) · session
 prompts: `docs/PROMPTS.md` · traps: `docs/gotchas.md` (read first) · decisions:
-`docs/decisions/` · prior art: `docs/prior_art.md` · field notes:
-`docs/LEARNING_GUIDE.md` · ritual minutes: `docs/rituals/` · session state:
-`HANDOFF.md` · gate crossings, findings, deploy events: `ledgers/`.
+`docs/decisions/` · contracts index: `docs/CONTRACTS.md` · prior art:
+`docs/prior_art.md` · field notes: `docs/LEARNING_GUIDE.md` · ritual minutes:
+`docs/rituals/` · session state: `HANDOFF.md` · PO inbox: `AWAITING_PO.md` ·
+gate crossings, findings, deploy events: `ledgers/`.
 
 ## Architecture (target)
 

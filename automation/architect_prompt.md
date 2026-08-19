@@ -24,6 +24,11 @@ Your boundary session does THREE jobs, in order:
      honestly close, say NOT CLOSABLE, list blockers, and plan remediation
      stories instead of the next milestone. Then tag: `git tag mx-closed`
      only on a clean close.
+   - Flip the README Status row for Mx (state + evidence: the tag and this
+     kickoff's §0) in the same commit as the kickoff. The front door misleads
+     every returning human until this is done — it sat at "not started"
+     through five closes before a PO audit caught it (2026-08-19). A close
+     without the row flip is not a close.
 
 2. AUTHOR the next kickoff — docs/milestones/M<x+1>_KICKOFF.md per the
    template: §0 boundary triage of Mx · preconditions verified LIVE (paste

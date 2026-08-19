@@ -88,12 +88,14 @@
 
 <header>
   <div>
-    <h1>Crosstown Mobility — how the project works</h1>
-    <p class="sub">The ETA &amp; Reliability Program on one page: a taxi trip-duration model and the
-    production system around it, built on a local Kubernetes cluster by a simulated seven-role
-    organization. Follow the circled numbers ①→⑧ through the platform, then see who hands what
-    to whom, then the road from M0 to M9.</p>
-    <p class="stamp">BLUEPRINT v2.1 · 2026-08-12 · reflects the current plan (Flyte-only; the Airflow fork remains open) · hover any box for detail</p>
+    <h1>Crosstown Mobility — what this project is, on one page</h1>
+    <p class="sub">Three purposes in one build: <b>learn the downstream of ML end-to-end</b> (data →
+    gate → serving → canary → drift → retrain → features) on a $0 laptop cluster; <b>watch the
+    disciplines blend</b> — DE, DA, MLE, MLOps, SRE as chartered roles handing real artifacts to
+    each other under review; and <b>experience enterprise autonomy</b> — after one pasted prompt,
+    the program builds itself in short chained sessions, while direction decisions wait for you.
+    Follow ①→⑧ through the platform, then the roles, the road, and the cadence.</p>
+    <p class="stamp">BLUEPRINT v3.0 · 2026-08-16 · BUILD-READY — sessions 0.0–0.9 designed it; the chain builds it · hover any box for detail</p>
   </div>
   <button class="theme" onclick="tgl()">light / dark</button>
 </header>
@@ -221,7 +223,7 @@ is the product.</p>
     <text class="boxT" x="714" y="340">⑥ KServe serving</text>
     <text class="boxS" x="714" y="358">mlserver runtime ← champion alias</text>
     <text class="boxS" x="714" y="373">parity vs offline: within 1e-6</text>
-    <text class="boxS" x="714" y="388">canary 10% → 100% · rehearsed rollback</text>
+    <text class="boxS" x="714" y="388">shadow → canary 10% → rollback</text>
     <text class="boxS" x="714" y="403">transformer + Feast features (M8)</text>
     <text class="boxS" x="714" y="418">go-live gated by SRE readiness review</text>
     <circle cx="922" cy="332" r="4" fill="var(--r-mlops)"/><circle cx="936" cy="332" r="4" fill="var(--r-sre)"/>
@@ -246,12 +248,12 @@ is the product.</p>
   <path class="soft dash" marker-end="url(#am)" d="M978,377 L956,377"/>
 
   <!-- band 3: analyst / monitoring / drift -->
-  <g><title>DA works only on the clean tables the DE publishes — never raw files. Memos, not just dashboards: where the model fails, what drift means.</title>
+  <g><title>The DA's full stack (v2.5): DuckDB as local workbench; dbt builds gold marts published to Postgres; Metabase serves the boards. Marts serve humans and never feed the model (gotcha #22).</title>
     <rect class="box" x="60" y="474" width="238" height="76" rx="9"/>
-    <text class="boxT" x="74" y="496">DuckDB analyst layer</text>
-    <text class="boxS" x="74" y="514">DA queries clean tables only</text>
-    <text class="boxS" x="74" y="529">EDA · error &amp; drift memos ·</text>
-    <text class="boxS" x="74" y="543">prior-art survey</text>
+    <text class="boxT" x="74" y="496">Analytics layer (DA)</text>
+    <text class="boxS" x="74" y="513">DuckDB · dbt marts → Postgres</text>
+    <text class="boxS" x="74" y="528">→ Metabase :3030 boards · EDA</text>
+    <text class="boxS" x="74" y="543">· memos · KPIs · prior art</text>
     <circle cx="282" cy="488" r="4" fill="var(--r-da)"/>
   </g>
   <path class="soft" marker-end="url(#am)" d="M134,292 L160,470"/>
@@ -268,20 +270,21 @@ is the product.</p>
   <path class="soft" marker-end="url(#am)" d="M790,436 L680,470"/>
   <text class="lblM" x="700" y="456">metrics</text>
 
-  <g><title>Evidently compares live months against the 2019 reference. Statistical drift (COVID 2020) and schema drift (2025 new column) are caught by DIFFERENT gates with different signatures.</title>
-    <rect class="box" x="764" y="474" width="212" height="84" rx="9"/>
-    <text class="boxT" x="778" y="496">⑧ Evidently drift watch</text>
+  <g><title>Evidently compares live months against the 2019 reference; the monthly run also WRITES a predictions mart (batch inference as a product, v2.2). Statistical drift (COVID 2020) and schema drift (2025 new column) are caught by DIFFERENT gates.</title>
+    <rect class="box" x="764" y="474" width="212" height="96" rx="9"/>
+    <text class="boxT" x="778" y="496">⑧ Drift watch + batch</text>
     <text class="boxS" x="778" y="514">reference 2019 vs live month</text>
     <text class="boxS" x="778" y="529">COVID-2020 = stats drift alarm</text>
-    <text class="boxS" x="778" y="544">2025 column = schema refusal</text>
-    <circle cx="946" cy="544" r="4" fill="var(--r-sre)"/><circle cx="960" cy="544" r="4" fill="var(--r-da)"/>
+    <text class="boxS" x="778" y="543">2025 column = schema refusal</text>
+    <text class="boxS" x="778" y="557">monthly scores → predictions mart</text>
+    <circle cx="946" cy="490" r="4" fill="var(--r-sre)"/><circle cx="960" cy="490" r="4" fill="var(--r-da)"/>
   </g>
   <path class="soft" marker-end="url(#am)" d="M866,436 L866,470"/>
 
   <!-- retrain loop -->
   <path class="flow dash" marker-end="url(#ab)" stroke="var(--r-de)"
-        d="M866,558 C866,566 856,566 836,566 L160,566 C100,566 50,558 50,500 L50,320 C50,304 56,296 66,292"/>
-  <text class="lbl" x="308" y="560" style="fill:var(--r-de)">drift &gt; threshold → scheduled retrain → auto challenger</text>
+        d="M866,570 C866,575 856,575 836,575 L160,575 C100,575 50,566 50,505 L50,320 C50,304 56,296 66,292"/>
+  <text class="lbl" x="308" y="571" style="fill:var(--r-de)">drift &gt; threshold → scheduled retrain → auto challenger</text>
 
   <!-- shared services strip -->
   <g><title>One storage story: every save/load in this diagram rides MinIO's S3 API; every database need rides the one Postgres.</title>
@@ -309,7 +312,7 @@ Two outside forces keep everyone honest.</p>
   <!-- PO band -->
   <rect x="40" y="12" width="1040" height="34" rx="9" fill="var(--wash-po)" stroke="var(--r-po)" stroke-opacity=".4"/>
   <circle cx="58" cy="29" r="4" fill="var(--r-po)"/>
-  <text class="lbl" x="70" y="33">PO (you) — settles forks, ratifies gates, accepts milestones · every ask arrives with options + a recommendation + a default</text>
+  <text class="lbl" x="70" y="33">PO (you) — one inbox: AWAITING_PO.md · direction forks WAIT for you, never auto-proceed (ADR-010) · gates and scope stay yours</text>
 
   <!-- chain -->
   <g><title>DE owns ingestion, contracts, DuckDB layer, DVC</title>
@@ -361,18 +364,18 @@ Two outside forces keep everyone honest.</p>
   <text class="lbl" x="70" y="222">re-derives a number, must file a finding, never self-closes</text>
   <rect x="566" y="190" width="514" height="40" rx="9" fill="var(--wash-arch)" stroke="var(--r-arch)" stroke-opacity=".4"/>
   <circle cx="584" cy="210" r="4" fill="var(--r-arch)"/>
-  <text class="lbl" x="596" y="207">ARCH — audits EVERY milestone boundary (Fable, fresh session):</text>
-  <text class="lbl" x="596" y="222">samples the sweep, re-checks carries, countersigns or vetoes</text>
+  <text class="lbl" x="596" y="207">ARCH (Fable) — sole planning authority: boundary triage (nothing</text>
+  <text class="lbl" x="596" y="222">carried silently) + authors every kickoff · parks forks for the PO</text>
   <path class="soft dash" d="M290,190 L290,156"/>
   <path class="soft dash" d="M820,190 L820,156"/>
 </svg>
 </div>
 
 <h2>3 · The road — ten milestones, gated boundaries</h2>
-<p class="h2sub">One milestone per session, each ending in something you can SEE. Between every
-pair sits the boundary ritual: <b>G</b> leftover sweep (nothing carried silently) →
-<b>E</b> next kickoff drafted by the executor (Opus) → <b>F</b> Grand Architect countersign or
-veto (Fable). ◆ marks the fresh-eyes review gates.</p>
+<p class="h2sub">Each milestone lands as a run of short executor sessions (Opus, one story each),
+ends in something you can SEE, and closes only through an <b>ARCH</b> session (Fable): boundary
+triage — nothing carried silently — then the next kickoff, authored. ◆ marks the fresh-eyes
+REV audits. "NOT CLOSABLE" is a respected verdict.</p>
 <div class="panel">
 <svg viewBox="0 0 1120 232" role="img" aria-label="Milestone roadmap">
   <line x1="70" y1="96" x2="1051" y2="96" stroke="var(--grid)" stroke-width="2"/>
@@ -385,9 +388,9 @@ veto (Fable). ◆ marks the fresh-eyes review gates.</p>
     <rect x="979" y="82" width="36" height="15" rx="4"/>
   </g>
   <g font-size="8.5" fill="var(--muted)" text-anchor="middle">
-    <text x="125" y="93">G·E·F</text><text x="234" y="93">G·E·F</text><text x="343" y="93">G·E·F</text>
-    <text x="452" y="93">G·E·F</text><text x="561" y="93">G·E·F</text><text x="670" y="93">G·E·F</text>
-    <text x="779" y="93">G·E·F</text><text x="888" y="93">G·E·F</text><text x="997" y="93">G·E·F</text>
+    <text x="125" y="93">ARCH</text><text x="234" y="93">ARCH</text><text x="343" y="93">ARCH</text>
+    <text x="452" y="93">ARCH</text><text x="561" y="93">ARCH</text><text x="670" y="93">ARCH</text>
+    <text x="779" y="93">ARCH</text><text x="888" y="93">ARCH</text><text x="997" y="93">ARCH</text>
   </g>
   <!-- nodes -->
   <g>
@@ -433,11 +436,69 @@ veto (Fable). ◆ marks the fresh-eyes review gates.</p>
     <text x="942" y="170">show: parity table</text>
     <text x="1051" y="170">opt-in</text>
   </g>
-  <text class="lblM" x="70" y="210">Every milestone: accept-when written BEFORE work · verified by running · closed only after the Architect countersigns · "NOT CLOSABLE" is a respected verdict.</text>
+  <text class="lblM" x="70" y="210">Every milestone: accept-when written BEFORE work · verified by running · built by the chain, closed by the Architect · ledgers hold the evidence.</text>
 </svg>
 </div>
 
-<h2>4 · The four laws that hold it together</h2>
+<h2>4 · The program builds itself — the autonomous cadence (v3.0)</h2>
+<p class="h2sub">One human paste starts it. After that, short fresh sessions schedule each other
+every ~2 minutes on your laptop: the executor builds one story at a time and merges its own
+PRs on green; REV audits the ◆ milestones; the Architect closes every boundary and writes the
+next plan. You hold the pause switch and the decisions.</p>
+<div class="panel">
+<svg viewBox="0 0 1120 240" role="img" aria-label="Autonomous session cadence">
+  <defs>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/>
+    </marker>
+  </defs>
+  <g><title>Your entire operating surface: one paste, one inbox, one pause switch</title>
+    <rect x="40" y="46" width="200" height="92" rx="9" fill="var(--wash-po)" stroke="var(--r-po)"/>
+    <text class="boxT" x="54" y="68">You (PO)</text>
+    <text class="boxS" x="54" y="86">paste Prompt A — once</text>
+    <text class="boxS" x="54" y="101">answer AWAITING_PO.md</text>
+    <text class="boxS" x="54" y="116">touch automation/STOP</text>
+    <text class="boxS" x="54" y="131">to pause anytime</text>
+  </g>
+  <path class="flow" marker-end="url(#c)" d="M240,92 L286,92"/>
+  <g><title>Fable, fresh session at every milestone boundary: triage with pasted evidence, quoted carries, then the next kickoff — sole planning authority</title>
+    <rect class="box" x="290" y="46" width="240" height="92" rx="9" stroke="var(--r-arch)"/>
+    <text class="boxT" x="304" y="68">ARCH session (Fable)</text>
+    <text class="boxS" x="304" y="86">boundary triage — nothing</text>
+    <text class="boxS" x="304" y="101">carried silently · authors the</text>
+    <text class="boxS" x="304" y="116">next kickoff · tags the close</text>
+    <text class="boxS" x="304" y="131">parks forks for the PO</text>
+  </g>
+  <path class="flow" marker-end="url(#c)" d="M530,92 L576,92"/>
+  <g><title>Opus, one story per fresh session: verify by running, branch, PR, CI watch, merge on green — then schedules its successor ~2 minutes out</title>
+    <rect class="box" x="580" y="46" width="240" height="92" rx="9" stroke="var(--r-mle)"/>
+    <text class="boxT" x="594" y="68">Executor sessions (Opus)</text>
+    <text class="boxS" x="594" y="86">ONE story · verify by running</text>
+    <text class="boxS" x="594" y="101">branch → PR → CI → merge</text>
+    <text class="boxS" x="594" y="116">on green · ledgers + field note</text>
+    <text class="boxS" x="594" y="131">main = a feed of story PRs</text>
+  </g>
+  <path class="flow dash" marker-end="url(#c)" d="M700,46 C670,10 750,10 720,42"/>
+  <text class="lblM" x="732" y="24">next session, +~2 min</text>
+  <path class="flow" marker-end="url(#c)" d="M820,92 L866,92"/>
+  <g><title>Fresh-eyes audit after M2, M3, M7: re-derives a number, must file a finding, then hands to the Architect</title>
+    <rect class="box" x="870" y="46" width="120" height="92" rx="9" stroke="var(--r-rev)"/>
+    <text class="boxT" x="884" y="68">REV ◆</text>
+    <text class="boxS" x="884" y="86">fresh audit</text>
+    <text class="boxS" x="884" y="101">M2 · M3 · M7</text>
+    <text class="boxS" x="884" y="116">mandatory</text>
+    <text class="boxS" x="884" y="131">finding</text>
+  </g>
+  <path class="flow" marker-end="url(#c)" d="M930,138 C930,190 480,196 414,142"/>
+  <text class="lblM" x="600" y="188">milestone done → back to the Architect</text>
+  <g><title>Direction forks park here with options and honest trade-offs; the chain takes only independent stories meanwhile — and halts entirely when everything depends on you</title>
+    <rect x="40" y="200" width="1040" height="32" rx="9" fill="var(--surface-1)" stroke="var(--border-2)" stroke-dasharray="5 4"/>
+    <text class="lbl" x="54" y="220">AWAITING_PO.md — direction forks WAIT here (options · trade-offs · the honest cost stated); hard-block classes never auto-proceed · STOP pauses the world</text>
+  </g>
+</svg>
+</div>
+
+<h2>5 · The five laws that hold it together</h2>
 <div class="cards">
   <div class="card"><b>One storage story</b><p>MinIO's S3 API serves data, DVC, MLflow artifacts,
   Flyte metadata, and KServe model pulls. Learn one interface, reuse it five times — swap in real
@@ -450,12 +511,17 @@ veto (Fable). ◆ marks the fresh-eyes review gates.</p>
   <div class="card"><b>One gate, no side doors</b><p>Champion moves only on held-out-month
   evidence: not for the hand-built model, not for AutoML's best, not for Optuna's. Gates loosen
   only by your decision as PO.</p></div>
+  <div class="card"><b>Decisions wait, work doesn't</b><p>The chain builds, ships, and merges on
+  its own — but direction forks park in one inbox for you, recommendations must state the cost
+  of the honest option, and hard-block classes never auto-proceed. Autonomy runs the work,
+  never the choices.</p></div>
 </div>
 
 <footer>
-  Sources of truth in the repo: docs/BLUEPRINT.md (v2.1, §9 milestones) · docs/org/ORG.md + ROLES.md ·
-  docs/PROMPTS.md (A–G) · ledgers/ (signoffs · findings · debt · deployments) · docs/gotchas.md.
-  Open fork: whether Airflow joins as an M9 ETL hand-off story — current plan is Flyte-only.
+  Sources of truth in the repo: docs/BLUEPRINT.md (v3.0, §9 milestones · §13 cadence) ·
+  docs/org/ORG.md + ROLES.md · automation/ (chain + prompts) · AWAITING_PO.md · ledgers/ ·
+  docs/gotchas.md (#1–#24) · ADR-001…010. Companion diagram: docs/m7_flow.html.
+  Open fork: Airflow as an ETL hand-off story remains available — current plan is Flyte-only.
 </footer>
 
 </div>
