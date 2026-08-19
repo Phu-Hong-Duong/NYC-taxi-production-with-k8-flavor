@@ -9,6 +9,78 @@ months from now.
 
 ## M5
 
+### M5-S4 — a percentile is a fact about a load shape, and an outage is not the span between two errors (2026-08-19, role:SRE)
+
+**What was built.** `make load` — an open-loop load client, stdlib only, that
+drives the declared route at a stated rate for a stated window and records
+p50/p95/p99 with the shape beside them. And `make load-drill` — four phases:
+preflight, a ramp that *chooses* the headline rate, the headline window with the
+container's CPU measured across it, and a self-heal leg that deletes the
+predictor pod mid-load. Result: **p50 17.2 / p95 104.2 / p99 107.2 ms at 4 req/s
+for 60 s, concurrency 8, zero errors, 1.31 of 2 CPU cores**, and **14.53 seconds
+of unavailability** when the pod is destroyed, after which a different pod object
+— on a different node — serves the same model version.
+
+**Why this way.** Three choices, and the second and third were bought with a red
+run.
+
+*The loop is open.* A closed loop (N threads, each firing when the last returns)
+is shorter and measures the wrong thing: the arrival rate becomes a consequence
+of the latency, so a slowing server quietly receives less load and the queueing a
+real arrival stream would cause never happens. That is **coordinated omission**,
+and its p95 is the service time of an unloaded server in a load test's clothes.
+Here arrival *k* is due at `t0 + k/rate` regardless, and the headline percentile
+is measured from the **scheduled** instant, so a client that falls behind cannot
+hide it — the gap between `latency_ms` and `service_ms` *is* the omission, and
+the summary prints a NOTE when it opens.
+
+*A rate at the CPU limit is not a capacity number.* The first ramp rule took the
+highest step that held its rate with no errors and chose 8 req/s — where the
+container ran at 2.003 of its 2 cores, throttled in 601 of ~601 periods. Every
+millisecond of that p95 above ~100 belonged to the kernel stopping the process,
+not to the service. Worse, it made the kill unreadable: sitting on the limit a
+*healthy* pod drops the odd request, so the drill went red on a tail of sporadic
+502/503s that had nothing to do with the kill.
+
+*An outage is not `last_error - first_error`.* The same red run reported a
+182-second outage. The service was unavailable for **13 seconds** and then served
+1,400 more requests while dropping about ten, one at a time. Both quantities are
+real; folding them together produces a number that never happened and would have
+gone straight into a runbook.
+
+**The concept underneath.** *Measure the quantity you will quote.* Both defects
+here were the same species as gotcha #63 (a cache drill measured on the wrong
+clock called a 98.7% saving a failure) and the fix was the same species too — the
+right quantity, never a looser threshold. The tell is to finish the sentence the
+number will appear in. "The endpoint sustains 8 req/s at p95 237 ms" is false the
+moment you know 8 req/s is the throttle ceiling. "The outage was 182 seconds" is
+false the moment you know the service answered 1,400 requests during it. A number
+that cannot survive its own sentence being read aloud is not measured yet.
+
+The second concept is **the control you already have**. The drill reports the
+residual error rate after recovery against the pre-kill segment of the *same run*
+— same client, same rate, same minute. It applies no threshold to it, deliberately:
+an error-rate objective is an SLO, the SLO document is M6's by the kickoff's own
+scope list, and an executor inventing one mid-drill would be setting a bar from
+the number it had just seen.
+
+**What to look at.** `src/taxi_mlops/serving/load.py` (the open loop and why the
+bodies are encoded before the clock starts) · `scripts/serving_load_drill.py`,
+`choose_headline_rate` and `measure_recovery` — both extracted so they are pure
+and testable, and both carrying the run that made them necessary in their
+docstrings · `docs/serving_load_m5.md` §5, the red run, kept unedited at
+`automation/runs/m5-load/attempt1-at-the-ceiling/` · `tests/unit/test_load.py`,
+where attempt 1's timeline is a fixture that fails if the naive span ever comes
+back.
+
+**What to try yourself.** Run `make load-drill DRILL_ARGS="--ramp 5,10
+--ramp-seconds 6 --seconds 10 --skip-selfheal --out /tmp/probe"` — forty seconds,
+no pod killed. Then look at `/tmp/probe/ramp.json` and ask what the same numbers
+would have looked like from a closed loop. Then, in `load.py`, change `scheduled
+= index / rate` to `scheduled = time.perf_counter() - t0` and run the unit
+suite: one test fails, by name, and it is the one that could not have been
+written behaviourally.
+
 ### M5-S3 — the number was zero, and the test found a door nobody could walk through (2026-08-19, role:MLE)
 
 **What was built.** `make parity` and `make parity-redteam`. Parity builds one

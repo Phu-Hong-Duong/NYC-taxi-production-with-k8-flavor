@@ -1056,3 +1056,47 @@ the seed line are earned by THIS project.
     to be protecting us, which is now known to be the logged signature. Sibling
     of #51 — *could this component tell if it were false?* — asked of a drill
     instead of a component.
+
+74. **A load test run at the CPU limit measures the QUOTA, not the service — and
+    a throttle counter says so where a mean utilisation does not.** M5-S4's ramp
+    picked its headline rate with the obvious rule: the highest step that held
+    its stated rate and returned no errors. It chose **8 req/s**, at which the
+    predictor's container ran at **2.003 of its 2-core limit** and was
+    CPU-throttled in **601 of ~601 periods**; p50 went from 18 ms at 6 req/s to
+    **115 ms**, and every millisecond of that was the kernel stopping the
+    process rather than the model taking longer. Held-its-rate and no-errors are
+    both satisfied *at the ceiling* — saturation shows up as latency, not as
+    failure, which is exactly why those two clauses cannot find it. Two further
+    consequences: the p95 published from such a run is a property of the cgroup
+    and moves the day somebody edits `limits.cpu`, and the next phase becomes
+    unreadable, because a pod with no headroom drops the occasional request all
+    by itself and the drill goes red for a reason unrelated to what it is
+    testing. **Read `cpu.stat`'s `nr_throttled` across the window, not just the
+    mean.** They are different statements: mean utilisation is a budget, the
+    throttle counter is a latency — at 2 req/s this container averaged 35% of
+    its limit and was still throttled 46 times, because CFS accounts in 100 ms
+    periods and one inference burst wider than the quota inside one period is
+    enough. `kubectl top` cannot answer this (and was unavailable here anyway,
+    no metrics-server); the cgroup files can, read straight out of the container
+    and differenced.
+
+75. **An outage is not the span from the first error to the last one.** The same
+    drill reported `outage_seconds_measured: 182.4` for a kill at T+25 of a 210 s
+    window — computed, reasonably enough, as `last_error - first_error`. What had
+    actually happened was a **13-second** unavailability followed by 1,400
+    successful requests with about ten sporadic 502/503s scattered through them
+    (a consequence of #74, above). Folding the two together invents a
+    three-minute outage that never occurred, and it was headed for a runbook.
+    The failure is the same species as #63 — a bar measured on the wrong clock —
+    and so is the fix: **the right quantity, never a looser threshold.** Separate
+    them: the *outage* is anchored on the first FAILURE after the kill and closed
+    by the first SUCCESS after that, and the residual error rate afterwards is a
+    second number with the pre-event segment of the same run as its control. Two
+    anchoring traps sit either side of the correct one: anchoring the start at
+    the kill overstates it (a pod takes a moment to stop answering), and
+    anchoring recovery on "the first success after the kill" *understates* it
+    catastrophically — it finds one of those still-succeeding requests 50 ms in
+    and reports a 0.05-second outage for a service about to be down for fourteen
+    seconds. Both were written and both were caught by replaying the real
+    timeline as a test fixture, which is the cheapest way to find out what a
+    definition actually computes.
