@@ -70,9 +70,10 @@ def _assign(path: Path, name: str) -> ast.expr | None:
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == name:
                     return node.value
-        if isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name) and node.target.id == name:
-                return node.value
+        if isinstance(node, ast.AnnAssign) and (
+            isinstance(node.target, ast.Name) and node.target.id == name
+        ):
+            return node.value
     return None
 
 
@@ -95,9 +96,7 @@ def _gameday_module():
 
 def _rules() -> dict[str, dict]:
     payload = yaml.safe_load(RULES.read_text())
-    return {
-        rule["alert"]: rule for group in payload["groups"] for rule in group["rules"]
-    }
+    return {rule["alert"]: rule for group in payload["groups"] for rule in group["rules"]}
 
 
 # --- the alert ids the gameday watches are the ones that exist ----------------
@@ -129,7 +128,9 @@ def test_every_prediction_names_only_alerts_that_exist():
     for name, entry in predictions.items():
         named = set(entry.get("must_fire", [])) | set(entry.get("must_not_fire", []))
         named |= set(entry.get("unpredictable", []))
-        assert named <= known, f"{name} names an alert that is not in the rules file: {named - known}"
+        assert named <= known, (
+            f"{name} names an alert that is not in the rules file: {named - known}"
+        )
 
 
 def test_every_scenario_predicts_what_must_not_fire():
@@ -193,7 +194,7 @@ def test_the_captured_secret_never_lands_in_the_repository():
     """A credential must not be one `git add -f` away from a commit."""
     source = GAMEDAY.read_text()
     assert "tempfile.gettempdir()" in source
-    assert "RECORD_DIR / \"storage-secret-undo" not in source
+    assert 'RECORD_DIR / "storage-secret-undo' not in source
 
 
 # --- the restore drill claims what it can and refuses the rest ----------------
@@ -209,9 +210,7 @@ def test_the_restore_drill_never_writes_a_live_database():
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.JoinedStr):
             continue
-        rendered = "".join(
-            part.value for part in node.values if isinstance(part, ast.Constant)
-        )
+        rendered = "".join(part.value for part in node.values if isinstance(part, ast.Constant))
         if "DROP DATABASE" in rendered or "CREATE DATABASE" in rendered:
             assert "SCRATCH_SUFFIX" in ast.unparse(node) or "scratch" in ast.unparse(node), (
                 f"a DDL statement that may not be scoped to scratch: {ast.unparse(node)}"
