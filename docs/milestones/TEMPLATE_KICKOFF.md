@@ -3,7 +3,8 @@
 ## 0. Boundary triage of the PREVIOUS milestone (the closure sweep, folded in)
 Verify re-run pasted: · lineage spot-check: · findings/conditions/debt
 dispositioned (FIXED evidence / CARRY with QUOTED landing / -> AWAITING_PO):
-· verdict: <cleanly closed + tagged | NOT CLOSABLE + blockers> ·
+· README Status row flipped (state + evidence — the front door is part of the
+close): · verdict: <cleanly closed + tagged | NOT CLOSABLE + blockers> ·
 (Session 1: "program start — nothing to triage")
 
 ## Preconditions (verified LIVE at draft time — pastes, not memory)
