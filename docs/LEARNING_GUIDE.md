@@ -9,6 +9,70 @@ months from now.
 
 ## M4
 
+### M4-S5 (third session) — the gate that closes M4, and the ground it found soft underneath (2026-08-19, role:MLOps A / SRE R)
+
+**What was built.** `make verify-m4` — 39 sub-checks in 7 sections, running in
+seconds — and `make verify-m4-redteam`, which proves it can say no. Plus
+`tests/unit/test_verify_m4.py` (19 tests on the gate itself), `DEFAULT_EXPERIMENT`
+extracted in `pipelines/tasks.py`, and **F-029**, which is what the story found
+while deciding what the gate was allowed to depend on.
+
+**Why this way.** M3's gate-writing law was *re-fits nothing*. M4's had to be
+stronger — *re-runs nothing* — for a reason that only becomes visible once you know
+how the cache drill works. M4's evidence cost ~95 minutes on-cluster, so re-running
+it would cost more than the milestone; but worse, **a re-run would mint MLflow runs,
+and the count of MLflow runs is the strongest thing the cache leg checks**. The
+control plane's `cache_status` is a claim; the clock corroborates it weakly; MLflow
+is the witness that could catch a lie, because a re-executed fit *has* to log. A gate
+that launched a pipeline would be adding runs to the very counter it reads. That is
+not a performance argument, it is a correctness one.
+
+The second decision was what to check the alias law with. "Is `@champion` still
+version 2?" is satisfiable by not looking, and it pins a literal that a legitimate
+future promotion turns red (the mistake `verify-m2` made and gotcha #50 records). So
+§7 asks the strong form instead: **none of the 28 runs the M4 pipeline fitted is a
+registry version.** A promotion cannot hide from that — it must create a version, and
+a version carries the run that made it. The law stops being a habit somebody follows
+and becomes a question the registry answers.
+
+**The concept underneath.** *Ask of any verifier the question you would ask of the
+thing it verifies: could it tell if it were wrong?* This program has been asking that
+of components since gotcha #51. This story pointed it at a gate's **inputs** for the
+first time — and the answer was uncomfortable. `automation/runs/` is gitignored, so
+`verify-m3`'s bake-off replay and every record `verify-m4` reads are machine state.
+An edit to one of them — *precisely the fault both red teams simulate* — leaves no
+diff for a reviewer to see. Two artifacts had already written the false version down:
+`verify_m3.sh`'s header listed "committed JSON" among its inputs, and its own red team
+advised `git checkout --` on a file git has never heard of. That second one is the
+tell, because a mistyped word is an accident and a recovery procedure is a belief.
+The false statements were corrected the same day; the policy question — what belongs
+under review — was routed to ARCH with three costed options rather than decided by
+the session that happened to notice it.
+
+The corollary showed up twice more in one afternoon, in the smaller register: a
+checker that demanded every recorded run have a parent action went red on the retry
+probe, which is *built* to have neither a parent nor a success (#67), and its tests
+went red for matching the word `make pipeline` inside the gate's own advice to a
+human (#68). Both were fixed by changing what the check *means* rather than what it
+*excludes* — derive the class, match the command position — which is the same move
+as #52 and is worth more than either individual bug.
+
+**What to look at.** `scripts/verify_m4.sh` §4's last check (the two witnesses, and
+why agreeing is stronger than either passing) and §7's third (the 28 runs) ·
+`scripts/verify_m4_redteam.sh` — read what it *leaves alone*, which is what makes the
+lie plausible · `docs/verify_m4_transcripts.md` for both runs verbatim ·
+`ledgers/findings.md` F-029, particularly the three options and their honest costs ·
+`docs/pipeline_m4_leg3.md` §17–§21.
+
+**What to try yourself.** Run `make verify-m4-redteam` and watch which two checks
+fire. Then edit the record by hand the other way — set run 2's `train` duration to
+`1935159` while leaving `cache_status` at `CACHE_HIT` — and see that the gate catches
+*that* too, from a different direction, before restoring with
+`cp` from the backup the drill keeps. Finally run
+`git check-ignore -v automation/runs/m4-cache/cache_drill.json` and sit with the
+answer for a moment: you have just been reading a gate's entire evidence base, and it
+is not in the repository.
+
 ### M4-S5 (second session) — one body of SQL, two transports, and a debt closed by measuring both options (2026-08-18, role:MLOps A / MLE R, DA hat for the mart decision)
 
 **What was built.** `publish_marts`, the pipeline's seventh stage: rebuild the
