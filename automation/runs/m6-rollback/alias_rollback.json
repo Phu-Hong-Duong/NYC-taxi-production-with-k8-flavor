@@ -1,0 +1,14 @@
+{
+  "story": "M6-S4",
+  "what": "docs/runbooks/serving.md \u00a74 run for real, both ways \u2014 F-032's un-rehearsed half",
+  "sanctioned_by": "M6 kickoff law 3: the alias moves exactly twice, inside this rehearsal",
+  "prediction": {
+    "written_before_the_alias_moved": true,
+    "p1_the_three_moves_all_succeed_both_ways": "The runbook's \u00a74.2 sequence runs end to end with no edit, in both directions. \u00a74.4's claim that rolling forward is the same procedure with '2' has never been checked and is checked here.",
+    "p2_a_rollback_is_NOT_a_0_5_s_re_deploy": "The error window is measured in TENS OF SECONDS, not the 0.5 s a model re-deploy costs (gotcha #80), because the config move changes the request schema on the wire while the old pod is still serving. Requests fail from the config move until the replacement pod answers. This is a prediction about the MECHANISM; the magnitude is unknown and the runbook's own guess ('expect longer than 18.24 s') is the only prior.",
+    "p3_leg_1_is_slower_than_leg_2": "Leg 1 takes longer than leg 2: version 1's artifacts are a different MinIO prefix that no node has cached, while version 2's have been downloaded on this cluster many times. The runbook says so and nothing has measured it.",
+    "p4_the_coherence_check_passes_at_v1_TOO": "`verify-m5` \u00a72's feature_set-vs-config check is GREEN at the half-way state. If it is not, it was never a coherence check \u2014 it was a literal that happened to hold at v2 (F-017, gotchas #49/#50).",
+    "p5_the_gate_goes_RED_at_v1_for_exactly_one_reason": "`verify-m5` as a whole goes RED at the half-way state, and the failures are ONLY about the alias not being the M3 bake-off's recorded winner. That is the check doing its job: the rehearsal is a sanctioned deviation from the gated champion, and a gate that stayed green through it would not be watching the pointer at all.",
+    "p6_the_end_state_is_byte_identical": "@champion is version 2, configs/train.yaml is unchanged by sha, one quote stamps version 2, and its value reproduces the parity record's own row."
+  }
+}
