@@ -1,2 +1,54 @@
-# kserve — helm values. Chart + version chosen at its milestone from live sources,
-# recorded in CLAUDE.md pin table. Keep every override commented with WHY.
+# kserve — helm values (M5-S1). Chart + version pinned in scripts/deploy_serving.sh
+# and recorded in CLAUDE.md's pin table with the command that read them.
+#
+# THE ONE DECISION THIS FILE ENCODES: **RawDeployment, not Knative** (ADR-004).
+# The chart's default is `deploymentMode: Knative`, which drags Knative Serving
+# and Istio in behind it — two more control planes on a laptop that already runs
+# five tenants, for a capability M5 does not use. KServe Standard/RawDeployment
+# produces a plain Deployment + Service + Ingress per InferenceService, which is
+# exactly the surface the parity test (S3), the load run (S4) and the PRR (S5)
+# want to talk to.
+#
+# THE HONEST COST, stated here because it lands on somebody else: **Standard mode
+# has no canary.** `canaryTrafficPercent` requires Serverless/Knative — that is
+# the prior-art ADOPT recorded in docs/prior_art.md, found before it cost a
+# session. M6's timeboxed spike (ADR-004: Knative profile vs a two-InferenceService
+# split behind this same ingress) is where that gets decided and paid for; its
+# pre-approved cost is "serving gets re-deployed once".
+kserve:
+  controller:
+    deploymentMode: RawDeployment
+
+    gateway:
+      # In RawDeployment the controller creates a plain Kubernetes Ingress, and
+      # this is the class it stamps on it — the ingress-nginx class installed by
+      # the same script, one hop earlier.
+      ingressGateway:
+        className: nginx
+        enableGatewayApi: false
+        createGateway: false
+      # The host it builds per service, via domainTemplate below. `example.com`
+      # is the chart default and is a placeholder, not a name: requests reach the
+      # route by Host header, so this string is part of the contract between the
+      # deploy and every curl in M5. `local` is chosen because it is obviously
+      # not routable — nobody can mistake it for something DNS should resolve.
+      domain: local
+      domainTemplate: '{{ .Name }}-{{ .Namespace }}.{{ .IngressDomain }}'
+      urlScheme: http
+      # Istio's VirtualHost machinery has no meaning without Istio, and leaving
+      # it on produces objects nothing reconciles.
+      disableIstioVirtualHost: true
+
+    # Small: it is a controller that watches a handful of objects. The PREDICTOR's
+    # resources are the ones that matter and they are set per-InferenceService
+    # (M5-S2), measured under load (M5-S4), and recorded in the PRR (M5-S5).
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+
+  # Webhook certificates come from cert-manager, installed one hop earlier by the
+  # same script. See infra/helm/cert-manager/values.yaml for why a program that
+  # serves no public TLS needs a CA at all.
+  certManager:
+    enabled: true

@@ -128,6 +128,8 @@ backup: ## the lifeboat: pg_dump every database + mirror every MinIO bucket outs
 	@bash scripts/platform_backup.sh
 deploy-flyte: ## Flyte on kind: databases via D-002, blob store in the existing MinIO (idempotent; ADR-002)
 	@bash scripts/deploy_flyte.sh
+deploy-serving: ## the serving PLATFORM: ingress-nginx (declared route :8081) + cert-manager + KServe Standard (M5-S1, ADR-004; DRY_RUN=1 previews). Installs NO model
+	@bash scripts/deploy_serving.sh
 flyte-console: ## forward the Flyte API to localhost:8090 (port-forward, NOT a declared route — see scripts/flyte_console.sh for why)
 	@bash scripts/flyte_console.sh
 flyte-hello: ## two tasks on-cluster, the second consuming the first's output through MinIO (F-023 closed at M4-S4)

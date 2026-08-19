@@ -1,0 +1,43 @@
+# cert-manager — helm values (M5-S1).
+#
+# WHY IT IS HERE AT ALL, since nothing in this program serves TLS to the public:
+# KServe's controller runs admission and conversion WEBHOOKS, and a webhook is
+# an HTTPS endpoint the API server calls — so it needs a certificate and a CA
+# bundle stitched into the webhook configuration. cert-manager is the mechanism
+# KServe's own chart expects for that (`kserve.certManager.enabled`), and the
+# alternative is hand-minted self-signed certs with a rotation nobody owns.
+#
+# It is deliberately a SMALL install: three controllers, no ClusterIssuer for a
+# public CA, no ACME, no DNS solver. Nothing here talks to the internet at
+# request time; the $0 budget and the "nothing leaves this machine" rule hold.
+crds:
+  # The chart's own CRDs, installed by the chart rather than by a separate
+  # `kubectl apply` of a raw manifest. One release owns them, so `helm uninstall`
+  # is a complete undo and there is no second artifact to keep in step.
+  enabled: true
+  # Left at the chart default (false) ON PURPOSE: `keep: true` would leave the
+  # CRDs behind after an uninstall. This cluster is stateful and M5 owns no
+  # certificate state worth surviving a deliberate removal of cert-manager —
+  # KServe's webhook certs are regenerated, not curated.
+  keep: false
+
+# Small, because this is a laptop with five other tenants on it. Sized from the
+# chart's own defaults rather than invented; M5-S4 measures what the SERVING path
+# costs and the PRR's capacity box records it. These three are control-plane
+# components that idle.
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+cainjector:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
