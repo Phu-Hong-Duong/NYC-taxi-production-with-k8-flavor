@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from ..features import sets
 from .client import DEFAULT_ROUTE, Endpoint, QuoteRefused, QuoteRequest, infer, minutes_of
 
 
@@ -28,6 +29,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--route", default=DEFAULT_ROUTE, help="the declared route")
     parser.add_argument("--name", default="nyc-taxi-eta", help="the InferenceService name")
     parser.add_argument("--namespace", default="serving")
+    # M6-S3. A second model is on the wire (the v1 shadow) and it eats a DIFFERENT
+    # matrix — 5 columns against the champion's 24. Without this the only way to
+    # quote it would be a second client, which is the one thing this module
+    # exists to prevent: features are built by `taxi_mlops.features` for every
+    # target or train/serve skew is a matter of luck.
+    #
+    # The default is deliberately None and not "v2": absent this flag the config
+    # decides, so a rollback that moves `features.version` moves this too. A
+    # caller that names a set is naming it for a NON-champion target and should
+    # derive it from that target's `feature_set` registry tag rather than typing
+    # it — `scripts/deploy_shadow.sh` does exactly that.
+    parser.add_argument(
+        "--features-version",
+        default=None,
+        help="feature set to build with (default: configs/train.yaml's). The shadow's "
+        "comes from its registry version's feature_set tag, never from a constant.",
+    )
     parser.add_argument(
         "--at",
         default="2019-07-04T09:15:00",
@@ -46,8 +64,10 @@ def main(argv: list[str] | None = None) -> int:
         passenger_count=args.passengers,
     )
 
+    features_cfg = sets.resolve_set(args.features_version) if args.features_version else None
+
     try:
-        response = infer([request], endpoint)
+        response = infer([request], endpoint, features_cfg=features_cfg)
     except QuoteRefused as refusal:
         print(f"[quote] REFUSED ({refusal.http_status}): {refusal}", file=sys.stderr)
         return 2
