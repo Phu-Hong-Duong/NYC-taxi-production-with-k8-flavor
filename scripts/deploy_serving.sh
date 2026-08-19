@@ -217,14 +217,29 @@ if [[ "$DEPLOY_MODE" != "RawDeployment" ]]; then
   exit 1
 fi
 
-# THE ACCEPT CHECK. A 404 from the controller is a PASS: it means the route
-# answers and no Ingress matches yet, which is the correct state before M5-S2
-# puts a model behind it. A connection refused is the failure. The discriminator
-# is the SERVER header — an nginx that is ours, not an absence of an error
-# (gotcha #59: assert positively on the artifact, never on the absence).
+# THE ACCEPT CHECK, in two parts, because "it answered" and "the right thing
+# answered" are different questions and only the second one is worth having.
+#
+#   (a) GET /            must ANSWER. A 404 here is the PASS: the route is up and
+#                        no Ingress matches yet, which is the correct state until
+#                        M5-S2 puts a model behind it. Connection refused is the
+#                        fail — and its first suspect is scheduling, not KServe.
+#   (b) GET /healthz     must be 200. This is the CONTROLLER'S OWN health
+#                        endpoint, served by its nginx on the same port, i.e. a
+#                        positive artifact of the thing that is supposed to be
+#                        answering (gotcha #59: assert on the artifact, never on
+#                        the absence of an error). It is also the shape M4-S2
+#                        settled on for Flyte — ask the server what it serves.
+#
+# NOT the `Server:` header, which is what the first version of this check used
+# and which cost this story a RED run over a perfectly good install: modern
+# ingress-nginx omits `Server:` entirely, so the discriminator was testing for a
+# header its own chart suppresses on purpose. The body's `<center>nginx</center>`
+# is printed below as corroboration and is deliberately NOT the discriminator —
+# it would pass for any nginx on earth.
 echo
 echo "   curl -sS -o /dev/null -D - http://localhost:$ROUTE_PORT/"
-ROUTE_HEADERS="$(curl -sS -o /dev/null -D - --max-time 15 "http://localhost:$ROUTE_PORT/" || true)"
+ROUTE_HEADERS="$(curl -sS -D - --max-time 15 "http://localhost:$ROUTE_PORT/" 2>/dev/null || true)"
 if [[ -z "$ROUTE_HEADERS" ]]; then
   echo "FAIL: nothing answered on http://localhost:$ROUTE_PORT/ — the declared route is dead." >&2
   echo "      Check WHERE the controller scheduled first (kubectl -n $INGRESS_NAMESPACE get pods -o wide):" >&2
@@ -232,11 +247,17 @@ if [[ -z "$ROUTE_HEADERS" ]]; then
   exit 1
 fi
 printf '%s\n' "$ROUTE_HEADERS" | sed 's/^/     /'
-if ! printf '%s' "$ROUTE_HEADERS" | grep -qi '^server: nginx'; then
-  echo "FAIL: something answered on :$ROUTE_PORT but it is not the ingress controller." >&2
-  echo "      A foreign holder of this port is gotcha #10's territory — run make ports." >&2
+
+HEALTHZ_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+  "http://localhost:$ROUTE_PORT/healthz" 2>/dev/null || echo 000)"
+echo "   GET /healthz -> $HEALTHZ_CODE"
+if [[ "$HEALTHZ_CODE" != "200" ]]; then
+  echo "FAIL: something answered on :$ROUTE_PORT but it does not serve the ingress" >&2
+  echo "      controller's own /healthz. A foreign holder of this port is gotcha" >&2
+  echo "      #10's territory — run make ports." >&2
   exit 1
 fi
 echo
 echo "ok  the declared route ANSWERS FROM THE CONTROLLER on http://localhost:$ROUTE_PORT/"
-echo "    (a 404 here is the pass: the route is up and no InferenceService is behind it yet — that is M5-S2)"
+echo "    GET / -> 404 (the pass: the route is up and no InferenceService is behind it yet — that is M5-S2)"
+echo "    GET /healthz -> 200 (the controller's own endpoint, asked of the server rather than remembered)"

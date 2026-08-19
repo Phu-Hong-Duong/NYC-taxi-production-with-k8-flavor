@@ -199,8 +199,19 @@ def test_the_accept_check_asserts_positively_on_the_controller(script: str) -> N
     """gotcha #59: `flyte run --follow` exited 0 over a run that died, and a check
     written against the exit code printed `ok`. Here the failure shape is the
     same — a 404 is the PASS, so 'no error' proves nothing. The discriminator has
-    to be a positive signature from the thing that is supposed to answer."""
-    assert "server: nginx" in script.lower()
+    to be a positive artifact of the thing that is supposed to answer.
+
+    It must ALSO not be a signature the deployed thing suppresses: the first
+    version of this check demanded a `Server: nginx` header, which modern
+    ingress-nginx omits on purpose, and it went RED over a perfectly good
+    install. `/healthz` is the controller's own endpoint on the same port."""
+    code = code_only(script)
+    assert "/healthz" in code
+    assert 'HEALTHZ_CODE" != "200"' in code
+    assert "server:" not in code.lower(), (
+        "the Server header is suppressed by ingress-nginx — it cannot be the "
+        "discriminator"
+    )
 
 
 # ------------------------------------------------------------------- the pins --
