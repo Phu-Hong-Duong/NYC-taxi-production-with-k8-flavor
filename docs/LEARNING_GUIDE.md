@@ -7,6 +7,71 @@ months from now.
 
 ---
 
+## M5
+
+### M5-S1 — the evidence entered review, and the accept check went red over a healthy install (2026-08-19, role:MLOps)
+
+**What was built.** Two halves. (1) **F-029's mechanics**: `automation/runs/**/*.json`
+is now tracked — 32 records, the evidence base that `verify-m3` and `verify-m4`
+REPLAY — while logs and `.status` stay ignored; the four stale "gitignored"
+statements were corrected at their source and both gates plus both red teams were
+re-run green over the moved files. (2) **the serving platform**: `make deploy-serving`
+installs ingress-nginx behind the declared route (host 8081), cert-manager, and
+KServe v0.20.0 in Standard/RawDeployment mode. It installs **no model**.
+
+**Why this way.** The gitignore change is three lines and none of them is a
+preference. A bare `automation/runs/` exclusion makes git **stop descending into the
+directory**, which means a `!automation/runs/**/*.json` rule underneath it is not
+overridden — it is never consulted at all. So the exclusion must be pattern-based,
+the directories re-included so the walk continues, and the files re-included last.
+This is the sort of thing you verify with `git check-ignore -v` in both directions
+rather than by reading a diff and nodding.
+
+The serving route needed a similar unglamorous care. kind published
+`containerPort 80 -> hostPort 8081` on the control-plane node at cluster CREATE, and
+that is only half a route: something has to BIND port 80 **on that node**. Hence
+hostPort plus a hostname nodeSelector plus a toleration for the control-plane taint —
+and each of those three, missing, produces a different unhelpful symptom. Missing
+toleration: Pending forever, with a message about taints. Missing nodeSelector: a
+controller on a worker, answering nothing, looking *exactly* like a KServe failure.
+The node name is derived from the kind config's cluster name and the values file is
+asserted against it, so a rename fails at deploy time instead of at minute forty.
+
+**The concept underneath.** *A positive artifact is only a discriminator if the thing
+actually emits it.* Gotcha #59 taught this program to stop asserting on the absence of
+an error and to assert instead on the artifact a component exists to produce. The
+accept check here did exactly that — it demanded a `Server: nginx` response header
+rather than merely "no connection error" — and it went **RED over a perfectly good
+install**, because modern ingress-nginx suppresses that header on purpose. Structurally
+right, factually wrong. #59 tells you to pick an artifact; it does not tell you to
+check that the artifact exists, and the way to find out is to ask the server rather
+than to remember: `GET /healthz` returns 200 and `GET /nginx-health` returns 404 — the
+same shape M4-S2 found for Flyte, where the path everyone types (`/healthcheck`) is
+the one that 404s. Filed as gotcha #70.
+
+The half-1 lesson is narrower and worth keeping separate from the satisfying version
+of it. Tracking the records does **not** make them true. It makes a tampered record a
+**diff**. What used to stand between a rewritten number and a green gate was only that
+nobody rewrote it; what stands there now is that somebody would see. That is a real
+improvement and it is not verification, and the distinction is the whole finding.
+
+**What to look at.** `.gitignore`'s last block (three lines, one mechanism) ·
+`scripts/deploy_serving.sh` — the derived route at the top, the DRY_RUN branch that
+exits rather than falling through, and the two-part accept check at the bottom ·
+`infra/helm/ingress-nginx/values.yaml`, where every override names the thing about
+THIS cluster that forced it · `tests/unit/test_deploy_serving.py`, and in particular
+`code_only()`: two of its tests would have tripped on the script's own prose, which is
+gotchas #53/#68 arriving for the fourth time · `docs/serving_m5.md`.
+
+**What to try yourself.** Run `git check-ignore -v` on a record and on a log and watch
+them match different lines. Then run `make verify-m4-redteam` and, the moment it
+finishes, run `git status` — the emptiness is the new property, and it did not exist
+last week. Finally, `curl -sS -D - http://localhost:8081/` and ask yourself what in
+that response would let you tell OUR controller from any other nginx on the machine.
+The answer is: nothing in it. That is why the check asks a second question.
+
+---
+
 ## M4
 
 ### M4-S5 (third session) — the gate that closes M4, and the ground it found soft underneath (2026-08-19, role:MLOps A / SRE R)

@@ -199,3 +199,207 @@ stand between a rewritten number and a green gate was that nobody rewrote it.
 Churn is the accepted cost, and it is bounded by the same split: a record changes
 only when a drill deliberately re-runs, and every such re-run is itself a
 reviewable event. Future drills keep verdict JSONs small; logs stay ignored.
+
+---
+
+## 2. Half 2 — the serving platform
+
+### 2.1 `make backup` first, and it found a database nobody added by hand
+
+The M4-S2 precedent: give the pre-serving state a copy before new tenants land
+beside it. The existing snapshot (`2026-08-18T06-02-29Z`) predates the marts tail
+task, so it predates the state M4-S5 leg 2 produced.
+
+```
+[backup] destination /home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-19T02-54-59Z
+[backup] 6 database(s) on the server: flyte marts metabase mlflow optuna postgres
+  flyte 91.9KiB · marts 1.2GiB · metabase 324.5KiB · mlflow 67.9KiB · optuna 27.1KiB · postgres 393.0B
+[backup-minio] 2 bucket(s): flyte-data (184 objects, 0.7 MiB), mlflow-artifacts (147 objects, 443.3 MiB)
+[backup-minio] ok  331 object(s) verified on disk by count AND bytes
+total on disk: 1.6GiB
+```
+
+**Six databases where M4-S2 backed up five, and 331 objects where it mirrored
+105.** Nobody edited a list: the script enumerates its targets from the server,
+which is exactly the property M4-S2 argued for and this is the first run that has
+proved it on a changed cluster. `metabase` grew (295.6 KiB -> 324.5 KiB) and the
+object count more than tripled because M4's pipeline runs wrote artifacts.
+
+**RESTORE IS STILL NOT REHEARSED**, and the new `MANIFEST.txt` says so in the
+same words as the old one. Every dump is proven COMPLETE (gzip CRC over every
+byte plus pg_dump's own completion marker); "these files restore a working
+platform" remains a hypothesis and an M6-gameday candidate.
+
+### 2.2 What was installed, and the one decision each piece encodes
+
+| Piece | Pinned | Why this, and not the obvious alternative |
+|---|---|---|
+| ingress-nginx | chart **4.15.1**, app **1.15.1** | NOT the upstream `provider/kind` manifest: it selects `ingress-ready=true`, a label kind writes only when the kind config asks, and ours does not. The kind config is read at cluster-CREATE only and this cluster is stateful — so the label is unavailable at a price M5 will not pay, and the chart is configured directly instead. |
+| cert-manager | chart + app **v1.21.1** | KServe's controller runs admission and conversion webhooks, and a webhook is an HTTPS endpoint the API server calls. The alternative is hand-minted certs with a rotation nobody owns. Deliberately a small install: no ClusterIssuer, no ACME, no DNS solver — nothing here talks to the internet at request time. |
+| KServe | charts `kserve-crd` and `kserve-resources` **v0.20.0** (OCI, digests `92deb742d22a…` and `956c4860374f…`) | **Standard / RawDeployment (ADR-004)** — the chart default is `Knative`, which drags Knative Serving and Istio in behind it for a capability M5 does not use. Honest cost, and it lands on M6: **Standard mode has no canary** (`canaryTrafficPercent` requires Serverless — the prior-art ADOPT, found before it cost a session). |
+
+Images, from `helm template` — so this is what the charts resolve, not what a
+release note claims: `registry.k8s.io/ingress-nginx/controller:v1.15.1@sha256:594ceea76b01…`
+· `quay.io/jetstack/cert-manager-{controller,webhook,cainjector,startupapicheck}:v1.21.1`
+· `kserve/kserve-controller:v0.20.0` · `kserve/storage-initializer:v0.20.0` ·
+`quay.io/brancz/kube-rbac-proxy:v0.18.0`.
+
+### 2.3 The route is derived, not typed
+
+The kickoff's risk R2 in one sentence: **an ingress controller on a worker
+answers nothing and looks exactly like a KServe failure.** Only the control-plane
+node carries the `containerPort: 80 -> hostPort: 8081` mapping, and it also
+carries the standard `node-role.kubernetes.io/control-plane:NoSchedule` taint —
+so the values file needs a hostname nodeSelector *and* a toleration, and either
+one alone produces a pod that is Pending or useless.
+
+The node name is a FUNCTION of the cluster name, so the script computes it and
+then asserts the values file against it (gotcha #52: the fix that changes a VALUE
+leaves the hazard in scope; the fix that derives it removes the hazard):
+
+```
+   route        host :8081 -> container :80 on mlops-taxi-control-plane (published at cluster CREATE)
+   ok  the ingress values pin scheduling to mlops-taxi-control-plane (derived from …/infra/kind/kind-config.yaml)
+   ok  node mlops-taxi-control-plane exists
+```
+
+And it landed where it was told, first time — the one line that would have caught
+the failure R2 warned about:
+
+```
+NAME                                        READY   STATUS    RESTARTS   AGE   NODE
+ingress-nginx-controller-74dcb9db98-whhtb   1/1     Running   0          68s   mlops-taxi-control-plane
+```
+
+### 2.4 `DRY_RUN=1` mutates nothing, helm included
+
+gotcha #30's rule, inherited again. The preview names every action as a WOULD
+line and the branch `exit 0`s rather than falling through:
+
+```
+== [3/6] ingress-nginx ==  DRY_RUN — WOULD helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx 4.15.1 -n ingress-nginx
+== [5/6] kserve ==         DRY_RUN — WOULD helm upgrade --install kserve-crd oci://ghcr.io/kserve/charts/kserve-crd v0.20.0 -n kserve
+DRY_RUN — nothing was installed, nothing was upgraded, no namespace was created.
+```
+
+Checked afterwards rather than assumed: `helm list -A` still showed the three
+pre-existing releases and nothing else, and no `ingress-nginx` or `cert-manager`
+namespace existed.
+
+### 2.5 The install, and the idempotent re-run
+
+First run — 3m13s wall from the first helm call to the accept check, against a
+9m49s-for-99MB precedent that made a 20m `--wait` the right size anyway:
+
+```
+== [6/6] read it back ==
+cert-manager   cert-manager    1  deployed  cert-manager-v1.21.1      v1.21.1
+ingress-nginx  ingress-nginx   1  deployed  ingress-nginx-4.15.1      1.15.1
+kserve         kserve          1  deployed  kserve-resources-v0.20.0  v0.20.0
+kserve-crd     kserve          1  deployed  kserve-crd-v0.20.0        v0.20.0
+
+   kserve defaultDeploymentMode (read from the live configmap): RawDeployment
+```
+
+**The mode is read back off `configmap/inferenceservice-config`, not off the
+values that were submitted** — a submitted value proves what was asked for, not
+what the controller consumes. And KServe's webhook certificate was issued:
+`kubectl -n kserve get certificate` -> `serving-cert   True
+kserve-webhook-server-cert`, which is cert-manager doing the job it was installed
+for, observed rather than assumed.
+
+The re-run is the idempotence evidence, in M4-S2's shape — **every release at
+REVISION 2 while every pod is minutes old and unrestarted**:
+
+```
+cert-manager   2  deployed      ingress-nginx-controller-…-whhtb    1/1 Running 0 4m44s  mlops-taxi-control-plane
+ingress-nginx  2  deployed      cert-manager-{,webhook,cainjector}  1/1 Running 0 3m35s
+kserve         2  deployed      kserve-controller-manager-…         2/2 Running 0 2m35s  mlops-taxi-worker2
+kserve-crd     2  deployed
+```
+
+A clean upgrade that restarted nothing. `kubectl get ingressclass` ->
+`nginx (default)   k8s.io/ingress-nginx`, and six KServe CRDs are registered on
+Kubernetes **v1.36.1** — the kickoff's risk R1 (KServe against a Kubernetes
+version it has never been tested against) did not materialise, and **ADR-004's
+plain-mlserver fallback stays armed and unspent**.
+
+### 2.6 The accept check went RED over a perfectly good install, and it was right to
+
+```
+FAIL: something answered on :8081 but it is not the ingress controller.
+      A foreign holder of this port is gotcha #10's territory — run make ports.
+```
+
+Everything was installed and healthy. The route was answering. The check demanded
+a **`Server: nginx`** response header as its positive discriminator — and modern
+ingress-nginx **omits that header on purpose**. The discriminator was testing for
+a signature the deployed thing deliberately suppresses.
+
+This is gotcha #59's lesson (assert positively on the artifact, never on the
+absence of an error) applied correctly and then failing at the next question,
+which #59 does not ask: *is the artifact you chose one this thing actually
+emits?* The replacement was found by asking the server rather than guessing —
+the same move M4-S2 made for Flyte's health path, where `/healthcheck` 404s and
+`/healthz` answers:
+
+```console
+$ curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:8081/healthz
+200
+$ curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:8081/nginx-health
+404
+```
+
+`/healthz` is the controller's OWN endpoint, served by its nginx on the same
+port. So the accept check is now two parts, and each answers a different
+question — did anything answer, and was it the right thing:
+
+```
+   curl -sS -o /dev/null -D - http://localhost:8081/
+     HTTP/1.1 404 Not Found
+     Content-Length: 146
+     <html>
+     <head><title>404 Not Found</title></head>
+     <body>
+     <center><h1>404 Not Found</h1></center>
+     <hr><center>nginx</center>
+     </body>
+     </html>
+   GET /healthz -> 200
+
+ok  the declared route ANSWERS FROM THE CONTROLLER on http://localhost:8081/
+    GET / -> 404 (the pass: the route is up and no InferenceService is behind it yet — that is M5-S2)
+    GET /healthz -> 200 (the controller's own endpoint, asked of the server rather than remembered)
+```
+
+**The 404 is the pass.** The route answers and nothing matches yet, which is the
+correct state until S2 puts a model behind it. The body's `<center>nginx</center>`
+is printed as corroboration and is deliberately NOT the discriminator — it would
+pass for any nginx on earth. Filed as **gotcha #70**.
+
+Two other candidates were considered and rejected: correlating the request with
+the controller's ACCESS LOG (the default backend's 404s are not logged, so a
+correct install produces silence — a discriminator that fails on success), and
+matching the 404 body, which is the weak signature above.
+
+### 2.7 What half 2 installed, and what it deliberately did not
+
+Installed: a route, a CA, and an operator. **No model, no InferenceService, no
+serving runtime, no credential.** `make deploy-serving` does not read `.env`,
+passes no `--set`, and a unit test asserts it cannot name `champion`, `models:/`
+or `mlflow` in CODE — M5 law 2 ("serving reads the pointer and never moves it")
+made falsifiable at the cheapest possible level, a script that does not know the
+registry exists. `@champion` is version 2 and nothing this session ran read it.
+
+Sixteen cluster-free tests cover what is wrong in a file rather than in a pod:
+the route's node and both ports derived from the kind config on BOTH sides, the
+taint/toleration pair, `DRY_RUN` reaching no mutating verb, `RawDeployment` read
+back off the live ConfigMap, KServe's ingress class equalling the one this script
+installs, every chart version an exact pin, and the two "cannot name the registry
+/ cannot read a secret" checks — those last two asserted over CODE ONLY, because
+this script argues its own design at length and a word-search greps the argument
+(gotchas #53/#68, applied before they bit rather than after).
+
+**What S2 inherits, stated plainly:** the wire is proven and nothing is on it.
+The model store credential, the `storage-config` secret, the alias resolution
+(F-009) and the F-019 policy decision are all S2's, and none of them is started.

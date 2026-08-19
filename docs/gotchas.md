@@ -963,3 +963,25 @@ the seed line are earned by THIS project.
     red teams now edit TRACKED files, which makes a clean drill's clean tree a
     checkable property and gives a crashed drill the `git checkout --` its own
     recovery line used to promise falsely.*
+
+70. **A positive discriminator can name a signature the deployed thing
+    deliberately suppresses — and then it goes RED over a perfectly good
+    install.** M5-S1's accept check for the serving route did everything #59
+    asks: it refused to read "no error" as success, and demanded a POSITIVE
+    artifact from the component that was supposed to answer — `Server: nginx` in
+    the response headers. Modern ingress-nginx omits that header on purpose, so
+    a healthy controller, correctly scheduled, serving a correct 404, failed a
+    check that was structurally right and factually wrong. #59 tells you to
+    assert on an artifact; it does not tell you to check that the artifact
+    EXISTS. So the follow-up question is: *does this thing actually emit the
+    signature I am about to require?* — and the way to answer it is to ask the
+    server, not to remember. `GET /healthz -> 200` is the controller's own
+    endpoint (`/nginx-health` returns 404, checked); it is the same shape M4-S2
+    settled on for Flyte, where `/healthcheck` — the 1.x path everyone types —
+    404s and `/healthz` answers. Two rejected candidates are worth naming
+    because both look reasonable: correlating the request with the controller's
+    ACCESS LOG (its default backend does not log 404s, so a correct install
+    produces silence — a discriminator that fails precisely on success), and
+    matching the 404 body's `<center>nginx</center>`, which would pass for any
+    nginx anywhere. Sibling of #55: a verifier that fails for its own reasons
+    and blames the artifact.

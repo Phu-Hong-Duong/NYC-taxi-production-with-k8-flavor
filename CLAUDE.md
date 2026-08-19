@@ -113,6 +113,10 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | Flyte SDK / CLI | **`flyte` 2.6.1** (brings `flyteidl2` **2.0.42** — an exact match to the chart) | 2026-08-18 | `uv add "flyte>=2.6,<3"` (M4-S2). **Gotcha #36 checked at add time: 29 packages installed, only the project rebuilt, and pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 · mlflow-skinny 3.15.1 · lightgbm 4.7.0 · xgboost 3.4.1 all unchanged.** The CLI is `flyte` (verb/noun), NOT `pyflyte`/`flytectl` — those are the 1.x tools |
 | Data stager image | `busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616` — TAG AND DIGEST | 2026-08-18 | `docker image inspect --format '{{index .RepoDigests 0}}'` (M4-S4). The short-lived pod `make stage-data` uses to untar the data trees onto the PVC. busybox because the whole job is `tar -x`/`du`/`find`, and because the MLflow chart's db-check init container already pinned this version at M0 — a version this program has, not a new dependency |
 | MLflow `serverAllowedHosts` | 8 entries: `localhost`/`127.0.0.1`/`mlflow.mlflow.svc.cluster.local`/`mlflow.mlflow`, **each with and without `:5000`** | 2026-08-18 | `infra/helm/mlflow/values.yaml` (M4-S4, **F-025**). Not a version pin but it belongs beside one: setting this value REPLACES MLflow's default list, and the uvicorn middleware compares the WHOLE Host header — port included — so a list of bare hostnames 403s every host-side client. Both forms, always |
+| ingress-nginx chart | **4.15.1** (appVersion **1.15.1**), image `registry.k8s.io/ingress-nginx/controller:v1.15.1@sha256:594ceea76b01c592858f803f9ff4d2cb40542cae2060410b2c95f75907d659e1` — the chart pins by TAG AND DIGEST itself | 2026-08-19 | `helm search repo ingress-nginx --versions` (M5-S1), read back with `helm list -A`. **Not** the upstream `deploy/static/provider/kind` manifest: it selects `ingress-ready=true`, a label kind writes only when the kind config asks and ours does not — and the kind config is read at cluster-CREATE only, so the label is unavailable at a price M5 will not pay |
+| cert-manager chart | **v1.21.1** (appVersion v1.21.1), images `quay.io/jetstack/cert-manager-{controller,webhook,cainjector,startupapicheck}:v1.21.1` | 2026-08-19 | `helm search repo jetstack --versions` (M5-S1). It exists for ONE reason: KServe's controller runs admission/conversion webhooks, and a webhook is an HTTPS endpoint the API server calls. `crds.enabled: true` (the release owns them), `crds.keep: false` |
+| KServe charts | **`oci://ghcr.io/kserve/charts/kserve-crd` and `…/kserve-resources`, both v0.20.0** — OCI, so the version IS the tag and there is no repo index to drift. Digests `sha256:92deb742d22a…` (crd) and `sha256:956c4860374f…` (resources) | 2026-08-19 | `helm show chart oci://…` + `curl` against the KServe releases API (M5-S1; v0.20.0 released 2026-08-06). Images: `kserve/kserve-controller:v0.20.0` · `kserve/storage-initializer:v0.20.0` · `quay.io/brancz/kube-rbac-proxy:v0.18.0`. **Six CRDs register cleanly on Kubernetes v1.36.1** — the M5 kickoff's risk R1 did not materialise and ADR-004's plain-mlserver fallback stays armed and unspent |
+| KServe `deploymentMode` | **`RawDeployment`** (ADR-004's Standard mode) — the chart default is `Knative` | 2026-08-19 | `infra/helm/kserve/values.yaml`, and READ BACK off `configmap/inferenceservice-config` by `scripts/deploy_serving.sh` rather than off the values that were submitted. Honest cost, landing on M6: **Standard mode has no canary** — `canaryTrafficPercent` requires Serverless (the prior-art ADOPT) |
 
 ## The data contract (M1-S1) — where the rules actually live
 Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT
@@ -1237,6 +1241,52 @@ can never disagree (the port-family twins lesson, applied before it bit).
   `make pipeline` caught the gate's own advice line, and the ban on `flyte get` caught
   `kubectl -n flyte get deploy`.
 
+## The records under review, and the serving platform (M5-S1)
+- **`automation/runs/**/*.json` is TRACKED from this story on — F-029 CLOSED.**
+  Two milestone gates REPLAY those records and both red teams simulate an EDITED
+  one, so what a gate reads must be what review can see; until now an edit left
+  no diff. 32 records, 236 KB, largest under 100 KB. **Logs and `.status` stay
+  ignored** — transcripts, and no gate reads them for a verdict. The gitignore is
+  pattern-based and had to be: a bare `automation/runs/` exclusion makes git stop
+  DESCENDING, so a `!` rule beneath it is silently inert (`automation/runs/**` +
+  `!automation/runs/**/` + `!automation/runs/**/*.json`, verified both directions
+  with `git check-ignore -v`). Re-run over the moved files: **verify-m3 46/46 ·
+  verify-m4 39/39 · both red teams PASSED** with sha256-verified restores. The
+  new checkable property: **a clean drill leaves a CLEAN TREE**, which could not
+  be stated while the files were invisible to git. Also: `test_bakeoff.py`'s
+  skip-when-the-record-is-absent became an ASSERTION (host suite **544 passed, no
+  skips**). What this does NOT claim: the records are now REVIEWABLE, not
+  verified — a tampered record is a **diff**, and what used to stand between a
+  rewritten number and a green gate was only that nobody rewrote it.
+- **`make deploy-serving` installs a route, a CA and an operator — and NO model.**
+  It does not read `.env`, passes no `--set`, and a test asserts it cannot name
+  `champion`/`models:/`/`mlflow` **in code** (asserted over code only, because the
+  script argues its own design and a word-search greps the argument — #53/#68
+  applied before they bit). M5 law 2 made falsifiable at the cheapest level: a
+  script that does not know the registry exists. `@champion` version 2, unread.
+- **The route's second hop is the whole trick.** kind published 8081←80 on the
+  control-plane node at CREATE; that is a route only once something BINDS 80 on
+  that node. `hostPort` + a hostname nodeSelector + a toleration for that node's
+  taint — and the node name is DERIVED from the kind config's cluster name, with
+  the values file asserted against it, so a rename fails at deploy time rather
+  than scheduling onto a node with no published ports (gotcha #52). The upstream
+  kind ingress manifest was NOT used: it selects `ingress-ready=true`, a label
+  this cluster was built without, and the kind config is read at create time only.
+- **KServe is Standard/RawDeployment (ADR-004) and the mode is read back off the
+  live ConfigMap**, never off the values submitted. Six CRDs registered cleanly on
+  **Kubernetes v1.36.1**, so risk R1 did not materialise and the plain-mlserver
+  fallback is armed and unspent. Honest cost, landing on M6: **Standard has no
+  canary** — `canaryTrafficPercent` requires Serverless.
+- **`make backup` ran first and proved its own design.** 6 databases and 331
+  objects where M4-S2 had 5 and 105 — nobody edited a list, because the script
+  enumerates from the server. **Restore is still NOT rehearsed** and every
+  artifact says so.
+- **The accept check went RED over a perfectly good install** by demanding
+  `Server: nginx`, a header modern ingress-nginx suppresses on purpose. #59 says
+  assert on a positive artifact; it does not say check the artifact EXISTS. Fixed
+  by asking the server: `GET /healthz` -> 200 is the controller's OWN endpoint
+  (`/nginx-health` 404s), the same shape M4-S2 found for Flyte. **gotcha #70.**
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1267,10 +1317,23 @@ cluster-CREATE time only, so the route is declared, never port-forwarded:
 `nodePort`. Live pairs: 5000←30500 (`infra/manifests/mlflow-nodeport.yaml`),
 9000←30900 and 9001←30901 (`infra/helm/minio/values.yaml`), **3030←30300**
 (`infra/manifests/metabase.yaml`, added M1-S5), 8081←80 / 8443←443
-(ingress, M5). Each pair is TWINS across two files — `tests/unit/
+(ingress, **LIVE from M5-S1**). Each pair is TWINS across two files — `tests/unit/
 test_platform_scripts.py` fails if they drift. Adding a port means
 `make cluster-down && make cluster-up`; there is no live path — M1-S5's
 rebuild was PLANNED for exactly this reason, not discovered.
+
+**8081/8443 are LIVE from M5-S1, and the second hop is the one people debug
+wrong.** kind published `containerPort 80 -> hostPort 8081` on the CONTROL-PLANE
+node at create time; that only becomes a route when something BINDS port 80 on
+that node. So `infra/helm/ingress-nginx/values.yaml` uses `hostPort` plus a
+`kubernetes.io/hostname` nodeSelector plus a toleration for that node's
+`node-role.kubernetes.io/control-plane:NoSchedule` taint — the selector alone
+leaves the pod Pending forever with a message about taints, and a controller on a
+WORKER answers nothing and looks exactly like a KServe fault. The node name is
+DERIVED from the kind config's cluster name by `scripts/deploy_serving.sh` and the
+values file is asserted against it (gotcha #52), so a rename fails at deploy time.
+Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
+`GET /healthz` -> 200 (the controller's own endpoint — gotcha #70).
 
 ## Commands (fill as they become real; each idempotent, each with a verify twin)
 | Intent | Command | Verified |
@@ -1307,6 +1370,7 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | Gate check M3 | `make verify-m3` | VERIFIED 2026-08-18 (M3-S5): **GREEN 46/46 in 4.7 s, exit 0**, 8 sections — dossier (20 candidates, source + leakage note each, all 3 HIGH-risk rows constrained to TRAIN months) · ablation (5 groups, both deltas, **DR-02's 0.50% bar RE-APPLIED to the table's own numbers reproduces all five verdicts**, 3 drops present, v2 == the survivors) · leakage drill (three numbers parse AND reconcile, `point_in_time=True` still the default, exactly one CALLER may flip it) · tuning (both sniper studies in Postgres at the count their JSON records, 6 PRUNED, the resume drill's kill survived) · **the five bake-off verdicts replayed through `gate.decide` on disk** · the four guards (F-011 both halves, val, flattering floor, F-008) · registry coherent with `bakeoff.json`'s recorded winner · F-013's one home. **Re-fits NOTHING** (M3 cost 12,447 s of fitting) and leaves the registry identical — checked: alias 2, versions [1,2]. No skip flag, no fast mode. Transcript: `docs/verify_m3_transcripts.md` §1 |
 | Prove the M3 gate can go RED | `make verify-m3-redteam` (`bash scripts/verify_m3_redteam.sh`) | VERIFIED 2026-08-18 (M3-S5): rewrites ONE contender's measured KPI-09 in `automation/runs/m3s5/bakeoff.json` (`auto-on-v1` 3.5038 → 3.2000) and leaves its recorded verdict at REFUSE → **RED exit 1**, naming the row AND both verdicts, **the four UNTAMPERED replays still passing** (what separates a replay from a checksum: red on a WRONG number, not on any edit), **44 of 46 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`c4a323ea072a…` before and after) → **GREEN 46/46**. Touches no model, no run, no registry, no study |
 | Rehearse the M4 graph locally (M4-S1) | `make pipeline-local MONTH=2019-01` (`uv run python pipelines/tasks.py --month …`; `--gate` exists only so the F-008 refusal can be watched) | VERIFIED 2026-08-18 (M4-S1): six stages composed on one month, **exit 0** — ingest 7,584,656/7,696,617 rows (1.4547% rejected, tracked tree unchanged in git) · validate re-read the parquet through the 2019 output contract, 20 columns · build_features set **v2**, 24 columns · train `lightgbm-v1` run `27aa90597f61…`, 265.8 s, sampled=True judged=False · evaluate reported the ONE evaluator's numbers · register **`decision=NO_VERDICT promoted=False`, CLI exit-code class 3** and `@champion is version 2 — read, never written`. **No orchestrator, no verdict, no result** — one train month against the champion's six (F-008). Transcript: `docs/pipeline_graph_m4.md` §4 |
+| The serving PLATFORM (M5-S1) | `make deploy-serving` (`scripts/deploy_serving.sh`; `DRY_RUN=1` mutates NOTHING, helm included) — ingress-nginx + cert-manager + KServe Standard. **Installs NO model** | VERIFIED 2026-08-19 (M5-S1): four releases at REVISION 1 in **3m13s** — `ingress-nginx 4.15.1` · `cert-manager v1.21.1` · `kserve-crd`/`kserve-resources v0.20.0` — the controller landing on **mlops-taxi-control-plane** (the node whose port 80 kind publishes as 8081; the name is DERIVED from the kind config and the values file asserted against it), `serving-cert True` issued by cert-manager, and `defaultDeploymentMode: RawDeployment` **read back off the live `inferenceservice-config` ConfigMap**, not off the values submitted. **Idempotent re-run = REVISION 2 with every pod 4m44s/3m35s/2m35s old and unrestarted** (the M4-S2 shape). Six KServe CRDs register on **Kubernetes v1.36.1** — risk R1 did not materialise, ADR-004's mlserver fallback armed and unspent. Accept: `GET localhost:8081/` -> **404** (the pass: route up, nothing behind it) AND `GET /healthz` -> **200**. Its FIRST accept check went RED over a perfectly good install by demanding a `Server:` header ingress-nginx suppresses — **gotcha #70**. `DRY_RUN=1` verified to leave `helm list -A` and the namespace list untouched. Transcript: `docs/serving_m5.md` §2 |
 | Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS NOT REHEARSED** — said in the header, in every `MANIFEST.txt` and in the ledger; an M6-gameday candidate. Same-disk limit, identical to the DVC remote's |
 | Port pre-check, now holder-aware (F-021, M4-S2) | `make ports` | RE-VERIFIED 2026-08-18 (M4-S2) against the LIVE cluster: `6 port(s) held by US — the 'mlops-taxi' cluster is up, which is expected`, each naming port, purpose and `-> container mlops-taxi-control-plane`, then `OK — 10 required port(s): 4 free, 6 held by us, 0 foreign.` **exit 0** — where it used to refuse and advise stopping the stack that holds the registry. The foreign refusal is UNSOFTENED: two unit tests use the same bound port and the same fake `docker ps`, differing only in the container NAME (`mlops-taxi-control-plane` → exit 0 · `somebody-elses-stack-web-1` → exit 2), and M0-S2's fake-listener red-team (no docker shim) still goes red |
 | Flyte on the cluster (M4-S2) | `make deploy-flyte` (`scripts/deploy_flyte.sh`; `DRY_RUN=1` mutates NOTHING, helm included) | VERIFIED 2026-08-18 (M4-S2): `STATUS: deployed REVISION: 2`, all three deployments rolled out, `[pg-db] flyte: before = role absent, database absent` → `ok flyte owner=flyte` (`5 database(s) converged`). **Idempotence proved by pod AGE**: the re-run reported every deployment rolled out while all three pods were **17 minutes old** — a clean upgrade that restarted nothing. First install FAILED `context deadline exceeded` with all pods healthy (the 99 MB console image took **9m49s** to pull); `--wait` is now 20m with that measurement written beside it. Self-sufficient (re-runs namespaces/secrets/D-002/MinIO, the M1-S5 rule). No secret on a command line — mode-600 overlay deleted on EXIT. Cluster never went down |
@@ -1477,4 +1541,12 @@ was gitignored, so `verify-m3`'s replay inputs and every record `verify-m4` read
 were invisible to review, which is precisely the edit both red teams simulate. Run
 `git check-ignore -v` before writing "committed" near a verifier (#69, F-029 —
 the STATE was fixed at M5-S1 by tracking the records; the check is the lesson,
-and it is a two-second command)**.
+and it is a two-second command)**. Newest (M5-S1): **a positive
+discriminator can name a signature the deployed thing deliberately SUPPRESSES —
+the serving route's accept check demanded a `Server: nginx` header and went RED
+over a healthy, correctly-scheduled controller serving a correct 404, because
+modern ingress-nginx omits that header on purpose. #59 says assert on a positive
+artifact; it does not say check that the artifact EXISTS. Ask the server:
+`GET /healthz` -> 200 is the controller's own endpoint and `/nginx-health` 404s
+(#70, sibling of #55 — a verifier failing for its own reasons and blaming the
+artifact)**.
