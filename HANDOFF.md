@@ -1,5 +1,127 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (bh) — M6-S4: two ways to take a change back, and only one is cheap
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE (Accountable),
+MLOps (R)** (charter read at entry; refusals in play: nothing promotes, no
+registry version minted, the cluster never goes down, every wire mutation
+deliberate and recorded, the alias moves EXACTLY the two times M6 law 3
+sanctions).
+Boot reads: CLAUDE.md · HANDOFF (bg) · M6 KICKOFF · AWAITING_PO.
+**Staleness check passed** — tree clean at `623dfc1`, no `automation/STOP`, no
+detached job pending, 3 nodes Ready v1.36.1, `@champion` version 2,
+`features.version` v2, and the v1 shadow still up exactly as (bg) left it.
+**M6-S4 COMPLETE.** PR **#37**, merged (`7e7acdf`), reachable from origin/main.
+End state is exactly M5's: `@champion` **2**, `configs/train.yaml:
+features.version` **v2** (byte-identical by `git hash-object`), champion at
+**100%**, canary torn down, `make verify-m5` **GREEN 49/49**, `make parity`
+**0.000e+00** over 16 hazard rows.
+
+### Done
+- **`make canary-deploy`** — a second InferenceService carrying the champion's
+  OWN bytes (M6-S3's DA memo said NO-GO for v1, so the MECHANISM is what is
+  rehearsed) plus its dedicated backend Service. **ADR-011 condition 2's
+  named-but-UNPROVEN remedy is PROVED, both ways**: `MLSERVER_MODEL_NAME:
+  nyc-taxi-eta` wins KServe's merge (checked on the Deployment object), the
+  canary answers `/v2/models/nyc-taxi-eta/infer` with **39.0019 minutes** on its
+  own host, and **404s on its own isvc name** — the negative half, because a
+  runtime answering to both names would pass a positive-only check.
+- **`make canary` PASS 11/11**, prediction on disk first. One continuous 6-minute
+  open-loop run at M5-S4's shape (4 req/s, concurrency 8, hazards) with the
+  weight changed from inside the load client's per-second callback. Split read
+  from COUNTERS: ingress `canary` label **0/177 · 41/420 = 9.76% · 301/301 =
+  100% · 0/300**, corroborated by the predictors' own `rest_server_requests_total`
+  at **204/0 · 379/39 = 9.33% · 0/240 = 100% · 300/0**. **0 of 1,440 requests
+  failed**, champion pod UID unchanged, **revert 0.37 s** against §9/M6's 120 s.
+- **`make rollback` PASS 10/10 — F-032's un-rehearsed half, RUN, both ways.**
+  v2→v1: alias 0.050 s · config <0.001 s · `make serve` 35.30 s = **35.35 s**,
+  with **27.93 s of failing requests (55 of 85 probes)**. v1→v2: **34.38 s** and
+  **0.501 s, one 502**. Raw `set_registered_model_alias`, never
+  `registry.promote` (F-011's refusal intact).
+- **F-040** (a rollback is not a 0.5 s re-deploy, and it is not symmetric) ·
+  **F-039** (a hand-authored Ingress must not take a KServe-generated name) ·
+  gotchas **#85/#86** · deployments ledger row · `docs/release_rehearsal_m6.md` ·
+  runbook §4 **REHEARSED 2026-08-19** with its cost table + new **§4.5** for the
+  traffic path + §8's list rewritten · a dated pointer in the M5 PRR (its
+  minutes NOT rewritten — the `error_memo_m2.md` §9 precedent) · CLAUDE.md
+  section, 4 command rows, traps paragraph · field note.
+- **771 unit tests** (18 new in `tests/unit/test_canary_and_rollback.py`), ruff
+  clean, CI green.
+
+### Decisions
+- **The canary carries version 2, not the shadow's version 1** — the memo
+  refused v1 and shifting rider traffic to a refused model is a release nobody
+  wants. Honest cost stated everywhere it matters: both backends answer under
+  one model name, so **a constant `model_version: 2` in the record is NOT
+  evidence that no traffic moved**. M6-S3 could attribute at the CLIENT only
+  because its canary was broken (the 404 rate was the split), which is not a
+  property to design for.
+- **`verify-m5`'s NOT-REHEARSED assertion was replaced by a PROPERTY, not
+  widened.** Rehearsing the rollback correctly would have turned it RED (gotcha
+  #50, fifth time). §4 must now DECLARE its status in its HEADING, and a claim
+  of REHEARSED must cite a record this repo holds. The first repair searched the
+  section BODY and reported a rehearsed rollback as un-rehearsed, because §4
+  legitimately contains both "REHEARSED 2026-08-19" and a sentence about an
+  un-rehearsed mitigation.
+- **The r4 check was corrected and the verdict RE-JUDGED from the record**
+  (`make rollback ROLLBACK_ARGS=--rejudge`, the `verify-m3` replay idiom) rather
+  than by re-running the rehearsal — that would have cost two more alias moves
+  and M6 sanctions exactly two.
+- **F-040's remedy was NOT adopted.** Reordering to alias → `make serve` →
+  config line should collapse the 27.93 s window; it follows from one
+  measurement, has never been run, and needs two more alias moves. It is written
+  into §4 labelled *do not silently substitute during an incident* and routed to
+  M6-S5. A named remedy is not a proved one — ADR-011's own discipline.
+- **The admission webhook was again NOT re-enabled.** ADR-011 argued the ~15 s
+  outage was better spent here, where Ingresses are hand-authored — but the
+  canary route needed no webhook to be validated, and the drill's own
+  precondition (controller must register `noServer: true` at the applied weight)
+  catches what a webhook would. Re-routed to S5 with that noted, not dropped.
+
+### Defects/Surprises
+- **F-039, and it cost the first canary run: 0 of 420 moved at weight 10.** The
+  route was named `nyc-taxi-eta-canary` — exactly what KServe generates for the
+  isvc of that name — so `kubectl apply` wrote the canary annotations onto the
+  CONTROLLER-OWNED object and KServe reverted them. **The symptom is
+  byte-for-byte ADR-011 condition 1's**, which this program had just spent a
+  story learning, so the obvious diagnosis was wrong. The tell was **3 of 300**
+  slipping through at weight 100 — the window between apply and reconcile.
+  Record kept unedited at `automation/runs/m6-canary/attempt1-ingress-name-collision/`.
+- **F-040's asymmetry was not predicted by anyone**: rolling FORWARD costs
+  0.501 s because a 24-column request sent to a 5-column model is TOLERATED
+  (MLflow takes the columns its signature names), while a 5-column request to a
+  24-column model is missing inputs and refused. Error classes say it exactly:
+  leg 1 `['HTTP 500','HTTP 502']`, leg 2 `['HTTP 502']`.
+- **One prediction of mine was wrong and is kept**: the half-way `verify-m5`
+  failures are NOT "only about the bake-off winner" — two of the three are the
+  gate ASKING the endpoint for a prediction and noticing a different model
+  serves. §2's coherence check stayed **GREEN at `v1`**, which is the whole
+  point of running the gate at a state it was never written for.
+- **Wall count**: two attempts on "make the canary split traffic" (name
+  collision → 0%, renamed + precondition → **9.76%/100%**, succeeded on the
+  second); one on the rollback (ran first time, one check corrected afterwards).
+
+### Next
+**Executor session → M6-S5** (Gameday 1 with a positive control first, the
+platform restore rehearsal, and the M6 gate). What it inherits, precisely:
+**F-040's reordered rollback is the named gameday candidate** and the only way
+to close the 27.93 s window — it needs two alias moves, and S5's gameday is the
+sanctioned place to spend them · **the traffic revert is 0.37 s and the alias
+rollback is 27.93 s**, so a gameday that needs to take something back should
+reach for the canary path first · **`make canary-deploy` / `make canary` /
+`make rollback` are re-runnable** and every record they write is tracked JSON ·
+**the v1 shadow isvc is STILL RUNNING** (`make shadow TEARDOWN=1` removes it) ·
+**the admission webhook re-enable is re-routed here** with its ~15 s cost
+argued in ADR-011 · **restore is still NOT rehearsed** (M4-S2, said in every
+backup artifact) and is S5's · `verify-m6`'s "90/10 observed" and "rollback
+<2 min under load" legs both have tracked records to read rather than re-run
+(`automation/runs/m6-canary/release_drill.json`,
+`automation/runs/m6-rollback/alias_rollback.json`) — and gotcha #66's rule
+applies: read the RECORD, do not re-ask the newest run.
+Chain scheduled: `automation/next_session.sh executor 120`.
+
+
 ## Session 2026-08-19 (bg) — M6-S3: the spike, the shadow, and what "configured" is worth
 
 ### State
