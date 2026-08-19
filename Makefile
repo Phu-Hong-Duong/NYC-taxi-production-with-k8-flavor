@@ -168,6 +168,10 @@ quote: ## ask the live endpoint for one quote through the ONE feature path (M5-S
 	@uv run python -m taxi_mlops.serving $(QUOTE_ARGS)
 shadow: ## registry version 1 as a second InferenceService with ZERO rider traffic (M6-S3; DRY_RUN=1 previews, TEARDOWN=1 removes)
 	@bash scripts/deploy_shadow.sh
+shadow-run: ## dual-send the same requests to champion and shadow, write the disagreement table (M6-S3; a READER)
+	@uv run python -m taxi_mlops.serving.shadow $(SHADOW_ARGS)
+canary-spike: ## ADR-004's spike, MEASURED: can ingress-nginx split traffic here? (M6-S3; --dry-run previews)
+	@uv run python scripts/canary_spike_probe.py $(SPIKE_ARGS)
 parity: ## THE parity test: one matrix, scored offline AND on the wire, max |delta| <= 1e-6 minutes (M5-S3; a READER — deploys nothing, moves no alias)
 	@uv run python -m taxi_mlops.serving.parity $(PARITY_ARGS)
 parity-redteam: ## prove the parity test can go RED without touching the served model (M5-S3)
