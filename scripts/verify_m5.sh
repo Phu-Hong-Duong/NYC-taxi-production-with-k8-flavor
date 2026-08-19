@@ -649,9 +649,15 @@ try:
         exists only at the precision it was written at (gotcha #42). So the
         comparison is made at each precision the record's own value can be
         rendered to, which still refuses a number the record does not hold.
+
+        The match is anchored on both sides. A bare substring search accepts
+        `14` inside `14.53`, which would let a rewritten 14.251 pass against a
+        runbook quoting 14.53 — i.e. the loosening would land exactly on the
+        fault the red team plants.
         """
         forms = {f"{value:.{d}f}".rstrip("0").rstrip(".") for d in range(0, 4)}
-        return any(form in runbook for form in forms)
+        return any(re.search(rf"(?<![\d.]){re.escape(form)}(?![\d.]?\d)", runbook)
+                   for form in forms)
 
     absent = {k: v for k, v in quoted.items() if not written(v)}
     if runbook and not absent:
