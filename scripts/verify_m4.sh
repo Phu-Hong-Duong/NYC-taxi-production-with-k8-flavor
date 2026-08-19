@@ -494,13 +494,31 @@ try:
     else:
         no(f"MLflow gained nothing during run 1 ({before} -> {after1}) — run 1 executed "
            f"no fit, so run 2's saving proves nothing")
+
+    # ...and the two systems must AGREE, which is a strictly stronger statement
+    # than either of them passing alone. The control plane's cache_status and
+    # MLflow's run count are independent witnesses to the same question — did the
+    # fit run a second time? — so a record claiming a stage re-executed while the
+    # tracking server minted nothing is a contradiction, and one of them is wrong.
+    reexecuted = {n for n, a in cacheable2.items() if a["cache_status"] != "CACHE_HIT"}
+    minted = after2 - after1
+    if not reexecuted and minted == 0:
+        ok("the two witnesses AGREE: the control plane says no cacheable stage re-executed "
+           "and MLflow minted no run to contradict it")
+    elif reexecuted and minted > 0:
+        ok(f"the two witnesses agree: {sorted(reexecuted)} re-executed and MLflow gained "
+           f"{minted} run(s) — consistent, though the rerun was not fully cached")
+    else:
+        no(f"the two witnesses CONTRADICT each other: the record says {sorted(reexecuted)} "
+           f"re-executed on the rerun while MLflow minted {minted} run(s) — a fit either "
+           f"logs or does not happen, so one of these records is wrong")
 except SystemExit:
     pass
 except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the cache check itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 5 "the cache check"
+expect_verdicts 6 "the cache check"
 
 # ------------------------------- 5. losing a pod, and the budget it did not spend
 section "5. kill-a-pod — the run survived it, and the retry budget is real AND finite"
