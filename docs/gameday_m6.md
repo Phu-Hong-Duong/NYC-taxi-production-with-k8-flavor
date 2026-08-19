@@ -190,6 +190,92 @@ whichever arrives first.
 
 ## 4. Scenario 3 — saturate the CPU
 
+**Injection**: 8 req/s open-loop, concurrency 16, hazard mix, for a declared
+780 s window — M5-S4 measured 8 req/s at **101% of the 2-core limit**, so this is
+deliberately past the ceiling. The window is long because A-6 sustains for 10 m
+and a latency measurement's 180 s would never have reached it.
+
+| | predicted | observed |
+|---|---|---|
+| A-6 `PredictorCpuThrottledSustained` | fires after its 10 m sustain | **pending T+244.1 s, firing T+844.3 s** |
+| throttled fraction | above the 0.90 bar | 0.00 before → **0.9996** |
+| A-2 · A-3 · A-5 (×2) · A-7 | all inactive | **all inactive** |
+| the pod | never replaced | same uid throughout |
+| A-1 `PredictorLatencySLOBurning` | **UNPREDICTABLE, on purpose** | pending T+49.1 s, **firing T+349.3 s, back to inactive T+514.3 s while the load ran** |
+| errors | **zero** | **125 of 6,240 — WRONG** |
+
+The throttling ramp is the whole story of §2.1 running backwards:
+**0.414 → 0.686 → 0.826 → 0.927 → 1.000** at T+60/120/180/240/300 s. The
+expression is a ratio of two `rate(...[5m])`s, so it climbs as the window fills
+with saturated periods; A-6's 10-minute sustain does not start when the load
+starts, it starts when the ratio CROSSES — 244 s later. Firing at
+**T+844.3 s = 244.1 + 600.2** is that clock, to the second.
+
+**The client's own numbers are the clearest picture of an unservable arrival
+rate**: `latency_ms` (scheduled → response) p50 **94,553 ms** against
+`service_ms` (sent → response) p50 **1,084 ms**, and an **achieved rate of
+6.775 req/s against a target of 8** — the 780 s window took **921 s** of wall
+clock to drain. The gap between those two numbers IS the backlog, and it is only
+visible because the loop is open (M5-S4's design decision, paying off in the one
+scenario built to break it).
+
+### 4.1 The second wrong prediction: saturation DOES produce errors, eventually
+
+Gotcha #74 was written from M5-S4's ramp, where every rate including 8 req/s
+measured **zero errors**, and this scenario predicted zero again in those words.
+It measured **125 errors — all `HTTP 502`, 2.00%**, spread from T+7.75 s to
+T+909.7 s.
+
+The difference between the two measurements is **duration, not rate**: M5-S4's
+ramp held 8 req/s for 60 s and this held it for fifteen minutes. Once the backlog
+outgrows what ingress-nginx will wait for, the edge starts returning 502 on its
+own account — the upstream never failed, it just never answered in time.
+
+So the lesson is refined rather than reversed, and the refinement matters for an
+on-call: **saturation shows up as latency first and as errors much later** — by
+which time latency has been wrong for ten minutes and A-1/A-6 have had every
+chance to say so. An error-rate alert is still not a saturation instrument; it is
+a very late one. Note also what the errors did NOT do: at 2.00% they came nowhere
+near A-2's 10% bar, so the page a saturated service produces is A-6's, exactly as
+designed.
+
+### 4.2 F-043 — the exporter starves under the condition it exists to report
+
+**A-1 fired at T+349.3 s and went back to `inactive` at T+514.3 s while the
+service was at its worst.** That is not the latency improving. The predictor's
+own `/metrics` endpoint is served by the same CPU-starved process, and Prometheus
+recorded it:
+
+| instance | what it was doing | max `scrape_duration_seconds` | min `up` |
+|---|---|---|---|
+| `10.244.1.14:8082` — the champion, saturated | serving the injection | **4.613 s** | **0** |
+| `10.244.2.12:8082` — the v1 shadow, idle | nothing | 0.004 s | 1 |
+
+A thousand-fold difference in scrape cost between two instances of the same
+exporter, and at least one scrape of the loaded one **failed outright**. A failed
+scrape makes the series stale; a stale series makes A-1's expression evaluate
+over nothing; an expression over nothing is not `> 0.05`, so the alert cleared
+itself in the middle of the event it was firing about.
+
+`docs/slo_serving.md` §3 already argues that A-2 is measured at the EDGE because
+*"when the predictor dies its exporter dies with it — mlserver cannot report its
+own absence"*. This is the same argument one notch weaker and therefore more
+dangerous: **a predictor does not have to die to stop reporting. It only has to
+be busy.** And the instrument that held up is the one on the other side of that
+boundary — A-6 reads the kubelet's cAdvisor, a different process on the node,
+which is why it was still able to fire at T+844 while the pod's own exporter was
+timing out.
+
+The idle shadow is an accidental control here, and a good one: it rules out
+Prometheus, the network and the scrape config, because the same job scraped both
+instances every 15 s throughout.
+
+Filed as **F-043**, OPEN, routed to the M6→M7 boundary with the options costed in
+the ledger row: the honest ones are to raise the container's CPU limit (a real
+resource change), to give the metrics endpoint its own thread budget (an mlserver
+question), or to accept it and lean on the node-side signals — which is what the
+alert set already does by accident, and would then do on purpose.
+
 <!-- SCENARIO-3 -->
 
 ## 5. The restore rehearsal — the label moves one notch, not to green
@@ -268,4 +354,34 @@ boards. It was never a claim that the app-db mirrors the repository, and a check
 written as though it were would have gone red on a correct backup of a correct
 platform every time it ran.
 
-<!-- ACCEPT -->
+---
+
+## 6. The accept bar, line by line
+
+§9/M6 and the M6 kickoff, quoted and answered:
+
+| asked | answer |
+|---|---|
+| gameday record committed with predicted-vs-observed per scenario | `automation/runs/m6-gameday/{predictions,control,kill,storage,saturation,gameday}.json`, tracked |
+| **positive control first** | scenario 0, GREEN 11/11, before any negative result was read |
+| staged failures with a **distinguishable signature predicted BEFORE injection** | all predictions in `predictions.json`, written by `--scenario predict` before the first injection; a unit test asserts the committed file still equals the code's `PREDICTIONS` |
+| (1) kill the predictor under load | §2 — 13.75 s, a different pod uid, nothing fired |
+| (2) break the storage-config secret, verified undo staged first | §3 — 8/8, `make serve` exit 0, A-7 cleared 15 s later |
+| (3) saturate CPU | §4 — A-6 fired at T+844.3 s, throttled fraction 0.9996 |
+| (4) the platform-restore rehearsal | §5 — GREEN 17/17, labels moved one notch everywhere |
+| **≥1 prediction wrong and investigated** | **two**, neither engineered: §2.1 (F-041, the transient ratio) and §4.1 (errors at sustained saturation). A third surprise — §4.2, F-043 — was not a prediction at all: nobody had thought to ask whether the exporter survives its own subject |
+| the alias | **`@champion` version 2 before and after every scenario**, read by each one and asserted |
+
+**What this gameday cost, stated plainly.** One deliberate outage of the only
+predictor (scenario 2, ~5 minutes, undo staged first and exercised), one killed
+pod (13.75 s), ~2,700 deliberately failing requests across the control and the
+saturation run, and about 25 minutes of a saturated container. No cluster
+restart, no helm release beyond `make serve`'s own idempotent re-converge, no
+registry write, no alias move.
+
+**What it changed in the repository.** Two corrections to written arguments that
+were inferences rather than measurements (`docs/slo_serving.md` §3's A-2
+paragraph and the A-7 rule's `why`), one new open finding (F-043), and **no
+threshold anywhere**. Every alert behaved correctly in every scenario; what was
+wrong was what we had written down about them.
+
