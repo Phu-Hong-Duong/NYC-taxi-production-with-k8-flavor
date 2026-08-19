@@ -1,0 +1,261 @@
+{
+  "story": "M6-S5",
+  "measured_at": "2026-08-19T16:08:27Z",
+  "backup": "/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-19T05-59-36Z",
+  "targets": [
+    "mlflow",
+    "optuna",
+    "metabase"
+  ],
+  "what_this_claims": "the three small irreplaceable dumps restore into scratch databases whose contents match the live platform AND this repository's own records, and the object mirror uploads back byte-identically",
+  "what_this_does_not_claim": "that a full restore over a DEAD platform works. Nothing here restores over anything; the live databases are only counted, never written.",
+  "databases": {
+    "mlflow": {
+      "dump": "/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-19T05-59-36Z/postgres/mlflow.sql.gz",
+      "dump_bytes": 69474,
+      "scratch_database": "mlflow_restore_drill",
+      "restore_seconds": 2.34,
+      "psql_exit_code": 0,
+      "stderr_tail": [],
+      "row_counts": {
+        "restored": {
+          "experiments": 8,
+          "runs": 101,
+          "registered_models": 1,
+          "model_versions": 2
+        },
+        "live": {
+          "experiments": 8,
+          "runs": 101,
+          "registered_models": 1,
+          "model_versions": 2
+        }
+      }
+    },
+    "optuna": {
+      "dump": "/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-19T05-59-36Z/postgres/optuna.sql.gz",
+      "dump_bytes": 27644,
+      "scratch_database": "optuna_restore_drill",
+      "restore_seconds": 0.78,
+      "psql_exit_code": 0,
+      "stderr_tail": [],
+      "row_counts": {
+        "restored": {
+          "studies": 5,
+          "trials": 59
+        },
+        "live": {
+          "studies": 5,
+          "trials": 59
+        }
+      }
+    },
+    "metabase": {
+      "dump": "/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-19T05-59-36Z/postgres/metabase.sql.gz",
+      "dump_bytes": 338164,
+      "scratch_database": "metabase_restore_drill",
+      "restore_seconds": 7.29,
+      "psql_exit_code": 0,
+      "stderr_tail": [],
+      "row_counts": {
+        "restored": {
+          "report_card": 67,
+          "report_dashboard": 4,
+          "core_user": 2
+        },
+        "live": {
+          "report_card": 67,
+          "report_dashboard": 4,
+          "core_user": 2
+        }
+      }
+    }
+  },
+  "expected_from_repo": {
+    "metabase_dashboard_names": [
+      "Data health",
+      "Error segments (M2)",
+      "KPI board"
+    ],
+    "metabase_card_names": [
+      "KPI-01 \u00b7 busiest pickup zones (264/265 are 'unknown', not places)",
+      "KPI-01 \u00b7 months in the mart",
+      "KPI-01 \u00b7 newest month ingested",
+      "KPI-01 \u00b7 trips ingested per month",
+      "KPI-01 \u00b7 trips ingested, all months",
+      "KPI-02 \u00b7 overall rejection rate",
+      "KPI-02 \u00b7 rejection rate SERIES, by month",
+      "KPI-03 \u00b7 rejections attributed per rule (every rule, including the zeroes)",
+      "KPI-03 \u00b7 rejections per rule, by month",
+      "KPI-04 \u00b7 undocumented-value rate (drift by VALUE)",
+      "KPI-05 \u00b7 raw-byte provenance (sha256 per month)",
+      "KPI-06 / KPI-07 \u00b7 duration by month",
+      "KPI-06 \u00b7 median duration by pickup hour (the segmented view)",
+      "KPI-06 \u00b7 median trip duration, all months",
+      "KPI-07 \u00b7 P90 trip duration, all months",
+      "KPI-08 \u00b7 mean fare (windowed) WITH its excluded-row count",
+      "KPI-08 \u00b7 mean fare (windowed) by month, with exclusions",
+      "KPI-11 / KPI-13 \u00b7 error and margin by true trip duration (test)",
+      "KPI-11 \u00b7 error by hour of day (test)",
+      "KPI-11 \u00b7 error by stated party size (test)",
+      "KPI-11 \u00b7 the champion on each held-out split (equals the evaluator's value)",
+      "KPI-11 \u00b7 worst drop-off zones (test, >= 20,000 trips)",
+      "KPI-11 \u00b7 worst pickup zones (test, >= 20,000 trips)",
+      "KPI-12 \u00b7 within-5-min rate by true trip duration (test)",
+      "KPI-12 \u00b7 within-tolerance rate by day of week (test)",
+      "KPI-13 \u00b7 every segment where the GROUP BY beats the booster (test)",
+      "KPI-13 \u00b7 the margin is bought on the rows the GROUP BY cannot answer",
+      "KPI-13 \u00b7 what the booster buys, by hour of day (test)"
+    ],
+    "optuna_studies": {
+      "m3-sniper-v1": 9,
+      "m3-sniper-v2": 21
+    },
+    "sources": {
+      "metabase": "analytics/metabase/boards/*.json",
+      "optuna": "automation/runs/m3s4/sniper-*.json"
+    }
+  },
+  "mlflow_alias": {
+    "restored": "champion|2",
+    "live": "champion|2"
+  },
+  "optuna_studies": {
+    "restored": {
+      "m3-sniper-v2": 21,
+      "m3-prune-smoke": 16,
+      "m3-sniper-v1": 9,
+      "m3-smoke-v1": 4,
+      "m3-resume-drill-v1": 9
+    },
+    "expected_from_repo": {
+      "m3-sniper-v1": 9,
+      "m3-sniper-v2": 21
+    }
+  },
+  "metabase": {
+    "restored_dashboards": [
+      "Data health",
+      "E-commerce Insights",
+      "Error segments (M2)",
+      "KPI board"
+    ],
+    "restored_card_count": 67,
+    "expected_dashboard_names_from_repo": [
+      "Data health",
+      "Error segments (M2)",
+      "KPI board"
+    ],
+    "expected_card_count_from_repo": 28,
+    "extra_not_described_by_the_repo": [
+      "E-commerce Insights"
+    ],
+    "note": "a SUBSET check, deliberately: metabase_boards.py never deletes and Metabase ships its own example dashboard, so the app-db is a superset of the repo's boards by design"
+  },
+  "minio": {
+    "scratch_bucket": "restore-drill-scratch",
+    "objects_restored": 184,
+    "bytes_restored": 783327,
+    "seconds": 31.65,
+    "artifact_byte_identity": {
+      "key": "1/models/m-c6ba724338f84376a23d19d16e01ec45/artifacts/MLmodel",
+      "restored_sha256": "51aa46e27cc4b9bd0e048c2255f5ddc9cfe9c5dd830f86100d75d419333b87e8",
+      "live_sha256": "51aa46e27cc4b9bd0e048c2255f5ddc9cfe9c5dd830f86100d75d419333b87e8",
+      "bytes": 1274
+    },
+    "kept": false
+  },
+  "live_database_sizes": {
+    "before": {
+      "postgres": 7664099,
+      "mlflow": 12472803,
+      "template1": 7569935,
+      "template0": 7504399,
+      "marts": 14469296611,
+      "metabase": 25014755,
+      "optuna": 8942051,
+      "flyte": 9449955
+    },
+    "after": {
+      "postgres": 7664099,
+      "mlflow": 12472803,
+      "template1": 7569935,
+      "template0": 7504399,
+      "marts": 14469296611,
+      "metabase": 25014755,
+      "optuna": 8942051,
+      "flyte": 9449955
+    }
+  },
+  "checks": [
+    {
+      "passed": true,
+      "check": "mlflow: the dump re-verifies before restoring \u2014 complete marker present"
+    },
+    {
+      "passed": true,
+      "check": "mlflow: restored into mlflow_restore_drill in 2.34s with ON_ERROR_STOP=1 (exit 0)"
+    },
+    {
+      "passed": true,
+      "check": "mlflow: every counted table matches the LIVE database (experiments=8, runs=101, registered_models=1, model_versions=2)"
+    },
+    {
+      "passed": true,
+      "check": "optuna: the dump re-verifies before restoring \u2014 complete marker present"
+    },
+    {
+      "passed": true,
+      "check": "optuna: restored into optuna_restore_drill in 0.78s with ON_ERROR_STOP=1 (exit 0)"
+    },
+    {
+      "passed": true,
+      "check": "optuna: every counted table matches the LIVE database (studies=5, trials=59)"
+    },
+    {
+      "passed": true,
+      "check": "metabase: the dump re-verifies before restoring \u2014 complete marker present"
+    },
+    {
+      "passed": true,
+      "check": "metabase: restored into metabase_restore_drill in 7.29s with ON_ERROR_STOP=1 (exit 0)"
+    },
+    {
+      "passed": true,
+      "check": "metabase: every counted table matches the LIVE database (report_card=67, report_dashboard=4, core_user=2)"
+    },
+    {
+      "passed": true,
+      "check": "the restored registry carries the same @champion pointer as the live one: 'champion|2'"
+    },
+    {
+      "passed": true,
+      "check": "the restored studies carry the trial counts automation/runs/m3s4 recorded: {'m3-sniper-v1': 9, 'm3-sniper-v2': 21} (of {'m3-sniper-v1': 9, 'm3-sniper-v2': 21})"
+    },
+    {
+      "passed": true,
+      "check": "every board this repo commits survives the restore BY NAME: 3 dashboard(s) / 28 card(s) found among the restored 4/67 (the extra are Metabase's own examples: ['E-commerce Insights'])"
+    },
+    {
+      "passed": true,
+      "check": "flyte-data restored WHOLE into a scratch bucket: 184 object(s) / 783327 byte(s) == 184 file(s) / 783327 byte(s) on disk, in 31.65s"
+    },
+    {
+      "passed": true,
+      "check": "a restored MLflow artifact is byte-identical to the live object (1/models/m-c6ba724338f84376a23d19d16e01ec45/artifacts/MLmodel, sha256 51aa46e27cc4\u2026)"
+    },
+    {
+      "passed": true,
+      "check": "the scratch bucket is gone and the live bucket list is unchanged: ['flyte-data', 'mlflow-artifacts']"
+    },
+    {
+      "passed": true,
+      "check": "the live database list is unchanged: ['flyte', 'marts', 'metabase', 'mlflow', 'optuna', 'postgres', 'template0', 'template1']"
+    },
+    {
+      "passed": true,
+      "check": "no scratch database survives the drill"
+    }
+  ],
+  "verdict": "GREEN"
+}
