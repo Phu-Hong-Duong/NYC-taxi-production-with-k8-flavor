@@ -82,13 +82,23 @@ class Champion:
         }
 
 
-def load_champion(train_cfg: dict[str, Any]) -> Champion:
+def load_champion(train_cfg: dict[str, Any], *, version_number: str | None = None) -> Champion:
     """Resolve the alias, read the version back, and load its booster.
 
     Reads the alias through `get_model_version_by_alias`, never off
     `search_model_versions` — on MLflow server 3.15.1 that call returns versions
     whose `aliases` field is EMPTY (M2-S3's finding), so a champion resolved that
     way would be resolved by guessing.
+
+    `version_number` addresses an EXPLICIT version instead of following the
+    alias. Added at M5-S3 for `make parity-redteam`, whose arm B compares the
+    live endpoint against a model that is deliberately not the champion — and
+    which cannot do that by moving an alias, because moving the serving pointer
+    to plant a red-team cause is the one thing a red team must never do. It is a
+    branch at the RESOLUTION step and nowhere else: the F-009 logged-model
+    resolution, the target-transform refusal and the booster load below are the
+    same code either way, so the drill exercises the real loader. M5-S5's typed
+    rollback wants exactly this call, at exactly this precision.
     """
     import mlflow
 
@@ -98,13 +108,22 @@ def load_champion(train_cfg: dict[str, Any]) -> Champion:
     cfg = train_cfg["registry"]
     model_name, alias = cfg["model_name"], cfg["champion_alias"]
     client = mlflow.MlflowClient()
-    try:
-        version = client.get_model_version_by_alias(model_name, alias)
-    except Exception as exc:  # noqa: BLE001 — an unset alias is a first-class refusal
-        raise ChampionError(
-            f"models:/{model_name}@{alias} does not resolve: {exc}. Run `make train` — "
-            "the alias is set by the promotion gate and by nothing else."
-        ) from exc
+    if version_number is not None:
+        try:
+            version = client.get_model_version(model_name, str(version_number))
+        except Exception as exc:  # noqa: BLE001 — an absent version is a refusal
+            raise ChampionError(
+                f"models:/{model_name}/{version_number} does not resolve: {exc}."
+            ) from exc
+        alias = f"v{version_number}"
+    else:
+        try:
+            version = client.get_model_version_by_alias(model_name, alias)
+        except Exception as exc:  # noqa: BLE001 — an unset alias is a first-class refusal
+            raise ChampionError(
+                f"models:/{model_name}@{alias} does not resolve: {exc}. Run `make train` — "
+                "the alias is set by the promotion gate and by nothing else."
+            ) from exc
 
     run = client.get_run(version.run_id)
     transform = run.data.params.get("target_transform", "none")
@@ -118,7 +137,11 @@ def load_champion(train_cfg: dict[str, Any]) -> Champion:
             "transform; this path predicts in minutes and will not guess."
         )
 
-    uri = f"models:/{model_name}@{alias}"
+    uri = (
+        f"models:/{model_name}/{version_number}"
+        if version_number is not None
+        else f"models:/{model_name}@{alias}"
+    )
     # F-009, found here by de-risking the API before spending a training run on it:
     # `mlflow.lightgbm.load_model("models:/<name>@<alias>")` RAISES
     # `No such artifact: 'MLmodel'` against server+client 3.15.1, while

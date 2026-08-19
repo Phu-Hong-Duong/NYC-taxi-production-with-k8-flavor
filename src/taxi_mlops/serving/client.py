@@ -12,11 +12,20 @@ symptom:
    reimplemented, so a change to a feature changes both sides in one commit.
    M5-S3's parity test measures what this guarantees; it does not create it.
 
-2. **The column ORDER is the model's, not the config's.** The V2 payload is
-   positional — a list of inputs, one per feature — so a reordering that a
-   DataFrame would shrug off silently swaps `PULocationID` for `DOLocationID`
-   and returns a plausible number. The order comes from
-   `quote_time.feature_names(cfg)`, the same call the trainer made.
+2. **The column ORDER is the model's, not the config's** — and what that buys is
+   narrower than this file used to claim. The paragraph here said the V2 body is
+   POSITIONAL, so a reordering would silently swap `PULocationID` for
+   `DOLocationID`. **M5-S3's red team measured that and it is false for this
+   runtime**: rotating the order of the inputs changed the answer by exactly
+   0.000e+00 on all 16 hazard rows. mlserver hands MLflow a NAMED frame and the
+   logged signature reorders it by name, so on this deployment the wire order is
+   not load-bearing. The order still comes from `quote_time.feature_names(cfg)`,
+   the same call the trainer made, for two reasons that survive the correction:
+   a runtime that pairs positionally is a legal V2 implementation and M7's
+   transformer may be one, and sending the model's own order costs nothing. What
+   is NOT true is that this ordering is the thing standing between us and a
+   mispaired feature — the signature is, and it is the second time in this
+   milestone that the signature has caught what nothing else would have.
 
 3. **An uncovered date is REFUSED, in a type, and never guessed.** See below.
 
