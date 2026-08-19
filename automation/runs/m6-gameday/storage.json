@@ -1,0 +1,162 @@
+{
+  "story": "M6-S5",
+  "scenario": "storage",
+  "measured_at": "2026-08-19T16:36:11Z",
+  "prediction": {
+    "title": "break the storage credential, then delete the pod",
+    "injection": "secret/minio-serving's AWS_SECRET_ACCESS_KEY overwritten with a wrong value, then the predictor pod deleted. NO load is applied.",
+    "must_fire": [
+      "PredictorNoAvailableReplica",
+      "PredictorStorageInitializerNotReady"
+    ],
+    "must_not_fire": [
+      "PredictorLatencySLOBurning",
+      "ServingEdge5xxRateHigh",
+      "PredictorRequestRejectionRateHigh",
+      "PredictorRestartFlapping",
+      "PredictorCpuThrottledSustained"
+    ],
+    "signature": "the REPLACEMENT never starts: the pod sits in Init, the route answers 503 with no 5xx RATIO to speak of because nobody is asking, and the two alerts that fire are the two that need no traffic. Utterly unlike scenario 1, which is what makes the pair worth running.",
+    "why": "A-5 is `replicas_available < 1 for 2m` and the replacement cannot become available at all, so it fires at about T+2m plus one scrape. A-7 is `init_container_ready == 0 for 3m` and fires about a minute LATER. NOTE THE ORDER: the A-7 rule's own `why` annotation claims it 'fires before A-5 does', and 2m < 3m says it cannot. If A-7 arrives second, that annotation is wrong and the SLO doc owes a correction. A-2 stays inactive DESPITE a total outage \u2014 the blind spot docs/slo_serving.md \u00a73 documents for it, demonstrated rather than asserted. The flapping rule watches kserve-container, which never starts, so its restart counter never moves.",
+    "quantities": {
+      "expected_a5_fires_before_a7": true,
+      "expected_undo": "make serve re-converges the secret from .env and the pod starts"
+    }
+  },
+  "observed": {
+    "settle": {
+      "settled": true,
+      "seconds": 0.0
+    },
+    "pod_before": {
+      "name": "nyc-taxi-eta-predictor-84fff9f665-d9ssh",
+      "uid": "3fd7165a-4596-49ce-8b04-50f1f20217ec",
+      "phase": "Running"
+    },
+    "injected_at": "2026-08-19T16:27:04Z",
+    "replacement_pod": {
+      "name": "nyc-taxi-eta-predictor-84fff9f665-lshk8",
+      "uid": "9b1f1b03-7dfe-458f-a8b0-cd045c61b18c",
+      "phase": "Pending"
+    },
+    "init_container_ready_metric": 1.0,
+    "route_status_while_broken": 503,
+    "alertmanager": [
+      "PredictorNoAvailableReplica",
+      "PredictorStorageInitializerNotReady"
+    ],
+    "undo_exit_code": 0,
+    "undo_tail": [
+      "ok  @champion is version 2 \u2014 the same version this script read before it started",
+      "ok  nyc-taxi-eta answers on http://localhost:8081 (Host: nyc-taxi-eta-serving.local)",
+      "make[1]: Leaving directory '/home/longt/NYC-taxi-production-with-k8-flavor'"
+    ],
+    "after_undo_states": {
+      "PredictorLatencySLOBurning": "inactive",
+      "ServingEdge5xxRateHigh": "inactive",
+      "PredictorRequestRejectionRateHigh": "inactive",
+      "PredictorNoAvailableReplica": "inactive",
+      "PredictorRestartFlapping": "inactive",
+      "PredictorCpuThrottledSustained": "inactive",
+      "PredictorStorageInitializerNotReady": "inactive"
+    },
+    "alerts": {
+      "timeline": [
+        {
+          "t_plus_s": 30.1,
+          "alert": "PredictorNoAvailableReplica",
+          "state": "pending"
+        },
+        {
+          "t_plus_s": 30.1,
+          "alert": "PredictorStorageInitializerNotReady",
+          "state": "pending"
+        },
+        {
+          "t_plus_s": 150.2,
+          "alert": "PredictorNoAvailableReplica",
+          "state": "firing"
+        },
+        {
+          "t_plus_s": 210.2,
+          "alert": "PredictorStorageInitializerNotReady",
+          "state": "firing"
+        }
+      ],
+      "first_pending_at_s": {
+        "PredictorNoAvailableReplica": 30.1,
+        "PredictorStorageInitializerNotReady": 30.1
+      },
+      "first_firing_at_s": {
+        "PredictorNoAvailableReplica": 150.2,
+        "PredictorStorageInitializerNotReady": 210.2
+      },
+      "ever_fired": [
+        "PredictorNoAvailableReplica",
+        "PredictorStorageInitializerNotReady"
+      ]
+    },
+    "clear_timeline": [
+      {
+        "t_plus_s": 0.0,
+        "alert": "PredictorNoAvailableReplica",
+        "state": "firing"
+      },
+      {
+        "t_plus_s": 0.0,
+        "alert": "PredictorStorageInitializerNotReady",
+        "state": "firing"
+      },
+      {
+        "t_plus_s": 15.0,
+        "alert": "PredictorStorageInitializerNotReady",
+        "state": "inactive"
+      },
+      {
+        "t_plus_s": 30.0,
+        "alert": "PredictorNoAvailableReplica",
+        "state": "inactive"
+      }
+    ],
+    "alias": {
+      "before": "2",
+      "after": "2"
+    }
+  },
+  "checks": [
+    {
+      "passed": true,
+      "check": "A-5 PredictorNoAvailableReplica FIRED at T+150.2s (predicted ~150s)"
+    },
+    {
+      "passed": true,
+      "check": "A-7 PredictorStorageInitializerNotReady FIRED at T+210.2s (predicted ~210s)"
+    },
+    {
+      "passed": true,
+      "check": "A-5 arrived BEFORE A-7 (150.2s vs 210.2s) \u2014 the order the sustain windows imply, and the OPPOSITE of what A-7's own `why` annotation claims"
+    },
+    {
+      "passed": true,
+      "check": "A-2 stayed inactive THROUGH A TOTAL OUTAGE \u2014 its documented blind spot, demonstrated (a ratio has no value when nobody is asking)"
+    },
+    {
+      "passed": true,
+      "check": "the flapping rule stayed inactive \u2014 it watches kserve-container, which never started"
+    },
+    {
+      "passed": true,
+      "check": "the staged undo worked: `make serve` exit 0"
+    },
+    {
+      "passed": true,
+      "check": "the endpoint answers again after the undo"
+    },
+    {
+      "passed": true,
+      "check": "@champion unmoved: 2 -> 2"
+    }
+  ],
+  "verdict": "AS PREDICTED",
+  "note": "A FAILED check here does not mean the system misbehaved \u2014 it means the PREDICTION was wrong, which is what \u00a79/M6 grades this gameday on. Read the check text, then the scenario's section in docs/gameday_m6.md."
+}

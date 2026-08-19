@@ -33,13 +33,158 @@ flawless run of silent alerts. So scenario 0 fires two real alerts end to end
 first. It is the prior-art ADOPT, and it is the reason the kill scenario's
 "nothing fired" below is evidence rather than an absence of evidence.
 
+**Injection** (`scripts/alert_fire_drill.py`, delegated to rather than
+re-implemented): 4 req/s of two shapes this endpoint really produces — a
+malformed V2 body answered **422** (F-030's class) and a body the model's logged
+signature refuses answered **500** (F-032's class). Observed: **672 × 422 and
+671 × 500**.
+
+| signal | predicted | observed |
+|---|---|---|
+| A-3 `PredictorRequestRejectionRateHigh` (`for: 2m`) | fires at ~T+150 s | **pending T+50.5 s, firing T+170.5 s** |
+| A-2 `ServingEdge5xxRateHigh` (`for: 5m`) | fires at ~T+330 s | **pending T+35.0 s, firing T+335.6 s** |
+| order | A-3 then A-2 | **A-3 then A-2** |
+| A-1 · A-5 (×2) · A-6 · A-7 | all stay inactive | **all inactive** |
+| Alertmanager | holds both | **holds both** |
+| an ordinary quote mid-injection | succeeds | **39.0019 minutes** |
+| both clear after the stop | yes | **330.1 s after the stop** |
+
+**GREEN 11/11** (`automation/runs/m6-gameday/control.json`). Two things worth
+carrying forward from it. The **pending** timestamps are the honest measure of
+detection — the expression crossed its bar within one scrape both times, and
+everything after that is the `for:` window doing exactly what it was chosen to
+do. And the **330 s to clear** is not a system being slow: with no other traffic
+the ratio stays at ~0.5 until the last injected sample leaves the 5-minute rate
+window, at which point the expression evaluates to `NaN` (0/0) and the rule goes
+inactive on the next evaluation. An alert here cannot clear faster than its own
+rate window, and that is the number an incident timeline should expect.
+
 <!-- SCENARIO-0 -->
 
 ## 2. Scenario 1 — kill the predictor under load
 
+**Injection**: 4 req/s open-loop for 300 s, concurrency 8, hazard mix — M5-S4's
+headline shape — with the predictor pod deleted at **T+30 s** from inside the
+load client's own per-second callback, so the kill and the latencies share one
+clock.
+
+| | predicted | observed |
+|---|---|---|
+| outage | 10–25 s | **13.75 s** (first failure 30.5 s → first success 44.25 s) |
+| errors | a short burst | **55 of 1,200** — 52 × `503`, 3 × `502` |
+| the replacement | a DIFFERENT pod object | uid `f7177380…` → **`3fd7165a…`** |
+| alerts FIRING | **none** | **none** |
+| Alertmanager | nothing | nothing |
+| the edge 5xx share peak | **below A-2's 0.10 bar** | **0.5000 — WRONG** |
+| `@champion` | unmoved | 2 → 2 |
+
+The outage corroborates the three numbers this program already had: 14.53 s for
+a killed pod (M5-S4), 15.0 s for the ingress roll (M6-S1), 18.24 s for a
+stop/start (M5-S5). Four mutations, four numbers inside five seconds of each
+other.
+
+### 2.1 The prediction that was wrong, and what it changes
+
+**The claim**: at 4 req/s a 5-minute rate window carries ~1,200 requests and a
+~15 s outage costs ~60 of them, so the 5xx SHARE peaks near 5% and A-2's 10% bar
+is unreachable by a single self-heal. The M6-S2 SLO document argues its threshold
+in exactly those words: *"10% is unreachable by any single recovery ever measured
+here."*
+
+**What happened**: the share reached **0.5000**, and the rule's own state
+timeline shows it — **A-2 went `pending` at T+89.2 s and back to `inactive` at
+T+103.2 s.** Fourteen seconds of pending. `PredictorNoAvailableReplica` did the
+same thing thirty seconds earlier: **pending T+59.1 s, inactive T+74.1 s.**
+
+**Why the arithmetic was wrong.** It divided the outage's errors by a FULL
+window's traffic, and the window is not full. `rate(...[5m])` extrapolates from
+the samples actually inside the window, and 30 seconds into a load run that
+window holds 30 seconds of requests, not five minutes of them. Immediately after
+the kill the denominator is small and almost all of it is the outage, so the
+ratio spikes towards 1 and then decays as ordinary traffic refills the window.
+The steady-state figure the SLO document computed is the number the ratio decays
+TO, not the number it reaches.
+
+**So what actually stopped the page is the `for: 5m` sustain, not the
+threshold** — and the same is true of A-5, where a 2-minute sustain absorbed a
+15-second dip that a bare threshold would have paged for. Both alerts are
+correct; both arguments for them were not. This is **F-041**, and
+`docs/slo_serving.md` §3 now carries the correction beside the original
+paragraph rather than instead of it (the `error_memo_m2.md` §9 precedent): a
+threshold argued from a steady-state ratio is an argument about the wrong
+quantity, and the sustain window is where the safety actually lives.
+
+**The operational consequence is not cosmetic.** An on-call looking at
+Prometheus during any ordinary self-heal will see two alerts **pending**, in red,
+neither of which will ever fire. That is the system working, and nobody had
+written it down.
+
 <!-- SCENARIO-1 -->
 
 ## 3. Scenario 2 — break the storage credential, then delete the pod
+
+**Injection**: `secret/minio-serving`'s `AWS_SECRET_ACCESS_KEY` overwritten with
+a wrong value, then the predictor pod deleted. **No load at all** — deliberately,
+because the point of this scenario is what the instruments say when a service is
+completely down and nobody is asking it for anything.
+
+**The undo was staged before the injection** (the M2 red-team rule; a unit test
+asserts the capture lexically precedes the patch): the original bytes were
+captured to a temp file outside the repository, and `make serve` — idempotent,
+proven four times at M5-S2 — is the documented re-converge.
+
+| | predicted | observed |
+|---|---|---|
+| the replacement | never starts | `Init:Error`, **3 restarts in 44 s** |
+| the failure | 403 on the artifact store | `S3 error … (403) … HeadBucket: Forbidden` — **exactly M5-S2's class** |
+| A-5 `PredictorNoAvailableReplica` (`for: 2m`) | ~T+150 s | **pending T+30.1 s, firing T+150.2 s** |
+| A-7 `PredictorStorageInitializerNotReady` (`for: 3m`) | ~T+210 s | **pending T+30.1 s, firing T+210.2 s** |
+| the order | A-5 **before** A-7 | **A-5 before A-7**, by 60 s |
+| A-2 during a TOTAL outage | inactive | **inactive** |
+| the flapping rule | inactive | **inactive** |
+| the route | down | **503** |
+| the undo | `make serve` restores it | exit 0; **A-7 cleared 15 s later, A-5 30 s** |
+| `@champion` | unmoved | 2 → 2 |
+
+**8/8 as predicted** (`automation/runs/m6-gameday/storage.json`). Three of those
+rows are worth more than the pass.
+
+**A-2 stayed silent through a complete outage**, which is the blind spot
+`docs/slo_serving.md` §3 documents in a sentence — *a ratio has no value when
+nobody is asking* — demonstrated rather than asserted. A-5 is the complement that
+needs no traffic, and this is the scenario where that design decision earns
+itself.
+
+**The flapping rule stayed silent too, and for a reason that is easy to get
+wrong.** `PredictorRestartFlapping` counts restarts of `kserve-container`. This
+pod restarted three times in forty-four seconds — but every one of those was the
+**init** container, and `kserve-container` never started at all. A rule written
+against "the pod restarted" would have fired here and blurred two signatures into
+one; the rule written against the model container does not.
+
+**The signature is genuinely distinguishable from scenario 1**, which is the
+property this pair exists to demonstrate: a kill gives a 14-second burst of edge
+5xx, two alerts flickering `pending`, and no firing; a broken credential gives no
+5xx ratio at all, a 503 route, and two alerts firing sixty seconds apart in a
+fixed order.
+
+### 3.1 The annotation that was wrong, and the change deliberately not made
+
+A-7's own `why` annotation claimed it *"fires before A-5 does, because a pod that
+never initialises never had a replica to lose"*. That is true about the CAUSE and
+silent about the two `for:` windows underneath it: A-5 sustains for 2m and A-7
+for 3m, and both expressions became true in the same scrape. **A-7 arrives
+sixty seconds later, every time.**
+
+The annotation is corrected in `infra/monitoring/alerting_rules.yml` to state the
+measured order. **The threshold is not touched.** Making A-7 arrive first means
+shortening it to ~1 m, which would be a threshold changed on the authority of the
+number that had just been measured — the edit this program does not make on its
+own (F-016's precedent). Recorded here as a recommendation for the M6→M7
+boundary, with the honest counter-argument: what the pair actually buys is not an
+ordering but a **signature** — *A-5 alone* is "the replica is gone", *A-5 then
+A-7* is "the replacement cannot fetch its model" — and that signature works
+whichever arrives first.
 
 <!-- SCENARIO-2 -->
 

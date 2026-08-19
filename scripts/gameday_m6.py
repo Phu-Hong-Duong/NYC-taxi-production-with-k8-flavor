@@ -707,9 +707,17 @@ def scenario_storage(args: argparse.Namespace) -> int:
             watcher.watch(args.storage_watch, poll=10.0)
 
             replacement = predictor_pod()
+            # SCOPED TO THE CHAMPION'S PODS, and the scoping was added after the
+            # first run recorded `1.0` here for a pod that had been in
+            # Init:Error for three minutes. The rule itself is a per-SERIES
+            # comparison and fired on the right pod; this field is a summary,
+            # and `prom_scalar` takes the first result — which was the v1
+            # SHADOW's storage-initializer, perfectly ready and entirely
+            # irrelevant. A reader's field must not silently answer about a
+            # different pod than the one under test.
             init_ready = prom_scalar(
                 'kube_pod_init_container_status_ready{namespace="serving",'
-                'container="storage-initializer"}',
+                'container="storage-initializer",pod=~"nyc-taxi-eta-predictor.*"}',
                 default=-1.0,
             )
             route_status, _ = http_get(SERVING_HOST, f"{ROUTE}/v2/models/nyc-taxi-eta")
