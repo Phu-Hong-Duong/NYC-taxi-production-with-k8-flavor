@@ -1,0 +1,30 @@
+{
+  "story": "M5-S4",
+  "measured_at": "2026-08-19T05:02:52Z",
+  "wall_seconds": 344.0,
+  "headline": {
+    "rate_per_second": 4.0,
+    "window_seconds": 60.0,
+    "concurrency": 8,
+    "mix": "hazards",
+    "achieved_rate_per_second": 4.016,
+    "errors": 0,
+    "latency_ms": {
+      "min": 11.133,
+      "p50": 17.207,
+      "p95": 104.226,
+      "p99": 107.239,
+      "max": 115.383
+    }
+  },
+  "selfheal": {
+    "passed": true,
+    "different_pod_object": true,
+    "outage_seconds": 14.53,
+    "seconds_from_kill_to_recovery": 15.03,
+    "fully_unavailable_seconds": 14,
+    "failed_requests_total": 58,
+    "residual_error_rate_after_recovery": 0.0,
+    "pre_kill_error_rate": 0.0
+  }
+}

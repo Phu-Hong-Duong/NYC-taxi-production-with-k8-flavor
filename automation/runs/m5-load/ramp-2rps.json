@@ -1,0 +1,195 @@
+{
+  "story": "M5-S4",
+  "label": "ramp-2rps",
+  "measured_at": "2026-08-19T04:57:18Z",
+  "shape": {
+    "target_rate_per_second": 2.0,
+    "window_seconds": 20.0,
+    "concurrency": 8,
+    "mix": "hazards",
+    "rows_per_request": 1,
+    "achieved_rate_per_second": 2.049,
+    "wall_seconds": 19.518
+  },
+  "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta/infer",
+  "host": "nyc-taxi-eta-serving.local",
+  "requests": {
+    "sent": 40,
+    "ok": 40,
+    "errors": 0,
+    "error_rate": 0.0
+  },
+  "latency_ms": {
+    "min": 11.256,
+    "p50": 18.474,
+    "p95": 85.495,
+    "p99": 85.963,
+    "max": 85.963
+  },
+  "service_ms": {
+    "min": 11.153,
+    "p50": 18.315,
+    "p95": 85.338,
+    "p99": 85.865,
+    "max": 85.865
+  },
+  "queue_ms": {
+    "min": 0.063,
+    "p50": 0.103,
+    "p95": 0.157,
+    "p99": 0.366,
+    "max": 0.366
+  },
+  "served_versions": [
+    "2"
+  ],
+  "error_window": {
+    "errors": 0,
+    "first_error_s": null,
+    "last_error_s": null,
+    "span_s": 0.0
+  },
+  "buckets_per_second": [
+    {
+      "second": 0,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 81.968
+    },
+    {
+      "second": 1,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 85.58
+    },
+    {
+      "second": 2,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 83.866
+    },
+    {
+      "second": 3,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 22.985
+    },
+    {
+      "second": 4,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 84.517
+    },
+    {
+      "second": 5,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 19.588
+    },
+    {
+      "second": 6,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 14.821
+    },
+    {
+      "second": 7,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 21.069
+    },
+    {
+      "second": 8,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 16.895
+    },
+    {
+      "second": 9,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 15.786
+    },
+    {
+      "second": 10,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 20.093
+    },
+    {
+      "second": 11,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 15.249
+    },
+    {
+      "second": 12,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 18.474
+    },
+    {
+      "second": 13,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 19.597
+    },
+    {
+      "second": 14,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 15.162
+    },
+    {
+      "second": 15,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 85.495
+    },
+    {
+      "second": 16,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 85.963
+    },
+    {
+      "second": 17,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 21.714
+    },
+    {
+      "second": 18,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 21.094
+    },
+    {
+      "second": 19,
+      "sent": 2,
+      "ok": 2,
+      "errors": 0,
+      "p95_latency_ms": 17.55
+    }
+  ],
+  "note": "ramp step: short window, run to CHOOSE the headline rate rather than guess it"
+}
