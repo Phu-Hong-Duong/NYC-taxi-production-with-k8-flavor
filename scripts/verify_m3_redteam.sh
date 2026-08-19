@@ -61,7 +61,13 @@ restore() {
     fi
   else
     printf '\033[31m[verify-m3-redteam] COULD NOT RESTORE %s.\033[0m\n' "$RECORD" >&2
-    printf 'Run this by hand:  git checkout -- %s\n' "$RECORD" >&2
+    # NOT `git checkout --`: `automation/runs/` is gitignored, so this record is
+    # untracked and git has no copy of it to restore (F-029, found 2026-08-19 —
+    # this line was written believing the record was committed). The byte copy
+    # this drill took at step 0 is the ONLY copy, so it is what gets named, and
+    # it is deliberately not deleted on this path.
+    printf 'Copy it back by hand:  cp %s %s\n' "$BACKUP" "$RECORD" >&2
+    return 0
   fi
   rm -f "$BACKUP"
 }

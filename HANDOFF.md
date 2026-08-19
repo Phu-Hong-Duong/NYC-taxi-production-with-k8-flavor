@@ -1,5 +1,155 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (aw) — M4-S5 leg 3: the gate that closes M4, and the ground it found soft underneath
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role:MLOps (A) · SRE (R) for the
+drill legs** — charter read (`docs/org/ROLES.md` §MLOps; its refusals include manual
+deploys and hand-edited cluster state — this session applied nothing, deployed
+nothing and edited no cluster object). Boot reads: CLAUDE.md · HANDOFF (av) ·
+`docs/milestones/M4_KICKOFF.md` · AWAITING_PO.
+
+**M4-S5 leg 3 is COMPLETE. `make verify-m4` GREEN 39/39 and `make verify-m4-redteam`
+PASSED. M4-S5 is finished, and M4 has no story left.** M4 carries no ◆, so the exit
+is `automation/next_session.sh architect 120`.
+
+**Staleness check, and it moved.** `automation/STOP` is GONE — the PO lifted the park
+recorded in (av) and AWAITING_PO 2026-08-18-2, which is why this session exists.
+**The host had restarted and Docker Desktop was down**: the first `kubectl get nodes`
+returned `command not found`, which is **gotcha #34** exactly as written (the binary
+is a symlink into `/mnt/wsl/docker-desktop/cli-tools/`, a mount that exists only
+while the daemon does). `docker ps` showed the three kind nodes `Up 4 seconds` —
+already restarting themselves. ~15 s later: 3/3 Ready v1.36.1 (age 47h), every
+platform pod Running at `RESTARTS 2 (115s ago)`, all three PVCs Bound. **Nothing was
+re-deployed and nothing was rebuilt.** No detached job pending; the four `.status`
+files under `automation/runs/` are M3/M4-S4/leg-1 evidence, all `DONE 0`, and (av)'s
+Next matched reality otherwise. Registry read at boot: `@champion` version 2, run
+`92b73bd4f77d`, versions [1, 2].
+
+**The statefulness law held.** No `kind delete`/`create`, no kind-config edit, no new
+hostPort, no helm upgrade. `@champion` **version 2 before and after** — and this
+session is the one that made that law checkable rather than habitual (see §7 below).
+
+### Done (each with the command and what it printed)
+- **`make verify-m4` — GREEN 39/39, exit 0, 7 sections, seconds.** §1 control plane
+  `/healthz` 200 + all 3 `flyte` Deployments available + PodTemplate
+  `flyte-task-defaults` APPLIED with its container named `default` + `pvc/taxi-data`
+  Bound + MLflow/Postgres/MinIO Running · §2 the image on **all 3 nodes** read with
+  each node's own `crictl` (`40e0ac84171f…`), and **D-004 re-observed dead INSIDE the
+  container** (`openmp: system libgomp.so.1` first line, no `[openmp]` anywhere) ·
+  §3 all 7 stages of `tasks.STAGES` wrapped by a Flyte task (AST-derived), 29 actions
+  across 4 recorded runs all SUCCEEDED, one run covering the whole graph,
+  **28 MLflow runs all FINISHED** · §4 from the RECORDED drill: 5/5 `CACHE_HIT`,
+  1966.9 s → 3.2 s, MLflow 16 → 16, **and the two witnesses agree** · §5 different pod
+  **uid**, ONE attempt, probe at attempt index 3 against a declared budget of 2 ·
+  §6 `publish_marts` last, `CACHE_DISABLED`, **8 months reconciled live,
+  56,127,878 rows** · §7 the alias law. Transcript: `docs/verify_m4_transcripts.md` §1.
+- **`make verify-m4-redteam` — PASSED.** Flipped **ONE field** (run 2's `train`,
+  `CACHE_HIT` → `CACHE_POPULATED`) leaving duration 140 ms, phase SUCCEEDED and the
+  MLflow counts 16 → 16 alone → **RED exit 1, 2 FAILs**, **37 of 39 sub-checks still
+  ran and passed**, restored from a byte copy under an EXIT trap and verified by
+  sha256 (`beb10ab49fb0…` before and after) → **GREEN 39/39**. Transcript §2.
+- **The gate RE-RUNS NOTHING and it is pinned, not promised**:
+  `tests/unit/test_verify_m4.py` (19 tests) forbids `make pipeline*`, `make marts`,
+  `make train`, `make image-*`, `flyte run`, and running any of the drill scripts;
+  forbids every registry mutator and every cluster mutator; requires each Python leg
+  to be guarded by `expect_verdicts` and to name its own exception; and fails if a
+  Flyte run name, an MLflow run id or a tagged image reference appears in the script.
+- **`make verify-m2` GREEN 55/55 · `make verify-m3` GREEN 46/46** re-run after this
+  session's two corrections to `verify_m3.sh`/`verify_m3_redteam.sh`.
+  **544 unit tests green (+19)**, ruff clean across `src tests scripts pipelines`.
+- Ledgers: **F-029 filed, OPEN, routed to ARCH at the M4 boundary** with three costed
+  options. Docs: `docs/pipeline_m4_leg3.md` §17–§21 (§1–§16 of `pipeline_m4.md` left
+  UNEDITED, with a pointer appended), `docs/verify_m4_transcripts.md`, CLAUDE.md new
+  section + 2 command rows + the traps paragraph, gotchas **#67 #68 #69**, field note
+  written. **No signoff row**: the M4 gate crossing is ARCH's at the boundary, and a
+  producer may not approve their own (ORG.md rule 2).
+
+### The strongest single number
+**None of the 28 runs the M4 pipeline fitted is a registry version.** M4's standing
+law was that no M4 run may move `@champion`, and the weak version of that check —
+"the alias is still 2" — is satisfiable by not looking, *and* pins a literal that the
+next legitimate promotion turns red (`verify-m2`'s exact mistake, gotcha #50). The
+strong version asks the registry a question a promotion cannot dodge: a promotion has
+to create a version, and a version carries the run that produced it. Twenty-eight
+fits, on-cluster, across four sessions, and the serving pointer never moved — said by
+the registry rather than by four transcripts.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **`re-runs nothing` rather than M3's `re-fits nothing`, and the reason is
+  correctness, not cost.** Re-running a pipeline would mint MLflow runs — and the
+  MLflow run count is the strongest leg §4 has (a re-executed fit *must* log). A gate
+  that launched a pipeline would be adding to the counter it reads.
+- **The cache leg reads the RECORDED drill and never the newest run** (gotcha #66,
+  inherited from (av) as an instruction). The image tag is the git short sha, so any
+  session that commits makes the newest run's stages `CACHE_POPULATED`; a gate
+  written the obvious way would go red for a commit.
+- **`DEFAULT_EXPERIMENT` extracted into `pipelines/tasks.py`.** The gate had typed
+  `"m4-pipeline"` in two legs — a string owned by the CLI's argparse default, i.e.
+  precisely the literal class `verify-m2` was burned by. One-line source change, the
+  gate imports it, a test fails if either types it twice.
+- **F-029's POLICY was deliberately NOT decided here.** Whether machine-produced
+  records belong under review changes what this repo contains and touches M3's
+  evidence as much as M4's. Three costed options are in the ledger row; the choice is
+  ARCH's at the boundary. What WAS done is correct the three false statements
+  (`verify_m3.sh`'s "committed JSON", its red team's `git checkout --` advice on an
+  untracked file, and CLAUDE.md's row) and state the dependency in `verify-m4`'s own
+  header, so a reader on a fresh clone meets the explanation before the red line.
+- **`docs/pipeline_m4_leg3.md` is a new file, not an append.** `pipeline_m4.md` is
+  1,032 lines; the numbering continues at §17 and a pointer was appended, so §1–§16
+  stay byte-unedited as the earlier sessions' record.
+
+### Defects/Surprises
+- **The gate's own first run went RED, and the gate was wrong** (gotcha **#67**). §3's
+  "every recorded run has a `main` parent action" named `rklz7vdv2d59bn8kbp8d` — the
+  **retry probe**, which is built to have neither a parent nor a success and which §5
+  reads as evidence. A guard firing because a component behaved as designed is #50,
+  caught inside the gate written to honour #50. Fixed by DERIVING what a pipeline run
+  is (one whose actions include ≥1 stage of this graph) rather than by an exclusion
+  list keyed on a name — and the excluded record is PRINTED, not silently dropped.
+- **Its tests went red three times for matching WORDS, not INVOCATIONS** (gotcha
+  **#68**): the ban on running `make pipeline` caught the gate's own advice line
+  (``run `make pipeline-cache-drill` ``, which is what a reader of a RED cache leg
+  needs), and the ban on `flyte get` caught `kubectl -n flyte get deploy`. #35's house
+  rule failing on a TEST rather than on prose. Fixed with one shared
+  `invokes(body, cmd)` helper requiring a command POSITION; a backtick is
+  deliberately not one, because in this repo backticks live in message strings.
+- **F-029 (new, OPEN): two gates replay evidence that is not in the repository**
+  (gotcha **#69**). `git ls-files automation/runs/` is EMPTY. A fresh clone runs those
+  legs red for no defect, and an edit to a record — exactly what both red teams
+  simulate — leaves no diff for a reviewer. The tell was `verify_m3_redteam.sh`
+  advising `git checkout --` on an untracked file: a mistyped word is an accident, a
+  recovery procedure is a belief.
+- **Gotcha #34 cost ~15 s at boot** and is recorded only because the recovery was
+  cheaper than reading the note: Docker Desktop down presents as
+  `kubectl: command not found`, the kind nodes restart themselves, nothing needs
+  re-deploying.
+
+### Next
+**M4 IS COMPLETE — all five stories done, the gate is real and can go red.** The
+successor is **ARCH** (no ◆ at M4), for M3→M4-style boundary triage and the M5
+kickoff. What the boundary owes:
+- **The M4 gate crossing signoff row** in `ledgers/signoffs.md` — deliberately NOT
+  written by this session (producer ≠ approver). Re-run `make verify-m4` at the
+  boundary as the approver; it is seconds and mutates nothing.
+- **F-029 is the one decision on the desk**: track the record JSONs (A), leave them
+  ignored and say so (B — what this session did as an interim), or copy the small
+  verdict-bearing summaries into `docs/` (C). Costs are written into the row. It
+  affects `verify-m3` as much as `verify-m4`, so it is a boundary call, not an M5 one.
+- **Open and dispositioned, none silent**: **F-016** (incumbent margin) is still the
+  PO's at AWAITING_PO 2026-08-18-1, non-blocking until M7 · **F-019** lands at M5 (the
+  champion raises on any request outside 2019 — a serving-time decision, with the
+  tripwire test already in place) · **F-022** (the bake-off script is un-runnable
+  since its own promotion moved the alias) is blocking at M7 · **F-009** → M5 ·
+  D-001's registry pattern lands at the next PO-sanctioned rebuild, which is the same
+  event that owes Flyte its declared 8080 route.
+- **The trap M5 meets first is gotcha #66**: an image rebuild invalidates every cached
+  stage, so the first pipeline run after any commit under
+  `src`/`scripts`/`analytics`/`docker`/`pyproject.toml`/`uv.lock` is a full 31-minute
+  re-fit, not an 11-second rerun.
+- Cluster left UP and stateful, tree clean, no open PR beyond this story's, no
+  detached job pending, `@champion` version 2.
+
 ## Session 2026-08-18 (av) — M4-S5 leg 2: one body of SQL, two transports, and D-003 closed by measuring both options
 
 ### State

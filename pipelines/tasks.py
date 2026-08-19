@@ -504,6 +504,14 @@ def publish_marts(
     )
 
 
+#: Where every stage of this pipeline logs. Named HERE rather than typed into
+#: the CLI's argparse default, for the same reason `STAGES` below is: `verify-m4`
+#: asks MLflow what the pipeline fitted, and a gate that typed the experiment
+#: name itself would be pinning a literal it does not own (F-017, gotcha #50 —
+#: `verify-m2` pinned the champion's experiment and went red for a correct
+#: transition). The drills reach it through their own `DRILL_EXPERIMENT` default.
+DEFAULT_EXPERIMENT = "m4-pipeline"
+
 #: The graph, declared once so the driver, the tests and M4-S4's Flyte workflow
 #: all read the same order from the same place. `publish_marts` joined at M4-S5
 #: (D-003) — BLUEPRINT §9/M1-S6 always said the build+publish becomes the tail
@@ -682,7 +690,7 @@ def main(argv: list[str] | None = None) -> int:
         help="ask for a verdict. Illegal on a one-month rehearsal (F-008) and "
         "present only so the refusal can be watched happening",
     )
-    parser.add_argument("--experiment", default="m4-pipeline")
+    parser.add_argument("--experiment", default=DEFAULT_EXPERIMENT)
     parser.add_argument("--story", default="M4-S1")
     parser.add_argument("--run-dir", default=DEFAULT_RUN_DIR)
     parser.add_argument(

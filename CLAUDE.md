@@ -728,7 +728,9 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **`make verify-m3` is 46 sub-checks in 8 sections, 4.7 s, and it re-fits
   NOTHING** — M3 cost 12,447 s of fitting across two tracks, so a gate that
   re-derived any of it would cost more than the milestone. It reads committed
-  docs, committed JSON, the Optuna storage and the registry, and **replays**:
+  docs, **RECORDED** JSON (not committed — `automation/runs/` is gitignored, so
+  its replay inputs are machine state; corrected 2026-08-19, **F-029**), the
+  Optuna storage and the registry, and **replays**:
   DR-02's keep bar is re-applied to the ablation table's own numbers, and the
   bake-off's five verdicts are re-computed through `gate.decide` as it exists on
   disk. `make verify-m3-redteam` proves it can say no.
@@ -1174,6 +1176,60 @@ can never disagree (the port-family twins lesson, applied before it bit).
   because nothing reads a summary line for information. It now DERIVES the count from
   `pipelines.tasks.STAGES` and names whether the tail was on.
 
+## The M4 gate (M4-S5 leg 3) — what it asks, what it refuses to do, and the ground it found soft
+- **`make verify-m4` is 39 sub-checks in 7 sections, seconds, and it RE-RUNS
+  NOTHING** — a stronger clause than M3's "re-fits nothing", because M4's evidence
+  cost ~95 minutes on-cluster AND because re-running any of it would **mint MLflow
+  runs**, which is the quantity the cache leg's strongest check counts. A gate that
+  launched a pipeline would corrupt the evidence it exists to read. No skip flag, no
+  fast mode (M1's rule, third inheritance). It reads: the live control plane, the
+  cluster, the registry, the warehouse, the image *from inside a container*, the code
+  *with `ast`*, and the records the drills wrote.
+- **The alias law is asked in its strong form.** "Is `@champion` still 2?" is
+  satisfiable by not looking. What §7 asks instead: **not one of the 28 runs the M4
+  pipeline fitted in `m4-pipeline` is a registry version** — a promotion cannot hide
+  from that, because it must create a version and a version carries its run. Plus
+  `tasks.train` has no `promote` parameter (AST), and every recorded run's
+  `champion_after` must equal the live alias — the gate never asserts the VALUE.
+- **The cache leg reads the RECORDED drill, never the newest run** (gotcha #66): the
+  image tag is the git short sha, so one commit makes every stage `CACHE_POPULATED`
+  and a gate written the obvious way would go red for a commit.
+- **Two witnesses must AGREE, which is stronger than either passing.** The control
+  plane's `cache_status` and MLflow's run count answer the same question — did the fit
+  run twice? — so a record claiming a stage re-executed while the tracking server
+  minted nothing is a contradiction. **This is what `make verify-m4-redteam` proves**:
+  it flips ONE field (run 2's `train`, `CACHE_HIT` → `CACHE_POPULATED`) and leaves
+  duration, phase and the MLflow counts alone — the most plausible lie the file can
+  tell, and internally consistent to any reader who skims. **RED with 2 FAILs, 37
+  sub-checks still passing, byte-identical restore under an EXIT trap, then GREEN
+  39/39.** A gate reading only `cache_status` would have believed it.
+- **Every literal is derived on BOTH sides** (F-017, gotchas #49/#50): the stage set
+  from `tasks.STAGES`; the flyte-task→callable map parsed out of `workflows.py`
+  (nothing declares it — `ingest` wraps `ingest_month`); the uncached set from the
+  `cache="disable"` decorator args; the retry budget from `_STAGE_RETRIES`; the
+  experiment from the new `tasks.DEFAULT_EXPERIMENT` (extracted this session — the
+  gate had typed `"m4-pipeline"`, which is exactly the literal `verify-m2` was burned
+  by). A test fails if a run name, an MLflow run id or a tagged image ref appears in
+  the script at all.
+- **F-029 (new, OPEN, ARCH's at the M4 boundary): both M3's and M4's gates replay
+  records that are GITIGNORED.** `git ls-files automation/runs/` is EMPTY. So a fresh
+  clone runs those legs red for no defect, and — the part that matters — an edit to a
+  record, which is exactly what both red teams simulate, **leaves no diff for a
+  reviewer to see**. Two artifacts had already written the false version down:
+  `verify_m3.sh`'s header said "committed JSON", and its red team advised
+  `git checkout --` on an untracked file. All three false statements (those two plus
+  CLAUDE.md's own row) were corrected the day it was found; the POLICY was not
+  changed, because what belongs under review is not an executor's call. Three costed
+  options are in the ledger row.
+- **The gate's own first run went RED for the right reason and the wrong target**
+  (gotcha **#67**): "every run has a `main` parent" named the retry probe, which is
+  built to have neither a parent nor a success. Fixed by DERIVING what a pipeline run
+  is (one that ran ≥1 stage of this graph), not by an exclusion list — and the
+  excluded record is printed, not silently dropped. Its tests then went red three
+  times for matching WORDS not INVOCATIONS (gotcha **#68**): the ban on running
+  `make pipeline` caught the gate's own advice line, and the ban on `flyte get` caught
+  `kubectl -n flyte get deploy`.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1261,7 +1317,9 @@ rebuild was PLANNED for exactly this reason, not discovered.
 | D-003: what a publish costs the volume | `make marts-peak` (full refresh) · `make marts-peak MARTS_MONTHS=YYYY-MM` (scoped) — samples `pg_database_size('marts')` and PGDATA every 5 s around any publish | VERIFIED 2026-08-18 (M4-S5): **full refresh 228.2 s, 15.33 → 27.96 → 13.48 GiB (peak/end 2.075×), PGDATA peak 204.62 GiB**; **month-scoped 2019-03 (7,753,921 rows) 82.7 s, peak 15.33 GiB**. **Peak −45.2%, wall −63.8%** — and M1-S4's remembered ~23 GB was optimistic. It MEASURES and does not judge: no threshold lives in a probe. Summaries in `automation/runs/m4-marts/*.json`, with the sample interval recorded because it bounds the peak's resolution |
 | Read a run's stages without hand-rolling a forward (M4-S5) | `make flyte-actions RUN=<run-name>` (`ACTIONS_ARGS=--json`) | VERIFIED 2026-08-18 (M4-S5): printed all 8 actions of `rw98pj84z4jh5ldqrxqp` with phase, `cache_status`, duration and **`attempts: 1`** (F-027's fix, visible). It is the same seven port-forward lines `run_pipeline.sh` and both drills each carried inline, once — on port **8092**, so a reader cannot steal the port of a run in flight |
 | What a Flyte run's actions actually did (M4-S4) | `uv run python scripts/flyte_run_actions.py <run> [--json]` (needs a route; the drill and `run_pipeline.sh` stand one up) | VERIFIED 2026-08-18 (M4-S4, second session): recovered the full-data run's per-stage detail that `--follow` never logged — **six stages, 1909.7 s, fit 1874.7 s, everything else 34.6 s**. Reads `cache_status`, which the CLI does not render. A READER: pinned by a test that it calls nothing which launches, aborts or deletes, because `verify-m4` is meant to reuse it |
-| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3 live; M4+ pending each milestone |
+| Gate check M4 | `make verify-m4` | VERIFIED 2026-08-19 (M4-S5 leg 3): **GREEN 39/39, exit 0**, 7 sections in seconds — control plane `/healthz` 200 + 3 Deployments available + the PodTemplate APPLIED with its container named `default` + its PVC Bound · the image on **all 3 nodes** by each node's own `crictl`, and **D-004 re-observed dead INSIDE the container** (`openmp: system libgomp.so.1` first line, no `[openmp]` anywhere) · all 7 stages of `tasks.STAGES` wrapped (AST), 29 actions across 4 recorded runs all SUCCEEDED, one run covering the whole graph, **28 MLflow runs all FINISHED** · the RECORDED cache drill (gotcha #66 — never the newest run): 5/5 `CACHE_HIT`, 1966.9 s → 3.2 s, MLflow 16 → 16, **and the two witnesses agree** · the kill drill: different pod **uid**, ONE attempt, and the probe at attempt index 3 against a declared budget of 2 · `publish_marts` last, CACHE_DISABLED, **8 months reconciled live, 56,127,878 rows, republishing nothing** · **none of the 28 pipeline runs is a registry version**. **RE-RUNS NOTHING** (no pipeline, no drill, no fit, no publish — pinned by `tests/unit/test_verify_m4.py`), no skip flag, no fast mode. Transcript: `docs/verify_m4_transcripts.md` §1 |
+| Prove the M4 gate can go RED | `make verify-m4-redteam` (`bash scripts/verify_m4_redteam.sh`) | VERIFIED 2026-08-19 (M4-S5 leg 3): flips **ONE field** — run 2's `train` from `CACHE_HIT` to `CACHE_POPULATED` in `automation/runs/m4-cache/cache_drill.json`, leaving duration (140 ms), phase and the MLflow counts (16 → 16) untouched, i.e. a record that is internally well-formed and still describes a green seven-stage run → **RED exit 1 with 2 FAILs**: the CLAIM leg names `train`, and the **CROSS-SYSTEM leg fires** (`the two witnesses CONTRADICT each other … MLflow minted 0 run(s)`) — the leg a gate reading only `cache_status` would not have had. **37 of 39 sub-checks still ran and passed**; restored from a byte copy under an EXIT trap and verified by sha256 (`beb10ab49fb0…` before and after) → **GREEN 39/39**. The target is CHOSEN from the record (the cached stage that cost run 1 most), never typed. Touches no pod, no image, no MLflow run, no registry version, no mart row |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4 live; M5+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
@@ -1397,3 +1455,17 @@ commit under `src`/`scripts`/`analytics`/`docker`/`pyproject.toml`/`uv.lock` tur
 the next full-data run back into a 31-minute fit, so a cache drill must hold the
 image constant and a gate must read RECORDED cache evidence rather than re-asking
 about the latest run (#66)**.
+Newest (M4-S5 leg 3), and all three are about CHECKERS rather than systems: **a
+checker's "every X must have Y" goes red on the one X that was BUILT without Y —
+`verify-m4` demanded a parent action of every recorded run and named the retry
+probe, which is designed to have neither a parent nor a success; the repair is to
+DERIVE what counts as an X, never to add an exclusion list keyed on a name (#67)**;
+**a test that forbids RUNNING a command catches the message telling a human to run
+it, and catches a namespace named after a CLI — `make pipeline` matched the gate's
+own advice line and `flyte get` matched `kubectl -n flyte get deploy`, so a needle
+must sit where a shell would START a command (#68, #35's rule failing on a TEST
+rather than on prose)**; and **a milestone gate can be replaying evidence that is
+not in the repository and say the opposite in its own header — `automation/runs/`
+is gitignored, so `verify-m3`'s replay inputs and every record `verify-m4` reads
+are invisible to review, which is precisely the edit both red teams simulate. Run
+`git check-ignore -v` before writing "committed" near a verifier (#69, F-029)**.
