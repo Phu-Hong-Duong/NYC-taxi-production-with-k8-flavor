@@ -157,7 +157,8 @@ verify-m4-redteam: ## prove verify-m4 goes RED: contradict ONE recorded cache st
 	@bash scripts/verify_m4_redteam.sh
 
 # ---- M5 serving & release (role:MLOPS + role:SRE PRR) ----
-.PHONY: holidays serve quote parity parity-redteam load load-drill verify-m5
+.PHONY: holidays serve quote parity parity-redteam load load-drill
+.PHONY: stop-start-drill verify-m5 verify-m5-redteam
 HOLIDAYS_TO ?= 2030
 holidays: ## re-derive data/reference/us_federal_holidays.csv from 5 U.S.C. §6103 (M5-S2, F-019; HOLIDAYS_TO=YYYY moves the horizon)
 	@uv run python scripts/derive_us_federal_holidays.py --to $(HOLIDAYS_TO)
@@ -173,8 +174,12 @@ load: ## drive the declared route at a STATED rate for a STATED window; p95 neve
 	@uv run python -m taxi_mlops.serving.load $(LOAD_ARGS)
 load-drill: ## ramp -> headline p95/p99 -> kill the predictor MID-LOAD and measure the outage (M5-S4; ~7 min, run it DETACHED)
 	@uv run python scripts/serving_load_drill.py $(DRILL_ARGS)
-verify-m5: ## THE parity test (offline==online 1e-6) + p95 under 60s load + PRR minutes exist
-	@echo "TODO(M5): pytest tests/smoke -m smoke"
+stop-start-drill: ## stop the InferenceService, start it again, TIME both (M5-S5; the runbook's §3 evidence — a real ~20s outage)
+	@uv run python scripts/serving_stop_start_rehearsal.py
+verify-m5: ## the route + the champion on the wire + parity + p95 + self-heal + the PRR; re-runs NOTHING expensive
+	@bash scripts/verify_m5.sh
+verify-m5-redteam: ## prove verify-m5 goes RED: rewrite ONE recorded number, watch the anchors and the runbook contradict it, restore
+	@bash scripts/verify_m5_redteam.sh
 
 # ---- M6 reliability (role:SRE) ----
 .PHONY: deploy-monitoring canary rollback gameday verify-m6
