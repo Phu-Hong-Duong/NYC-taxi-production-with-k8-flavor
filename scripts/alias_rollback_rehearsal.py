@@ -94,6 +94,36 @@ PROBE_AT = "2019-07-04T09:15:00"
 PROBE_PU, PROBE_DO = 132, 48
 PROBE_INTERVAL_S = 0.5
 
+#: What the champion answers for that row — `automation/runs/m5-parity/parity.json`,
+#: measured at M5-S3 and reproduced by every serving check since. The end state is
+#: checked against a number this program has PUBLISHED, not against itself.
+PARITY_ROW_MINUTES = 39.001937154
+
+#: WHAT THE RUN GOT WRONG, KEPT (the M5-S4 / M6-S3 precedent, third milestone).
+SUPERSEDED_PREDICTIONS = {
+    "p5_only_about_the_bake_off_winner": {
+        "predicted": (
+            "at the half-way state verify-m5's failures are ONLY about the alias not being "
+            "the M3 bake-off's recorded winner"
+        ),
+        "observed": (
+            "THREE failures, and only one of them names the pointer: the live answer "
+            "10.291528327 differs from the parity record's 10.665224429, the configured "
+            "feature set is 5 features wide where parity was measured at 24, and @champion is "
+            "not the bake-off's recorded winner"
+        ),
+        "why_it_was_wrong": (
+            "the M5 gate ASKS THE SERVED MODEL for a prediction and checks it against the "
+            "parity record (M5-S5 §2, deliberately: a serving gate that never asks for the "
+            "artifact would pass against a dead model). Rolling the alias back changes that "
+            "answer, so two of the three failures are the gate noticing a different model is "
+            "serving — the same fact as the third, through a different instrument. The check "
+            "was replaced by a property that survives BOTH states rather than by a wider "
+            "keyword list: gotcha #50, and a check that greps a gate's prose is #53/#68."
+        ),
+    },
+}
+
 PREDICTION: dict[str, Any] = {
     "written_before_the_alias_moved": True,
     "p1_the_three_moves_all_succeed_both_ways": (
@@ -118,11 +148,12 @@ PREDICTION: dict[str, Any] = {
         "is not, it was never a coherence check — it was a literal that happened to hold at "
         "v2 (F-017, gotchas #49/#50)."
     ),
-    "p5_the_gate_goes_RED_at_v1_for_exactly_one_reason": (
-        "`verify-m5` as a whole goes RED at the half-way state, and the failures are ONLY "
-        "about the alias not being the M3 bake-off's recorded winner. That is the check "
-        "doing its job: the rehearsal is a sanctioned deviation from the gated champion, and "
-        "a gate that stayed green through it would not be watching the pointer at all."
+    "p5_the_gate_goes_RED_at_v1_and_GREEN_again_at_the_end": (
+        "`verify-m5` as a whole goes RED at the half-way state and GREEN again at the end "
+        "state. The red is the check doing its job: the rehearsal is a sanctioned deviation "
+        "from the gated champion, and a gate that stayed green through it would not be "
+        "watching the pointer at all. What the failures SAY is recorded verbatim rather than "
+        "pattern-matched — a check that greps a gate's prose is the shape #53/#68 warn about."
     ),
     "p6_the_end_state_is_byte_identical": (
         "@champion is version 2, configs/train.yaml is unchanged by sha, one quote stamps "
@@ -365,10 +396,85 @@ def verify_m5_at_this_state() -> dict[str, Any]:
     }
 
 
+def judge(record: dict[str, Any]) -> dict[str, bool]:
+    """Every check, derived from the record and NOTHING else.
+
+    Separated from the run for a reason this story paid for: the first version of
+    `r4` demanded that every half-way failure name the bake-off winner, and the
+    gate — correctly — also reported that the served model no longer reproduces
+    the parity record, because M5-S5 §2 asks the endpoint for a real prediction.
+    A wrong assertion about a correct system (gotcha #50) is repaired by fixing
+    the property and RE-JUDGING the evidence, exactly as `verify-m3` replays
+    recorded verdicts rather than re-running a bake-off. Re-running this
+    rehearsal would have cost two more alias moves, and M6's kickoff sanctions
+    exactly two.
+    """
+    leg1, leg2 = record["leg_1_rollback"], record["leg_2_roll_forward"]
+    half, end_gate = record["at_the_half_way_state"], record["at_the_end_state"]
+    end = record["end_state"]
+    final = end["last_champion_answer_minutes"]
+    checks = {
+        "r1_leg1_moved_all_three_and_v1_answered": leg1["route"][flip_key(TARGET_VERSION)]
+        is not None,
+        "r2_leg2_moved_all_three_and_v2_answered": leg2["route"][flip_key(START_VERSION)]
+        is not None,
+        "r3_the_coherence_check_was_green_at_v1": half["coherence_green"],
+        # The coherence check is only a coherence check if it holds on BOTH
+        # sides. Green at v2 alone is satisfiable by a literal.
+        "r4_the_coherence_check_is_green_at_v2_too": record["at_the_end_state"]["coherence_green"],
+        "r5_the_gate_went_RED_at_the_half_way_state": half["exit_code"] != 0
+        and bool(half["failures"]),
+        "r6_the_gate_is_GREEN_again_at_the_end_state": end_gate["exit_code"] == 0
+        and not end_gate["failures"],
+        "r7_the_end_state_is_the_declared_one": (
+            end["alias_version"],
+            end["features_version"],
+        )
+        == (START_VERSION, START_SET),
+        "r8_configs_train_yaml_is_byte_identical": end["configs_train_yaml_sha_before"]
+        == end["configs_train_yaml_sha_after"],
+        "r9_the_final_answer_reproduces_the_parity_row": final is not None
+        and abs(final - PARITY_ROW_MINUTES) < 1e-6,
+        # A rollback that reported zero cost would be the finding, not the pass:
+        # the config move changes the request schema while the old pod serves.
+        "r10_the_rollback_leg_has_a_measured_outage": leg1["route"].get("outage_seconds")
+        is not None,
+    }
+    record["checks"] = {k: bool(v) for k, v in checks.items()}
+    record["verdict"] = "PASS" if all(checks.values()) else "FAIL"
+    return record["checks"]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--rejudge",
+        action="store_true",
+        help="re-derive the verdict from the existing record and re-run verify-m5 at the "
+        "CURRENT state; moves no alias and edits no config (the verify-m3 replay idiom)",
+    )
     args = parser.parse_args(argv)
+
+    if args.rejudge:
+        record = json.loads(RECORD.read_text())
+        record["prediction"] = PREDICTION
+        record["superseded_predictions"] = SUPERSEDED_PREDICTIONS
+        record["at_the_end_state"] = verify_m5_at_this_state()
+        record["judged_by"] = (
+            "--rejudge: the checks were corrected after the run (gotcha #50) and re-applied "
+            "to the recorded evidence. The two alias moves in this record are the only two "
+            "M6 sanctions; re-running would have spent two more."
+        )
+        judge(record)
+        RECORD.write_text(json.dumps(record, indent=2) + "\n")
+        for name, ok_ in record["checks"].items():
+            print(f"  {'ok  ' if ok_ else 'FAIL'} {name}")
+        print(
+            f"[rollback] {record['verdict']} — "
+            f"{sum(record['checks'].values())}/{len(record['checks'])} checks (re-judged)"
+        )
+        return 0 if record["verdict"] == "PASS" else 1
 
     RECORD.parent.mkdir(parents=True, exist_ok=True)
     record: dict[str, Any] = {
@@ -376,6 +482,7 @@ def main(argv: list[str] | None = None) -> int:
         "what": "docs/runbooks/serving.md §4 run for real, both ways — F-032's un-rehearsed half",
         "sanctioned_by": "M6 kickoff law 3: the alias moves exactly twice, inside this rehearsal",
         "prediction": PREDICTION,
+        "superseded_predictions": SUPERSEDED_PREDICTIONS,
     }
     RECORD.write_text(json.dumps(record, indent=2) + "\n")
     print(f"[rollback] prediction written to {RECORD} — the alias has not moved")
@@ -430,26 +537,9 @@ def main(argv: list[str] | None = None) -> int:
         "configs_train_yaml_sha_after": config_sha_after,
         "last_champion_answer_minutes": final_minutes[-1] if final_minutes else None,
     }
-    checks = {
-        "r1_leg1_moved_all_three_and_v1_answered": leg1["route"][flip_key(TARGET_VERSION)]
-        is not None,
-        "r2_leg2_moved_all_three_and_v2_answered": leg2["route"][flip_key(START_VERSION)]
-        is not None,
-        "r3_the_coherence_check_was_green_at_v1": half["coherence_green"],
-        "r4_the_gate_went_red_at_v1_only_about_the_pointer": half["exit_code"] != 0
-        and bool(half["failures"])
-        and all("bake-off" in f or "winner" in f for f in half["failures"]),
-        "r5_the_end_state_is_the_declared_one": (end_alias, end_set)
-        == (START_VERSION, START_SET),
-        "r6_configs_train_yaml_is_byte_identical": config_sha_before == config_sha_after,
-        "r7_the_final_answer_reproduces_the_parity_row": final_minutes
-        and abs(final_minutes[-1] - 39.001937154) < 1e-6,
-        "r8_a_rollback_is_not_free_and_the_number_exists": leg1["route"].get("outage_seconds")
-        is not None
-        or leg1["route"]["failed"] == 0,
-    }
-    record["checks"] = {k: bool(v) for k, v in checks.items()}
-    record["verdict"] = "PASS" if all(checks.values()) else "FAIL"
+    print("\n== the end state: run the M5 gate again, where it WAS written to run ==")
+    record["at_the_end_state"] = verify_m5_at_this_state()
+    judge(record)
     RECORD.write_text(json.dumps(record, indent=2) + "\n")
 
     print("\n== the rehearsal, measured ==")
@@ -468,7 +558,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n[rollback] {RECORD}")
     for name, ok_ in record["checks"].items():
         print(f"  {'ok  ' if ok_ else 'FAIL'} {name}")
-    print(f"[rollback] {record['verdict']} — {sum(record['checks'].values())}/{len(checks)} checks")
+    print(
+        f"[rollback] {record['verdict']} — "
+        f"{sum(record['checks'].values())}/{len(record['checks'])} checks"
+    )
     return 0 if record["verdict"] == "PASS" else 1
 
 
