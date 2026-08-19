@@ -1,5 +1,78 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (ax) — M4 boundary: cleanly closed, the records ruled into review, and M5 (serving) chartered
+
+### State
+**ARCH, `claude-fable-5` (stated first line), Grand Architect boundary session**
+— boot reads: CLAUDE.md · HANDOFF (aw) · BLUEPRINT §9 · all four ledgers ·
+AWAITING_PO · M4 kickoff. **M4 is CLOSED and tagged `m4-closed`. M5 kickoff
+authored (`docs/milestones/M5_KICKOFF.md`). Chain continues — executor
+scheduled for M5-S1.** Cluster 3/3 Ready (age 2d), `@champion` version 2,
+tree clean before this session's triage commits.
+
+### Done
+- **Triage (job 1).** `make verify-m4` re-run BY THE APPROVER → **GREEN 39/39,
+  7 sections, exit 0** (count verified with `grep -c "ok  "`; paste in M5
+  kickoff §0). Lineage spot-check (gotcha #20): M4-S3's merge `6a43498` is an
+  ancestor of origin/main. M4 = PRs #20–#27. **Sign-off row written** (producer
+  EXEC S1–S5, approver ARCH/Fable — producer ≠ approver holds; the row the leg-3
+  session deliberately left for this boundary).
+- **F-029 DECIDED: Option A — the records enter review.** `automation/runs/**/
+  *.json` to be un-ignored (logs/`.status` stay ignored). A over C: the copy
+  step is the twin this program refuses everywhere. A over B: what a gate reads
+  must be what review can see, and B leaves a tampered record diffless.
+  **Mechanics INTAKEN → M5-S1 as ONE PR** — deliberately not executed at the
+  boundary: tracked files under headers still saying "gitignored" would be a
+  #51-class inconsistency. Ledger row amended: closes on the landed mechanics
+  (stricter than its original "decided, not moved" condition, reason recorded).
+- **F-022 DECIDED: option (a)** — the bake-off's incumbent cell resolves by
+  alias and reads its feature set off the LOADED model ("the champion, whatever
+  it is now"); pre-registered Specs stay for the four fixed contenders.
+  **CARRY → M7** (quoted: §9/M7 "scheduled Flyte retrain landing a challenger"
+  — the next builder of a contender set). Closes there by the change + one
+  `--smoke-rows` execution.
+- **Every other open item dispositioned, none silent** (§0 table): F-019 →
+  M5-S2 (intake honored at its quoted landing — the serving story decides
+  extend-vs-policy, SRE half minuted in the PRR) · F-009 → M5-S2 (same, with
+  gotcha #39's impostor named first) · F-016 standing at AWAITING_PO
+  2026-08-18-1 (M5 legislated alias-neutral) · F-020 → M7 unchanged · error
+  memo §7 row 2 stays in the memo · both standing PO entries restated. **Debt
+  register: fully closed, nothing re-carries** — first boundary with zero due
+  rows; D-001's registry-pattern deferral stands with trigger + landing event.
+- **M5 kickoff authored (job 2), 5 stories:** S1 F-029 mechanics + backup +
+  ingress/cert-manager/KServe Standard (ADR-004) through the PRE-PROVISIONED
+  8081/8443 route — no rebuild · S2 champion on the wire (F-009 + F-019 land) ·
+  S3 THE parity test 1e-6 + red team · S4 p95 + self-heal under load (detached,
+  ritual e named in the story) · S5 PRR minutes + `verify-m5` + red team.
+  Preconditions verified LIVE and pasted, including the wall found this
+  session: **the kind config has no `ingress-ready` label**, so the upstream
+  ingress manifest will not schedule as-shipped (risk R2 with the fix named —
+  hostname nodeSelector derived from the cluster name).
+- **Hygiene**: two stale remote-tracking refs pruned (`git remote prune
+  origin`) — the branches themselves were already deleted at merge time.
+
+### Decisions
+- F-029 → A and F-022 → (a), both recorded in the ledger with reasoning (above).
+- ADR-004's stale numbering NOTED in the kickoff, not edited: its "M4/M5"
+  predates the renumber and reads "M5/M6" today; the Knative-vs-two-isvc spike
+  is the **M6 boundary's**, and its pre-approved "re-deployed once" cost is
+  M6's to spend. The ADR itself is a dated record and stays as written.
+
+### Defects/Surprises
+- None in execution. One planning catch worth the line: the upstream kind
+  ingress path assumes a node label this cluster was built without — found by
+  a 2-second grep at kickoff time instead of by a scheduling failure at story
+  time (the precondition table's job, done).
+
+### Next
+**Executor: M5-S1** (`docs/milestones/M5_KICKOFF.md`). Two halves, safe stop
+after each: (1) F-029 mechanics as ONE PR — un-ignore the record JSONs, correct
+the three stale "gitignored" lines, both gates + both red teams green after;
+(2) `make backup`, then ingress → cert-manager → KServe Standard, pins observed
+live, idempotent, DRY_RUN honest, declared-route curl as the accept. Mind R2
+(ingress scheduling) and R3 (pull times — detach, never wait). The cluster
+stays up; serving reads the pointer and never moves it.
+
 ## Session 2026-08-19 (aw) — M4-S5 leg 3: the gate that closes M4, and the ground it found soft underneath
 
 ### State
