@@ -168,9 +168,11 @@ def check_request_becomes_a_number() -> dict:
         ["make", "quote"], cwd=REPO_ROOT, capture_output=True, text=True,
     )
     quoted = proc.returncode == 0
-    tail = proc.stdout.strip().splitlines()[-1:] or ["(no output)"]
+    # The line that carries the ANSWER, not the last line make happens to print.
+    lines = [ln for ln in proc.stdout.splitlines() if "minute" in ln.lower()]
+    answer = lines[-1].strip() if lines else (proc.stdout.strip().splitlines() or ["(no output)"])[-1]
     if quoted:
-        ok(f"one real quote sent through the live endpoint: {tail[-1][:110]}")
+        ok(f"one real quote sent through the live endpoint: {answer[:120]}")
     else:
         fail(f"`make quote` exited {proc.returncode} — no request to observe. "
              f"{(proc.stderr or proc.stdout).strip()[-200:]}")
@@ -222,12 +224,28 @@ def check_board() -> dict:
                 "panel": panel["id"], "refId": target["refId"],
                 "series": series, "expr": expr,
             })
-            note = "" if series else "  (0 series — legal for a counter with no traffic yet)"
-            print(f"    panel {panel['id']}.{target['refId']}: {series} series{note}")
+            print(f"    panel {panel['id']}.{target['refId']}: {series} series")
     if answered:
-        with_data = sum(1 for a in answered if a["series"])
-        ok(f"all {len(answered)} panel queries parsed and executed against "
-           f"Prometheus; {with_data} returned live series")
+        # EVERY query must return at least one series, and that bar is the whole
+        # value of this leg. The first draft called 0 series "legal for a counter
+        # with no traffic yet" and printed it in green — which hid three real
+        # defects at once: the ingress metrics Service was never discovered
+        # (annotation missing), and two container panels could not draw at all
+        # because a rate() over a 1-minute window at a 1-minute scrape interval
+        # has one sample. A panel that renders an empty rectangle looks exactly
+        # like a quiet system, so an empty rectangle must be a FAILURE here, not
+        # a footnote. If a future panel is legitimately empty, this goes red and
+        # a human decides — which is the correct place for that judgement.
+        empty = [a for a in answered if not a["series"]]
+        if empty:
+            for a in empty:
+                fail(f"panel {a['panel']}.{a['refId']} returned 0 series — it "
+                     f"would render an empty rectangle, which is indistinguishable "
+                     f"from a quiet system: {a['expr'][:120]}")
+        else:
+            ok(f"all {len(answered)} panel queries executed against Prometheus "
+               f"and every one returned live series — no panel on this board "
+               f"renders an empty rectangle")
     return {"uid": uid, "queries": answered}
 
 

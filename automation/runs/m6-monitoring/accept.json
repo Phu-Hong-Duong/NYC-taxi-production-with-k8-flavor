@@ -1,0 +1,84 @@
+{
+  "route": "http://localhost:8081",
+  "prometheus_host": "prometheus.local",
+  "grafana_host": "grafana.local",
+  "scrape_wait_s": 40,
+  "inference_counter": {
+    "before": 13.0,
+    "after": 15.0,
+    "delta": 2.0,
+    "quoted": true
+  },
+  "board": {
+    "uid": "crosstown-serving",
+    "queries": [
+      {
+        "panel": 2,
+        "refId": "A",
+        "series": 1,
+        "expr": "sum by (status_code) (rate(rest_server_requests_total{job=\"kserve-predictors\"}[1m]))"
+      },
+      {
+        "panel": 3,
+        "refId": "A",
+        "series": 1,
+        "expr": "histogram_quantile(0.50, sum by (le) (rate(rest_server_request_duration_seconds_bucket{job=\"kserve-predictors\"}[1m])))"
+      },
+      {
+        "panel": 3,
+        "refId": "B",
+        "series": 1,
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(rest_server_request_duration_seconds_bucket{job=\"kserve-predictors\"}[1m])))"
+      },
+      {
+        "panel": 3,
+        "refId": "C",
+        "series": 1,
+        "expr": "histogram_quantile(0.99, sum by (le) (rate(rest_server_request_duration_seconds_bucket{job=\"kserve-predictors\"}[1m])))"
+      },
+      {
+        "panel": 4,
+        "refId": "A",
+        "series": 1,
+        "expr": "sum by (inferenceservice) (rate(model_infer_request_success_total[1m]))"
+      },
+      {
+        "panel": 4,
+        "refId": "B",
+        "series": 1,
+        "expr": "sum by (inferenceservice) (rate(model_infer_request_failure_total[1m]))"
+      },
+      {
+        "panel": 5,
+        "refId": "A",
+        "series": 0,
+        "expr": "sum by (status) (rate(nginx_ingress_controller_requests{namespace=\"serving\"}[1m]))"
+      },
+      {
+        "panel": 6,
+        "refId": "A",
+        "series": 0,
+        "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"serving\",container=\"kserve-container\"}[1m]))"
+      },
+      {
+        "panel": 6,
+        "refId": "B",
+        "series": 1,
+        "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=\"serving\",container=\"kserve-container\",resource=\"cpu\"})"
+      },
+      {
+        "panel": 7,
+        "refId": "A",
+        "series": 0,
+        "expr": "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace=\"serving\",container=\"kserve-container\"}[1m]))"
+      },
+      {
+        "panel": 7,
+        "refId": "B",
+        "series": 1,
+        "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"serving\"})"
+      }
+    ]
+  },
+  "sub_checks": 10
+}

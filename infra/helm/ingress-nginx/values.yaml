@@ -118,6 +118,17 @@ controller:
   # this component at all.
   metrics:
     enabled: true
+    service:
+      # The chart creates the metrics Service but annotates it with nothing, so
+      # Prometheus's endpoint-discovery job — which keys on exactly this
+      # annotation — never sees it. Found by the accept check's board leg, which
+      # ran every panel's query and reported the edge panel with 0 series while
+      # every scrape target was up: a target list cannot tell you about a
+      # component that was never discovered. Annotations on a Service do NOT
+      # roll the Deployment, so this costs no outage.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "10254"
 
   resources:
     requests:
