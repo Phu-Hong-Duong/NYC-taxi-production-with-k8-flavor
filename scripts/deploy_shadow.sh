@@ -96,10 +96,11 @@ fi
 # ------------------------------------------------------------------ DRY_RUN --
 if [[ "$DRY_RUN" == "1" ]]; then
   echo
-  echo "== [1/4] resolve ==  DRY_RUN — WOULD read models:/$CHAMPION_NAME/$SHADOW_VERSION (a READ)"
-  echo "== [2/4] isvc ==     DRY_RUN — WOULD apply $SHADOW_MANIFEST with the resolved storageUri"
-  echo "== [3/4] accept ==   DRY_RUN — WOULD POST one quote to $ROUTE/v2/models/$SHADOW_NAME/infer"
-  echo "== [4/4] invariant== DRY_RUN — WOULD re-read @champion and re-quote the champion's host"
+  echo "== [1/5] resolve ==  DRY_RUN — WOULD read models:/$CHAMPION_NAME/$SHADOW_VERSION (a READ)"
+  echo "== [2/5] isvc ==     DRY_RUN — WOULD apply $SHADOW_MANIFEST with the resolved storageUri"
+  echo "== [3/5] route ==    DRY_RUN — WOULD poll $ROUTE/v2/models/$SHADOW_NAME/ready until nginx routes it"
+  echo "== [4/5] accept ==   DRY_RUN — WOULD POST one quote to $ROUTE/v2/models/$SHADOW_NAME/infer"
+  echo "== [5/5] invariant== DRY_RUN — WOULD re-read @champion and re-quote the champion's host"
   echo
   echo "DRY_RUN — nothing was applied, no InferenceService was created."
   exit 0
@@ -113,7 +114,7 @@ ALIAS_BEFORE="$(champion_version)"
 echo "   @champion is version $ALIAS_BEFORE (read before any change)"
 
 echo
-echo "== [1/4] resolve version $SHADOW_VERSION (F-009's two hops, asked of a version) =="
+echo "== [1/5] resolve version $SHADOW_VERSION (F-009's two hops, asked of a version) =="
 RESOLVED="$(uv run python "$REPO_ROOT/scripts/resolve_champion_storage.py" \
               --version "$SHADOW_VERSION" 2>/dev/null)"
 STORAGE_URI="$(printf '%s' "$RESOLVED" | python3 -c 'import json,sys; print(json.load(sys.stdin)["storage_uri"])')"
@@ -130,7 +131,7 @@ echo "   feature set (from the version's OWN tag): $FEATURE_SET"
 echo "   what KServe will download                : $STORAGE_URI"
 
 echo
-echo "== [2/4] the shadow InferenceService =="
+echo "== [2/5] the shadow InferenceService =="
 python3 - "$SHADOW_MANIFEST" "$STORAGE_URI" "$SHADOW_VERSION" > "/tmp/isvc-shadow.$$.yaml" <<'PY'
 import sys
 
@@ -164,7 +165,43 @@ echo "   waiting for the shadow predictor (first start downloads $STORAGE_URI)�
   -l "serving.kserve.io/inferenceservice=$SHADOW_NAME"
 
 echo
-echo "== [3/4] read it back — a PREDICTION, in the shadow's OWN feature set =="
+# THE THIRD WAIT, AND IT IS ABOUT THE ROUTE RATHER THAN THE POD — F-037.
+#
+# Both waits above passed and the accept check below still got a bare nginx
+# `404 Not Found`. Neither was wrong: `rollout status` is about the ReplicaSet
+# and the ISVC's `Ready` condition is about the PREDICTOR. KServe creates the
+# Ingress as a separate object and ingress-nginx then has to observe it and
+# reload — so on a FIRST deploy there is a window in which the service is
+# genuinely ready and its route genuinely does not exist. Observed live: the
+# Ingress object was **6 seconds old** when the quote 404'd, and the same quote
+# succeeded on retry.
+#
+# This is gotcha #71's family with a different mechanism, and the difference
+# matters. #71 was "a wait the thing you are REPLACING can satisfy"; there is no
+# predecessor on a first deploy. This is "a wait about a DIFFERENT OBJECT than
+# the one the next step uses" — every condition being true about the pod says
+# nothing about whether nginx can route to it.
+#
+# So the route is waited on by ASKING IT, which is the only instrument that
+# answers the question the accept check is about to ask. `/v2/models/<name>/ready`
+# is mlserver's own endpoint and reaching it proves the whole path — nginx has
+# the Ingress, the Service resolves, the pod answers.
+echo "== [3/5] wait for the ROUTE (not the pod — F-037) =="
+ROUTE_DEADLINE=$(( SECONDS + 180 ))
+until curl -sf -o /dev/null -H "Host: $SHADOW_HOST" \
+        "$ROUTE/v2/models/$SHADOW_NAME/ready"; do
+  if (( SECONDS >= ROUTE_DEADLINE )); then
+    echo "FAIL: $SHADOW_HOST never became routable, though the predictor is Ready." >&2
+    echo "      The pod is fine; the Ingress is the suspect. Check:" >&2
+    echo "        kubectl -n $SERVING_NS get ingress $SHADOW_NAME" >&2
+    exit 1
+  fi
+  sleep 2
+done
+echo "ok  $SHADOW_HOST answers /v2/models/$SHADOW_NAME/ready"
+
+echo
+echo "== [4/5] read it back — a PREDICTION, in the shadow's OWN feature set =="
 # gotcha #59: assert on the artifact the thing exists to produce. And note what
 # this line proves that a health check could not — that the 5-column matrix this
 # client built is the one version 1's logged signature accepts. Send it 24
@@ -175,7 +212,7 @@ uv run python -m taxi_mlops.serving \
   --at "2019-07-04T09:15:00"
 
 echo
-echo "== [4/4] the story-exit invariant: the champion is untouched =="
+echo "== [5/5] the story-exit invariant: the champion is untouched =="
 ALIAS_AFTER="$(champion_version)"
 if [[ "$ALIAS_BEFORE" != "$ALIAS_AFTER" ]]; then
   echo "FAIL: @champion moved from $ALIAS_BEFORE to $ALIAS_AFTER during a SHADOW deploy." >&2
