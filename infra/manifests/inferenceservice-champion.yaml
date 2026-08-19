@@ -1,0 +1,61 @@
+# The champion on the wire (M5-S2) — one InferenceService, KServe Standard mode.
+#
+# THE ONE FIELD THIS FILE DOES NOT CARRY IS `storageUri`, AND THAT IS THE POINT.
+# What serves is `models:/nyc-taxi-eta@champion`, an ALIAS — a pointer designed
+# to move (F-022's decision, the same reasoning one layer up). The S3 path of
+# today's champion is a FACT ABOUT TODAY, and a committed one would be a second
+# address for the champion that nothing keeps in step with the registry: the day
+# the alias moves, this file would still apply cleanly and serve the model that
+# used to be champion, with no error anywhere. So `scripts/deploy_champion.sh`
+# resolves the alias at deploy time and renders the value in; the placeholder
+# below is deliberately not a valid URI so an accidental `kubectl apply -f` of
+# this file fails instead of half-working.
+#
+# WHY THE RESOLUTION IS TWO HOPS AND NOT ONE — F-009, landing here (option b).
+# The registry version's `source` is `runs:/<run>/model`, but MLflow 3 writes a
+# logged model's artifacts to `<experiment>/models/m-<id>/artifacts`. Reading
+# `source` and handing it to KServe would point the storage-initializer at
+# `s3://mlflow-artifacts/6/<run>/artifacts/model`, which exists as a prefix with
+# NOTHING UNDER IT — the download would "succeed" with an empty directory and
+# mlserver would fail on a missing MLmodel, i.e. exactly the artifact-shaped
+# error F-009 says blames the wrong thing. The deploy resolves alias -> logged
+# model -> `artifact_location`, in one place, and prints it.
+#
+# `deploymentMode: RawDeployment` is stamped here as well as configured
+# cluster-wide (infra/helm/kserve/values.yaml). Belt and braces on purpose: the
+# cluster default is a ConfigMap somebody could change, and an InferenceService
+# that silently became Serverless would ask for a Knative control plane this
+# cluster does not have and would sit Unknown with a message about revisions.
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: nyc-taxi-eta
+  namespace: serving
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+spec:
+  predictor:
+    # The identity the storage-initializer reads MinIO as. Read-only, created by
+    # the MinIO chart's user Job (infra/helm/minio/values.yaml) — a leaked
+    # serving credential must not be able to write the registry's artifacts,
+    # which is the same argument that gave Flyte its own bucket and identity.
+    serviceAccountName: taxi-serving
+    # One replica: M5 serves one model on one laptop and says so. M5-S4 kills
+    # this pod under load on purpose, so "how long until a replacement answers"
+    # is a number this milestone measures rather than a property it claims.
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: mlflow
+      runtime: taxi-mlserver
+      storageUri: RESOLVED-AT-DEPLOY-TIME-FROM-THE-CHAMPION-ALIAS
+      resources:
+        requests:
+          cpu: 200m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 3Gi

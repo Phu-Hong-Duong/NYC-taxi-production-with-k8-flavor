@@ -1,0 +1,78 @@
+# The ServingRuntime the champion runs in (M5-S2).
+#
+# WHY THIS FILE EXISTS AT ALL. KServe's `kserve-resources` chart v0.20.0 ships
+# NO runtimes — `helm template … | grep -c 'kind: ClusterServingRuntime'` returns
+# 0, and `kubectl get clusterservingruntimes` on the freshly-installed platform
+# returned `No resources found`. Upstream keeps them as plain manifests in
+# `config/runtimes/`, image-substituted by a kustomization at release time. So a
+# runtime is ours to declare either way; declaring it here means the image is
+# pinned in the same diff as the rest of the pins, instead of arriving through a
+# `newTag: latest` we do not control.
+#
+# It is `kserve-mlserver` upstream, narrowed and repinned:
+#   * ONE supportedModelFormat (`mlflow`) instead of eight. The five this program
+#     will never serve (sklearn/xgboost/…) would be claims this runtime cannot
+#     honour — the image carries LightGBM and MLflow and nothing else new — and
+#     `autoSelect: true` on a format nobody deploys is a trap for the next
+#     InferenceService somebody writes.
+#   * `image` is OUR derived predictor (docker/serving.Dockerfile), because the
+#     stock image cannot load this champion: it has no `lightgbm`, measured in
+#     one `docker run` before anything was installed.
+#   * `imagePullPolicy: IfNotPresent`, which the tag makes safe: it is immutable
+#     and specific, so a node either has these exact bytes or fails loudly with
+#     ImagePullBackOff (M4-S3's argument for immutable tags, applied again).
+#
+# Resources are a STARTING POINT, not a measurement, and are deliberately below
+# the upstream 1 CPU / 2Gi: five tenants already share this laptop. M5-S4 drives
+# the endpoint at a stated rate and the PRR (M5-S5) records what it actually
+# used — that is where these numbers earn their values.
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: taxi-mlserver
+  annotations:
+    serving.kserve.io/server-type: mlserver
+spec:
+  annotations:
+    prometheus.kserve.io/port: '8080'
+    prometheus.kserve.io/path: /metrics
+  supportedModelFormats:
+    - name: mlflow
+      version: "2"
+      autoSelect: true
+      priority: 1
+  protocolVersions:
+    - v2
+  containers:
+    - name: kserve-container
+      image: taxi-mlops-predictor:mlserver-1.7.1-lgb-4.7.0
+      imagePullPolicy: IfNotPresent
+      env:
+        # MLServer's MLflow runtime. The upstream manifest templates this from
+        # `{{.Labels.modelClass}}`; naming it outright is one fewer indirection
+        # for a runtime that serves exactly one kind of model.
+        - name: MLSERVER_MODEL_IMPLEMENTATION
+          value: mlserver_mlflow.MLflowRuntime
+        - name: MLSERVER_HTTP_PORT
+          value: "8080"
+        - name: MLSERVER_GRPC_PORT
+          value: "9000"
+        # One worker, said out loud: p95 measured under load (M5-S4) is a
+        # number about THIS shape, and a parallelism that changes between the
+        # measurement and the runbook makes the measurement fiction.
+        - name: MLSERVER_PARALLEL_WORKERS
+          value: "0"
+      securityContext:
+        allowPrivilegeEscalation: false
+        privileged: false
+        runAsNonRoot: true
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        requests:
+          cpu: 200m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 3Gi

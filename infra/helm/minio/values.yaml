@@ -86,3 +86,21 @@ users:
     existingSecret: minio-flyte-user
     existingSecretKey: secretKey
     policy: readwrite
+  # The SERVING identity (M5-S2), and the first one in this file that is
+  # genuinely least-privilege: `readonly`, MinIO's built-in policy. KServe's
+  # storage-initializer downloads the champion's artifacts and never writes a
+  # byte, so nothing about serving needs more — and the credential it carries is
+  # the one most exposed by construction, because it lives in the namespace a
+  # predictor pod runs in and travels with every pod restart, kill drill (M5-S4)
+  # and rollback rehearsal (M5-S5). A leaked serving credential must not be able
+  # to overwrite the model it reads: `readonly` is what makes "the artifact that
+  # was gated is the artifact that serves" a property of the store rather than a
+  # promise about who has the key.
+  #
+  # It is bucket-wide read, which is the honest limit — the same one recorded on
+  # `flyte` above. Narrowing it to the champion's prefix needs a custom policy
+  # document and this chart has no hook for one.
+  - accessKey: serving
+    existingSecret: minio-serving-user
+    existingSecretKey: secretKey
+    policy: readonly
