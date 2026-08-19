@@ -52,6 +52,16 @@ spec:
         name: mlflow
       runtime: taxi-mlserver
       storageUri: RESOLVED-AT-DEPLOY-TIME-FROM-THE-CHAMPION-ALIAS
+      env:
+        # The REGISTRY version, carried onto the wire. mlserver stamps
+        # `model_version` on every inference response, so with this set the
+        # answer to "which model produced this number?" travels WITH the number
+        # instead of being looked up afterwards from something that may since
+        # have changed. Rendered from the same resolution as storageUri — one
+        # read of the alias, two fields — so the two can never disagree about
+        # which champion this pod is.
+        - name: MLSERVER_MODEL_VERSION
+          value: CHAMPION-VERSION-RESOLVED-AT-DEPLOY-TIME
       resources:
         requests:
           cpu: 200m

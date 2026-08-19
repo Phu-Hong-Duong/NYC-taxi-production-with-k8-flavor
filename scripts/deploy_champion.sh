@@ -164,21 +164,40 @@ echo "== [6/7] the InferenceService =="
 # The placeholder is replaced with the RESOLVED uri. A python one-liner and not
 # `sed` because the value contains slashes and a `sed s|..|..|` whose delimiter
 # collides with the payload is the kind of thing that half-works.
-python3 - "$ISVC_MANIFEST" "$STORAGE_URI" > /tmp/isvc-rendered.$$.yaml <<'PY'
+python3 - "$ISVC_MANIFEST" "$STORAGE_URI" "$VERSION" > /tmp/isvc-rendered.$$.yaml <<'PY'
 import sys
 
-path, storage_uri = sys.argv[1], sys.argv[2]
-placeholder = "RESOLVED-AT-DEPLOY-TIME-FROM-THE-CHAMPION-ALIAS"
-text = path and open(path).read()
-if placeholder not in text:
-    sys.exit(f"{path} no longer carries the storageUri placeholder — refusing to guess")
-sys.stdout.write(text.replace(placeholder, storage_uri))
+path, storage_uri, version = sys.argv[1], sys.argv[2], sys.argv[3]
+substitutions = {
+    "RESOLVED-AT-DEPLOY-TIME-FROM-THE-CHAMPION-ALIAS": storage_uri,
+    "CHAMPION-VERSION-RESOLVED-AT-DEPLOY-TIME": f'"{version}"',
+}
+text = open(path).read()
+for placeholder, value in substitutions.items():
+    if placeholder not in text:
+        sys.exit(f"{path} no longer carries the {placeholder} placeholder — refusing to guess")
+    text = text.replace(placeholder, value)
+sys.stdout.write(text)
 PY
 trap 'rm -f /tmp/isvc-rendered.$$.yaml' EXIT
 "${KUBECTL[@]}" apply -f /tmp/isvc-rendered.$$.yaml
 
 echo
 echo "   waiting for the predictor (first start downloads $STORAGE_URI)…"
+# THE ROLLOUT FIRST, AND THAT ORDER IS THE FIX FOR A REAL FALSE GREEN. On a
+# RE-deploy the InferenceService's `Ready` condition is satisfied by the pod
+# ALREADY SERVING, so `kubectl wait --for=condition=Ready inferenceservice`
+# returns instantly while the new pod is still `Init:0/1` — and the accept check
+# below then interrogates the OLD predictor and passes. Watched happen on this
+# story's third deploy: the new pod was 0 s old and `Init:0/1` in the very
+# `get pods` this script prints, and the quote came back from its predecessor
+# reporting `(unversioned)` when the change under test was the version stamp.
+# `rollout status` waits for the new ReplicaSet specifically; the ISVC condition
+# stays as the second leg because it is what KServe itself considers serving.
+# Siblings of gotchas #59/#65: a wait that can be satisfied by the thing you are
+# replacing is not a wait.
+"${KUBECTL[@]}" -n "$SERVING_NS" rollout status \
+  "deploy/$ISVC_NAME-predictor" --timeout="$WAIT_TIMEOUT"
 "${KUBECTL[@]}" -n "$SERVING_NS" wait --for=condition=Ready \
   "inferenceservice/$ISVC_NAME" --timeout="$WAIT_TIMEOUT"
 "${KUBECTL[@]}" -n "$SERVING_NS" get pods -o wide -l "serving.kserve.io/inferenceservice=$ISVC_NAME"

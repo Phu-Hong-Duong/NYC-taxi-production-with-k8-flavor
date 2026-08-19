@@ -148,8 +148,8 @@ def build_matrix(
             years = sorted(pd.DatetimeIndex(frame[quote_time.PICKUP_TIMESTAMP]).year.unique())
             raise UncoveredDateError(
                 f"this deployment cannot quote for {years}: "
-                f"{calendar_mod.HOLIDAY_TABLE} does not cover "
-                f"{sorted(calendar_mod.load_calendar().years)[-1]} onward, and the "
+                f"{calendar_mod.HOLIDAY_TABLE} covers through "
+                f"{sorted(calendar_mod.load_calendar().years)[-1]}, and the "
                 "champion eats holiday flags. REFUSED rather than guessed — a "
                 "quote built on invented holiday flags is a wrong number nobody "
                 "can see is wrong (F-019). Extend the table: `make holidays "
@@ -158,30 +158,64 @@ def build_matrix(
         raise
 
 
-def v2_payload(matrix: pd.DataFrame, feature_names: list[str]) -> dict[str, Any]:
-    """The Open Inference (V2) request body: one input per feature, positional.
+#: numpy dtype -> Open Inference (V2) datatype. The map is deliberately narrow:
+#: these are the only dtypes `quote_time.build_features` produces, and an
+#: unlisted one should stop the request rather than be coerced into something
+#: that looks close enough.
+_V2_DATATYPES = {
+    "int8": "INT8",
+    "int16": "INT16",
+    "int32": "INT32",
+    "int64": "INT64",
+    "float32": "FP32",
+    "float64": "FP64",
+}
 
-    `FP64` for every column because the champion's signature mixes integer and
-    float fields and a V2 input's datatype must match what the runtime casts to;
-    LightGBM predicts on a float matrix regardless, and sending one dtype removes
-    a whole class of "which column was the int one?" mismatch. The names travel
-    WITH the values so the server can rebuild the frame by name.
+
+def v2_payload(matrix: pd.DataFrame, feature_names: list[str]) -> dict[str, Any]:
+    """The Open Inference (V2) request body: one input per feature, named + typed.
+
+    **THE WIRE CARRIES THE MATRIX'S OWN DTYPES, and that is not a detail.** The
+    first version of this function sent `FP64` for everything, on the reasoning
+    that LightGBM predicts on a float matrix regardless. The endpoint answered
+    500:
+
+        Failed to enforce schema … Error: Incompatible input types for column
+        hour. Can not safely convert float64 to int32.
+
+    MLflow enforces the signature the model was LOGGED with, and it refuses a
+    lossy cast — `float64 -> int32` is one, because nothing in the payload proves
+    9.0 was ever an integer. That refusal is the model's signature doing its job,
+    so the fix is to stop lying about the types rather than to strip the
+    signature: `hour` is `int16` in the matrix the trainer built, so `INT16` is
+    what the wire says. Sending the real dtypes also removes a float32 -> float64
+    -> float32 round trip from the geometry columns, which is one fewer place for
+    M5-S3's 1e-6 to have to survive.
     """
     missing = [name for name in feature_names if name not in matrix.columns]
     if missing:
         raise ValueError(f"the matrix is missing {missing} — it cannot be sent positionally")
     rows = len(matrix)
-    return {
-        "inputs": [
+    inputs = []
+    for name in feature_names:
+        column = matrix[name]
+        datatype = _V2_DATATYPES.get(str(column.dtype))
+        if datatype is None:
+            raise ValueError(
+                f"feature {name!r} has dtype {column.dtype}, which this client has no "
+                f"V2 datatype for (known: {sorted(set(_V2_DATATYPES.values()))}). "
+                "Guessing one would send the model a column it was not fitted on."
+            )
+        values = np.asarray(column)
+        inputs.append(
             {
                 "name": name,
                 "shape": [rows, 1],
-                "datatype": "FP64",
-                "data": [float(v) for v in np.asarray(matrix[name], dtype="float64")],
+                "datatype": datatype,
+                "data": values.tolist(),
             }
-            for name in feature_names
-        ]
-    }
+        )
+    return {"inputs": inputs}
 
 
 @dataclass(frozen=True)
@@ -229,6 +263,41 @@ def served_version(endpoint: Endpoint, *, timeout: float = 30.0) -> dict[str, An
     return _get(endpoint.metadata_url, endpoint.host, timeout)
 
 
+def infer(
+    requests: list[QuoteRequest],
+    endpoint: Endpoint,
+    *,
+    features_cfg: dict[str, Any] | None = None,
+    timeout: float = 60.0,
+) -> dict[str, Any]:
+    """The endpoint's WHOLE answer, not just the numbers.
+
+    Callers want the numbers; the response also carries `model_name` and
+    `model_version`, and those are the answer to "which model produced THIS
+    prediction?" — stamped by the server on the very response being read, rather
+    than fetched from a metadata call that could describe a different moment.
+    """
+    cfg = features_cfg if features_cfg is not None else load_train_config()["features"]
+    names = quote_time.feature_names(cfg)
+    matrix = build_matrix(requests, cfg)
+    try:
+        return _post(endpoint.infer_url, endpoint.host, v2_payload(matrix, names), timeout)
+    except urllib.error.HTTPError as exc:  # pragma: no cover — needs a live endpoint
+        body = exc.read().decode(errors="replace")[:500]
+        raise RuntimeError(
+            f"the endpoint answered {exc.code} for {endpoint.infer_url} "
+            f"(Host: {endpoint.host}): {body}"
+        ) from exc
+
+
+def minutes_of(response: dict[str, Any]) -> np.ndarray:
+    """The predicted minutes out of a V2 response."""
+    outputs = response.get("outputs") or []
+    if not outputs:
+        raise RuntimeError(f"the endpoint returned no outputs: {json.dumps(response)[:500]}")
+    return np.asarray(outputs[0]["data"], dtype="float64")
+
+
 def predict(
     requests: list[QuoteRequest],
     endpoint: Endpoint,
@@ -237,18 +306,4 @@ def predict(
     timeout: float = 60.0,
 ) -> np.ndarray:
     """Quote requests -> minutes, off the live endpoint. Raises on a refusal."""
-    cfg = features_cfg if features_cfg is not None else load_train_config()["features"]
-    names = quote_time.feature_names(cfg)
-    matrix = build_matrix(requests, cfg)
-    try:
-        response = _post(endpoint.infer_url, endpoint.host, v2_payload(matrix, names), timeout)
-    except urllib.error.HTTPError as exc:  # pragma: no cover — needs a live endpoint
-        body = exc.read().decode(errors="replace")[:500]
-        raise RuntimeError(
-            f"the endpoint answered {exc.code} for {endpoint.infer_url} "
-            f"(Host: {endpoint.host}): {body}"
-        ) from exc
-    outputs = response.get("outputs") or []
-    if not outputs:
-        raise RuntimeError(f"the endpoint returned no outputs: {json.dumps(response)[:500]}")
-    return np.asarray(outputs[0]["data"], dtype="float64")
+    return minutes_of(infer(requests, endpoint, features_cfg=features_cfg, timeout=timeout))

@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .client import DEFAULT_ROUTE, Endpoint, QuoteRefused, QuoteRequest, predict, served_version
+from .client import DEFAULT_ROUTE, Endpoint, QuoteRefused, QuoteRequest, infer, minutes_of
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,17 +47,18 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     try:
-        minutes = predict([request], endpoint)
+        response = infer([request], endpoint)
     except QuoteRefused as refusal:
         print(f"[quote] REFUSED ({refusal.http_status}): {refusal}", file=sys.stderr)
         return 2
 
-    metadata = served_version(endpoint)
-    # What the SERVER says it is serving, asked rather than remembered. mlserver
-    # reports the model version it loaded; KServe reports the name it routes.
+    minutes = minutes_of(response)
+    # The version is read off THIS response, not off a metadata call: it is the
+    # server's own stamp on the very answer being printed, so it cannot describe
+    # a different moment than the number beside it.
     print(
-        f"[quote] served by {metadata.get('name', args.name)} "
-        f"version {metadata.get('versions') or metadata.get('version') or '(unversioned)'} "
+        f"[quote] served by {response.get('model_name', args.name)} "
+        f"version {response.get('model_version') or '(unversioned)'} "
         f"via {endpoint.infer_url} (Host: {endpoint.host})"
     )
     print(

@@ -57,6 +57,7 @@ Usage: uv run python scripts/resolve_champion_storage.py            (json)
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 
@@ -129,7 +130,7 @@ def check(resolved: dict[str, object]) -> int:
         load_ok, load_err = False, exc
 
     if info_ok and not load_ok:
-        print(
+        print(  # noqa: T201 — redirected to stderr by main; see the note there
             f"[resolve] F-009 CONFIRMED (not its impostor): get_model_info({uri}) "
             f"SUCCEEDS while load_model on the SAME uri fails — {type(load_err).__name__}: "
             f"{str(load_err)[:80]}"
@@ -160,9 +161,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--train-config", default="configs/train.yaml")
     args = parser.parse_args(argv)
 
-    resolved = resolve(args.train_config)
-    if args.check and check(resolved) != 0:
-        return 1
+    # STDOUT CARRIES THE PAYLOAD AND NOTHING ELSE. `tracking.configure` prints a
+    # three-line banner naming where it got its credentials — worth having, and
+    # it is diagnostics, not data. It used to land on stdout, where the caller's
+    # `json.load` met it and died on `Expecting value: line 1 column 2`. Sending
+    # every human-facing line to stderr means a shell can read this script with a
+    # plain pipe and a human still sees the banner.
+    with contextlib.redirect_stdout(sys.stderr):
+        resolved = resolve(args.train_config)
+        if args.check and check(resolved) != 0:
+            return 1
     print(json.dumps(resolved, indent=2))
     return 0
 
