@@ -36,12 +36,18 @@
 # commit, which is #50's disease exactly. The drill's record is the evidence;
 # `make pipeline-cache-drill` is what refreshes it.
 #
-# HONEST LIMIT, STATED BECAUSE IT IS LOAD-BEARING: `automation/runs/` is
-# gitignored, so the records below are MACHINE state, not repo state, and a
-# fresh clone cannot run §3-§6 until the drills have been run on it. That is
-# true of `verify-m3` too (its bake-off record lives in the same ignored tree)
-# and it is not a new gap — it is F-029, filed by this story rather than left
-# implied. Nothing here pretends otherwise: each leg names the file it read.
+# THE RECORDS ARE COMMITTED, AND THEY WERE NOT WHEN THIS GATE WAS WRITTEN
+# (F-029, closed at M5-S1). This header used to carry an honest limit instead:
+# `automation/runs/` was gitignored, so every record §3-§6 reads was MACHINE
+# state — present on this laptop, absent in a fresh clone, and, worse, editable
+# with no diff for a reviewer to see, which is precisely the fault
+# `verify_m4_redteam.sh` plants on purpose. ARCH decided the fork at the M4
+# boundary (2026-08-19, option A) and M5-S1 landed the mechanics: the verdict
+# JSONs under `automation/runs/**` are TRACKED; the logs and `.status` files
+# stay ignored, because they are transcripts and no gate reads them. So a fresh
+# clone can run §3-§6 against the same bytes this machine ran them against, and
+# a tampered record shows up in `git status`. Each leg still names the file it
+# read — that part was never the problem.
 #
 # Prints one line per sub-check and exits nonzero if ANY fails — it keeps going
 # rather than stopping at the first, so one run tells you everything broken.
@@ -785,7 +791,7 @@ if [[ "$FAILS" -eq 0 ]]; then
   printf '\033[32m[verify-m4] GREEN — every M4 sub-check passed.\033[0m\n'
   printf '            Show: the pipeline story   docs/pipeline_m4.md\n'
   printf '                  the image + D-004    docs/task_image_m4.md\n'
-  printf '                  the records read     automation/runs/m4-*/ (gitignored: F-029)\n'
+  printf '                  the records read     automation/runs/m4-*/ (tracked: F-029 closed)\n'
   exit 0
 fi
 printf '\033[31m[verify-m4] RED — %d sub-check(s) failed.\033[0m\n' "$FAILS"

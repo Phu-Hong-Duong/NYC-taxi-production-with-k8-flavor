@@ -40,4 +40,20 @@ analytics/dbt/dbt_packages/
 # here, under a throwaway config, so a corrupt byte never goes near data/raw.
 # The gate deletes it on exit; this entry covers a run that was interrupted.
 .verify_m1_sandbox/
-automation/runs/
+
+# automation/runs/ — the records two milestone gates REPLAY (F-029, decided at the
+# M4 boundary 2026-08-19, option A). The verdict JSONs are the evidence base of
+# `verify-m3` §5 and `verify-m4` §3-§6, and both red teams simulate an EDITED
+# record — so what a gate reads must be what review can see, or a tampered record
+# lands with no diff for anybody to notice. The JSONs are therefore TRACKED; the
+# logs and .status files stay ignored (they are transcripts, they are large, and
+# no gate reads them).
+#
+# The three rules below are one mechanism, not three preferences. A bare
+# `automation/runs/` exclusion makes git stop descending into the directory, and
+# a `!` rule underneath it then does NOTHING — so the exclusion is pattern-based
+# (`/**`), the directories are re-included (`!.../**/`) so git keeps walking, and
+# the JSONs are re-included last.
+automation/runs/**
+!automation/runs/**/
+!automation/runs/**/*.json

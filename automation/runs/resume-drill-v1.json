@@ -1,0 +1,26 @@
+{
+  "study": "m3-resume-drill-v1",
+  "trials_before": 0,
+  "trials_at_kill": 3,
+  "states_at_kill": {
+    "COMPLETE": 2,
+    "RUNNING": 1,
+    "TOTAL": 3
+  },
+  "trials_after_resume": 9,
+  "states_after_resume": {
+    "COMPLETE": 8,
+    "FAIL": 1,
+    "TOTAL": 9
+  },
+  "answered_after_resume": 8,
+  "reaped_by_heartbeat": 1,
+  "still_running": 0,
+  "arm2_opened_with": 3,
+  "n_trials_requested": 8,
+  "heartbeat_seconds": 5,
+  "logs": [
+    "/home/longt/NYC-taxi-production-with-k8-flavor/automation/runs/resume-drill-v1-arm1.log",
+    "/home/longt/NYC-taxi-production-with-k8-flavor/automation/runs/resume-drill-v1-arm2.log"
+  ]
+}

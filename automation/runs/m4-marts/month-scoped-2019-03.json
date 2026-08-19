@@ -1,0 +1,15 @@
+{
+  "label": "month-scoped-2019-03",
+  "command": "uv run python scripts/marts_publish.py --duckdb analytics/dbt/marts.duckdb --transport kubectl --months 2019-03",
+  "exit_code": 0,
+  "seconds": 83,
+  "samples": 17,
+  "interval_seconds": null,
+  "marts_db_start_gib": 13.48,
+  "marts_db_peak_gib": 15.33,
+  "marts_db_end_gib": 15.33,
+  "marts_db_peak_over_end": 1.0,
+  "pgdata_used_start_gib": 190.04,
+  "pgdata_used_peak_gib": 191.99,
+  "pgdata_used_end_gib": 191.99
+}

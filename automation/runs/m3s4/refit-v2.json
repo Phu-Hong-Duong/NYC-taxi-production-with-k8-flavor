@@ -1,0 +1,37 @@
+{
+  "contender": "auto-lgbm-v2",
+  "family": "lgbm",
+  "feature_set": "v2",
+  "study": "m3-sniper-v2",
+  "params": {
+    "learning_rate": 0.11930201304123594,
+    "num_leaves": 535,
+    "min_data_in_leaf": 1293,
+    "feature_fraction": 0.8983776880153702,
+    "bagging_fraction": 0.8856351733429728,
+    "lambda_l1": 4.638759594322625e-08,
+    "lambda_l2": 1.683416412018213e-05,
+    "max_cat_threshold": 27,
+    "cat_smooth": 64.36159556258944
+  },
+  "best_iteration": 791,
+  "val_mae": 3.3822796832477016,
+  "val_within_rate": 80.55193846340755,
+  "sample_val_mae": 3.40591043993416,
+  "train_rows": 43987422,
+  "val_rows": 6189748,
+  "train_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "val_month": [
+    "2019-07"
+  ],
+  "full_data": true,
+  "fitting_seconds": 981.467747512,
+  "run_id": "92b73bd4f77d4a05b92472bfcfb3cccf"
+}

@@ -1,0 +1,111 @@
+{
+  "run_name": "rb2cxpmsksx489qjbn5b",
+  "retry_budget": {
+    "declared_in_workflows_py": 2,
+    "probe_run": "rklz7vdv2d59bn8kbp8d",
+    "note": "phase 0 proved the budget by exhausting it on a task that always raises; the kill below is survived by pod RECREATION, which does not spend it. Two different mechanisms, both measured."
+  },
+  "month": "2019-03",
+  "train_months": [
+    "2019-03"
+  ],
+  "sampled": true,
+  "target_stage": "train",
+  "target_action": "e5rvu8gd7fu01qmk5ojfc8ufh",
+  "killed_pod": "rb2cxpmsksx489qjbn5b-e5rvu8gd7fu01qmk5ojfc8ufh-0",
+  "killed_pod_node": "mlops-taxi-worker2",
+  "killed_pod_uid": "1223e07d-0f1a-4ab1-9a3b-e04857f1412c",
+  "killed_at": "2026-08-18T15:38:01Z",
+  "attempt_pods": [
+    {
+      "pod": "rb2cxpmsksx489qjbn5b-e5rvu8gd7fu01qmk5ojfc8ufh-0",
+      "phase": "Succeeded",
+      "uid": "9d8b05a3-5fa7-4db8-a000-644c7e16e594",
+      "created": "2026-08-18T15:38:32Z",
+      "is_the_killed_pod": false
+    }
+  ],
+  "attempt_suffixes": [
+    0
+  ],
+  "replacement_pods": [
+    "rb2cxpmsksx489qjbn5b-e5rvu8gd7fu01qmk5ojfc8ufh-0"
+  ],
+  "control_plane_attempts": 1,
+  "target_duration_s": 939.8,
+  "pipeline_exit": 0,
+  "actions": [
+    {
+      "action": "a0",
+      "task": "taxi-pipeline-light.main",
+      "short_name": "main",
+      "parent": "",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 975838,
+      "attempts": 1
+    },
+    {
+      "action": "72w099wr9gekv9g3rm4zfr0b6",
+      "task": "taxi-pipeline-data.ingest",
+      "short_name": "ingest",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 14864,
+      "attempts": 1
+    },
+    {
+      "action": "2b9jrw2urmtdtnodo33bskkhh",
+      "task": "taxi-pipeline-data.validate",
+      "short_name": "validate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 5871,
+      "attempts": 1
+    },
+    {
+      "action": "7pg4zwtomkcqe7nx5i0q2jtb8",
+      "task": "taxi-pipeline-data.build_features",
+      "short_name": "build_features",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 8888,
+      "attempts": 1
+    },
+    {
+      "action": "e5rvu8gd7fu01qmk5ojfc8ufh",
+      "task": "taxi-pipeline-train.train",
+      "short_name": "train",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 939813,
+      "attempts": 1
+    },
+    {
+      "action": "3l06et5pxef063y59ebydm2bd",
+      "task": "taxi-pipeline-light.evaluate",
+      "short_name": "evaluate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 3823,
+      "attempts": 1
+    },
+    {
+      "action": "2lkfpbohy79mb31f86mep7dbv",
+      "task": "taxi-pipeline-light.register",
+      "short_name": "register",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 3837,
+      "attempts": 1
+    }
+  ],
+  "verdicts": 7,
+  "failures": 0
+}

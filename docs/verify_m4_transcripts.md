@@ -9,6 +9,13 @@ Re-run them with `make verify-m4` and `make verify-m4-redteam`. Neither re-fits
 anything, neither launches a pipeline, and neither mutates the registry, the
 cluster or the warehouse. The narrative is `docs/pipeline_m4.md` §17–§20.
 
+> **Note, 2026-08-19 (M5-S1).** §1's closing block below prints
+> `the records read     automation/runs/m4-*/ (gitignored: F-029)`. That was true
+> the day it was pasted and is not any more: F-029 was decided (option A) and the
+> record JSONs are tracked, so the gate now prints `(tracked: F-029 closed)`. The
+> transcripts below are left VERBATIM — a transcript edited to match today's code
+> is not a transcript. The post-move re-runs are in `docs/serving_m5.md` §1.
+
 ---
 
 ## 1. `make verify-m4` — GREEN 39/39

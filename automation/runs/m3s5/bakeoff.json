@@ -1,0 +1,243 @@
+{
+  "story": "M3-S5",
+  "holdout_split": "test",
+  "gate": {
+    "floor": "baseline-group-median-od-fallback",
+    "min_improvement_pct": 2.0,
+    "require_no_kpi10_regression": true
+  },
+  "incumbent": {
+    "version": "1",
+    "mae": 3.2608,
+    "within_tolerance_rate": 81.47966594899296,
+    "split": "test",
+    "source": "version tags + run 3adee05a855a\u2026"
+  },
+  "floor_fit": {
+    "name": "baseline-group-median-od-fallback",
+    "groups": 1610050,
+    "fallback_groups": 46938,
+    "fallback_minutes": 11.15,
+    "train_months": [
+      "2019-01",
+      "2019-02",
+      "2019-03",
+      "2019-04",
+      "2019-05",
+      "2019-06"
+    ],
+    "train_rows": 43987422
+  },
+  "winner": "auto-on-v2",
+  "contenders": [
+    {
+      "label": "floor",
+      "name": "baseline-group-median-od-fallback",
+      "track": "floor",
+      "feature_set": "v1",
+      "hyperparameters": "none \u2014 it is a two-level GROUP BY",
+      "run_id": null,
+      "family": "group-by",
+      "best_iteration": null,
+      "recorded_val_mae": null,
+      "val_mae": 3.551472861523065,
+      "val_within_rate": 79.11139516503741,
+      "test_mae": 3.351759301862344,
+      "test_within_rate": 80.73345222114746,
+      "test_rows": 5950708,
+      "verdict": "REFUSE",
+      "observed_pct": 0.0,
+      "checks": [
+        {
+          "name": "KPI-09 margin over the honest floor",
+          "passed": false,
+          "detail": "3.3518 vs 3.3518 min = +0.00% (required >= 2.00%)"
+        },
+        {
+          "name": "KPI-10 (within 5 min) does not regress",
+          "passed": true,
+          "detail": "80.733% vs 80.733% = -0.000 points"
+        },
+        {
+          "name": "KPI-09 does not regress against the serving champion (v1)",
+          "passed": false,
+          "detail": "3.3518 vs 3.2608 min (-2.79% vs incumbent)"
+        },
+        {
+          "name": "KPI-10 does not regress against the serving champion (v1)",
+          "passed": false,
+          "detail": "80.733% vs 81.480% = -0.746 points"
+        }
+      ],
+      "caveats": []
+    },
+    {
+      "label": "champion v1",
+      "name": "lightgbm-v1",
+      "track": "artisan",
+      "feature_set": "v1",
+      "hyperparameters": "hand (configs/train.yaml: model)",
+      "run_id": "3adee05a855a424bb664c7fea3735703",
+      "family": "lgbm",
+      "best_iteration": 500,
+      "recorded_val_mae": 3.47603843547682,
+      "val_mae": 3.47603843547682,
+      "val_within_rate": 79.69330900062491,
+      "test_mae": 3.260828400795599,
+      "test_within_rate": 81.47966594899296,
+      "test_rows": 5950708,
+      "verdict": "PROMOTE",
+      "observed_pct": 2.7129305202858944,
+      "checks": [
+        {
+          "name": "KPI-09 margin over the honest floor",
+          "passed": true,
+          "detail": "3.2608 vs 3.3518 min = +2.71% (required >= 2.00%)"
+        },
+        {
+          "name": "KPI-10 (within 5 min) does not regress",
+          "passed": true,
+          "detail": "81.480% vs 80.733% = +0.746 points"
+        },
+        {
+          "name": "KPI-09 does not regress against the serving champion (v1)",
+          "passed": true,
+          "detail": "3.2608 vs 3.2608 min (-0.00% vs incumbent)"
+        },
+        {
+          "name": "KPI-10 does not regress against the serving champion (v1)",
+          "passed": true,
+          "detail": "81.480% vs 81.480% = +0.000 points"
+        }
+      ],
+      "caveats": []
+    },
+    {
+      "label": "artisan v2",
+      "name": "artisan-v2",
+      "track": "artisan",
+      "feature_set": "v2",
+      "hyperparameters": "hand (v1's, held fixed \u2014 DR-03)",
+      "run_id": "6807116edf4c49d681a31bd941298a81",
+      "family": "lgbm",
+      "best_iteration": 500,
+      "recorded_val_mae": 3.3905388307148137,
+      "val_mae": 3.3905388307148137,
+      "val_within_rate": 80.50637925808934,
+      "test_mae": 3.242513399356197,
+      "test_within_rate": 81.58227558804766,
+      "test_rows": 5950708,
+      "verdict": "PROMOTE",
+      "observed_pct": 3.2593600156624087,
+      "checks": [
+        {
+          "name": "KPI-09 margin over the honest floor",
+          "passed": true,
+          "detail": "3.2425 vs 3.3518 min = +3.26% (required >= 2.00%)"
+        },
+        {
+          "name": "KPI-10 (within 5 min) does not regress",
+          "passed": true,
+          "detail": "81.582% vs 80.733% = +0.849 points"
+        },
+        {
+          "name": "KPI-09 does not regress against the serving champion (v1)",
+          "passed": true,
+          "detail": "3.2425 vs 3.2608 min (+0.56% vs incumbent)"
+        },
+        {
+          "name": "KPI-10 does not regress against the serving champion (v1)",
+          "passed": true,
+          "detail": "81.582% vs 81.480% = +0.103 points"
+        }
+      ],
+      "caveats": []
+    },
+    {
+      "label": "auto-on-v1",
+      "name": "auto-xgboost-v1",
+      "track": "automation",
+      "feature_set": "v1",
+      "hyperparameters": "tuned (FLAML scout -> Optuna sniper)",
+      "run_id": "ec0eba69389d44bc9f4dadcbad8e4094",
+      "family": "xgboost",
+      "best_iteration": 800,
+      "recorded_val_mae": 3.724473218110082,
+      "val_mae": 3.724473218110082,
+      "val_within_rate": 78.00270705689472,
+      "test_mae": 3.5038422819518478,
+      "test_within_rate": 79.74654444479548,
+      "test_rows": 5950708,
+      "verdict": "REFUSE",
+      "observed_pct": -4.537407563991892,
+      "checks": [
+        {
+          "name": "KPI-09 margin over the honest floor",
+          "passed": false,
+          "detail": "3.5038 vs 3.3518 min = -4.54% (required >= 2.00%)"
+        },
+        {
+          "name": "KPI-10 (within 5 min) does not regress",
+          "passed": false,
+          "detail": "79.747% vs 80.733% = -0.987 points"
+        },
+        {
+          "name": "KPI-09 does not regress against the serving champion (v1)",
+          "passed": false,
+          "detail": "3.5038 vs 3.2608 min (-7.45% vs incumbent)"
+        },
+        {
+          "name": "KPI-10 does not regress against the serving champion (v1)",
+          "passed": false,
+          "detail": "79.747% vs 81.480% = -1.733 points"
+        }
+      ],
+      "caveats": [
+        "F-015: the 800-round cap bound this arm MID-DESCENT (val still falling 0.02808 MAE over its last 100 rounds); its study got 9 trials of a configured 60 and was stopped by the clock, not by convergence"
+      ]
+    },
+    {
+      "label": "auto-on-v2",
+      "name": "auto-lgbm-v2",
+      "track": "automation",
+      "feature_set": "v2",
+      "hyperparameters": "tuned (FLAML scout -> Optuna sniper)",
+      "run_id": "92b73bd4f77d4a05b92472bfcfb3cccf",
+      "family": "lgbm",
+      "best_iteration": 791,
+      "recorded_val_mae": 3.3822796832477016,
+      "val_mae": 3.3822796832477016,
+      "val_within_rate": 80.55193846340755,
+      "test_mae": 3.2402793988736875,
+      "test_within_rate": 81.57709973334265,
+      "test_rows": 5950708,
+      "verdict": "PROMOTE",
+      "observed_pct": 3.3260115941712947,
+      "checks": [
+        {
+          "name": "KPI-09 margin over the honest floor",
+          "passed": true,
+          "detail": "3.2403 vs 3.3518 min = +3.33% (required >= 2.00%)"
+        },
+        {
+          "name": "KPI-10 (within 5 min) does not regress",
+          "passed": true,
+          "detail": "81.577% vs 80.733% = +0.844 points"
+        },
+        {
+          "name": "KPI-09 does not regress against the serving champion (v1)",
+          "passed": true,
+          "detail": "3.2403 vs 3.2608 min (+0.63% vs incumbent)"
+        },
+        {
+          "name": "KPI-10 does not regress against the serving champion (v1)",
+          "passed": true,
+          "detail": "81.577% vs 81.480% = +0.097 points"
+        }
+      ],
+      "caveats": [
+        "the same 800-round cap bound this arm FLAT (0.00034 MAE over its last 100 rounds, ~82x less slope than auto-on-v1), so F-015's truncation caveat does NOT attach to this row"
+      ]
+    }
+  ]
+}

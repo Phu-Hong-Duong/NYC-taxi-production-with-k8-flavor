@@ -24,13 +24,18 @@
 #   storage, the registry — and it REPLAYS the recorded numbers through the
 #   decision code that is on disk right now. Total wall clock is seconds.
 #
-#   "RECORDED", not "committed" — corrected 2026-08-19 (M4-S5 leg 3, F-029).
-#   `automation/runs/` is gitignored, so `automation/runs/m3s5/bakeoff.json` and
-#   `m3s4/*.json` are MACHINE state: present here, absent in a fresh clone, and
-#   outside review. Nothing about this gate's logic changes — the sentence was
-#   simply wrong about where its own inputs live, which is exactly the claim #51
-#   says to ask a component to justify. The policy fork is F-029's, and it is
-#   ARCH's at the M4 boundary.
+#   RECORDED **AND COMMITTED** — and it took two corrections to get that
+#   sentence right (F-029). M4-S5 leg 3 found the original "committed docs,
+#   committed JSON" was false: `automation/runs/` was gitignored, so
+#   `m3s5/bakeoff.json` and `m3s4/*.json` were MACHINE state — present here,
+#   absent in a fresh clone, outside review, and editable (which is what this
+#   gate's red team simulates) with no diff for a reviewer to see. The word was
+#   corrected to "RECORDED" that day and the POLICY was routed to ARCH, because
+#   what a gate reads being invisible to review is a direction call, not an
+#   executor's. ARCH decided option A at the M4 boundary (2026-08-19) and M5-S1
+#   landed the mechanics: the verdict JSONs are now TRACKED (logs and .status
+#   stay ignored). So the inputs below are recorded by the drills, committed to
+#   the repository, and a tampered record shows up in `git diff`.
 #
 #   ASSERTS PROPERTIES, NOT LITERALS. M3-S5 spent three of its sub-checks
 #   learning this the expensive way: `verify-m2` §1 pinned the floor's NAME, the

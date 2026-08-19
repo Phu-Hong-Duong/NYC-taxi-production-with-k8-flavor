@@ -334,12 +334,15 @@ def test_the_json_records_where_the_winner_was_ranked(source):
     learn which split decided. The M3 record predates the key, deliberately."""
     assert '"winner_selected_on": SELECTION_SPLIT' in source
 
-    # The M3 record itself lives under the gitignored `automation/runs/`, so CI
-    # never sees it — skip rather than assert-on-absence, which would be green in
-    # CI for a reason that has nothing to do with the property.
+    # The M3 record is a TRACKED file from M5-S1 on (F-029 option A), so this no
+    # longer skips in CI: the assertion below now runs everywhere. It used to skip
+    # because `automation/runs/` was ignored wholesale and asserting on absence
+    # would have been green in CI for a reason unrelated to the property.
     record = REPO / "automation/runs/m3s5/bakeoff.json"
-    if not record.exists():
-        pytest.skip(f"{record} is a local run artifact (automation/runs/ is gitignored)")
+    assert record.exists(), (
+        f"{record} is committed (F-029) — its absence is a deleted record, not a "
+        "clone without local artifacts"
+    )
     assert "winner_selected_on" not in json.loads(record.read_text()), (
         "the M3 record must NOT be regenerated — its silence is the honest marker "
         "of the run that ranked on the holdout (see docs/bakeoff_m3.md §3's note)"

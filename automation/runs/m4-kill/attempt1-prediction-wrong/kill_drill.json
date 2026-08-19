@@ -1,0 +1,99 @@
+{
+  "run_name": "r8dtc45vhb4mnkdzqtx4",
+  "month": "2019-02",
+  "train_months": [
+    "2019-02"
+  ],
+  "sampled": true,
+  "target_stage": "train",
+  "target_action": "2n82fjvm1sx2qard5yl02he3v",
+  "killed_pod": "r8dtc45vhb4mnkdzqtx4-2n82fjvm1sx2qard5yl02he3v-0",
+  "killed_pod_node": "mlops-taxi-worker2",
+  "killed_at": "2026-08-18T15:13:33Z",
+  "attempt_pods": [
+    {
+      "pod": "r8dtc45vhb4mnkdzqtx4-2n82fjvm1sx2qard5yl02he3v-0",
+      "phase": "Succeeded"
+    }
+  ],
+  "attempt_suffixes": [
+    0
+  ],
+  "control_plane_attempts": 0,
+  "target_duration_s": 1000.9,
+  "pipeline_exit": 0,
+  "actions": [
+    {
+      "action": "a0",
+      "task": "taxi-pipeline-light.main",
+      "short_name": "main",
+      "parent": "",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 1008916,
+      "attempts": 0
+    },
+    {
+      "action": "2n82fjvm1sx2qard5yl02he3v",
+      "task": "taxi-pipeline-train.train",
+      "short_name": "train",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 1000879,
+      "attempts": 0
+    },
+    {
+      "action": "3vo9aftqnn5n4bji71bayh8eo",
+      "task": "taxi-pipeline-data.ingest",
+      "short_name": "ingest",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 288,
+      "attempts": 0
+    },
+    {
+      "action": "5k578bco83m83kf2erxu8nybz",
+      "task": "taxi-pipeline-data.validate",
+      "short_name": "validate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 367,
+      "attempts": 0
+    },
+    {
+      "action": "9lojbatgorbglgtid5yg1n1sf",
+      "task": "taxi-pipeline-data.build_features",
+      "short_name": "build_features",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 447,
+      "attempts": 0
+    },
+    {
+      "action": "4937nnlok21cao478rx4hlksj",
+      "task": "taxi-pipeline-light.evaluate",
+      "short_name": "evaluate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 3885,
+      "attempts": 0
+    },
+    {
+      "action": "8hw1ya74sn3r4mqwcnyn035jt",
+      "task": "taxi-pipeline-light.register",
+      "short_name": "register",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 2883,
+      "attempts": 0
+    }
+  ],
+  "verdicts": 7,
+  "failures": 1
+}
