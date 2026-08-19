@@ -1,5 +1,129 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (ay) — M5-S1: the gates' evidence entered review, and the route went red for a header nobody sends
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block MLOps — Platform
+Engineer** (charter read at entry; refusals in play: no manual deploys, no
+unpinned versions, no secrets in git or images, no hand-edits to cluster state
+the recipe cannot reproduce). Boot reads: CLAUDE.md · HANDOFF (ax) · M5 KICKOFF ·
+AWAITING_PO. **Staleness check passed** — tree clean at `cd4a720`, no
+`automation/STOP`, no detached job pending, cluster 3/3 Ready v1.36.1 (age 2d),
+`@champion` version 2, the three pre-existing helm releases where (ax) left them.
+**M5-S1 COMPLETE, both halves.** Cluster never went down.
+
+### Done
+- **HALF 1 — F-029 CLOSED, the mechanics as ONE PR.** `automation/runs/**/*.json`
+  is TRACKED (**32 records, 236 KB**, `git ls-files automation/runs | wc -l` was
+  0); logs and `.status` stay ignored. The gitignore is **pattern-based and had
+  to be**: a bare `automation/runs/` exclusion makes git stop DESCENDING, so a
+  `!` rule beneath it is never consulted — landed as `automation/runs/**` +
+  `!automation/runs/**/` + `!automation/runs/**/*.json`, verified BOTH directions
+  with `git check-ignore -v` (records match the negation at line 59, `.log`/
+  `.status` match the exclusion at line 57).
+- **Four stale statements corrected at source**, plus two the kickoff did not
+  enumerate (found by grepping the CLAIM, not the file list): both red-team
+  headers now state the new regime, and `tests/unit/test_bakeoff.py`'s
+  skip-when-the-record-is-absent became an **assertion** — strictly stronger, and
+  why the host suite now reports no skips. Verbatim transcripts
+  (`docs/verify_m4_transcripts.md`) were NOT edited: a transcript edited to match
+  today's code is not a transcript. They carry dated notes instead, as do
+  `docs/pipeline_m4_leg3.md` §19 and `docs/pipeline_m4.md`.
+- **Both gates and both red teams re-run over the moved files**: `make verify-m3`
+  **GREEN 46/46** · `make verify-m4` **GREEN 39/39** · `make verify-m3-redteam`
+  **PASSED** (RED with 2 FAILs, 44 sub-checks still passing, sha256
+  `c4a323ea072a…` before and after) · `make verify-m4-redteam` **PASSED** (RED
+  with 2 FAILs including the cross-system leg, sha256 `beb10ab49fb0…` before and
+  after). **New checkable property: `git status --porcelain` is EMPTY after each
+  drill** — a clean drill leaves a clean tree, which could not be stated while the
+  files were invisible to git. verify-m4's closing line now reads
+  `(tracked: F-029 closed)`.
+- **HALF 2 — `make backup` FIRST, and it proved its own design.**
+  `2026-08-19T02-54-59Z`: **6 databases and 331 MinIO objects, where M4-S2 had 5
+  and 105.** Nobody edited a list — the script enumerates from the server, and
+  this is the first run to test that on a changed cluster. 1.6 GiB, every dump
+  verified by gzip CRC + pg_dump's completion marker. **Restore is still NOT
+  rehearsed and every artifact says so.**
+- **`make deploy-serving` — ingress-nginx 4.15.1 + cert-manager v1.21.1 + KServe
+  v0.20.0 (Standard/RawDeployment, ADR-004).** Four releases at REVISION 1 in
+  **3m13s**; controller on **mlops-taxi-control-plane** (printed `-o wide`, not
+  assumed — R2's failure mode is a controller on a worker that answers nothing and
+  looks exactly like a KServe fault); `serving-cert True` issued by cert-manager;
+  `defaultDeploymentMode: RawDeployment` **read back off the live
+  `inferenceservice-config` ConfigMap**, never off the values submitted.
+  **Idempotent re-run = REVISION 2 with pods 4m44s / 3m35s / 2m35s old and zero
+  restarts** (the M4-S2 shape). `DRY_RUN=1` verified to leave `helm list -A` and
+  the namespace list untouched.
+- **Risk R1 did not materialise**: six KServe CRDs register cleanly on Kubernetes
+  **v1.36.1**. **ADR-004's plain-mlserver fallback is armed and unspent.**
+- **The declared route ANSWERS**: `GET localhost:8081/` -> **404** (the pass —
+  route up, nothing behind it until S2) AND `GET /healthz` -> **200**.
+- **16 cluster-free tests** (`tests/unit/test_deploy_serving.py`): route node +
+  both ports derived from the kind config on BOTH sides, the taint/toleration
+  pair, DRY_RUN reaching no mutating verb, RawDeployment read back off the live
+  ConfigMap, KServe's ingress class == the one this script installs, every chart
+  version an exact pin, and the deploy unable to name the registry or read a
+  secret. Full suite **560 passed**, ruff clean.
+
+### Decisions
+- **The route's node name is DERIVED, not typed** (gotcha #52): computed from the
+  kind config's cluster name, with the values file asserted against it, so a
+  cluster rename fails at deploy time rather than scheduling an ingress
+  controller onto a node with no published ports. The kind config is read at
+  cluster-CREATE only, so the upstream `provider/kind` manifest (which needs an
+  `ingress-ready=true` label this cluster was built without) was rejected in
+  favour of configuring the chart directly.
+- **ingress-nginx's admission webhook is DISABLED, with the reason in the values
+  file**: it costs an extra image, two Jobs and a certificate to validate Ingress
+  objects at create time, and every Ingress in this program is GENERATED by the
+  KServe controller from an InferenceService. Re-enable it the day somebody
+  hand-writes one. Craft-level, verified undo (one values line).
+- **cert-manager is deliberately small** — no ClusterIssuer, no ACME, no DNS
+  solver. Nothing talks to the internet at request time; the $0 and
+  nothing-leaves-this-machine rules hold.
+- **`crds.keep: false`** so `helm uninstall` is a complete undo: M5 owns no
+  certificate state worth surviving a deliberate removal.
+
+### Defects/Surprises
+- **The accept check went RED over a perfectly good install — gotcha #70.** It
+  demanded a `Server: nginx` response header as its positive discriminator, and
+  modern ingress-nginx **omits that header on purpose**. Everything was installed,
+  healthy and correctly scheduled. This is #59's lesson (assert on a positive
+  artifact, never on the absence of an error) applied correctly and then failing
+  at the question #59 does not ask: *does this thing actually emit the signature
+  you are about to require?* Fixed by asking the server — `GET /healthz` -> 200 is
+  the controller's own endpoint, `/nginx-health` 404s — the same shape M4-S2 found
+  for Flyte. Two candidates rejected and named in the doc: the access log (the
+  default backend does not log its 404s, so a correct install produces silence)
+  and the 404 body (`<center>nginx</center>` passes for any nginx anywhere).
+- **Two of the new tests would have tripped on the script's own prose** — the ban
+  on naming the registry matched the header sentence explaining why it must not,
+  and the `.env` check matched "Nothing here reads .env". Caught before running,
+  fixed with a `code_only()` helper. Gotchas #53/#68 arriving for the fourth time,
+  which is itself the finding: in this repo a check about code must look only
+  where code is.
+- **No wall hit. No fork opened.** Nothing new for AWAITING_PO.
+
+### Next
+**Executor: M5-S2 — the champion on the wire** (`docs/milestones/M5_KICKOFF.md`).
+The platform is up and **nothing is on it**: no InferenceService, no serving
+runtime, no model-store credential. S2 owns all of it, plus two ledger rows that
+land there: **F-009** (alias-URI load on MLflow 3.15.1 — run gotcha #39's
+one-call discriminator FIRST: under F-009 `get_model_info` succeeds where
+`load_model` fails; under missing MinIO credentials both fail) and **F-019** (the
+champion raises on any request dated outside 2019 — DECIDE extend-the-table vs a
+typed serving policy BEFORE the first non-2019 curl, update the M4-S1 tripwire in
+the same PR to pin the NEW behaviour, and minute the SRE half in S5's PRR).
+Reminders that cost time if forgotten: the model store credential is a **NEW
+read-only MinIO identity** in a `storage-config` secret (a leaked serving
+credential must not be able to write the registry's artifacts); the serving pod
+pulls by the **in-cluster** MinIO name — split horizon is the host's problem,
+never a pod's; KServe's generated Ingress carries host
+`<name>-<namespace>.local`, so every curl needs a `Host:` header or `--resolve`.
+`@champion` is version **2** and M5 is legislated alias-neutral. Parity at 1e-6 is
+S3's — do not let a spot check masquerade as it.
+
+
 ## Session 2026-08-19 (ax) — M4 boundary: cleanly closed, the records ruled into review, and M5 (serving) chartered
 
 ### State
