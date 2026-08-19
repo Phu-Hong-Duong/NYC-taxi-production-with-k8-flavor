@@ -1,0 +1,135 @@
+{
+  "prediction": {
+    "written_before_anything_was_applied": true,
+    "p1_shared_service_canary_moves_nothing": "A canary Ingress at weight 50 pointing at the shadow's OWN Service moves 0 of 200 requests, and reports no error. The champion's backend still shows the alternativeBackends LINK while the alternative's trafficShapingPolicy reads weight 0 \u2014 configured, linked, inert.",
+    "p2_dedicated_service_canary_splits": "The same Ingress pointed at a DEDICATED Service (selecting the same pods, referenced by nothing else) splits at weight 50: about half of 200 requests leave the champion, \u00b110.0 points. The canary backend registers with noServer=true and weight/weightTotal 50/100.",
+    "p3_canary_traffic_404s_on_the_model_name": "Every request the canary receives returns 404 and never a number, because the V2 model name is in the URL path. This is the constraint S4 inherits: a traffic-split canary needs both backends serving the SAME V2 model name.",
+    "p4_rewrite_target_cannot_fix_it": "Adding rewrite-target to the CANARY Ingress does not change the 404 share: ingress-nginx applies only canary-* annotations from a canary Ingress and inherits the rest from the main one. So the model-name mismatch cannot be papered over at the ingress; it must be fixed at the backend.",
+    "p5_mirror_target_on_a_kserve_owned_ingress": "UNKNOWN and deliberately not guessed. The annotation is added to the Ingress KServe OWNS and checked two ways that the first run conflated: does the ANNOTATION persist, and does nginx.conf actually gain a `mirror` directive? The first run only asked the first question, and asked the second AFTER cleanup had already removed the annotation \u2014 which measures nothing.",
+    "p6_end_state_is_exactly_the_start_state": "After cleanup, 200 requests to the champion's host return 200 with model_version 2 and zero failures."
+  },
+  "superseded_predictions": {
+    "run1_p2_weight_10_splits_traffic": {
+      "predicted": "with canary-weight=10, ~10% of 200 requests reach the shadow",
+      "observed": "0 of 200 at weight 10 and 0 of 200 at weight 50 \u2014 no error anywhere",
+      "why_it_was_wrong": "the canary Ingress pointed at the shadow's OWN Service, which KServe's generated Ingress had already registered as an ordinary backend. One backend key, two roles; the ordinary role wins and the weight is dropped."
+    },
+    "run1_p4_shadow_500s_at_the_signature": {
+      "predicted": "traffic reaching the shadow returns 500 \u2014 v1's signature refuses 24 columns",
+      "observed": "404",
+      "why_it_was_wrong": "the V2 protocol carries the model name in the URL PATH. The shadow's mlserver serves `nyc-taxi-eta-shadow`, so `/v2/models/nyc-taxi-eta/infer` is refused as an unknown model before a signature is ever consulted. The signature wall is real and is simply behind this one."
+    }
+  },
+  "phases": {
+    "p0_baseline": {
+      "sent": 200,
+      "by_status": {
+        "200": 200
+      },
+      "model_versions_seen": {
+        "2": 200
+      },
+      "a_sampled_prediction": 39.00193715359812,
+      "left_the_champion_pct": 0.0
+    },
+    "p1_shared_service": {
+      "champion_alternativeBackends": [
+        "serving-nyc-taxi-eta-shadow-predictor-80"
+      ],
+      "alternative_noServer": false,
+      "alternative_trafficShapingPolicy": {
+        "weight": 0,
+        "weightTotal": 0,
+        "header": "",
+        "headerValue": "",
+        "headerPattern": "",
+        "cookie": ""
+      },
+      "batch": {
+        "sent": 200,
+        "by_status": {
+          "200": 200
+        },
+        "model_versions_seen": {
+          "2": 200
+        },
+        "a_sampled_prediction": 39.00193715359812,
+        "left_the_champion_pct": 0.0
+      }
+    },
+    "p2_dedicated_service": {
+      "canary_noServer": true,
+      "canary_trafficShapingPolicy": {
+        "weight": 50,
+        "weightTotal": 100,
+        "header": "",
+        "headerValue": "",
+        "headerPattern": "",
+        "cookie": ""
+      },
+      "batch": {
+        "sent": 200,
+        "by_status": {
+          "200": 100,
+          "404": 100
+        },
+        "model_versions_seen": {
+          "2": 100
+        },
+        "a_sampled_prediction": 39.00193715359812,
+        "left_the_champion_pct": 50.0
+      }
+    },
+    "p3_rewrite_target": {
+      "batch": {
+        "sent": 200,
+        "by_status": {
+          "404": 100,
+          "200": 100
+        },
+        "model_versions_seen": {
+          "2": 100
+        },
+        "a_sampled_prediction": 39.00193715359812,
+        "left_the_champion_pct": 50.0
+      }
+    },
+    "p4_mirror_target": {
+      "annotation_survived_on_the_object": true,
+      "annotation": "http://nyc-taxi-eta-shadow-predictor.serving.svc.cluster.local/v2/models/nyc-taxi-eta-shadow/infer",
+      "nginx_conf_has_a_mirror_directive": true,
+      "batch": {
+        "sent": 50,
+        "by_status": {
+          "200": 50
+        },
+        "model_versions_seen": {
+          "2": 50
+        },
+        "a_sampled_prediction": 39.00193715359812,
+        "left_the_champion_pct": 0.0
+      }
+    },
+    "p5_end_state": {
+      "sent": 200,
+      "by_status": {
+        "200": 200
+      },
+      "model_versions_seen": {
+        "2": 200
+      },
+      "a_sampled_prediction": 39.00193715359812,
+      "left_the_champion_pct": 0.0
+    }
+  },
+  "checks": {
+    "p1_shared_service_canary_moved_nothing": true,
+    "p1_the_link_existed_while_the_weight_did_not": true,
+    "p2_dedicated_service_canary_split_the_traffic": true,
+    "p2_canary_registered_as_canary_only": true,
+    "p3_canary_traffic_never_returned_a_number": true,
+    "p4_rewrite_target_did_not_change_the_share": true,
+    "p6_end_state_is_100pct_champion": true
+  },
+  "verdict": "PASS"
+}
