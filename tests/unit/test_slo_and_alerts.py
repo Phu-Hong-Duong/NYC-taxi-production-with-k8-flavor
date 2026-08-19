@@ -148,7 +148,10 @@ def test_the_values_file_holds_no_rules_because_the_rules_file_does(prom_values_
 def test_the_deploy_provisions_the_rules_file_and_validates_it_first():
     """The rules reach the cluster from git, and a malformed file fails early."""
     body = code_only(DEPLOY.read_text())
-    assert "render_alert_rules.py --check" in body, (
+    # The invocation is a quoted absolute path, so the flag does not sit adjacent
+    # to the script name in the text — match the two together rather than as one
+    # literal (gotcha #68's tokenisation lesson, on a test this time).
+    assert re.search(r'render_alert_rules\.py"?\s+--check', body), (
         "the deploy does not validate the rules before installing them, so a malformed "
         "rules file would be a successful helm upgrade over a Prometheus with no rules"
     )
@@ -303,9 +306,12 @@ def test_the_drill_mutates_no_serving_state():
     tree = ast.parse(DRILL.read_text())
     forbidden = {"delete", "scale", "patch", "apply", "rollout", "annotate", "edit"}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if node.value in forbidden:
-                pytest.fail(f"the drill passes the kubectl verb {node.value!r} somewhere")
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value in forbidden
+        ):
+            pytest.fail(f"the drill passes the kubectl verb {node.value!r} somewhere")
         if isinstance(node, ast.Attribute) and node.attr in {
             "set_registered_model_alias",
             "delete_registered_model_alias",

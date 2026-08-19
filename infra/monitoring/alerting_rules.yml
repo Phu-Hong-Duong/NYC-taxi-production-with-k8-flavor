@@ -165,6 +165,12 @@ groups:
             rehearsal), so a normal replacement cannot page and a pod that
             cannot come back does. One replica, no canary: this alert IS the
             outage.
+          sustain: >-
+            for 2m, not 5m. This is the rule that fires with NO traffic, so it is
+            the only witness to an outage nobody is currently experiencing —
+            waiting five minutes to say "there is no server" is four minutes of
+            silence bought for nothing. 2m is chosen against the measured
+            recoveries, not against the ADOPTed default.
 
       - alert: PredictorRestartFlapping
         expr: |
@@ -236,3 +242,10 @@ groups:
             mlserver with no MLmodel. A healthy init takes seconds; 3m is a
             failure, and this alert fires before A-5 does because a pod that
             never initialises never had a replica to lose.
+          sustain: >-
+            for 3m, not 5m. A healthy storage-initializer on this cluster
+            completes in seconds (the artifact is ~5 MB from an in-cluster MinIO),
+            so 3m is already two orders of magnitude of slack — and it is set
+            BELOW A-5's 2m-plus-detection so that "the model could not be
+            fetched" arrives distinguishable from "the replica is gone", which is
+            the whole point of having both.

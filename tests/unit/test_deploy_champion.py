@@ -304,9 +304,23 @@ def test_the_deploy_waits_for_the_ROLLOUT_and_not_only_the_isvc_condition(deploy
     InferenceService's Ready condition is satisfied by the pod ALREADY SERVING,
     so the accept check interrogated the predictor being replaced. Siblings of
     gotchas #59/#65 — a wait that the thing you are replacing can satisfy is not
-    a wait."""
+    a wait.
+
+    THIS TEST USED TO PIN THE LITERAL `--for=condition=Ready`, and M6-S2 had to
+    change that flag (F-036: kubectl v1.36 ignores conditions while
+    `observedGeneration` trails `generation`, which KServe v0.20.0 leaves behind
+    on every re-deploy, so the wait could never succeed). The literal went red
+    for a correct fix — gotcha #50 exactly. What this story's ordering decision
+    actually asserts is the ORDER of two waits, so that is what is asserted now,
+    derived rather than typed: whatever form the InferenceService-level wait
+    takes, it must come after the rollout."""
     body = code_only(deploy)
     assert "rollout status" in body
     rollout = body.index("rollout status")
-    condition = body.index("--for=condition=Ready")
-    assert rollout < condition, "the rollout must be waited on FIRST"
+    isvc_waits = [
+        match.start()
+        for match in re.finditer(r"wait\b", body)
+        if "inferenceservice/" in body[match.start() : match.start() + 400]
+    ]
+    assert isvc_waits, "there is no InferenceService-level readiness wait at all"
+    assert rollout < min(isvc_waits), "the rollout must be waited on FIRST"

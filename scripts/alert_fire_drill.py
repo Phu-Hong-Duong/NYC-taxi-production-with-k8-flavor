@@ -52,13 +52,12 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -87,7 +86,7 @@ SIGNATURE_REFUSED_BODY: dict[str, Any] = {
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def say(msg: str) -> None:
@@ -176,9 +175,8 @@ class Injector:
         while not self.stop.is_set():
             due = start + k / self.rate
             delay = due - time.monotonic()
-            if delay > 0:
-                if self.stop.wait(delay):
-                    return
+            if delay > 0 and self.stop.wait(delay):
+                return
             body = MALFORMED_BODY if k % 2 == 0 else SIGNATURE_REFUSED_BODY
             code = self._post(body)
             self.counts[code] = self.counts.get(code, 0) + 1
@@ -270,7 +268,9 @@ def preflight(rule_names: set[str]) -> list[str]:
         if rule is None:
             problems.append(f"rule {name} is not loaded in Prometheus")
         elif rule["state"] != "inactive":
-            problems.append(f"rule {name} is already {rule['state']} — the drill would prove nothing")
+            problems.append(
+                f"rule {name} is already {rule['state']} — the drill would prove nothing"
+            )
         elif rule["health"] != "ok":
             problems.append(f"rule {name} health is {rule['health']}")
     return problems
@@ -297,7 +297,9 @@ def main(argv: list[str] | None = None) -> int:
         help="how long to wait for every fired alert to go back to inactive",
     )
     parser.add_argument("--poll-seconds", type=float, default=5.0)
-    parser.add_argument("--dry-run", action="store_true", help="preflight + prediction, no injection")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="preflight + prediction, no injection"
+    )
     parser.add_argument("--record", default=str(RECORD_DIR / "alert-fire-drill.json"))
     parser.add_argument(
         "--prediction-record", default=str(RECORD_DIR / "alert-fire-prediction.json")
@@ -424,10 +426,14 @@ def main(argv: list[str] | None = None) -> int:
                     "stdout": result.stdout.strip().splitlines()[-1] if result.stdout else "",
                 }
                 verdict = "ok " if result.returncode == 0 else "FAIL"
-                say(f"    {verdict} an ordinary quote DURING the injection: {quote_during_injection['stdout']}")
+                tail = quote_during_injection["stdout"]
+                say(f"    {verdict} an ordinary quote DURING the injection: {tail}")
 
             if all(name in fired_at for name in must_fire) and elapsed > 60:
-                say(f"    every predicted alert has fired at T+{elapsed}s — stopping the injection early")
+                say(
+                    f"    every predicted alert has fired at T+{elapsed}s — "
+                    "stopping the injection early"
+                )
                 break
 
         injector.halt()
@@ -442,7 +448,10 @@ def main(argv: list[str] | None = None) -> int:
         am_received = [name for name in must_fire if name in am_names]
 
         # --- phase 5: it clears -----------------------------------------------
-        say(f"phase 5 — injection stopped; waiting up to {args.clear_timeout}s for a return to inactive")
+        say(
+            f"phase 5 — injection stopped; waiting up to {args.clear_timeout}s "
+            "for a return to inactive"
+        )
         cleared_at: dict[str, float] = {}
         t1 = time.monotonic()
         while time.monotonic() - t1 < args.clear_timeout:
@@ -473,7 +482,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     for entry in PREDICTION["must_not_fire"]:
         name = entry["alert"]
-        checks.append((name not in ever_fired, f"{entry['signal']} {name} stayed inactive (predicted)"))
+        checks.append(
+            (name not in ever_fired, f"{entry['signal']} {name} stayed inactive (predicted)")
+        )
     checks.append(
         (
             sorted(am_received) == sorted(must_fire),
@@ -489,7 +500,8 @@ def main(argv: list[str] | None = None) -> int:
     checks.append(
         (
             sorted(cleared_at) == sorted(ever_fired) and bool(ever_fired),
-            f"every fired alert returned to inactive after the injection stopped: {sorted(cleared_at)}",
+            "every fired alert returned to inactive after the injection stopped: "
+            f"{sorted(cleared_at)}",
         )
     )
 

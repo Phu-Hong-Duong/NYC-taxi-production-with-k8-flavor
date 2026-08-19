@@ -128,7 +128,7 @@ so nobody re-derives it and thinks it was missed.
 |---|---|
 | **Instrument** | I-3, at the **edge** — see below |
 | **Budget** | 0.1% of requests; at a sustained 4 req/s that is ~**43 minutes** of full outage per 30 days |
-| **Alerts** | A-2 `ServingEdge5xxRateHigh` (>10% 5xx, `for: 5m`) · A-5 `PredictorNoAvailableReplica` (`< 1`, `for: 2m`) · A-7 `PredictorStorageInitializerNotReady` (`for: 3m`) |
+| **Alerts** | A-2 `ServingEdge5xxRateHigh` (>10% 5xx, `for: 5m`) · A-5 `PredictorNoAvailableReplica` (`< 1`, `for: 2m`) · A-5 `PredictorRestartFlapping` (>2 restarts in 15m) · A-7 `PredictorStorageInitializerNotReady` (`for: 3m`) |
 
 **Measured at the edge, and that is the load-bearing choice.** When the
 predictor dies, its `/metrics` endpoint dies with it: the series does not fall to
@@ -340,3 +340,34 @@ cap. So the honest prediction, written before the change:
   believing this pod needs a fifth of a core — and protection under future
   contention, not speed today.
 * **If p95 does move materially, that is a finding, not a footnote.**
+
+### 7.1 Measured, with the change as the only difference
+
+Two `make load` runs of an identical shape either side of the change
+(`automation/runs/m6-slo/load-{before,after}.json`, compared by
+`scripts/cpu_request_resize_record.py` so the comparison is derived and not
+typed):
+
+| | p50 | p95 | p99 | max | ≥N of 240 over the 250 ms SLO target |
+|---|---|---|---|---|---|
+| **before** (`200m`) | 29.4 ms | 84.4 ms | 433.7 ms | 692.9 ms | 2 |
+| **after** (`1500m`) | 29.5 ms | 112.7 ms | 118.9 ms | 142.9 ms | **0** |
+
+**The prediction holds, and the honest reading is more careful than either
+column.** The body did not move — p50 by 0.175 ms. p95 rose 28 ms, and that is
+**inside the run-to-run spread of this identical shape**: M5-S4 measured 104.2 ms
+on the same four requests per second, so the three measurements of one shape span
+84–113 ms and the change sits inside them. It is not attributable.
+
+**The extreme tail improved sharply and that is not claimed either.** p99 fell
+73% and max fell 79% — but the before run's slow requests were in its **10th and
+11th seconds**, mid-run rather than at start-up, which is the signature of host
+contention on a laptop rather than of a scheduler's arithmetic. Claiming a
+CPU-request change fixed a 700 ms stall would be the flattering reading, and
+this program's rule is that the flattering floor is the one you name and refuse
+(M2-S2).
+
+**On the SLO's own instrument, which is the number that matters:** at most 2 of
+240 requests beyond 250 ms before and 0 of 240 after, against a 5% budget. A-1
+would not have fired in either run. The scheduler now sees the truth about this
+pod, which was the entire point, and nothing a rider experiences moved.
