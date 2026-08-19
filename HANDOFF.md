@@ -1,5 +1,155 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (bb) — M5-S4: p95 with its shape attached, and fifteen seconds without a predictor
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE — Site
+Reliability Engineer** (charter read at entry; refusals in play: no unqualified
+latency, no SLO invented outside the SLO document's own story, no threshold
+loosened to make a drill pass, nothing on the wire reconfigured by a measurement
+story). Boot reads: CLAUDE.md · HANDOFF (ba) · M5 KICKOFF · AWAITING_PO.
+**Staleness check passed** — tree clean at `657e4a5`, no `automation/STOP`, no
+detached job pending, cluster 3/3 Ready v1.36.1, InferenceService
+`serving/nyc-taxi-eta` **Ready True**, `@champion` version 2. **M5-S4 COMPLETE.**
+PR **#31** merged (`e9c933c`), reachable from origin/main. Cluster never went
+down; nothing was promoted, no alias moved, no manifest changed. **The one
+mutation in the story is a single predictor pod deleted on purpose and replaced
+by its own controller — the endpoint is Ready now on `mlops-taxi-worker2`, 0
+restarts.**
+
+### Done
+- **`make load` — an open-loop load client, stdlib only** (`urllib`, which is
+  what `serving/client.py` already uses; the kickoff's "check before adding ANY
+  dependency" was checked and nothing was added). Arrivals are scheduled at
+  `t0 + k/rate` whether or not a worker is free, so the headline percentile is
+  measured from the **scheduled** instant. A closed loop makes the arrival rate a
+  consequence of the latency — coordinated omission — and its p95 is an unloaded
+  server's service time wearing a load test's clothes. `service_ms` is recorded
+  beside `latency_ms` precisely so the gap between them is visible; in the
+  headline run it is 0.1 ms.
+- **THE NUMBER, and it never appears without its shape: p50 17.2 · p95 104.2 ·
+  p99 107.2 · max 115.4 ms, 0 errors in 240 requests, at 4 req/s for 60 s,
+  concurrency 8, hazard mix, 1 row/request, achieved 4.02 req/s.** Every response
+  carries `model_version: 2` — read off the timed answers, not from a metadata
+  call.
+- **The rate was CHOSEN from a ramp, not guessed**, and the ramp found the
+  ceiling: 2 req/s = 35% of the 2-core limit, 4 = 72%, **6 = 96%**, **8 = 101%
+  with p50 jumping 18 → 115 ms**. CPU comes from the container's own cgroup
+  (`cpu.stat`, differenced across each window) because there is no metrics-server
+  and installing one would be a platform change inside a measurement story.
+- **Capacity for S5's PRR: 1.31 of 2 CPU cores, 0.326 core-seconds per request,
+  236 MiB against a 1 GiB request.** So **the CPU *request* of `200m` understates
+  real usage by ~6×** — written down, deliberately NOT changed (see Decisions).
+- **`make load-drill` — self-heal: the predictor pod deleted at T+25 s of a 180 s
+  window → 14.53 s unavailable**, 58 failed requests of 720 (56×`503`, 2×`502`),
+  then **559 requests with 0 errors** against **0 of the 100 before the kill**.
+  A **different pod object by UID** serves afterwards (`f6bf83df…` → `2ba0096c…`)
+  — identity, never name (M4-S5's lesson, pinned by a test that fails if a
+  `.name` comparison appears) — **and on a different node**, `mlops-taxi-worker`
+  → `worker2`. GREEN 7/7 checks. The prediction was written to disk BEFORE the
+  kill; the kill fires from inside the load client's own per-second callback, so
+  it and the latencies share one clock.
+- **M5-S2's `kind load` to all three nodes was paid back exactly as its CLAUDE.md
+  note predicted** — "required, not convenient: M5-S4 kills the predictor and the
+  replacement may land elsewhere." It did. On one node this drill would have
+  measured an `ImagePullBackOff` instead of a recovery.
+- **`make parity` re-run against the REPLACEMENT pod: `0.000e+00` over all 16
+  rows, and the record diff is one line — the timestamp.** Every delta is
+  byte-identical across a pod replacement on a different node.
+- **671 host tests passed** (was 638; `tests/unit/test_load.py` adds 33), ruff
+  clean. Records tracked under F-029's regime: `automation/runs/m5-load/`.
+
+### Decisions
+- **Ritual (e) was not used, and this is the deviation to know about.** The
+  kickoff said to run the load+kill sequence detached. Measured, the whole drill
+  is ~6.5 minutes — comfortably inside one foreground tool call, which never ends
+  a turn and so cannot hit gotcha #45. Detaching it would have meant the story's
+  numbers arriving in a *later* session and the doc, ledger row and field note
+  being written by somebody who did not watch the run. The run was launched in the
+  foreground and completed twice; nothing waited across a turn boundary at any
+  point. If a future load story runs longer windows, ritual (e) is right again.
+- **The CPU request stays at `200m` and the finding goes to the PRR.** 200m is
+  what the scheduler places on and what any future autoscaler would call idle,
+  against ~1.3 cores actually used. Fixing it is a change to what is on the wire,
+  and M5-S4 is a measurement story; S5's PRR capacity box is where a change to a
+  deployed workload gets argued. **Flagged for M5-S5 and M6.**
+- **No error-rate threshold exists anywhere in the drill, and a test pins that.**
+  The residual error rate after recovery (0/559) is REPORTED against the pre-kill
+  segment of the same run (0/100) as its control — same client, same rate, same
+  minute. A threshold would be an SLO; the SLO document is M6's by the kickoff's
+  own scope list, and a bar set here would be a bar set from the number just seen.
+- **The failed first attempt is kept unedited**, at
+  `automation/runs/m5-load/attempt1-at-the-ceiling/`, with §5 of
+  `docs/serving_load_m5.md` explaining it — the M4-S5 precedent for a wrong
+  prediction, applied to a wrong measurement.
+
+### Defects/Surprises
+- **The drill's first full run went RED, correctly, and both causes were mine.**
+  (1) Its ramp rule took the highest step that held its rate with no errors and
+  chose **8 req/s** — the CPU throttle ceiling (2.003 of 2 cores, throttled in
+  601 of ~601 periods). Held-its-rate and no-errors cannot detect saturation,
+  because saturation shows up as latency and not as failure; the p95 it produced
+  was a property of the CFS quota. It also made the kill unreadable: a pod with no
+  headroom drops the odd request by itself, so the run showed the real outage plus
+  ten scattered 502/503s over the next 170 seconds. **Gotcha #74.**
+  (2) It reported `outage_seconds_measured: 182.4`, computed as
+  `last_error - first_error`, for a service that was down **13 seconds** and then
+  served 1,400 more requests. **Gotcha #75.**
+- **Both were fixed as QUANTITIES, never thresholds** — gotcha #63's lesson in a
+  new place. The ramp gained a third clause with a mechanism behind it (the next
+  phase destroys the pod; a rate spending the whole quota leaves no headroom for
+  the replacement), and the outage is now anchored on the first FAILURE after the
+  kill and closed by the first SUCCESS after that. **The obvious alternative
+  anchor was written first and is also wrong**: "the first success after the kill"
+  finds a still-succeeding request 50 ms in and reports a 0.05-second outage for a
+  service about to be down for fourteen seconds. Both anchors were caught by
+  replaying attempt 1's real timeline as a test fixture.
+- **The two attempts corroborate on the thing that matters**: 13 fully-dead
+  seconds at 8 req/s, 14 at 4 req/s. Self-heal costs ~14 s regardless of load, and
+  attempt 1's long tail belonged to the saturation — which is the argument for
+  keeping a red run rather than deleting it.
+- **Throttling is non-zero at every rate, including 2 req/s at 35% mean
+  utilisation.** Not a contradiction: CFS accounts in 100 ms periods and one
+  inference burst wider than the quota inside one period is throttled. Mean
+  utilisation is a budget statement; the throttle counter is a latency statement.
+- **`role:SRE` did not exist as a GitHub label** — created (`d93f0b`) so the PR
+  could carry it. The other four roles had labels; this is the first SRE-owned PR.
+- **No wall hit. No fork opened. Nothing new for AWAITING_PO.**
+
+### Next
+**Executor: M5-S5 — the PRR, the M5 gate, and its red team** (role:SRE A / MLOps
+R, `docs/milestones/M5_KICKOFF.md`). It is the milestone's LAST story and M5 is
+**not** ◆-marked, so its exit is `automation/next_session.sh architect 120`.
+
+What it inherits, and what will cost time if forgotten:
+- **`docs/runbooks/serving.md` owes a rollback that is TYPED**, and the registry
+  holds version 1 for exactly this. `score.load_champion(cfg,
+  version_number="1")` already exists (M5-S3 added it for the parity red team's
+  arm B, and the handoff there predicted this use) — but note that loading a
+  version offline is a READ, while a rollback must move the `@champion` alias and
+  re-run `make serve`, which resolves the alias. **v1 eats 5 features and v2 eats
+  24**, so a rollback is not only a pointer move: the client's feature set comes
+  from `configs/train.yaml`, and that line moves with a promotion or not at all
+  (M3-S5's law). Work out what a v1 rollback actually requires before typing the
+  commands — this may be the story's real finding.
+- **The runbook should quote 14.53 s, not a hope.** Any event replacing the
+  predictor pod — a node drain, an image change, a rollback — costs about fifteen
+  seconds of 503s on this deployment: one replica, an init container that pulls
+  the model from MinIO, and no canary (Standard mode, ADR-004).
+- **The PRR's capacity box has real numbers now** (`automation/runs/m5-load/
+  headline.json` → the `capacity` block) **and one open recommendation**: the CPU
+  request of `200m` against ~1.3 cores observed. That is a change to a deployed
+  workload and belongs in the PRR's decisions, not in a measurement story's diff.
+- **`make verify-m5` is still the M5 stub** in the Makefile (`TODO(M5)`) — S5
+  writes it. The evidence it should read is now: `automation/runs/m5-parity/
+  parity.json`, `automation/runs/m5-load/{headline,selfheal,summary}.json`, the
+  live InferenceService, and the registry. **Read the recorded records, not a
+  fresh run** (gotcha #66's lesson) — and remember the red team must break a
+  POINTER or ONE recorded field and restore it byte-identically under an EXIT
+  trap.
+- **Every literal DERIVED on both sides** (F-017, gotchas #49/#50): the served
+  version must equal what the ALIAS says, never the string "2".
+
 ## Session 2026-08-19 (ba) — M5-S3: parity is zero, and the test found a door nobody could walk through
 
 ### State
