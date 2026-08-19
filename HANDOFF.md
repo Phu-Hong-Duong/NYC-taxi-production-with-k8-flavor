@@ -1,5 +1,153 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (ba) — M5-S3: parity is zero, and the test found a door nobody could walk through
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block MLE — Machine
+Learning Engineer** (charter read at entry; refusals in play: no number quoted
+that `taxi_mlops.training.evaluate` did not produce, no gate/threshold loosened
+without a PO fork, no leakage admitted by a knob, scout numbers labelled
+scout-internal). Boot reads: CLAUDE.md · HANDOFF (az) · M5 KICKOFF · AWAITING_PO.
+**Staleness check passed** — tree clean at `0c1b828`, no `automation/STOP`, no
+detached job pending, cluster 3/3 Ready v1.36.1, InferenceService
+`serving/nyc-taxi-eta` **Ready True** with its predictor pod 21m old and 0
+restarts, `@champion` version 2. **M5-S3 COMPLETE.** PR **#30** merged
+(`33e53e1`), reachable from origin/main. Cluster never went down; nothing was
+deployed, restarted or promoted all session.
+
+### Done
+- **`make parity` — THE number: `max |offline − online| = 0.000e+00` minutes over
+  16 hazard rows against a 1e-6 bar.** Identical, not merely within tolerance, on
+  every row including the two with no geometry at all. ONE 16×24 matrix built
+  through the ONE `features/` path and scored TWICE — the registry-loaded
+  champion in this process, and the live InferenceService — so the delta is the
+  model bytes + the serving runtime + the wire, and NOT two feature builds that
+  could have differed. M5-S2's spot-check row reproduces at **39.001937154**.
+- **The rows are declared, committed, and each names its hazard** (`HAZARDS`):
+  airports JFK/LGA/EWR, an OD pair unseen in train (`55 -> 148`, 6 in test / 0 in
+  train — a committed literal with its query in the note, so parity stays a
+  seconds-long reader), the 100–120 min tail, midnight and week seams, holiday
+  and near-holiday, passenger_count 0 and 6, a 2026 date (F-019's extension), and
+  both no-geometry shapes. Sampling was refused: it gives a number that changes
+  every run, a red team with nothing to plant, and the rows that break serving
+  are never the average ones.
+- **`make parity-redteam` — PASSED, 7 checks, 0 failures.** Arm A sends every
+  feature under its own name and dtype carrying its NEIGHBOUR's values → **max
+  delta 4.210e+01 minutes**, a 48-minute trip quoted at 6, from a body in which
+  every input is individually valid. Arm B loads registry version **1** offline
+  (a READ — moving an alias would be a mutation, and a red team never moves the
+  pointer it checks) → refused at the feature-set guard BEFORE a number exists,
+  because v1 eats 5 columns and v2 eats 24. Neither arm deploys, restarts or
+  promotes; `@champion` is 2 before and after and the untampered run is GREEN
+  again at the end.
+- **F-030 CLOSED (HIGH, found and fixed this session): the missing-geometry path
+  could not be quoted AT ALL, and had not been since the endpoint existed.**
+  Zones 264/265 have no centroid by design (DR-04 condition 1) → nine NaN
+  features → `json.dumps` writes the bare token `NaN`, which Python emits BY
+  DEFAULT and no parser accepts → `HTTP 422 {"loc":["body",1241],"error":
+  "unexpected character"}`, a byte offset naming neither the feature nor the
+  zone. ~1% of every split, and **264->264 is the largest single OD "route" in
+  the data**. Missing now travels as `null`; an **infinity is REFUSED** rather
+  than encoded; `_post` passes **`allow_nan=False`**. Proof that `null` is the
+  same missing value the booster was fitted on: those rows parity at 0.000e+00,
+  and `make quote --pu 264 --do 264` returns **9.6555 minutes** where it raised.
+- **F-031 CLOSED: the client's documented "the V2 payload is POSITIONAL" was
+  false for this runtime** — corrected, not deleted. See Defects.
+- **638 host tests passed** (was 610; `tests/unit/test_parity.py` adds 28 and the
+  serving-client docstring was corrected in the same commit), ruff clean,
+  **`make verify-m4` GREEN 39/39** as a regression check over the `src/` change.
+  Record: `automation/runs/m5-parity/parity.json`, tracked under F-029's regime.
+
+### Decisions
+- **One matrix, scored twice — and the claim is stated at the size it is.**
+  Building features on both sides sounds more end-to-end and is worse: when the
+  numbers disagree you cannot tell whether the model or the feature build
+  differs, and when they agree you have proved neither cleanly. So this PROVES
+  the deployed model computes what the registered one computes, and explicitly
+  does NOT prove M7's transformer will build features the way training does.
+  Written into the module docstring and `docs/parity_m5.md` §1, where the next
+  person will read it rather than infer it.
+- **Zero, not the kickoff's predicted ~1e-7, and the reason is M5-S2's dtype
+  fix.** The wire carries the matrix's own dtypes, so there is no float32 round
+  trip; lightgbm is 4.7.0 on both sides; pandas/numpy carry values, they do not
+  compute them. **M5-S2's "first suspect if parity comes back wide" — the base
+  image's Python 3.10.12 / pandas 2.2.3 / numpy 2.2.6 — is cleared, and the
+  derived predictor image stands.** Zero is also more brittle than 1e-7 would
+  be: anything reintroducing a dtype round trip moves it, so a future 1e-7 is
+  worth a sentence, not a shrug. The bar stays 1e-6 (an honest tolerance for a
+  seam); loosening it is a PO fork, and there is no skip flag.
+- **`load_champion` gained `version_number=` — one branch at the resolution step,
+  nowhere else.** Arm B needs to load a model that is deliberately not the
+  champion, and it must not do that by moving an alias. Addressing a version is a
+  read. The F-009 logged-model resolution, the target-transform refusal and the
+  booster load are shared, so the drill exercises the real loader — and **M5-S5's
+  typed rollback wants exactly this call**.
+- **The red team plants its cause inside the TEST.** Every earlier drill here
+  mutates something real (an alias, a record, a library file); for parity the
+  obvious lever is to point the endpoint at another model, which would mean
+  breaking production to prove a test works.
+
+### Defects/Surprises
+- **F-030, and it is the finding of the story: the test's job is to send the
+  requests nobody sends.** The defect was found by *building the hazard set*, not
+  by running it — the third row I wrote returned a 422. It was invisible for a
+  milestone because every client before M5-S2 handed a DataFrame straight to
+  LightGBM (where NaN is ordinary) and because M5-S2's accept check was one
+  ordinary JFK trip with full geometry. Gotcha **#72**: a serialiser whose
+  permissive default produces output its own format forbids fails at the
+  RECEIVER, in the receiver's vocabulary, about a byte.
+- **The red team's arm A went GREEN under its own tampering — F-031, gotcha
+  #73.** It rotated the ORDER of the request's inputs, on the property
+  `client.v2_payload` had asserted since M5-S2, and measured 0.000e+00 on all 16
+  rows. The two tempting readings ("the tampering was too weak", "the test is
+  broken") are both wrong: **this runtime pairs by NAME** — mlserver hands MLflow
+  a named frame and the logged signature reorders it. The plant moved to a cause
+  this runtime can express; the docstring was CORRECTED rather than deleted,
+  because the practice it prescribed (send the model's own order) is still right
+  — a positional V2 runtime is legal, M7's transformer may be one, and it costs
+  nothing. What is no longer claimed is that the ordering is what protects us.
+  **The logged signature is, for the second time in this milestone** (it also
+  refused the lossy `float64 -> int32` cast at M5-S2).
+- **A verdict that named a "worst row" when every delta was zero.** `max()` over
+  an all-zero list returns the first element, so the first run printed
+  `(worst: ordinary-midday)` beside `0.000e+00` — a ranking that does not exist.
+  Fixed to say `(every row agrees EXACTLY)`, pinned by a test. Small, but it is
+  the difference between a report and a rendering of a data structure.
+- **No wall hit. No fork opened. Nothing new for AWAITING_PO.**
+
+### Next
+**Executor: M5-S4 — p95 measured + self-heal under load** (role:SRE,
+`docs/milestones/M5_KICKOFF.md`). A committed load client drives the DECLARED
+route at a STATED rate for a STATED window; p95/p99 recorded with the load shape
+beside them (an unqualified latency is not a measurement). Then the self-heal
+leg: kill the predictor pod mid-load and assert **IDENTITY, a different pod uid,
+never a name** (M4-S5's kill drill learned that the hard way and kept its wrong
+prediction in `automation/runs/m4-kill/attempt1-prediction-wrong/`), measure the
+error window, show recovery under sustained load. Records as JSON under
+`automation/runs/m5-load/` — tracked, S1's regime. **This story's verification
+outlives an attended wait: run the load+kill sequence detached
+(`automation/run_detached.sh … --then-schedule executor`, exit ritual e) and
+never end the turn waiting on it (gotcha #45).**
+
+What it inherits, and what will cost time if forgotten:
+- **Check the dependency graph before adding a load client dep** — the kickoff
+  says so explicitly, and `urllib` (stdlib) is what `serving/client.py` already
+  uses successfully against this endpoint. `client.infer_matrix(matrix, names,
+  endpoint)` is the cheapest way to fire a prepared request repeatedly without
+  rebuilding features per call; `parity.HAZARDS` is a ready-made request mix that
+  spans the honest shapes, if a realistic mix is wanted over a single row.
+- **Every request needs the `Host: nyc-taxi-eta-serving.local` header** or the
+  ingress 404s. `Endpoint.host` builds it.
+- **F-030's shape is now impossible to reintroduce quietly** (`allow_nan=False`),
+  but a load client that builds its own body bypasses `client._post` — use the
+  client, do not hand-roll a payload.
+- **Capacity numbers for the PRR**: the predictor is one replica on
+  `mlops-taxi-worker2`, Standard/RawDeployment, no HPA, no canary (ADR-004's
+  honest cost). Requests/limits are in
+  `infra/manifests/inferenceservice-champion.yaml`.
+- **`@champion` is version 2 and M5 stays alias-neutral.** A kill drill must not
+  redeploy: deleting the pod is the drill, and `make serve` is not part of it.
+
 ## Session 2026-08-19 (az) — M5-S2: the champion answers, and three of four defects were about what "ready" means
 
 ### State
