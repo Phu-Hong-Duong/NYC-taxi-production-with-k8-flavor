@@ -1,0 +1,16 @@
+{
+  "written": "BEFORE the kill \u2014 this file is the drill's pre-registration",
+  "month": "2019-02",
+  "train_months": "2019-02",
+  "target_stage": "train",
+  "kill_after_seconds": 120,
+  "predicted": {
+    "what_is_killed": "the pod named <run>-<action-id>-0, i.e. attempt 0 of the 'train' action, deleted with `kubectl delete pod` while it is doing work",
+    "orchestrator": "Flyte marks that attempt failed and starts a second one; a NEW pod appears, named <run>-<action-id>-1. The attempt suffix is part of the pod name, so the retry is visible with `kubectl get pods` and does not depend on this script interpreting anything.",
+    "control_plane_attempts": ">= 1 for the killed action. REPORTED RATHER THAN ASSERTED, and the reason is recorded here BEFORE the run so neither outcome can be presented afterwards as the one that was expected: Flyte distinguishes USER retries (governed by the task's `retries=`) from SYSTEM retries (network, container, k8s \u2014 governed by the platform). A pod deleted out from under a healthy container is plausibly either, and which counter it increments is a property of the platform's classification, not of whether the pipeline survived. The second pod and the completed run are the assertions.",
+    "run_outcome": "the run reaches SUCCEEDED and its outputs carry a `decision` field \u2014 a NO_VERDICT decision, because the run is sampled",
+    "stage_outcome": "the 'train' action ends SUCCEEDED, having run twice",
+    "champion": "unchanged \u2014 no M4 run may promote (kickoff law)",
+    "known_cost": "if the killed stage is `train`, the attempt that died leaves an MLflow run behind: the run is created when the fit starts and the process that would have ended it was killed. Expected, not a defect."
+  }
+}

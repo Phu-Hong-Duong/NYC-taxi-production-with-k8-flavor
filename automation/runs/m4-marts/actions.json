@@ -1,0 +1,85 @@
+{
+  "run_name": "rw98pj84z4jh5ldqrxqp",
+  "actions": [
+    {
+      "action": "a0",
+      "task": "taxi-pipeline-light.main",
+      "short_name": "main",
+      "parent": "",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 886594,
+      "attempts": 1
+    },
+    {
+      "action": "2d98cwh9qaqg2ygcjcv59zhe8",
+      "task": "taxi-pipeline-data.ingest",
+      "short_name": "ingest",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 14033,
+      "attempts": 1
+    },
+    {
+      "action": "c91whjsuy5pbpetnoq7b2rk57",
+      "task": "taxi-pipeline-data.validate",
+      "short_name": "validate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 5051,
+      "attempts": 1
+    },
+    {
+      "action": "6p7vnr37wglu937f3mz910l5o",
+      "task": "taxi-pipeline-data.build_features",
+      "short_name": "build_features",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 7068,
+      "attempts": 1
+    },
+    {
+      "action": "b8sum2j0yyx6gonm6fj1iz7ox",
+      "task": "taxi-pipeline-train.train",
+      "short_name": "train",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 762373,
+      "attempts": 1
+    },
+    {
+      "action": "35vy13jifs2n4m4dk7izdt48b",
+      "task": "taxi-pipeline-light.evaluate",
+      "short_name": "evaluate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_POPULATED",
+      "duration_ms": 3381,
+      "attempts": 1
+    },
+    {
+      "action": "1hzjxd9vl60m8isspfwpeiijt",
+      "task": "taxi-pipeline-light.register",
+      "short_name": "register",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 2380,
+      "attempts": 1
+    },
+    {
+      "action": "8rbeep9e3sx4qs1ogfajzklpw",
+      "task": "taxi-pipeline-data.publish_marts",
+      "short_name": "publish_marts",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 90591,
+      "attempts": 1
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "run_name": "r8dtc45vhb4mnkdzqtx4",
+  "month": "2019-02",
+  "train_months": [
+    "2019-02"
+  ],
+  "judged": false,
+  "image_ref": "taxi-mlops-pipeline:fb57324",
+  "champion_after": "2",
+  "cli_exit": 0,
+  "project": "nyc-taxi",
+  "domain": "development"
+}

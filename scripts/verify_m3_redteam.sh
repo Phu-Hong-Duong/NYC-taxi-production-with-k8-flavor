@@ -32,6 +32,14 @@
 # edit, so a Ctrl-C, a failure or a crash mid-drill still leaves the record as it
 # found it — and the restore is verified by sha256, not assumed.
 #
+# THE RECORD IS A TRACKED FILE from M5-S1 on (F-029 option A: verdict JSONs are
+# committed, logs and .status stay ignored). Two consequences worth stating,
+# because this drill is the reason the policy exists. A clean drill leaves a
+# CLEAN TREE — the EXIT-trap restore is byte-identical, so `git status` after a
+# successful run shows nothing, and anything it does show is a drill that did not
+# finish. And a crashed drill is now recoverable by `git checkout --` as well as
+# from the byte copy below: two copies where there used to be one.
+#
 # Usage: scripts/verify_m3_redteam.sh   (via `make verify-m3-redteam`)
 set -uo pipefail
 
@@ -61,12 +69,14 @@ restore() {
     fi
   else
     printf '\033[31m[verify-m3-redteam] COULD NOT RESTORE %s.\033[0m\n' "$RECORD" >&2
-    # NOT `git checkout --`: `automation/runs/` is gitignored, so this record is
-    # untracked and git has no copy of it to restore (F-029, found 2026-08-19 —
-    # this line was written believing the record was committed). The byte copy
-    # this drill took at step 0 is the ONLY copy, so it is what gets named, and
-    # it is deliberately not deleted on this path.
+    # Two ways back, and the byte copy is named FIRST because it is the one that
+    # is right under every condition. The record is a tracked file from M5-S1 on
+    # (F-029 option A), so `git checkout --` also works — but only if the record
+    # was committed in the state this drill found it, which is not something a
+    # failing restore path may assume. The byte copy was taken at step 0 of THIS
+    # run, so it is exactly what was there; it is deliberately not deleted here.
     printf 'Copy it back by hand:  cp %s %s\n' "$BACKUP" "$RECORD" >&2
+    printf '  (or, if it was committed as found:  git checkout -- %s)\n' "$RECORD" >&2
     return 0
   fi
   rm -f "$BACKUP"

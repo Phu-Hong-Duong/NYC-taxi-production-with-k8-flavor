@@ -1,0 +1,168 @@
+{
+  "run1": {
+    "name": "r56p9p7qwfsqgh6qgrlw",
+    "seconds": 1974,
+    "actions": [
+      {
+        "action": "a0",
+        "task": "taxi-pipeline-light.main",
+        "short_name": "main",
+        "parent": "",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_DISABLED",
+        "duration_ms": 1970164,
+        "attempts": 0
+      },
+      {
+        "action": "d5ycofwajy5hvj3rb1coder41",
+        "task": "taxi-pipeline-data.ingest",
+        "short_name": "ingest",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_POPULATED",
+        "duration_ms": 13848,
+        "attempts": 0
+      },
+      {
+        "action": "40q2473fkn2woa6a03vxaoqp8",
+        "task": "taxi-pipeline-data.validate",
+        "short_name": "validate",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_POPULATED",
+        "duration_ms": 5858,
+        "attempts": 0
+      },
+      {
+        "action": "5dhua5pl43oqwkh5d09dzjrze",
+        "task": "taxi-pipeline-data.build_features",
+        "short_name": "build_features",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_POPULATED",
+        "duration_ms": 8902,
+        "attempts": 0
+      },
+      {
+        "action": "7pxwkh8n5gvki6tqxnzqqftfn",
+        "task": "taxi-pipeline-train.train",
+        "short_name": "train",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_POPULATED",
+        "duration_ms": 1935159,
+        "attempts": 0
+      },
+      {
+        "action": "eithh5v6qr8tdovomehltyvdn",
+        "task": "taxi-pipeline-light.evaluate",
+        "short_name": "evaluate",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_POPULATED",
+        "duration_ms": 3153,
+        "attempts": 0
+      },
+      {
+        "action": "4mxq1zfwx7vt7cde2lqgtbuot",
+        "task": "taxi-pipeline-light.register",
+        "short_name": "register",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_DISABLED",
+        "duration_ms": 3159,
+        "attempts": 0
+      }
+    ]
+  },
+  "run2": {
+    "name": "rbbvfb5mhfgz8cngx9rn",
+    "seconds": 11,
+    "actions": [
+      {
+        "action": "a0",
+        "task": "taxi-pipeline-light.main",
+        "short_name": "main",
+        "parent": "",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_DISABLED",
+        "duration_ms": 7188,
+        "attempts": 0
+      },
+      {
+        "action": "40q2473fkn2woa6a03vxaoqp8",
+        "task": "taxi-pipeline-data.validate",
+        "short_name": "validate",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_HIT",
+        "duration_ms": 963,
+        "attempts": 0
+      },
+      {
+        "action": "5dhua5pl43oqwkh5d09dzjrze",
+        "task": "taxi-pipeline-data.build_features",
+        "short_name": "build_features",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_HIT",
+        "duration_ms": 1049,
+        "attempts": 0
+      },
+      {
+        "action": "d5ycofwajy5hvj3rb1coder41",
+        "task": "taxi-pipeline-data.ingest",
+        "short_name": "ingest",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_HIT",
+        "duration_ms": 858,
+        "attempts": 0
+      },
+      {
+        "action": "4mxq1zfwx7vt7cde2lqgtbuot",
+        "task": "taxi-pipeline-light.register",
+        "short_name": "register",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_DISABLED",
+        "duration_ms": 3183,
+        "attempts": 0
+      },
+      {
+        "action": "7pxwkh8n5gvki6tqxnzqqftfn",
+        "task": "taxi-pipeline-train.train",
+        "short_name": "train",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_HIT",
+        "duration_ms": 140,
+        "attempts": 0
+      },
+      {
+        "action": "eithh5v6qr8tdovomehltyvdn",
+        "task": "taxi-pipeline-light.evaluate",
+        "short_name": "evaluate",
+        "parent": "a0",
+        "phase": "SUCCEEDED",
+        "cache_status": "CACHE_HIT",
+        "duration_ms": 231,
+        "attempts": 0
+      }
+    ]
+  },
+  "wall_clock_ratio": 0.0056,
+  "cached_stage_seconds": {
+    "run1": 1966.9,
+    "run2": 3.2,
+    "ratio": 0.0016
+  },
+  "mlflow_runs": {
+    "before": "12",
+    "after_run1": "16",
+    "after_run2": "16"
+  },
+  "stage_only": null,
+  "verdicts": 19,
+  "failures": 0
+}

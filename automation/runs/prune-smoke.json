@@ -1,0 +1,46 @@
+{
+  "study": "m3-prune-smoke",
+  "feature_set": "v1",
+  "n_features": 5,
+  "family": "lgbm",
+  "trials_total": 16,
+  "trials_complete": 16,
+  "trials_pruned": 0,
+  "trials_failed": 0,
+  "trials_requested": 16,
+  "stopped_on": "n_trials",
+  "budget_seconds": 0.0,
+  "wall_seconds": 50.75599189499917,
+  "fitting_seconds": 44.36415452499932,
+  "best_params": {
+    "learning_rate": 0.09436614553028187,
+    "num_leaves": 415,
+    "min_data_in_leaf": 374,
+    "feature_fraction": 0.9985063710104551,
+    "bagging_fraction": 0.8155421717694826,
+    "lambda_l1": 0.013007769702962545,
+    "lambda_l2": 0.0010695159048720376,
+    "max_cat_threshold": 52,
+    "cat_smooth": 12.403668827219594
+  },
+  "best_value_sample_val_mae": 3.7111711602615074,
+  "best_trial_number": 14,
+  "best_within_rate_sample": 78.03806261914762,
+  "best_iteration": 251,
+  "sample_fraction": 0.005,
+  "seed": 20260817,
+  "max_rounds": 300,
+  "train_rows": 219937,
+  "val_rows": 30949,
+  "train_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "val_month": [
+    "2019-07"
+  ]
+}

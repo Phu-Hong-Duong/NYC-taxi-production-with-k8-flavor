@@ -1,0 +1,15 @@
+{
+  "run_name": "rklz7vdv2d59bn8kbp8d",
+  "actions": [
+    {
+      "action": "a0",
+      "task": "taxi-pipeline-retry-probe.always_fails",
+      "short_name": "always_fails",
+      "parent": "",
+      "phase": "FAILED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 6789,
+      "attempts": 3
+    }
+  ]
+}

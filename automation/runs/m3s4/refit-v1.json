@@ -1,0 +1,36 @@
+{
+  "contender": "auto-xgboost-v1",
+  "family": "xgboost",
+  "feature_set": "v1",
+  "study": "m3-sniper-v1",
+  "params": {
+    "eta": 0.062227792515279316,
+    "max_depth": 12,
+    "min_child_weight": 5.471357605940969,
+    "subsample": 0.8178379144051043,
+    "colsample_bytree": 0.8016326703908547,
+    "reg_lambda": 2.6185068507773707e-08,
+    "reg_alpha": 0.0029369981104377003,
+    "max_cat_threshold": 30
+  },
+  "best_iteration": 800,
+  "val_mae": 3.724473218110082,
+  "val_within_rate": 78.00270705689472,
+  "sample_val_mae": 3.7417044334470204,
+  "train_rows": 43987422,
+  "val_rows": 6189748,
+  "train_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "val_month": [
+    "2019-07"
+  ],
+  "full_data": true,
+  "fitting_seconds": 1308.0625770020015,
+  "run_id": "ec0eba69389d44bc9f4dadcbad8e4094"
+}

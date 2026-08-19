@@ -37,6 +37,14 @@
 # — and the restore is verified by sha256, not assumed. It touches no cluster
 # state, no image, no MLflow run, no registry version, and no warehouse row.
 #
+# THE RECORD IS A TRACKED FILE from M5-S1 on (F-029 option A: verdict JSONs are
+# committed, logs and .status stay ignored). This drill is the argument for that
+# policy in one line — the fault it plants is an edited record, and until M5-S1
+# an edited record left no diff for a reviewer to see. Two consequences: a clean
+# drill leaves a CLEAN TREE (the restore is byte-identical, so anything `git
+# status` shows afterwards is a drill that did not finish), and a crashed drill
+# is recoverable by `git checkout --` as well as from the byte copy.
+#
 # Usage: scripts/verify_m4_redteam.sh   (via `make verify-m4-redteam`)
 set -uo pipefail
 
@@ -67,6 +75,7 @@ restore() {
   else
     printf '\033[31m[verify-m4-redteam] COULD NOT RESTORE %s.\033[0m\n' "$RECORD" >&2
     printf 'The drill kept a copy at %s — copy it back by hand.\n' "$BACKUP" >&2
+    printf '  (or, if it was committed as found:  git checkout -- %s)\n' "$RECORD" >&2
     return 0
   fi
   rm -f "$BACKUP"

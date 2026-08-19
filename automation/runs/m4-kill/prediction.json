@@ -1,0 +1,16 @@
+{
+  "written": "BEFORE the kill \u2014 this file is the drill's pre-registration",
+  "month": "2019-03",
+  "train_months": "2019-03",
+  "target_stage": "train",
+  "kill_after_seconds": 120,
+  "predicted": {
+    "what_is_killed": "the pod named <run>-<action-id>-0, i.e. attempt 0 of the 'train' action, deleted with `kubectl delete pod` while it is doing work",
+    "orchestrator": "a DIFFERENT pod object runs the stage afterwards \u2014 same action, new uid. REVISED after the drill's first run on 2026-08-18, and the original wording is kept beside its refutation in automation/runs/m4-kill/attempt1-prediction-wrong/prediction.json. It predicted a pod named `<run>-<action>-1`, on the reasoning that Flyte encodes the attempt in the pod name and a retry bumps it. Observed instead: the k8s plugin RECREATED the pod under the same name `-0` with a new uid 31 seconds after the kill, and the run finished. The run survived; the assertion was about a naming convention. Identity is the property that holds under both.",
+    "control_plane_attempts": "0 for the killed action, because recreating a pod is not the same event as failing an attempt. REPORTED RATHER THAN ASSERTED: which counter a deleted pod increments is a property of the platform's classification, not of whether the pipeline survived. The USER budget (`retries=`) is measured separately and positively, by phase 0 \u2014 see pipelines/flyte/retry_probe.py, which exists BECAUSE this drill turned out not to spend it.",
+    "run_outcome": "the run reaches SUCCEEDED and its outputs carry a `decision` field \u2014 a NO_VERDICT decision, because the run is sampled",
+    "stage_outcome": "the 'train' action ends SUCCEEDED, having run twice",
+    "champion": "unchanged \u2014 no M4 run may promote (kickoff law)",
+    "known_cost": "if the killed stage is `train`, the attempt that died leaves an MLflow run behind: the run is created when the fit starts and the process that would have ended it was killed. Expected, not a defect."
+  }
+}

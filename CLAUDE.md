@@ -728,8 +728,10 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **`make verify-m3` is 46 sub-checks in 8 sections, 4.7 s, and it re-fits
   NOTHING** — M3 cost 12,447 s of fitting across two tracks, so a gate that
   re-derived any of it would cost more than the milestone. It reads committed
-  docs, **RECORDED** JSON (not committed — `automation/runs/` is gitignored, so
-  its replay inputs are machine state; corrected 2026-08-19, **F-029**), the
+  docs, **RECORDED — and, from M5-S1, COMMITTED — JSON** (the row said
+  "committed" until M4-S5 leg 3 found `automation/runs/` gitignored and
+  corrected it to "recorded"; **F-029** option A then made the correction moot
+  the right way round, by tracking the verdict JSONs), the
   Optuna storage and the registry, and **replays**:
   DR-02's keep bar is re-applied to the ablation table's own numbers, and the
   bake-off's five verdicts are re-computed through `gate.decide` as it exists on
@@ -1220,7 +1222,12 @@ can never disagree (the port-family twins lesson, applied before it bit).
   `git checkout --` on an untracked file. All three false statements (those two plus
   CLAUDE.md's own row) were corrected the day it was found; the POLICY was not
   changed, because what belongs under review is not an executor's call. Three costed
-  options are in the ledger row.
+  options are in the ledger row. **CLOSED at M5-S1 (2026-08-19): ARCH decided option
+  A at the M4 boundary and the mechanics landed — `automation/runs/**/*.json` is
+  tracked (32 records), logs and `.status` stay ignored, and both gates and both red
+  teams were re-run green over the moved files.** The gitignore is pattern-based
+  because a bare directory exclusion stops git descending and makes any `!` rule
+  beneath it silently do nothing.
 - **The gate's own first run went RED for the right reason and the wrong target**
   (gotcha **#67**): "every run has a `main` parent" named the retry probe, which is
   built to have neither a parent nor a success. Fixed by DERIVING what a pipeline run
@@ -1466,6 +1473,8 @@ own advice line and `flyte get` matched `kubectl -n flyte get deploy`, so a need
 must sit where a shell would START a command (#68, #35's rule failing on a TEST
 rather than on prose)**; and **a milestone gate can be replaying evidence that is
 not in the repository and say the opposite in its own header — `automation/runs/`
-is gitignored, so `verify-m3`'s replay inputs and every record `verify-m4` reads
-are invisible to review, which is precisely the edit both red teams simulate. Run
-`git check-ignore -v` before writing "committed" near a verifier (#69, F-029)**.
+was gitignored, so `verify-m3`'s replay inputs and every record `verify-m4` reads
+were invisible to review, which is precisely the edit both red teams simulate. Run
+`git check-ignore -v` before writing "committed" near a verifier (#69, F-029 —
+the STATE was fixed at M5-S1 by tracking the records; the check is the lesson,
+and it is a two-second command)**.

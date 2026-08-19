@@ -1,0 +1,45 @@
+{
+  "study": "m3-smoke-v1",
+  "feature_set": "v1",
+  "n_features": 5,
+  "family": "xgboost",
+  "trials_total": 4,
+  "trials_complete": 4,
+  "trials_pruned": 0,
+  "trials_failed": 0,
+  "trials_requested": 4,
+  "stopped_on": "n_trials",
+  "budget_seconds": 0.0,
+  "wall_seconds": 8.007623534998856,
+  "fitting_seconds": 5.129459903000679,
+  "best_params": {
+    "eta": 0.21156626259977931,
+    "max_depth": 12,
+    "min_child_weight": 3.4587052147518103,
+    "subsample": 0.7933847212232381,
+    "colsample_bytree": 0.8471554633232659,
+    "reg_lambda": 2.6185068507773707e-08,
+    "reg_alpha": 0.0029369981104377003,
+    "max_cat_threshold": 30
+  },
+  "best_value_sample_val_mae": 4.122941395534224,
+  "best_trial_number": 3,
+  "best_within_rate_sample": 74.76816698439367,
+  "best_iteration": 120,
+  "sample_fraction": 0.005,
+  "seed": 20260817,
+  "max_rounds": 120,
+  "train_rows": 219937,
+  "val_rows": 30949,
+  "train_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "val_month": [
+    "2019-07"
+  ]
+}

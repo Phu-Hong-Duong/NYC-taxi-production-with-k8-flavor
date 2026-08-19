@@ -1,0 +1,43 @@
+{
+  "feature_set": "v1",
+  "n_features": 5,
+  "family": "xgboost",
+  "params": {
+    "n_estimators": 144,
+    "max_leaves": 137,
+    "min_child_weight": 0.054536162966569185,
+    "learning_rate": 0.47357916878804085,
+    "subsample": 0.9194568075941549,
+    "colsample_bylevel": 1.0,
+    "colsample_bytree": 1.0,
+    "reg_alpha": 0.0026784891535010275,
+    "reg_lambda": 10.837229104799704
+  },
+  "scout_internal_loss": 4.061569248914459,
+  "scout_internal_metric": "mae",
+  "time_budget_s": 40.0,
+  "smoke_override": true,
+  "fitting_seconds": 40.35299535900049,
+  "sample_fraction": 0.01,
+  "seed": 20260817,
+  "train_rows": 439875,
+  "val_rows": 61897,
+  "train_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "val_month": [
+    "2019-07"
+  ],
+  "estimator_list": [
+    "lgbm",
+    "xgboost",
+    "rf",
+    "extra_tree"
+  ],
+  "run_id": null
+}

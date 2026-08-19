@@ -1,0 +1,15 @@
+{
+  "label": "full-refresh",
+  "command": "uv run python scripts/marts_publish.py --duckdb analytics/dbt/marts.duckdb --transport kubectl --months ",
+  "exit_code": 0,
+  "seconds": 228,
+  "samples": 45,
+  "interval_seconds": null,
+  "marts_db_start_gib": 15.33,
+  "marts_db_peak_gib": 27.96,
+  "marts_db_end_gib": 13.48,
+  "marts_db_peak_over_end": 2.075,
+  "pgdata_used_start_gib": 191.99,
+  "pgdata_used_peak_gib": 204.62,
+  "pgdata_used_end_gib": 190.13
+}

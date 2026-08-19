@@ -1,0 +1,75 @@
+{
+  "run_name": "rbbvfb5mhfgz8cngx9rn",
+  "actions": [
+    {
+      "action": "a0",
+      "task": "taxi-pipeline-light.main",
+      "short_name": "main",
+      "parent": "",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 7188,
+      "attempts": 0
+    },
+    {
+      "action": "40q2473fkn2woa6a03vxaoqp8",
+      "task": "taxi-pipeline-data.validate",
+      "short_name": "validate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 963,
+      "attempts": 0
+    },
+    {
+      "action": "5dhua5pl43oqwkh5d09dzjrze",
+      "task": "taxi-pipeline-data.build_features",
+      "short_name": "build_features",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 1049,
+      "attempts": 0
+    },
+    {
+      "action": "d5ycofwajy5hvj3rb1coder41",
+      "task": "taxi-pipeline-data.ingest",
+      "short_name": "ingest",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 858,
+      "attempts": 0
+    },
+    {
+      "action": "4mxq1zfwx7vt7cde2lqgtbuot",
+      "task": "taxi-pipeline-light.register",
+      "short_name": "register",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_DISABLED",
+      "duration_ms": 3183,
+      "attempts": 0
+    },
+    {
+      "action": "7pxwkh8n5gvki6tqxnzqqftfn",
+      "task": "taxi-pipeline-train.train",
+      "short_name": "train",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 140,
+      "attempts": 0
+    },
+    {
+      "action": "eithh5v6qr8tdovomehltyvdn",
+      "task": "taxi-pipeline-light.evaluate",
+      "short_name": "evaluate",
+      "parent": "a0",
+      "phase": "SUCCEEDED",
+      "cache_status": "CACHE_HIT",
+      "duration_ms": 231,
+      "attempts": 0
+    }
+  ]
+}

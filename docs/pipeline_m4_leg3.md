@@ -138,6 +138,15 @@ and this is the last story of M4 — so it is routed to ARCH at the boundary, wi
 three options and their honest costs written into F-029's row. Nothing waits on
 it; both gates are green today and now say truthfully what they read.
 
+> **Closed 2026-08-19 (M5-S1).** ARCH decided **option A** at the M4 boundary —
+> the records enter review — and M5-S1 landed the mechanics as one PR:
+> `automation/runs/**/*.json` is tracked (32 records, 236 KB), logs and `.status`
+> stay ignored, the four stale "gitignored" statements above were corrected at
+> their source, and both gates plus both red teams were re-run green over the
+> moved files. The section above stands unedited as the record of what was found
+> and why the policy was somebody else's to decide. Transcript:
+> `docs/serving_m5.md` §1.
+
 ## 20. Defects and surprises
 
 - **The gate's own first run went RED, and it was the gate that was wrong.** §3

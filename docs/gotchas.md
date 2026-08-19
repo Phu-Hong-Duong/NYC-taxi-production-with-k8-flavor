@@ -951,3 +951,15 @@ the seed line are earned by THIS project.
     (the policy fork is open to ARCH); the false statements were corrected the day
     it was found. #51's question — *could this component tell if its own claim were
     false?* — asked of a gate's INPUTS rather than of its outputs.
+
+    *Resolved 2026-08-19 (M5-S1): ARCH decided option A and the mechanics landed —
+    `automation/runs/**/*.json` is tracked, logs and `.status` stay ignored. The
+    STATE is fixed; the GOTCHA is not retired, because it is about the check, not
+    about this one directory. Two mechanics worth carrying forward. (1) gitignore
+    semantics: a bare `automation/runs/` exclusion makes git stop descending into
+    the directory, so a `!automation/runs/**/*.json` rule beneath it does NOTHING —
+    the exclusion must be pattern-based (`automation/runs/**`), the directories
+    re-included (`!automation/runs/**/`), and the files re-included last. (2) both
+    red teams now edit TRACKED files, which makes a clean drill's clean tree a
+    checkable property and gives a crashed drill the `git checkout --` its own
+    recovery line used to promise falsely.*

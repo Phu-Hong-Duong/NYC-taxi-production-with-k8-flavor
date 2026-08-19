@@ -1,0 +1,42 @@
+{
+  "feature_set": "v2",
+  "n_features": 24,
+  "family": "lgbm",
+  "params": {
+    "n_estimators": 8695,
+    "num_leaves": 5,
+    "min_child_samples": 9,
+    "learning_rate": 0.35607811750709095,
+    "log_max_bin": 6,
+    "colsample_bytree": 1.0,
+    "reg_alpha": 0.009998217305414494,
+    "reg_lambda": 0.18797147342242768
+  },
+  "scout_internal_loss": 3.503506748195364,
+  "scout_internal_metric": "mae",
+  "time_budget_s": 1800.0,
+  "smoke_override": false,
+  "fitting_seconds": 1853.0298221550001,
+  "sample_fraction": 0.05,
+  "seed": 20260817,
+  "train_rows": 2199371,
+  "val_rows": 309487,
+  "train_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "val_month": [
+    "2019-07"
+  ],
+  "estimator_list": [
+    "lgbm",
+    "xgboost",
+    "rf",
+    "extra_tree"
+  ],
+  "run_id": "a01cd9048a4f45c6a7759b233da3b46b"
+}
