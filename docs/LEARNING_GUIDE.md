@@ -9,6 +9,74 @@ months from now.
 
 ## M6
 
+### M6-S3 — the spike and the shadow: what "configured" is worth (2026-08-19, role:SRE/MLOps/DA)
+
+**What was built.** A second model on the wire — `make shadow` puts registry
+version **1** up as its own InferenceService with zero rider traffic — plus
+`make shadow-run` (the dual-send disagreement table, 1,016 stratified rows),
+`make canary-spike` (ADR-004's deferred spike, measured), **ADR-011**, and the DA
+shadow-analysis memo with a named verdict. The F-009 resolver learned to answer
+for a VERSION as well as an alias.
+
+**The thing worth taking away.** *A mechanism that reports itself as configured
+is not evidence that it works.* The canary spike's headline is not that
+ingress-nginx can split traffic — it can — but HOW it fails when it cannot. Point
+a canary Ingress at a Service that some other Ingress also routes to and you get:
+the annotation accepted, the object synced, the controller logging `Scheduled for
+sync`, the main backend genuinely listing the canary under `alternativeBackends`
+— and **zero of two hundred requests moving**, with no error, no warning and no
+event anywhere. Every signal a person would naturally check says yes. The only
+instrument that says no is a traffic counter.
+
+That is why the §9/M6 acceptance leg says "90/10 **observed from metrics**". This
+story found out why that word is in the sentence, and it cost three attempts to
+find it: run the probe (0%), re-apply and re-measure (0%), then read
+ingress-nginx's own Lua backend table and see `{weight: 0, weightTotal: 0}` on a
+backend whose `noServer` was false because KServe's generated Ingress had already
+claimed it as an ordinary one.
+
+**The second lesson is about the word "metadata".** To force a controller
+reconcile the first probe ran `kubectl annotate isvc` — an annotation, surely the
+safest edit there is. KServe copies an InferenceService's annotations onto its pod
+template, so it rolled the champion's only predictor. Twice. The probe's own
+end-state batch caught it as **174 of 200 requests returning 502**, which is the
+one good thing about the story: the check that measured the damage was already
+written, because the prediction had been written first. On a resource an operator
+templates from, there is no metadata-only field until you have checked what the
+operator copies downstream.
+
+**Two predictions were wrong and they are the most useful output.** The first run
+predicted a 10% canary would split (it silently did not) and that canary traffic
+would 500 at v1's signature. It **404s** — the V2 protocol puts the model name in
+the URL path, so the request is refused as an unknown model before any signature
+is consulted. The schema wall everyone predicts is real and sits *behind* a wall
+nobody mentioned. Both records are kept: the wrong run unedited under
+`attempt1-no-dedicated-service/`, the corrected predictions beside them under
+`superseded_predictions`.
+
+**And the memo did not say what it was pre-registered to say.** The kickoff
+predicted a NO-GO on v1 because v1 is "the known-worse model". The verdict is
+still NO-GO, but the margin is thin: **8.61 vs 8.93 MAE**, champion closer on
+**54.4%** of rows, airports a dead tie (**5.97 vs 5.99**, with the champion
+*behind* on within-five-minutes), and on no-geometry rows the 5-feature model is
+closer more often. Writing "no" for the honest reason — the full holdout already
+answered on 5.9M rows, and nothing here is a reason to CHANGE — is a different
+document from writing "no" because it was expected.
+
+**What to look at.** `automation/runs/m6-spike/canary_spike.json` beside
+`attempt1-no-dedicated-service/canary_spike.json` — read the predictions first,
+then the phases · `docs/decisions/ADR-011-canary-and-shadow-mechanism.md`, whose
+two conditions are the whole deliverable · `docs/shadow_analysis_m6.md` §5, which
+argues why a thin margin does not become a reason to ship · gotchas **#81–#84**.
+
+**What to try yourself.** Apply a canary Ingress at weight 50 pointing at
+`nyc-taxi-eta-shadow-predictor`, then read
+`kubectl -n ingress-nginx exec deploy/ingress-nginx-controller -- curl -s
+http://127.0.0.1:10246/configuration/backends`. Find your canary in it and look at
+`noServer` and `trafficShapingPolicy`. Now add a dedicated Service and do it
+again. The two JSON blobs, side by side, are the entire lesson — and neither
+`kubectl get ingress` nor the controller log distinguishes them.
+
 ### M6-S2 — judgement: what a number needs before it is allowed to be a threshold (2026-08-19, role:SRE)
 
 **What was built.** `docs/slo_serving.md` (four SLOs, every target carrying its
