@@ -1,5 +1,162 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (bi) — M6-S5 leg 1: Gameday 1, the first restore, and two arguments that were not measurements
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE (Accountable),
+MLOps (R)** (charter read at entry; refusals in play: nothing promotes, no
+registry version minted, the cluster never goes down, every wire mutation
+deliberate and recorded).
+Boot reads: CLAUDE.md · HANDOFF (bh) · M6 KICKOFF · AWAITING_PO.
+**Staleness check passed** — tree clean at `ce1703a`, no `automation/STOP`, no
+detached job pending, 3 nodes Ready v1.36.1, `@champion` version 2, all 7 alert
+rules loaded/healthy/inactive, both isvcs (champion + the v1 shadow (bh) left
+running) Ready.
+**M6-S5 LEG 1 COMPLETE. `make verify-m6` IS NOT BUILT — that is the declared leg
+boundary**, the one the M6 kickoff names as legitimate ("gameday complete, gate
+unbuilt … the gate lands as leg 2", the M4-S5 precedent). PR **#38**, merged
+(`5e5a71b`), reachable from origin/main.
+End state is exactly M5's: `@champion` **2**, `features.version` **v2**,
+`make verify-m5` **GREEN 49/49**, `make parity` **0.000e+00** over 16 hazard rows.
+
+### Done
+- **`make gameday` — four scenarios, every prediction on disk BEFORE the first
+  injection** (`automation/runs/m6-gameday/predictions.json`, committed; a unit
+  test asserts the committed file still equals the code's `PREDICTIONS`, so
+  amending one to match an outcome is a RED test).
+  - **Scenario 0, the POSITIVE CONTROL, first** — delegated to M6-S2's
+    `alert_fire_drill.py` rather than re-implemented. **GREEN 11/11**: A-3
+    **T+170.5 s**, A-2 **T+335.6 s**, in the predicted order, both at
+    **Alertmanager**, all five must-not-fire alerts inactive, an ordinary quote
+    answering 39.0019 mid-injection, both clearing **330.1 s** after the stop.
+  - **Scenario 1, kill under load** — **13.75 s** outage (55 of 1,200 requests,
+    52×503 + 3×502), a DIFFERENT pod uid, **no alert fired**, `@champion` 2 → 2.
+  - **Scenario 2, break the storage credential** — **8/8 as predicted**. `403 …
+    HeadBucket: Forbidden` (M5-S2's class exactly), **A-5 at T+150.2 s then A-7
+    at T+210.2 s**, A-2 **inactive through a TOTAL outage** (its documented blind
+    spot demonstrated), the flapping rule inactive because `kserve-container`
+    never started while all three restarts were the INIT container, route 503,
+    undo staged BEFORE the injection and `make serve` exit 0 with both alerts
+    clear inside 30 s.
+  - **Scenario 3, saturation** — **A-6 fired at T+844.3 s = 244.1 + 600.2**,
+    throttled fraction 0 → **0.9996**, client p50 **94,553 ms** vs service p50
+    **1,084 ms** at an achieved 6.775 of 8 req/s.
+- **`make restore-drill` GREEN 17/17 — the first restore this program has ever
+  performed.** mlflow **2.34 s** · optuna **0.78 s** · metabase **7.29 s** into
+  `<db>_restore_drill` scratch databases with `ON_ERROR_STOP=1`; every counted
+  table equal to LIVE; the restored registry carrying the same `champion|2`
+  pointer; the restored studies carrying `automation/runs/m3s4`'s trial counts
+  (9 and 21) — a second witness that is NOT the live database; `flyte-data`
+  restored WHOLE (184 objects / 783,327 bytes); one MLflow artifact
+  byte-identical by sha256. Live databases and buckets untouched, no scratch
+  survived. **Every artifact that said NOT REHEARSED now says
+  scratch-rehearsed 2026-08-19; full restore over a dead platform still not.**
+- **F-041 · F-042 · F-043** · gotchas **#87–#89** · `docs/gameday_m6.md` · dated
+  correction in `docs/slo_serving.md` §3 · corrected A-7 annotation in
+  `infra/monitoring/alerting_rules.yml` · deployments ledger row · CLAUDE.md
+  section, 2 command rows + the backup row, traps paragraph · field note.
+- **789 unit tests** (18 new in `tests/unit/test_gameday_and_restore.py`), ruff
+  clean, CI green.
+
+### Decisions
+- **The positive control is a DELEGATION, not a re-implementation.** M6-S2's
+  drill already fires A-3 and A-2 end to end and its records are tracked; the
+  gameday runs it with `--record` pointed into its own directory, so the control
+  that THIS gameday ran is the one on disk beside its negatives.
+- **No threshold was changed, anywhere.** Two written arguments were corrected
+  and both corrections sit BESIDE the originals (the `error_memo_m2.md` §9
+  precedent) because decisions were made from them. Making A-7 fire before A-5
+  means shortening it to ~1 m on the authority of the number just measured —
+  the edit this program does not make on its own (F-016's precedent) — so it is
+  a recommendation routed to the M6→M7 boundary with its counter-argument.
+- **The captured secret goes to a temp file OUTSIDE the repo**, not into
+  `automation/runs/` where only `*.json` is tracked. A credential must not be one
+  `git add -f` away from a commit; pinned by a test.
+- **`marts` is deliberately excluded from the restore drill** — 1.2 GiB of the
+  1.6 GiB backup and the ONE database provably rebuildable from DVC pins
+  (M1-S5's fresh-volume proof). Restoring it would cost M4-S5's measured 2.075×
+  peak to re-prove a path another proof already covers.
+- **The v1 shadow is STILL RUNNING** and it earned its keep: it is the
+  accidental control in F-043 (same job, same 15 s scrape, idle). `make shadow
+  TEARDOWN=1` removes it; leg 2 should decide whether `verify-m6` wants it.
+
+### Defects/Surprises
+- **F-041 — the wrong prediction that matters.** A-2's and A-5's thresholds were
+  argued from a STEADY-STATE ratio; the kill made the edge 5xx share **peak at
+  0.5000** with A-2 `pending` T+89.2 → 103.2 s and A-5 `pending` T+59.1 →
+  74.1 s. `rate(...[5m])` extrapolates from the samples IN the window, so 30 s
+  into a load run the denominator is 30 s of traffic and nearly all of it is the
+  outage. **The `for:` sustain is what prevents the page, not the threshold** —
+  and an on-call will see both alerts sitting red-and-pending through every
+  ordinary self-heal, which nobody had written down.
+- **The second wrong prediction: saturation DOES produce errors, given time** —
+  **125 × HTTP 502 of 6,240 (2.00%)** where M5-S4's 60-second ramp measured zero
+  at the same rate. Gotcha #74 is refined by DURATION, not reversed: latency
+  first, errors much later, and at 2.00% nowhere near A-2's bar.
+- **F-043 (OPEN, routed to the boundary): the predictor's exporter starves under
+  the condition it exists to report.** A-1 fired at T+349.3 s and **cleared
+  itself at T+514.3 s while the load ran** — the loaded predictor's `/metrics`
+  reached `scrape_duration` **4.613 s with `up == 0`** against the idle shadow's
+  **0.004 s / 1** on the same job. Options costed in the ledger row;
+  recommendation is (c) accept it and say so in the SLO document, because it is
+  the only one true today.
+- **F-042 — A-7's own annotation claimed it fires BEFORE A-5**, and 2m < 3m says
+  it cannot. Both went pending in the same scrape; A-5 won by sixty seconds.
+- **The restore drill's first run went RED on a check that was wrong, not a
+  restore that was**: it compared the Metabase app-db to the repo's boards by
+  COUNT (3/28) and found 4/67 — Metabase's own `E-commerce Insights` example
+  dashboard plus `metabase_boards.py` never deleting (M1-S5's stated asymmetry).
+  Now a subset-by-NAME check. *"The boards are checked-in JSON" is a claim about
+  OUR boards, never that the app-db mirrors the repo.*
+- **One instrument blemish, fixed for future runs and recorded rather than
+  hidden**: `storage.json`'s `init_container_ready_metric: 1.0` is the SHADOW's
+  series — `prom_scalar` takes the first result. The RULE is per-series and fired
+  on the right pod. The query is now scoped to the champion's pods; the record
+  stands as written.
+- **Wall count**: none. Every scenario ran first time; two predictions were wrong
+  by design of the exercise, and the restore drill needed one check corrected.
+
+### Next
+**Executor session → M6-S5 leg 2: `make verify-m6` + `make verify-m6-redteam`,
+then the milestone boundary.** What it inherits, precisely:
+- **Everything the gate must read is a tracked record**: `automation/runs/
+  m6-gameday/{predictions,control,kill,storage,saturation,gameday}.json` ·
+  `automation/runs/m6-restore/restore_drill.json` · `automation/runs/m6-canary/
+  release_drill.json` (90/10 observed) · `automation/runs/m6-rollback/
+  alias_rollback.json` (rollback under load) · `automation/runs/m6-slo/
+  alert-fire-drill.json` · `automation/runs/m6-shadow/` · the M5 load records.
+  **Gotcha #66's regime: read the RECORD, never re-ask the newest run.**
+- **§9/M6's accept-when, quoted**: shadow comparison table with a quantified
+  disagreement rate before the first shift (M6-S3) · canary 90/10 observed
+  (**9.76% / 100% from counters**) · rollback <2 min under load (**35.35 s of
+  moves; the traffic revert is 0.37 s**) · alert fired in a red team (M6-S2's
+  drill AND this gameday's control) · gameday record with predicted-vs-observed
+  and **≥1 prediction wrong and investigated** (two; `gameday.json` carries
+  `accept_bar_met: true`).
+- **Every inherited law**: re-runs nothing expensive, mints nothing it counts, no
+  skip flag, no fast mode (sixth inheritance) · every literal derived on BOTH
+  sides (thresholds READ from `infra/monitoring/alerting_rules.yml` and
+  `docs/slo_serving.md`, never re-typed; the served version from the alias, never
+  "2") · Python legs guarded by `expect_verdicts` · asks the LIVE system for at
+  least one prediction (the verify-m5 §2 shape), one Prometheus query answered,
+  one alert rule loaded · **checks the PROSE against the records** (SLO doc
+  numbers vs load records; the gameday doc's numbers vs the scenario records —
+  `tests/unit/test_gameday_and_restore.py` already does this for the restore
+  half and is the shape to copy) · the red team breaks ONE recorded field or
+  pointer, restores byte-identically under an EXIT trap, RED naming it while
+  untampered sub-checks pass, GREEN after.
+- **A live check worth having that no predecessor gate has**: F-043 gives the
+  gate a cheap, real question — is the predictor's own exporter healthy RIGHT NOW
+  (`scrape_duration_seconds` and `up` for `job="kserve-predictors"`)? It is one
+  query, and it is the signal that went dark during the one event it existed for.
+- **Also open at the boundary**: the admission webhook re-enable (re-routed from
+  S3 and S4, ~15 s outage of the only route in) · F-040's reordered rollback
+  remedy (named, UNPROVEN, needs two alias moves) · `docs/error_memo_m2.md` §7
+  row 2 (the airport gap, now with two independent measurements) · the v1 shadow
+  still running.
+Chain scheduled: `automation/next_session.sh executor 120`.
+
+
 ## Session 2026-08-19 (bh) — M6-S4: two ways to take a change back, and only one is cheap
 
 ### State
