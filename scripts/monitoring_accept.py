@@ -170,7 +170,8 @@ def check_request_becomes_a_number() -> dict:
     quoted = proc.returncode == 0
     # The line that carries the ANSWER, not the last line make happens to print.
     lines = [ln for ln in proc.stdout.splitlines() if "minute" in ln.lower()]
-    answer = lines[-1].strip() if lines else (proc.stdout.strip().splitlines() or ["(no output)"])[-1]
+    fallback = (proc.stdout.strip().splitlines() or ["(no output)"])[-1]
+    answer = lines[-1].strip() if lines else fallback
     if quoted:
         ok(f"one real quote sent through the live endpoint: {answer[:120]}")
     else:

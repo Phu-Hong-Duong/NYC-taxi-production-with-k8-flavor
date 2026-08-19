@@ -7,6 +7,80 @@ months from now.
 
 ---
 
+## M6
+
+### M6-S1 — the eyes, and three things that looked completely fine (2026-08-19, role:SRE)
+
+**What was built.** `make deploy-monitoring` — Prometheus 29.27.0 (v3.14.0) +
+Alertmanager + kube-state-metrics + Grafana 10.5.15 (12.3.1) on the existing
+cluster, reached through the existing 8081 route by host, with a serving board
+provisioned from checked-in JSON. Plus two small instruments that turned out to
+matter more than the stack: `make probe-mlserver-metrics` (where are the metrics,
+actually?) and `scripts/route_availability_probe.py` (what did that change cost
+the route?). And `make monitoring-accept`, which is the part worth reading.
+
+**Why this way.** Three choices, and the third is the one to take away.
+
+*The small chart, not the operator.* `kube-prometheus-stack` is the reflex answer
+and it brings ~10 CRDs plus a controller whose whole job is to turn ServiceMonitor
+objects into the nine-line scrape config that now sits in a values file. Two costs
+made the decision, and neither is aesthetic: CRDs are cluster-scoped state on a
+cluster this program is not allowed to rebuild, and the alert rules landing next
+story would have become objects **living in the cluster** — when the rule since
+M1-S5 has been that what renders is checked in and converged. The heavier chart is
+written down as the fallback if the lighter one ever hits its three-attempt wall.
+
+*The port was asked, not read.* The kickoff said the predictor's metrics were
+*believed* to be on 8082 and said to probe. KServe stamps its own answer on the
+pod — `prometheus.kserve.io/port: "8080"` — and that port returns **404** on this
+runtime, while 8082 returns 200 with 24 series. Believing the platform's own
+annotation would have produced a target that is permanently down and a board of
+empty rectangles. The probe stays in the repo and a test fails if it is deleted,
+because a pinned number whose measurement has been thrown away is just a memory.
+
+*The accept check refuses to be a target list.* `up == 1` proves Prometheus can
+open a socket. It is exactly as green when the counter it scrapes never moves. So
+the check reads the inference counter, **sends one real quote**, waits for a
+scrape, and requires the number to move — and then parses **every panel's PromQL
+out of the dashboard JSON** and executes it. That is where the session's real
+lesson arrived: the first run was GREEN with three panels reporting "0 series",
+under a message I had written myself saying that was legal. Three different real
+defects were hiding inside that sentence — the ingress metrics Service was never
+*discovered* (the chart annotates it with nothing, and discovery keys on exactly
+that annotation), `rate(x[1m])` at the chart's 1-minute scrape interval evaluates
+to **nothing at all**, and one target was genuinely down behind an rbac-proxy.
+Zero series is now a FAILURE.
+
+**The concept underneath.** *Absence renders identically to calm.* An empty panel,
+a scrape target that was never created, a rollout that is Pending forever — each
+of them presents as a system with nothing wrong with it, and each of them is
+measured by an instrument that reports success. The ingress rollout is the purest
+version: enabling metrics deadlocked the controller (hostPort + one replica + a
+single-node selector means the surge pod can never bind port 80), the new pod sat
+Pending for ten minutes, and a 420-second availability probe recorded **840/840
+ok** — because the OLD pod was serving perfectly. The zero-outage measurement was
+the strongest possible evidence for the wrong conclusion. The question that
+catches all of these is the same one #59 asks and #51 generalises: *what positive
+artifact would exist if this had actually worked?* For a rollout it is a new pod
+**age**. For a metrics pipeline it is a counter that **moved**. For a panel it is
+a **series**. None of those is "no error occurred".
+
+**What to look at.** `docs/monitoring_m6.md` §4 (the deadlock, with the probe
+output that argued for the wrong conclusion) and §5 (the three zeros) ·
+`scripts/monitoring_accept.py`, specifically the comment where the lenient version
+used to be · `infra/helm/ingress-nginx/values.yaml`'s `updateStrategy` block,
+which states an unavoidable cost rather than a preference · gotchas **#77** and
+**#78** · findings **F-033** and **F-034**.
+
+**What to try yourself.** Set `server.global.scrape_interval` back to `1m`,
+re-run `make deploy-monitoring` (no restart is needed — the configmap-reload
+sidecar picks it up), and watch `make monitoring-accept` go red on exactly the
+panels whose windows can no longer hold two samples. Then put it back and, this
+time, look at the board in Grafana while it is wrong: the panels do not say
+"misconfigured", they say nothing at all, which is the entire point.
+
+---
+
 ## M5
 
 ### M5-S5 — a rollback is not a pointer move, and a runbook is only as true as the record it quotes (2026-08-19, role:SRE)
