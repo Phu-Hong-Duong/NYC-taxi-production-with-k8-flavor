@@ -277,9 +277,25 @@ class Endpoint:
     name: str
     namespace: str
     route: str = DEFAULT_ROUTE
+    #: The Host header, when it is NOT derivable from the model name — M6-S4.
+    #:
+    #: Until the canary, every target in this program had one name that served
+    #: two purposes: the V2 model name in the URL path AND the KServe-generated
+    #: hostname. The canary breaks that on purpose. Its InferenceService is
+    #: `nyc-taxi-eta-canary`, so its host is `nyc-taxi-eta-canary-serving.local`
+    #: — but it must answer to the model name `nyc-taxi-eta`, because rider
+    #: traffic split onto it by a canary Ingress arrives at
+    #: `/v2/models/nyc-taxi-eta/infer` and a canary Ingress cannot rewrite the
+    #: path (ADR-011 condition 2, measured: 404, and `rewrite-target` moved it 0
+    #: points). The override is how a client addresses that pod DIRECTLY —
+    #: which is the only way to check the canary's own answer without going
+    #: through the split and losing the attribution.
+    host_override: str | None = None
 
     @property
     def host(self) -> str:
+        if self.host_override:
+            return self.host_override
         return DEFAULT_HOST_TEMPLATE.format(name=self.name, namespace=self.namespace)
 
     @property

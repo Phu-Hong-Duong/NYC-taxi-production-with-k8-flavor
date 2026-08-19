@@ -1,0 +1,45 @@
+# The canary's DEDICATED backend Service (M6-S4) — ADR-011 condition 1, in one object.
+#
+# WHY THIS EXISTS AT ALL, GIVEN THAT KSERVE ALREADY MADE A SERVICE FOR THE CANARY.
+# ingress-nginx keys its backends by `<namespace>-<service>-<port>` and a backend
+# holds exactly ONE role. KServe RawDeployment generates an Ingress per
+# InferenceService, so `serving-nyc-taxi-eta-canary-predictor-80` is already
+# registered as an ORDINARY backend the moment the canary exists. Naming it from
+# a canary Ingress as well does not make it a canary — the ordinary registration
+# wins, `noServer` stays false, and the traffic-shaping policy reads
+# `{weight: 0, weightTotal: 0}`.
+#
+# M6-S3 measured that failure and it is the reason this file is here: at weight
+# 50, **0 of 200 requests moved**, with the canary LINK genuinely present in the
+# champion's `alternativeBackends` and no error in any log. A canary that is
+# configured, linked, logged clean and completely inert is the worst shape a
+# release mechanism can have, and it is the natural implementation on this
+# platform. With a dedicated Service the same Ingress moved **100 of 200**,
+# `noServer: true`, `{weight: 50, weightTotal: 100}`.
+#
+# THE SELECTOR IS COMMITTED HERE AND ASSERTED AT RUN TIME. `app:
+# isvc.<isvc>-predictor` is KServe's convention, not a contract, so
+# `scripts/canary_release_drill.py` reads the selector off the canary's OWN
+# generated Service and REFUSES if it differs from this file. Deriving it in code
+# alone would keep it out of review; typing it alone would let a KServe labelling
+# change turn this into a Service that selects nothing — which fails as a 503
+# blamed on the canary pod rather than on the selector.
+#
+# NOTHING ELSE MAY NAME THIS SERVICE. That is the whole property. It exists so
+# that exactly one Ingress — the canary one — refers to it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: nyc-taxi-eta-canary-backend
+  namespace: serving
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+    crosstown.io/serving-role: canary-backend
+spec:
+  selector:
+    app: isvc.nyc-taxi-eta-canary-predictor
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080

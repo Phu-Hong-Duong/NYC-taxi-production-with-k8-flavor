@@ -1246,3 +1246,38 @@ the seed line are earned by THIS project.
     deploy. Wait on the route by ASKING it — `/v2/models/<name>/ready` through the
     real host header is the only instrument that answers the question the accept
     check is about to ask (F-037).
+
+85. **A hand-authored object must not take a name an operator generates — the
+    collision is accepted, works for seconds, and then undoes itself.** The
+    first canary release drill named its Ingress `nyc-taxi-eta-canary`, which is
+    exactly what KServe RawDeployment generates for the InferenceService of that
+    name. `kubectl apply` returned success, the canary annotations sat on the
+    **controller-owned** object, and the controller reconciled them away —
+    **0 of 420 requests moved at weight 10, 3 of 300 at weight 100**, no error
+    anywhere. The three that moved are the window between the apply and the
+    reconcile, which is the only tell there is. Worse, the symptom is
+    byte-for-byte #81's (a canary pointed at a Service some other Ingress
+    claims), and this program had just spent a story learning #81 — so the
+    obvious diagnosis was the wrong one. Two cheap habits close it:
+    `kubectl get <kind> <name> -o jsonpath='{.metadata.ownerReferences[*].name}'`
+    before writing to anything you did not create, and a precondition that reads
+    the CONTROLLER's runtime state (`noServer: true` plus the applied weight)
+    rather than the annotation you just applied. **What caught it was measuring
+    the split from counters instead of from its own configuration** — the same
+    discipline #81 bought, paying for itself against a different cause (F-039).
+
+86. **"A deploy costs 0.5 s" is not "a rollback costs 0.5 s" — and the
+    asymmetry is in the SCHEMA, not the pod.** #80 established that re-deploying
+    a model costs 0.5 s at one replica. A rollback is three moves, and the second
+    one — moving `configs/train.yaml: features.version` — changes what every
+    client on the wire SENDS, while the pod still holds the old model. Measured:
+    **v2 → v1 cost 27.93 s of failing requests** (55 of 85 probes, almost all
+    `HTTP 500` at MLflow's logged signature), against **0.501 s and a single 502**
+    for v1 → v2. The direction that hurts is the one that REMOVES features: a
+    24-column request sent to a 5-column model is tolerated, because the
+    signature takes the columns it names and ignores the rest, while a 5-column
+    request to a 24-column model is missing inputs and is refused. So the cost of
+    a config-coupled rollback is bounded by the DEPLOY, not by the swap — and the
+    remedy that follows (deploy first, move the config line last) is a
+    consequence of the measurement and must be rehearsed before it is trusted,
+    not substituted mid-incident (F-040).

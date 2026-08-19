@@ -623,11 +623,37 @@ try:
     else:
         no("the runbook's rollback section does not type the alias move, the feature-set config "
            "line and the re-deploy")
-    if re.search(r"NOT\s+REHEARSED", body, re.I) and re.search(r"NOT\s+REHEARSED", runbook, re.I):
-        ok("the rollback says NOT REHEARSED in its own section — the M4-S2 backup precedent")
+    # THE ROLLBACK MUST DECLARE ITS REHEARSAL STATUS, AND THE CHECK IS THE
+    # PROPERTY RATHER THAN THE WORD IT USED TO SAY (F-017, gotchas #49/#50).
+    #
+    # This asserted `NOT REHEARSED` until M6-S4 ran the rollback for real, at
+    # which point a correct, honest, better runbook would have turned it RED —
+    # the exact shape that trains the next session to edit assertions. What must
+    # hold at every state is that the section says WHICH it is, and that a claim
+    # of REHEARSED is backed by a record this repo holds (the M4-S2 backup
+    # precedent, in the form that survives the rehearsal happening).
+    #
+    # The status is read off the section's own HEADING and nowhere else. A body
+    # search cannot tell "this procedure has never been run" from "the mitigation
+    # named in the last paragraph has never been run" — and §4 now legitimately
+    # contains both sentences, which is exactly how the first version of this
+    # repair reported a rehearsed rollback as un-rehearsed.
+    heading = body.splitlines()[0] if body else ""
+    unrehearsed = re.search(r"NOT\s+REHEARSED", heading, re.I)
+    rehearsed = re.search(r"(?<!NOT\s)REHEARSED\s+(\d{4}-\d{2}-\d{2})", heading, re.I)
+    cited = re.findall(r"automation/runs/[\w./-]+\.json", body)
+    if unrehearsed:
+        ok("the rollback's heading says NOT REHEARSED — the M4-S2 backup precedent")
+    elif rehearsed and any(Path(c).exists() for c in cited):
+        held = [c for c in cited if Path(c).exists()]
+        ok(f"the rollback is declared REHEARSED {rehearsed.group(1)} and cites a record this "
+           f"repo holds ({', '.join(held)}) — a rehearsal claim with evidence behind it")
+    elif rehearsed:
+        no(f"the rollback claims REHEARSED {rehearsed.group(1)} but cites no record that "
+           f"exists (cited: {cited or 'nothing'}) — a claim of proof needs the proof")
     else:
-        no("the rollback does not state that it has never been run — an un-rehearsed path must "
-           "say so in every artifact")
+        no(f"the rollback's heading ({heading.strip()!r}) declares neither NOT REHEARSED nor a "
+           "dated rehearsal — an operator cannot tell argued from proven")
 
     # The numbers a runbook quotes must be the numbers the records hold. A
     # runbook quoting a hope is the failure mode this check exists for.

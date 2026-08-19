@@ -69,6 +69,12 @@ from taxi_mlops.features import quote_time, sets
 from taxi_mlops.serving.client import Endpoint, QuoteRequest, build_matrix, v2_payload
 
 RECORD = Path("automation/runs/m6-spike/canary_spike.json")
+# NOTE (M6-S4, F-039): this name is safe only while no InferenceService is called
+# `nyc-taxi-eta-canary` — KServe generates an Ingress named after the isvc, and
+# writing canary annotations onto a controller-owned object is accepted and then
+# reverted, silently. M6-S4's own route is `nyc-taxi-eta-canary-route` for exactly
+# that reason. Re-running this SPIKE while `make canary-deploy` is up would
+# reproduce F-039 rather than ADR-011 condition 1; tear the canary down first.
 CANARY_INGRESS = "nyc-taxi-eta-canary"
 CANARY_SERVICE = "nyc-taxi-eta-canary-backend"
 CHAMPION_ISVC = "nyc-taxi-eta"

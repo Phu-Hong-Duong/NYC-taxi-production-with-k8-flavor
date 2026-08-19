@@ -9,6 +9,98 @@ months from now.
 
 ## M6
 
+### M6-S4 — the release rehearsal: two ways to take a change back, and only one of them is cheap (2026-08-19, role:SRE/MLOps)
+
+**What was built.** `make canary-deploy` (a second InferenceService carrying the
+champion's own bytes, plus the dedicated backend Service ADR-011 condition 1
+demands), `make canary` (10% → 100% → revert under one continuous load run, the
+split read from counters), `make rollback` (the runbook's §4 alias rollback, run
+for real in both directions), and `scripts/canary_split_paste.py` so the board and
+the record are not two different claims. Runbook §4 flipped from **NOT REHEARSED**
+to **REHEARSED 2026-08-19** with a table of measured costs, and gained a §4.5 for
+the traffic path.
+
+**The thing worth taking away.** *A system has more than one undo, and they do not
+cost the same.* Both rehearsals in this story take a change back. Deleting the
+canary Ingress took **0.37 seconds** and cost **zero requests**. Rolling
+`@champion` from version 2 to version 1 took **35 seconds of moves and 27.93
+seconds of failing requests**. Same cluster, same minute, same operator — a
+factor of about seventy-five between them, and nothing in either procedure's
+*text* tells you which is which. You find out by running them and holding a
+stopwatch, which is the entire argument for rehearsing a runbook rather than
+writing one.
+
+The runbook now says **prefer the traffic revert**, and that sentence is worth
+more than either measurement on its own: it is the operational conclusion the
+numbers license, written where a person under pressure will read it.
+
+**Why the rollback is expensive, and it is not the pod.** Gotcha #80 had already
+established that re-deploying a model costs 0.5 s — at one replica
+`maxUnavailable` floors to zero, so a surge pod must be ready before the old one
+goes. So the natural prediction was that a rollback costs about 0.5 s too. It
+does not, because a rollback here is *three* moves and the second one changes
+what every client SENDS. The instant `configs/train.yaml: features.version`
+becomes `v1`, the wire carries a 5-column matrix while the pod still holds the
+24-column model, and MLflow's logged signature refuses it — `HTTP 500`, for as
+long as the deploy takes.
+
+And then the asymmetry, which nobody predicted: **rolling FORWARD cost 0.501
+seconds and a single 502.** A 24-column request sent to a 5-column model is
+tolerated — MLflow takes the columns its signature names and ignores the rest —
+while a 5-column request to a 24-column model is missing inputs and is refused.
+*Removing features breaks requests in flight; adding features does not.* That is
+a fact about MLflow signatures with an immediate operational consequence, and it
+suggests a fix (deploy first, move the config line last) which this story
+deliberately did **not** adopt: it follows from one measurement, it has never
+been run, and M6 sanctions exactly two alias moves. A named remedy is not a
+proved one — the same discipline ADR-011 used for `MLSERVER_MODEL_NAME`, which
+this story then went and proved.
+
+**The second lesson is about diagnosis under a fresh prior.** The first canary
+run moved **0 of 420 requests** — and M6-S3 had just spent a whole story
+establishing that a canary moves 0% when it points at a Service some other
+Ingress claims. Every instinct said condition 1. It was not condition 1. The
+Ingress had been named `nyc-taxi-eta-canary`, which is exactly the name KServe
+generates for the InferenceService of that name, so `kubectl apply` wrote the
+annotations onto the controller's own object and the controller quietly reverted
+them (F-039, gotcha #85). The tell was three requests of three hundred slipping
+through at weight 100 — the seconds between the apply and the reconcile.
+
+*The most recent lesson is the most available explanation, and availability is
+not evidence.* What actually resolved it was the same habit that resolved M6-S3:
+measure the split from a counter rather than from the configuration you just
+applied. The discipline was right; the diagnosis it enabled was a different bug
+than the one it was learned on.
+
+**The third lesson: a guard that fires when you do the right thing.** `verify-m5`
+asserted that the runbook says `NOT REHEARSED`. Rehearsing the rollback — the
+whole point of the story — would have turned that check RED for an improvement.
+That is gotcha #50 for the fifth time, and the repair is always the same shape:
+replace the literal with the property. The section must now *declare its status*,
+and a claim of REHEARSED must cite a record this repo holds. The first attempt at
+that repair searched the section BODY and reported a rehearsed rollback as
+un-rehearsed, because §4 legitimately contains both "REHEARSED 2026-08-19" and a
+sentence about an un-rehearsed mitigation. Anchoring on the heading is what
+distinguishes a status from a mention.
+
+**What to look at.** `automation/runs/m6-canary/release_drill.json` beside
+`automation/runs/m6-canary/attempt1-ingress-name-collision/release_drill.json` —
+the same drill, one green and one 0%, and the difference is a name ·
+`automation/runs/m6-rollback/alias_rollback.json`, whose per-0.5 s probe log lets
+you re-derive the 27.93 s yourself and see the `HTTP 500`s turn into a single
+`HTTP 502` · `docs/runbooks/serving.md` §4 and §4.5 as a pair — two undos, priced
+· `scripts/canary_release_drill.py`'s `apply_weight`, where the precondition
+lives.
+
+**What to try yourself.** Run `make canary DRILL_ARGS=--dry-run` and read the
+prediction file before reading any result — then ask which of the seven
+predictions you would have got wrong. Then rename the Ingress in
+`infra/manifests/canary-ingress.yaml` back to `nyc-taxi-eta-canary` and run
+`uv run pytest tests/unit/test_canary_and_rollback.py -q`: the test derives the
+forbidden name from the isvc manifest, so it goes red without either name being
+typed into it.
+
+
 ### M6-S3 — the spike and the shadow: what "configured" is worth (2026-08-19, role:SRE/MLOps/DA)
 
 **What was built.** A second model on the wire — `make shadow` puts registry

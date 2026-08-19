@@ -108,15 +108,42 @@ of magnitude and both are a **full outage**: one replica, no canary.
 
 ---
 
-## 4. Rollback to version 1 — TYPED, **NOT REHEARSED**
+## 4. Rollback to version 1 — **REHEARSED 2026-08-19**
 
-> **Not rehearsed.** These commands have never been run end to end on this
-> cluster. M5 is legislated alias-neutral (kickoff law 2: `@champion` is
-> version 2 and stays version 2), so rehearsing the rollback would have cost
-> exactly the thing the milestone forbids. Treat the sequence as *argued and
-> typed*, not as *proven* — the same honesty `scripts/platform_backup.sh` states
-> about restore. **The first person to run it should record what actually
-> happened, in this file.** A rehearsal is a named M6-gameday candidate.
+> **Rehearsed, both ways.** Record: `automation/runs/m6-rollback/alias_rollback.json`
+> · re-runnable: `make rollback`. M6-S4 ran this exact sequence v2→v1 and then
+> v1→v2, timing every move, with the route probed twice a second throughout.
+> It said "TYPED, **NOT REHEARSED**" from M5-S5 until then, for a reason that
+> was correct at the time — M5 was legislated alias-neutral, so rehearsing it
+> would have cost exactly the thing that milestone forbade.
+>
+> **What it cost, measured:**
+>
+> | | move the alias | move the config line | `make serve` | **total** | **route outage** |
+> |---|---|---|---|---|---|
+> | v2 → v1 (rollback) | 0.050 s | <0.001 s | 35.30 s | **35.35 s** | **27.93 s** — 55 of 85 probes failed |
+> | v1 → v2 (roll forward) | 0.034 s | <0.001 s | 34.34 s | **34.38 s** | **0.50 s** — 1 of 81 probes failed |
+>
+> **A ROLLBACK IS NOT A 0.5 s RE-DEPLOY, AND THE ASYMMETRY IS THE POINT (F-040).**
+> §4.4 used to guess "expect longer than 18.24 s"; the real number is **27.93 s
+> of failing requests**, and it is not the pod swap. It is step 4: the moment
+> `features.version` moves to `v1`, every client on the wire starts sending a
+> **5-column** matrix while the pod still holds the **24-column** model, and
+> MLflow's logged signature refuses it — `HTTP 500` until the replacement pod
+> answers, then `HTTP 502` for the swap itself. Rolling FORWARD costs almost
+> nothing (**0.50 s, one 502 — gotcha #80's re-deploy cost exactly**) because a
+> 24-column request sent to the 5-column model is *tolerated*: MLflow takes the
+> columns its signature names and ignores the rest. **Removing features breaks
+> requests in flight; adding features does not.**
+>
+> **The obvious mitigation is NOT rehearsed and must not be assumed.** Reordering
+> the moves — alias → `make serve` → *then* the config line — should collapse the
+> window to the 0.5 s swap, because clients would keep sending 24 columns to a
+> 5-column model until the new pod is up. That follows from the measurement
+> above and from nothing else; it has never been run, it would cost two more
+> alias moves, and M6-S4's kickoff sanctions exactly two. **Do not silently
+> substitute it during an incident.** It is routed to M6-S5 as a gameday
+> candidate and recorded as F-040's named-but-unproven remedy.
 
 ### 4.1 A rollback here is NOT just a pointer move — this is the finding
 
@@ -193,11 +220,62 @@ be a deliberate, recorded act.
   today's configured floor — F-012 by design). That refusal is correct; it is
   telling you the published rows and the serving model were argued against
   different bars.
-- **Expect longer than 18.24 s to come back.** The storage-initializer must
-  download a *different* prefix from MinIO. It is not cached on the node, and
-  no measurement of it exists.
+- **Expect ~28 s of failing requests, not ~18 s and not 0.5 s** — measured
+  2026-08-19, see the table at the top of §4 and F-040. Most of it is the
+  schema gap opened by step 4, not the pod swap.
 - **Rolling forward is the same procedure with `'2'`** — and version 2's
-  `feature_set` tag says `v2`. Nothing about the sequence is one-directional.
+  `feature_set` tag says `v2`. Nothing about the sequence is one-directional,
+  and that claim is now measured rather than asserted: leg 2 of the rehearsal
+  ran the identical three moves back. It is not, however, symmetric in COST —
+  0.50 s against 27.93 s.
+
+### 4.5 Shifting traffic instead of switching it — REHEARSED 2026-08-19
+
+A rollback replaces what serves. A canary moves a *share* of riders to a second
+InferenceService and can be undone without touching the champion at all. Record:
+`automation/runs/m6-canary/release_drill.json` · re-runnable: `make canary-deploy`
+then `make canary`.
+
+```bash
+make canary-deploy      # a second isvc + its DEDICATED backend Service. No traffic.
+make canary             # 10% -> 100% -> revert, under load, split read from counters
+make canary-deploy TEARDOWN=1
+```
+
+Two conditions, both measured at M6-S3 (ADR-011) and both mandatory:
+
+1. **The canary needs its OWN backend Service.** Pointed at the Service KServe
+   generated for it, the weight is discarded *silently* — 0 of 200 moved,
+   `{weight: 0, weightTotal: 0}`, no error anywhere.
+2. **Both backends must serve the same V2 model name**, because the name is in
+   the URL path. `MLSERVER_MODEL_NAME: nyc-taxi-eta` on the canary isvc is what
+   makes that true, and it is now proved: the canary answers `/v2/models/
+   nyc-taxi-eta/infer` and 404s on its own isvc name.
+
+**And the hand-written route must not take a KServe-generated name (F-039).**
+The Ingress is `nyc-taxi-eta-canary-route`, not `nyc-taxi-eta-canary` — the
+latter is owned by the canary InferenceService, so `kubectl apply` writes your
+annotations onto the controller's object and the controller undoes them within
+seconds. **Observed cost: 10% moved 0%, and nothing said so.**
+
+Measured (4 req/s, hazard mix, one continuous 6-minute load run):
+
+| weight | ingress counter | the two pods' own counters | failed requests |
+|---|---|---|---|
+| none | 0 of 177 | 204 / 0 | 0 |
+| 10 | **41 of 420 = 9.76%** | 379 / 39 = **9.33%** | 0 |
+| 100 | **301 of 301 = 100%** | 0 / 240 = **100%** | 0 |
+| reverted | 0 of 300 | 300 / 0 | 0 |
+
+**The revert is one deletion and it took 0.37 s** for the controller to drop the
+backend — against §9/M6's 2-minute budget, and against the rollback's 27.93 s.
+**Prefer the traffic revert.** `kubectl -n serving delete ingress
+nyc-taxi-eta-canary-route` is the whole of it, and it costs no requests.
+
+**Never read the split from the annotation.** It is an intent; condition 1's
+failure is invisible in it. `nginx_ingress_controller_requests{canary!=""}` is
+the router's own count, and the predictors' `rest_server_requests_total` is a
+second witness from a different process.
 
 ---
 
@@ -254,11 +332,19 @@ a number; quote them together or not at all.
 
 ## 8. What is NOT rehearsed (the honest list)
 
-1. **The rollback in §4** — typed, argued, never run. M6 gameday candidate.
+1. **Reordering §4's moves** (alias → `make serve` → config line) to collapse
+   the 27.93 s window. It follows from F-040's measurement and has never been
+   run; M6-S5 gameday candidate. **The rollback ITSELF is rehearsed** as
+   written — 2026-08-19, both directions, §4's table.
 2. **Platform restore** from `make backup`'s dumps — never restored; every
    backup artifact says so (M4-S2).
-3. **Canary / shadow / traffic shift** — no mechanism exists in Standard mode.
-   M6 owns the spike and the decision.
+3. **A canary carrying a DIFFERENT model.** The traffic split is rehearsed
+   (M6-S4: 10% → 100% → revert, observed from counters, `make canary`) but the
+   canary carried the champion's own bytes, because M6-S3's DA memo returned
+   NO-GO for v1. A challenger with a different signature cannot share the split
+   at all until it serves the same V2 model name (ADR-011 condition 2) — the
+   `MLSERVER_MODEL_NAME` override that makes it possible is proved, a differing
+   *signature* behind it is not.
 4. **Node loss** — only pod loss has been drilled. The predictor image is on
    all three nodes, which is what makes a reschedule survivable, but nothing has
    tested a node going away.

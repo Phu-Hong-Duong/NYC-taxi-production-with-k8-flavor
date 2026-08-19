@@ -1720,6 +1720,77 @@ can never disagree (the port-family twins lesson, applied before it bit).
   route in — and **S4 hand-authors the same objects again**, so the outage is
   better spent once, there. Argued in ADR-011, routed to M6-S4.
 
+## The release rehearsal (M6-S4) — traffic that moved, and what a rollback really costs
+- **`make canary` shifted rider traffic 10% → 100% → back, and ZERO of 1,440
+  requests failed.** One continuous 6-minute open-loop run at M5-S4's headline
+  shape (4 req/s, concurrency 8, hazards), with the weight changed from inside
+  the load client's own per-second callback so the split and the latencies share
+  one clock. Observed **from counters, never from the annotation**: ingress
+  `canary` label **41/420 = 9.76%** at weight 10 and **301/301 = 100%** at 100,
+  corroborated by the two predictors' OWN `rest_server_requests_total` at
+  **9.33%** and **100%** — two processes counting the same requests, which is
+  what makes a claimed split checkable. **The revert is 0.37 s** (one
+  `kubectl delete ingress`, timed against the controller's own
+  `/configuration/backends` polled at 0.25 s) against §9/M6's 120 s budget, and
+  it costs no requests — so the runbook now says **prefer the traffic revert**.
+  The champion's predictor kept the same UID throughout: an Ingress edit reloads
+  nginx and touches no pod, which is exactly what F-038 proved an **isvc**
+  annotation does not.
+- **ADR-011 condition 2's remedy is PROVED, both ways.** `MLSERVER_MODEL_NAME:
+  nyc-taxi-eta` on the canary isvc wins KServe's merge (checked on the
+  Deployment object) and the canary answers `/v2/models/nyc-taxi-eta/infer` with
+  **39.0019 minutes** on its own host while **404ing on its own isvc name** —
+  the negative half, because a runtime answering to both names would pass a
+  positive-only check and prove nothing about which name carried the request.
+- **F-039 cost the first run and is the story's best find: a hand-authored
+  Ingress must not take a KServe-GENERATED name.** The route was called
+  `nyc-taxi-eta-canary`, which is what KServe generates for the isvc of that
+  name; `kubectl apply` wrote the canary annotations onto the controller's own
+  object and the controller reverted them — **0 of 420 moved at weight 10, 3 of
+  300 at weight 100**, no error anywhere. The symptom is byte-for-byte ADR-011
+  condition 1's, which this program had just spent a story learning, so the
+  obvious diagnosis was the wrong one. Route renamed `…-canary-route`; the drill
+  now REFUSES to weight an Ingress carrying `ownerReferences` and requires the
+  controller to register `noServer: true` at the applied weight first — a
+  one-second precondition where the symptom cost a six-minute run. Kept unedited
+  at `automation/runs/m6-canary/attempt1-ingress-name-collision/`.
+- **The canary carried the CHAMPION'S OWN BYTES**, because M6-S3's DA memo
+  returned NO-GO for v1. Honest cost, stated: both backends serve version 2
+  under one model name, so **every response in the record carries
+  `model_version: 2` and that is NOT evidence no traffic moved**. M6-S3 could
+  attribute at the client only because its canary was broken.
+- **F-032's un-rehearsed half is RUN — `make rollback`, both ways, PASS 10/10 —
+  and F-040 is what it found.** v2→v1: alias 0.050 s · config <0.001 s ·
+  `make serve` 35.30 s = **35.35 s**, with **27.93 s of failing requests (55 of
+  85 probes)**. v1→v2: **34.38 s** and **0.501 s, one 502**. Gotcha #80's 0.5 s
+  is what a re-DEPLOY costs; a ROLLBACK's cost is the second move. The instant
+  `features.version` becomes `v1`, every client sends a 5-column matrix while
+  the pod still holds the 24-column model and the logged signature refuses it
+  (`HTTP 500`) — leg 1's error classes are `['HTTP 500','HTTP 502']`, leg 2's is
+  `['HTTP 502']` alone. **Removing features breaks requests in flight; adding
+  features does not**, because MLflow takes the columns its signature names and
+  ignores the rest. The remedy (alias → `make serve` → config line last) is
+  **named and UNPROVEN** — it needs two more alias moves and M6 sanctions two —
+  so it is in §4 labelled do-not-substitute-mid-incident and routed to M6-S5.
+- **The M5 gate was run at a state it was never written for, and that is the
+  point.** At `@champion` = version 1 `verify-m5` went **RED with 3 FAILs while
+  §2's coherence check stayed GREEN at `v1`** — green at v2 alone is satisfiable
+  by a literal. Two of the three failures were the gate ASKING the endpoint for
+  a prediction and noticing a different model serves; the drill's prediction had
+  said "only about the bake-off winner" and that is kept as a superseded
+  prediction. **The check was corrected and the verdict RE-JUDGED from the
+  recorded evidence** (`--rejudge`, the `verify-m3` replay idiom) rather than by
+  spending two more sanctioned alias moves.
+- **`verify-m5`'s own NOT-REHEARSED assertion was gotcha #50 waiting to fire.**
+  Running the rollback correctly would have turned it RED. It now reads the §4
+  HEADING (not the body — §4 legitimately contains both "REHEARSED 2026-08-19"
+  and a sentence about an un-rehearsed mitigation, and the first repair got that
+  wrong) and requires a dated rehearsal claim to cite a record this repo holds.
+- **End state is exactly M5's**: canary torn down, `@champion` **2**,
+  `features.version` **v2**, `configs/train.yaml` byte-identical by
+  `git hash-object`, `make verify-m5` **GREEN**, `make parity` **0.000e+00** over
+  16 hazard rows. The v1 shadow is deliberately LEFT RUNNING for M6-S5.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1843,6 +1914,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The v1 shadow on the wire (M6-S3) | `make shadow` (`DRY_RUN=1` previews, `TEARDOWN=1` removes, `SHADOW_VERSION=N` picks the version) | VERIFIED 2026-08-19 (M6-S3): `models:/nyc-taxi-eta/1 -> run 3adee05a…`, feature set **`v1` read from the version's OWN tag**, `s3://mlflow-artifacts/2/models/m-4a4e7bdc…/artifacts` downloaded, predictor Ready on `mlops-taxi-worker2`, and the accept check is a **PREDICTION in the shadow's own 5-column matrix** — `2019-07-04T09:15:00, zone 132 -> 48 -> 64.1043 minutes`, `model_version: 1`, against the champion's 39.0019 for the identical request. `@champion` version **2** read before AND after (a move exits 2), and the champion re-quoted on its own host at the end. **TEARDOWN proven**: deleting the isvc took its Deployment, Service and Ingress with it while the champion's three objects stayed at 9h age — which is the evidence that the shadow deploy never touched it. Its first run 404'd over a healthy service because the ISVC reports Ready before nginx has loaded the generated Ingress — **F-037**, fixed with a third wait leg that asks the route |
 | Dual-send the shadow, write the disagreement table (M6-S3) | `make shadow-run` (`SHADOW_ARGS="--rows-per-segment N"`; a READER — deploys nothing, moves no alias) | VERIFIED 2026-08-19 (M6-S3): **1,016 rows** (250 each ordinary/airport/no-geometry/long-trip + parity's 16 hazards) sent to BOTH endpoints, each matrix built through the ONE feature path — v1's 5 columns, v2's 24. Champion MAE **8.61** vs shadow **8.93**, champion closer on **54.4%**; long_trip mean \|d\| **2.65** max **36.42** champion closer **63.6%**; **airport 5.97 vs 5.99** (a tie, and the champion is behind on within-5-min); no_geometry champion closer **47.6%** (the shadow wins). Served versions read off the ANSWERS: champion `2`, shadow `1`. Record + row-grain CSV in `automation/runs/m6-shadow/` |
 | ADR-004's canary spike, MEASURED (M6-S3) | `make canary-spike` (`SPIKE_ARGS=--dry-run` writes the prediction and applies nothing) | VERIFIED 2026-08-19 (M6-S3): **PASS 7/7**, ~4 min, prediction on disk BEFORE anything was applied. Shared Service **0 of 200** moved (`{weight: 0, weightTotal: 0}` — silent) · dedicated Service **100 of 200** (`noServer: true`, `{weight: 50, weightTotal: 100}`) · canary traffic **404** (the V2 model name is in the URL path) · `rewrite-target` **0 points** of change · `mirror-target` on the KServe-owned Ingress survived a reconcile AND produced a real nginx `mirror` directive · end state **200/200 champion**. Cleans up under a `finally` block. **Its first run is kept unedited** at `automation/runs/m6-spike/attempt1-no-dedicated-service/` — two wrong predictions and a self-inflicted outage (F-038) |
+| The canary PATH (M6-S4) | `make canary-deploy` (`DRY_RUN=1` previews, `TEARDOWN=1` removes) — a second isvc carrying the champion's OWN bytes + its dedicated backend Service. **Moves no traffic** | VERIFIED 2026-08-19 (M6-S4): `models:/nyc-taxi-eta@champion -> version 2`, `MLSERVER_MODEL_NAME` on the Deployment reads **`nyc-taxi-eta`** (KServe injects the isvc name; our override wins the merge), the canary's own host answers `/v2/models/nyc-taxi-eta/infer` with **39.0019 minutes** and **404s on `/v2/models/nyc-taxi-eta-canary/ready`** — ADR-011 condition 2's remedy proved with its negative half. Backend Service selector asserted against KServe's own generated one, endpoints non-empty. `@champion` version 2 read before AND after (a move exits 2) |
+| Shift traffic 10 → 100 → back, MEASURED (M6-S4) | `make canary` (`DRILL_ARGS=--dry-run` writes the prediction and applies nothing; ~6 min foreground) | VERIFIED 2026-08-19 (M6-S4): **PASS 11/11.** Ingress `canary` counter **0/177 · 41/420 = 9.76% · 301/301 = 100% · 0/300**, the two predictors' own counters **204/0 · 379/39 = 9.33% · 0/240 = 100% · 300/0** — two witnesses from different processes, and a record claiming one without the other is a contradiction. **0 of 1,440 requests failed**, champion pod UID unchanged, revert **0.37 s** against a 120 s budget. **Its first run went RED at 0% for F-039** (the route took a KServe-generated Ingress name) and is kept unedited in `attempt1-ingress-name-collision/` |
+| The split as Prometheus draws it (M6-S4) | `uv run python scripts/canary_split_paste.py [--minutes N]` (a READER — one range query) | VERIFIED 2026-08-19 (M6-S4): prints champion/canary/share per minute; the green run reads `5.9% · 11.1% · 100.0% · 100.0% · 0.0%` at 240 req/min, with the failed attempt's flat `0.0%` visible six minutes above it. It exists so the board and the record are not two different claims |
+| The alias rollback, REHEARSED (M6-S4) | `make rollback` (`ROLLBACK_ARGS=--dry-run` previews; `--rejudge` re-derives the verdict from the record and moves nothing) | VERIFIED 2026-08-19 (M6-S4): **PASS 10/10**, the runbook's §4 three moves run for real BOTH ways. **v2→v1 = 35.35 s of moves and 27.93 s of failing requests (55 of 85 probes, `HTTP 500` at the logged signature); v1→v2 = 34.38 s and 0.501 s (one 502)** — F-040, gotcha #86. `verify-m5` at the half-way state: **RED, 3 FAILs, §2's coherence check GREEN at `v1`**; at the end state GREEN. `configs/train.yaml` byte-identical by `git hash-object`, `@champion` back to 2, the final answer reproducing the parity row at **39.001937**. It REFUSES to start from a half-rolled-back state, and moves the alias with a RAW `set_registered_model_alias` — never `registry.promote`, whose refusal (F-011) is the point |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5 live; M6+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
@@ -2085,6 +2160,27 @@ condition both passed while the generated Ingress was 6 seconds old and nginx ha
 not loaded it, so the accept check got a bare 404 over a perfectly good service.
 #71's family with no predecessor in sight; wait on the route by ASKING it
 (#84, F-037)**.
+Newest (M6-S4), and the first is #81 wearing a different cause: **a
+hand-authored object must not take a name an operator GENERATES — the collision
+is accepted, works for seconds, then undoes itself. A canary Ingress named
+`nyc-taxi-eta-canary` (exactly what KServe generates for the isvc of that name)
+took the annotations onto the CONTROLLER-OWNED object and had them reconciled
+away: 0 of 420 requests moved at weight 10, 3 of 300 at weight 100 — and those
+three are the window between apply and reconcile, the only tell there is. Worse,
+the symptom is byte-for-byte #81's, which this program had just spent a story
+learning, so the obvious diagnosis was wrong. `kubectl get <kind> <name> -o
+jsonpath='{.metadata.ownerReferences[*].name}'` before writing to anything you
+did not create; and take the precondition from the CONTROLLER's runtime state,
+never from the annotation you just applied (#85, F-039)**. And: **"a deploy costs
+0.5 s" is not "a rollback costs 0.5 s" — the asymmetry is in the SCHEMA, not the
+pod. A rollback's second move changes what every client SENDS while the old pod
+still serves: v2→v1 cost 27.93 s of failing requests (55 of 85 probes, almost all
+`HTTP 500` at MLflow's logged signature) against 0.501 s and a single 502 for
+v1→v2. The direction that hurts is the one that REMOVES features — a 24-column
+request to a 5-column model is tolerated, a 5-column request to a 24-column model
+is missing inputs and refused. The remedy that follows (deploy first, move the
+config line last) is a CONSEQUENCE of the measurement and must be rehearsed
+before it is trusted, never substituted mid-incident (#86, F-040)**.
 Newest (M5-S4), and both are the same disease — **measure the quantity you will
 quote**: **a load test run at the CPU limit measures the QUOTA, not the service,
 and "held its rate with no errors" cannot detect that, because saturation shows
