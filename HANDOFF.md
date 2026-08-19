@@ -1,5 +1,93 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (bd) — ARCH: M5 boundary triage, CLEANLY CLOSED; M6 kickoff authored (reliability)
+
+### State
+**GRAND ARCHITECT, `claude-fable-5` (stated first line — an architect session
+on any other model is void).** Boot reads: CLAUDE.md · HANDOFF (bc, bb) ·
+BLUEPRINT §9 · all four ledgers · AWAITING_PO · M5 KICKOFF. Staleness check
+passed: tree clean at `44db7f6`, no `automation/STOP`, no detached job
+pending, cluster 3/3 Ready v1.36.1 (age 2d3h), InferenceService Ready,
+`@champion` version 2. **M5 is CLEANLY CLOSED — tagged `m5-closed`. M6
+kickoff authored (`docs/milestones/M6_KICKOFF.md`) and the chain continues:
+`automation/next_session.sh executor 120` fired at exit.**
+
+### Done
+- **Triage verify re-run: `make verify-m5` → GREEN 49/49 sub-checks, 7
+  sections, exit 0** (paste in the kickoff §0). Counting note for the next
+  approver: `grep -c "ok  "` says 50 — the extra hit is the pattern matching
+  inside `runbook<spaces>` in the gate's own footer (gotcha #68's shape,
+  landing on the approver's grep, not on the gate).
+- **Lineage spot-check (gotcha #20):** `3e28a1f` (M5-S2's merge, PR #29) is an
+  ancestor of origin/main. M5 = PRs #28–#32. Two stale remote-tracking refs
+  pruned (their remote branches died at merge).
+- **Every open item dispositioned, none silent** (table in kickoff §0):
+  F-029/F-009/F-019/F-030/F-031/F-032 all CLOSED during M5 with evidence
+  (restated); **F-032's REHEARSAL half → M6-S4** (the check closed the row;
+  the rehearsal was legislated out of M5 and the PRR routed it here) ·
+  **restore rehearsal → M6-S5** · **CPU request → M6-S2** · **A-1…A-7 →
+  M6-S2** · **ADR-004's spike → M6-S3 (outcome = ADR-011**, because ADR-004's
+  "recorded as ADR-006" predates the org-overlay taking that number**)** ·
+  F-016 standing at AWAITING_PO 2026-08-18-1 (blocking only at M7's first
+  retrain) · F-020 + F-022 CARRY → M7 unchanged (landings re-quoted) · debt
+  register fully closed, nothing due.
+- **Ledger repair (found by this triage's grep, fixed structure-only): the
+  F-020 row in `ledgers/findings.md` had lost its newline and leading
+  `| F-020` cell** — its whole content sat fused onto the tail of F-021's
+  line 15, so `grep F-020 ledgers/findings.md` returned NOTHING. The ID cell
+  and line break were restored; content byte-unchanged. A register a grep
+  cannot search loses findings silently — gotcha #69's family, asked of a
+  ledger.
+- **Sign-off row added** (producer EXEC PRs #28–#32; approver ARCH/Fable —
+  producer ≠ approver holds). **Tag `m5-closed` pushed.**
+- **M6 kickoff authored — 5 stories under three laws** (stateful cluster, no
+  new hostPort — monitoring UIs ride the 8081 ingress; wire changes are
+  deliberate, recorded, and every story ends at M5's state with the verify-m5
+  §2 coherence check as the exit invariant; nothing promotes): S1 monitoring
+  stack (backup first; Prometheus+Grafana, dashboards from checked-in JSON;
+  probe mlserver's /metrics, never assume it) · S2 SLO document + alerts
+  A-1…A-7 with one FIRED end-to-end + the CPU request re-sized with
+  before/after p95 · S3 ADR-004's spike decided as ADR-011 (recommend
+  two-isvc + ingress-nginx canary/mirror; Knative pre-refused inside the
+  one-re-deploy budget) + shadow of version 1 by DUAL-SEND with the
+  disagreement table and the DA memo · S4 canary 10→90/10-observed→100 +
+  traffic rollback <2 min under load + the ALIAS rollback rehearsed
+  round-trip (runbook labels flip to REHEARSED) · S5 gameday (positive
+  control first; predicted-vs-observed signatures; scratch restore rehearsal)
+  + verify-m6 + red team.
+
+### Decisions
+- **M5 CLEANLY CLOSED** — all §9/M5 accept-when legs green against the quoted
+  text, gate re-run by the approver, red team real, no silent carry.
+- **The wire fact that shapes M6-S3, stated in the kickoff so it is not
+  discovered as a defect: raw traffic mirroring cannot shadow version 1** —
+  the live wire carries 24 features, v1's logged signature eats 5, so every
+  mirrored request would 500 at the signature (F-032's shape, expected). The
+  v1 disagreement table comes from dual-send with per-target feature builds
+  through the ONE `features/` path; mirroring is reserved for same-schema
+  challengers.
+- **The canary's shiftable challenger is the memo-approved one** — after the
+  expected NO-GO on v1 (the known-worse model; the DA gate saying no is the
+  ritual working), the mechanism rehearsal shifts the champion's own bytes
+  under the challenger path, and the story ends at M5's topology.
+- **No new fork. No gate loosened.** The spike is an executor decision inside
+  ADR-004's pre-approved budget (one serving re-deploy), not a PO fork.
+
+### Defects/Surprises
+- The F-020 ledger fusion (above) — pre-existing since the M3 boundary wrote
+  the row; found because this triage grepped for the finding ID rather than
+  scrolling. No content was lost; the row was unfindable, not absent.
+- My own `grep -c "ok  "` over-count (50 for 49) — the checker's checker
+  matching prose. Recorded in §0 so the next boundary doesn't chase it.
+- No wall hit. Nothing else surprised.
+
+### Next
+**Executor session → M6-S1** (backup, then the monitoring stack). The kickoff
+is the contract; its §0 carries the triage, its preconditions were verified
+live this session (cluster 3/3, ports 4-free/6-ours/0-foreign, 37Gi RAM,
+943G disk, backup `2026-08-19T02-54-59Z` present — S1 re-runs it). Chain
+scheduled: `automation/next_session.sh executor 120`.
+
 ## Session 2026-08-19 (bc) — M5-S5: the rollback nobody could type in one move, and the gate that reads the prose
 
 ### State
