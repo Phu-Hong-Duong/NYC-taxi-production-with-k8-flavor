@@ -1,0 +1,64 @@
+{
+  "story": "M6-S2",
+  "written_at": "2026-08-19T06:59:24Z",
+  "written_before_injection": true,
+  "injection": {
+    "rate_per_second": 4.0,
+    "seconds": 420.0,
+    "shapes": [
+      "malformed V2 body -> 422",
+      "signature-refused body -> 500"
+    ]
+  },
+  "prediction": {
+    "must_fire": [
+      {
+        "alert": "PredictorRequestRejectionRateHigh",
+        "signal": "A-3",
+        "for_seconds": 120,
+        "expected_fire_after_s": 150,
+        "why": "half the injected requests are malformed bodies answered 422, so the 4xx share of infers goes to ~0.5 against a 0.01 bar within one scrape; the rule then holds for its 2m sustain."
+      },
+      {
+        "alert": "ServingEdge5xxRateHigh",
+        "signal": "A-2",
+        "for_seconds": 300,
+        "expected_fire_after_s": 330,
+        "why": "the other half are bodies the model's logged signature refuses, answered 500 and counted at the EDGE by ingress-nginx; the 5xx share goes to ~0.5 against a 0.10 bar, then holds for its 5m sustain."
+      }
+    ],
+    "must_fire_in_this_order": [
+      "PredictorRequestRejectionRateHigh",
+      "ServingEdge5xxRateHigh"
+    ],
+    "must_not_fire": [
+      {
+        "alert": "PredictorLatencySLOBurning",
+        "signal": "A-1",
+        "why": "it selects status_code=\"200\" only; a rejected request is not a slow one."
+      },
+      {
+        "alert": "PredictorNoAvailableReplica",
+        "signal": "A-5",
+        "why": "nothing is deleted or scaled; the replica stays available throughout."
+      },
+      {
+        "alert": "PredictorRestartFlapping",
+        "signal": "A-5",
+        "why": "a rejected request does not restart a container."
+      },
+      {
+        "alert": "PredictorCpuThrottledSustained",
+        "signal": "A-6",
+        "why": "a 422 is refused before the model runs and a signature refusal is cheap; neither approaches the CPU ceiling at this rate."
+      },
+      {
+        "alert": "PredictorStorageInitializerNotReady",
+        "signal": "A-7",
+        "why": "the pod is already initialised and is not being replaced."
+      }
+    ],
+    "must_clear_after_injection_stops": true,
+    "the_service_stays_up": "an ordinary quote must still succeed during the injection \u2014 this drill provokes errors, it does not cause an outage."
+  }
+}

@@ -182,11 +182,15 @@ verify-m5-redteam: ## prove verify-m5 goes RED: rewrite ONE recorded number, wat
 	@bash scripts/verify_m5_redteam.sh
 
 # ---- M6 reliability (role:SRE) ----
-.PHONY: deploy-monitoring monitoring-accept probe-mlserver-metrics canary rollback gameday verify-m6
+.PHONY: deploy-monitoring monitoring-accept probe-mlserver-metrics alert-rules alert-fire-drill canary rollback gameday verify-m6
 deploy-monitoring: ## Prometheus + Alertmanager + kube-state-metrics + Grafana, through the EXISTING 8081 route (M6-S1)
 	@bash scripts/deploy_monitoring.sh
 monitoring-accept: ## the accept twin: targets up, ONE real quote moves a counter, every board query answers
 	@uv run python scripts/monitoring_accept.py $(ACCEPT_ARGS)
+alert-rules: ## validate the checked-in alert rules (A-ids, severities, and every threshold's written argument) — M6-S2
+	@uv run python scripts/render_alert_rules.py --check
+alert-fire-drill: ## fire A-3 then A-2 for real against the live stack, prediction written FIRST (M6-S2; ~8 min, no outage)
+	@uv run python scripts/alert_fire_drill.py $(DRILL_ARGS)
 probe-mlserver-metrics: ## ask the live predictor where its /metrics really is (never the docs — gotcha #70)
 	@uv run python scripts/probe_mlserver_metrics.py
 canary: ## shift 10% to challenger under synthetic load (revert typed & tested FIRST)
