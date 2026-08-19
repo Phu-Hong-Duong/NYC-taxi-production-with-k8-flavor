@@ -20,9 +20,17 @@
 #   RE-FITS NOTHING. Every number M3 produced took hours (the artisan track
 #   3,313.9 s of fitting, the automation track 9,133.8 s). A gate that re-derived
 #   them would cost more than the milestone and would mint MLflow runs on every
-#   verification. So this gate reads: committed docs, committed JSON, the Optuna
+#   verification. So this gate reads: committed docs, RECORDED JSON, the Optuna
 #   storage, the registry — and it REPLAYS the recorded numbers through the
 #   decision code that is on disk right now. Total wall clock is seconds.
+#
+#   "RECORDED", not "committed" — corrected 2026-08-19 (M4-S5 leg 3, F-029).
+#   `automation/runs/` is gitignored, so `automation/runs/m3s5/bakeoff.json` and
+#   `m3s4/*.json` are MACHINE state: present here, absent in a fresh clone, and
+#   outside review. Nothing about this gate's logic changes — the sentence was
+#   simply wrong about where its own inputs live, which is exactly the claim #51
+#   says to ask a component to justify. The policy fork is F-029's, and it is
+#   ARCH's at the M4 boundary.
 #
 #   ASSERTS PROPERTIES, NOT LITERALS. M3-S5 spent three of its sub-checks
 #   learning this the expensive way: `verify-m2` §1 pinned the floor's NAME, the

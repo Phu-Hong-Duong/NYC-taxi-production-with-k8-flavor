@@ -1030,3 +1030,10 @@ evidence from `automation/runs/m4-cache/cache_drill.json` rather than re-asking 
 control plane about the latest run — the latest run's stages are `CACHE_POPULATED`
 whenever the image moved, which is most sessions, and a gate that expected
 `CACHE_HIT` there would go red for a commit.
+
+---
+
+**Continued in `docs/pipeline_m4_leg3.md`** — M4-S5 leg 3 (2026-08-19): `make verify-m4`
+(39/39), its red team, and F-029. Split into its own file only because this one is
+already 1,032 lines; the section numbering continues there at §17, and §1-§16 above stay
+UNEDITED as the earlier sessions record.

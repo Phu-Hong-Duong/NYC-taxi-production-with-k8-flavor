@@ -728,7 +728,9 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - **`make verify-m3` is 46 sub-checks in 8 sections, 4.7 s, and it re-fits
   NOTHING** — M3 cost 12,447 s of fitting across two tracks, so a gate that
   re-derived any of it would cost more than the milestone. It reads committed
-  docs, committed JSON, the Optuna storage and the registry, and **replays**:
+  docs, **RECORDED** JSON (not committed — `automation/runs/` is gitignored, so
+  its replay inputs are machine state; corrected 2026-08-19, **F-029**), the
+  Optuna storage and the registry, and **replays**:
   DR-02's keep bar is re-applied to the ablation table's own numbers, and the
   bake-off's five verdicts are re-computed through `gate.decide` as it exists on
   disk. `make verify-m3-redteam` proves it can say no.
