@@ -124,11 +124,22 @@ run "${HELM[@]}" repo add "$GRAFANA_REPO_NAME" "$GRAFANA_REPO_URL" --force-updat
 run "${HELM[@]}" repo update "$PROM_REPO_NAME" "$GRAFANA_REPO_NAME"
 
 # --- 4. prometheus ------------------------------------------------------------
+# The alert rules (M6-S2) are a checked-in Prometheus rules file, nested into the
+# chart's `serverFiles."alerting_rules.yml"` by a renderer that PARSES it first —
+# so a malformed rule file fails here, before helm reports a successful upgrade
+# over a Prometheus that has quietly loaded no rules. The overlay is a temp file
+# deleted on EXIT (the M4-S2 shape), not because it holds a secret but because a
+# generated file left in the tree is a second copy of the rules.
 say "step 4/6 — prometheus $PROM_CHART_VERSION (+ alertmanager, kube-state-metrics)"
+RULES_OVERLAY="$(mktemp -t prometheus-alert-rules-XXXXXX.yaml)"
+trap 'rm -f "$RULES_OVERLAY"' EXIT
+uv run --directory "$REPO_ROOT" python "$REPO_ROOT/scripts/render_alert_rules.py" --check
+uv run --directory "$REPO_ROOT" python "$REPO_ROOT/scripts/render_alert_rules.py" >"$RULES_OVERLAY"
 run "${HELM[@]}" upgrade --install "$PROM_RELEASE" "$PROM_CHART" \
   --version "$PROM_CHART_VERSION" \
   --namespace "$NAMESPACE" \
   --values "$REPO_ROOT/infra/helm/monitoring/prometheus-values.yaml" \
+  --values "$RULES_OVERLAY" \
   --wait --timeout "$WAIT_TIMEOUT"
 
 # --- 5. the dashboards, from checked-in JSON ---------------------------------
