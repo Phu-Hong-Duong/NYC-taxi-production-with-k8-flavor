@@ -322,10 +322,11 @@ def main(argv: list[str] | None = None) -> int:
             "alternative_trafficShapingPolicy": back.get(alt_key, {}).get("trafficShapingPolicy"),
             "batch": send_batch(BATCH, body, champion.host, champion.infer_url),
         }
-        print(f"        tsp={record['phases']['p1_shared_service']['alternative_trafficShapingPolicy']}")
-        print(f"        {record['phases']['p1_shared_service']['batch']['by_status']}")
+        shared = record["phases"]["p1_shared_service"]
+        print(f"        tsp={shared['alternative_trafficShapingPolicy']}")
+        print(f"        {shared['batch']['by_status']}")
 
-        print(f"\n[spike] phase 2 — the SAME canary on a DEDICATED Service")
+        print("\n[spike] phase 2 — the SAME canary on a DEDICATED Service")
         apply(canary_service(selector))
         apply(canary_ingress(CANARY_SERVICE, WEIGHT))
         time.sleep(12)
@@ -336,8 +337,9 @@ def main(argv: list[str] | None = None) -> int:
             "canary_trafficShapingPolicy": back.get(ded_key, {}).get("trafficShapingPolicy"),
             "batch": send_batch(BATCH, body, champion.host, champion.infer_url),
         }
-        print(f"        tsp={record['phases']['p2_dedicated_service']['canary_trafficShapingPolicy']}")
-        print(f"        {record['phases']['p2_dedicated_service']['batch']['by_status']}")
+        dedicated = record["phases"]["p2_dedicated_service"]
+        print(f"        tsp={dedicated['canary_trafficShapingPolicy']}")
+        print(f"        {dedicated['batch']['by_status']}")
 
         print("\n[spike] phase 3 — rewrite-target on the CANARY Ingress")
         apply(canary_ingress(CANARY_SERVICE, WEIGHT,
@@ -356,9 +358,12 @@ def main(argv: list[str] | None = None) -> int:
         time.sleep(30)
         # BOTH questions, asked WHILE the annotation is still in place — the first
         # run asked the second one after cleanup, which measures nothing.
+        jsonpath = (
+            "jsonpath={.metadata.annotations."
+            "nginx\\.ingress\\.kubernetes\\.io/mirror-target}"
+        )
         survived = kubectl(
-            "-n", NAMESPACE, "get", "ingress", CHAMPION_ISVC,
-            "-o", "jsonpath={.metadata.annotations.nginx\\.ingress\\.kubernetes\\.io/mirror-target}",
+            "-n", NAMESPACE, "get", "ingress", CHAMPION_ISVC, "-o", jsonpath
         )
         record["phases"]["p4_mirror_target"] = {
             "annotation_survived_on_the_object": bool(survived),
