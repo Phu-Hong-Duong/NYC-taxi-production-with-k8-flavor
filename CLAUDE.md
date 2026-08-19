@@ -1344,6 +1344,59 @@ can never disagree (the port-family twins lesson, applied before it bit).
   enforcing the logged signature and refusing a lossy cast. The fix was to stop
   lying about the types, never to strip the signature.
 
+## Parity, measured (M5-S3) — the number, the defect it found, and the claim it does NOT make
+- **`max |offline − online| = 0.000e+00` minutes over 16 hazard rows, bar 1e-6.**
+  Not "within tolerance" — identical, to every bit float64 holds. Every quality
+  number this program has published (KPI-09 3.2403, KPI-10 80.552%, every KPI-13
+  in the mart) was measured in a HOST process; the rider's quote comes out of a
+  container running Python 3.10.12 / pandas 2.2.3 / numpy 2.2.6 against
+  training's 3.12.14 / 3.0.5 / 2.5.2. **That seam is now measured, and M5-S2's
+  "first suspect if parity comes back wide" is cleared** — none of the three
+  differing packages is on the numeric path, lightgbm is 4.7.0 on both sides, and
+  the wire carrying the matrix's own dtypes means the trees traverse identical
+  float32 bits. Zero is stronger than the kickoff's predicted ~1e-7 AND more
+  brittle: anything that reintroduces a dtype round trip moves it, so a future
+  1e-7 is worth a sentence, not a shrug.
+- **ONE matrix, scored TWICE.** Built through `taxi_mlops.features`, scored by
+  the registry-loaded booster and by the endpoint. So the delta is the model
+  bytes + the runtime + the wire, and NOT two feature builds that could differ.
+  Said out loud in the module and in `docs/parity_m5.md` §1: this does NOT prove
+  M7's transformer will build features the way training does — that seam does not
+  exist yet and needs its own measurement.
+- **The rows are DECLARED, COMMITTED and each names its hazard.** Sampling would
+  give a number that changes every run, a red team that cannot plant a cause,
+  and — the real objection — the rows that break serving are never the average
+  ones. The unseen OD pair (`55 -> 148`: 6 in `trips_test`, 0 in `trips_train`)
+  is a committed literal with the query in its note, so parity stays a
+  seconds-long reader instead of re-scanning 44M rows for a constant.
+- **F-030, found by building that set and live since the endpoint existed:
+  the missing-geometry path could not be quoted AT ALL.** Zones 264/265 have no
+  centroid by design (DR-04 condition 1) → nine NaN features → `json.dumps`
+  writes the bare token `NaN`, which is not JSON → **`HTTP 422 … "loc":
+  ["body",1241] … unexpected character`**, a byte offset naming neither the
+  feature nor the zone. ~1% of every split, and 264->264 is the largest single OD
+  "route" in the data. Missing now travels as `null`; an **infinity is REFUSED**
+  (equally unrepresentable, but not a missing value — laundering it would present
+  a broken feature as an absent one); `_post` passes **`allow_nan=False`** so the
+  next path that forgets fails loudly HERE. Proof that `null` is the same missing
+  value the booster was fitted on: those rows parity at **0.000e+00**.
+- **The red team plants its cause inside the TEST, never on the cluster.** The
+  obvious lever — point the endpoint elsewhere — would break production to prove
+  a test works. Arm A: every feature under its own name and dtype carrying its
+  neighbour's values (**42.10 min** of skew, every input individually valid).
+  Arm B: load version **1** offline (a READ) while the wire serves the champion —
+  refused at the feature-set guard before a number exists, because a "delta"
+  between a 5-column and a 24-column model could only be manufactured.
+- **F-031 / gotcha #73: arm A's first draft went GREEN under its own tampering.**
+  It rotated the ORDER of the inputs, on the client's own documented property
+  that a V2 body is positional — and measured 0.000e+00. **This runtime pairs by
+  NAME**: mlserver hands MLflow a named frame and the logged signature reorders
+  it. The docstring was CORRECTED, not deleted (a positional V2 runtime is legal,
+  M7's transformer may be one, and the ordering costs nothing) — what is no
+  longer claimed is that the ordering is what protects us. **The logged signature
+  is**, for the second time this milestone after it refused the lossy
+  `float64 -> int32` cast at M5-S2.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1430,6 +1483,8 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The serving PLATFORM (M5-S1) | `make deploy-serving` (`scripts/deploy_serving.sh`; `DRY_RUN=1` mutates NOTHING, helm included) — ingress-nginx + cert-manager + KServe Standard. **Installs NO model** | VERIFIED 2026-08-19 (M5-S1): four releases at REVISION 1 in **3m13s** — `ingress-nginx 4.15.1` · `cert-manager v1.21.1` · `kserve-crd`/`kserve-resources v0.20.0` — the controller landing on **mlops-taxi-control-plane** (the node whose port 80 kind publishes as 8081; the name is DERIVED from the kind config and the values file asserted against it), `serving-cert True` issued by cert-manager, and `defaultDeploymentMode: RawDeployment` **read back off the live `inferenceservice-config` ConfigMap**, not off the values submitted. **Idempotent re-run = REVISION 2 with every pod 4m44s/3m35s/2m35s old and unrestarted** (the M4-S2 shape). Six KServe CRDs register on **Kubernetes v1.36.1** — risk R1 did not materialise, ADR-004's mlserver fallback armed and unspent. Accept: `GET localhost:8081/` -> **404** (the pass: route up, nothing behind it) AND `GET /healthz` -> **200**. Its FIRST accept check went RED over a perfectly good install by demanding a `Server:` header ingress-nginx suppresses — **gotcha #70**. `DRY_RUN=1` verified to leave `helm list -A` and the namespace list untouched. Transcript: `docs/serving_m5.md` §2 |
 | The champion ON THE WIRE (M5-S2) | `make serve` (`scripts/deploy_champion.sh`; `DRY_RUN=1` mutates NOTHING) — read-only MinIO identity + our ClusterServingRuntime + an InferenceService whose `storageUri` is RESOLVED from the alias | VERIFIED 2026-08-19 (M5-S2): InferenceService **Ready True**, predictor on `mlops-taxi-worker2`, 0 restarts; the accept check is a **PREDICTION** (gotcha #59) — `2019-07-04T09:15:00, zone 132 -> 48 -> 39.0019 minutes` with mlserver stamping **`model_version: "2"`** on the response itself, matching the locally-loaded champion **bit for bit** (absolute delta 0.000e+00, ONE row — the 1e-6 gate is M5-S3's). **Idempotent re-run = `unchanged`/`configured`, the SAME pod uid, 0 restarts, 2m1s old** (the M4-S2 shape). `@champion` version **2** read before AND after, unmoved (a move exits 2). Its first run 403'd on `HeadBucket` because MinIO's built-in `readonly` omits `s3:ListBucket`; its third printed a passing accept check against **the pod it was replacing**, because the InferenceService's Ready condition is satisfied by the predecessor (gotcha #71) — `rollout status` now runs first. Transcript: `docs/champion_on_the_wire_m5.md` §5 |
 | Ask the live endpoint for a quote (M5-S2) | `make quote` (`QUOTE_ARGS="--at YYYY-MM-DDTHH:MM:SS --pu N --do N"`; **exit 0 = quoted · 2 = REFUSED by the typed boundary · 1 = anything else**) | VERIFIED 2026-08-19 (M5-S2): a 2019 request quotes, a **2026** request quotes where it used to raise (F-019's table half), and a **2031** request returns `REFUSED (422) … covers through 2030 … Extend the table: make holidays HOLIDAYS_TO=2031`, exit 2 (F-019's typed half). Builds features through the ONE `features/` path — it reimplements nothing, pinned by an AST test |
+| THE parity test (M5-S3) | `make parity` (`PARITY_ARGS="--tolerance …"`; a READER — no deploy, no registry write, seconds) | VERIFIED 2026-08-19 (M5-S3): **`max \|offline − online\| = 0.000e+00` minutes over 16 hazard rows against a 1e-6 bar** — identical, not merely within tolerance, on every row including the two with no geometry at all. ONE matrix built through `taxi_mlops.features` and scored TWICE (locally-loaded champion vs the live endpoint), so the delta is attributable to the model bytes + runtime + wire and NOT to two feature builds. Rows are declared and committed, each naming its hazard: airports (JFK/LGA/EWR), an OD pair unseen in train (`55 -> 148`, 6 in test / 0 in train), the 100–120 min tail, midnight and week seams, passenger_count 0 and 6, a 2026 date (F-019's extension), and M5-S2's exact spot-check row — which reproduces at **39.001937154**. `@champion` version 2 read, never written. Transcript: `docs/parity_m5.md` §5.1 |
+| Prove the parity test can go RED (M5-S3) | `make parity-redteam` (`bash scripts/parity_redteam.sh`) | VERIFIED 2026-08-19 (M5-S3): **PASSED, 7 checks, 0 failures.** Arm A sends every feature under its own name and dtype carrying its NEIGHBOUR's values — every input individually valid, only the pairing wrong → **max delta 4.210e+01 minutes** (a 48-minute trip quoted at 6) and the verdict names it. Arm B loads registry version **1** offline (a READ; moving an alias would be a mutation and a red team never moves the pointer it checks) while the wire serves the champion → refused at the feature-set guard BEFORE a number exists, because v1 eats 5 columns and v2 eats 24. Neither arm deploys, restarts or promotes; `@champion` is version 2 before and after and the untampered run is GREEN again at the end. **Its first arm A went green under its own tampering — that is F-031/gotcha #73** |
 | Re-derive the holiday table (M5-S2, F-019) | `make holidays` (`HOLIDAYS_TO=YYYY` moves the horizon; `--year 2019 --stdout` is the reproduction check) | VERIFIED 2026-08-19 (M5-S2): **146 rows, 2019..2030, 16 observed-day rows**, and re-deriving 2019 alone reproduces the ten hand-written rows **byte for byte** (`diff` silent) — those rows predate this script by two milestones, so agreement is evidence about the RULES, Juneteenth included (federal from 2021, correctly absent from 2019). Idempotent; the human `note` column is preserved by date. 136 insertions, 0 deletions — and the holiday AND near-holiday sets inside 2019-01..08 are asserted unchanged, because a near-day can arrive from another year entirely |
 | Back the platform up (M4-S2) | `make backup` (`scripts/platform_backup.sh` + `scripts/backup_minio.py`; `DRY_RUN=1` enumerates and sizes, writes nothing; `BACKUP_ROOT=` moves the destination) | VERIFIED 2026-08-18 (M4-S2): **5 databases enumerated FROM THE SERVER** — marts 1.2GiB/210s · metabase 295.6KiB · mlflow 53.9KiB · optuna 27.0KiB · postgres 389B — plus **105 MinIO objects / 352.3 MiB**, **1.5GiB total**, into `/home/longt/dvc-remote/nyc-taxi-platform-backups/2026-08-18T06-02-29Z/`. Every dump verified host-side by `gzip -t` over every byte AND pg_dump's own completion marker; the object mirror verified by object count AND byte total. **Both dump legs RED-TEAMED first against a deliberately truncated copy of the real 1.2GiB file** (`gzip -t` rc 1, marker rc 1). **RESTORE IS NOT REHEARSED** — said in the header, in every `MANIFEST.txt` and in the ledger; an M6-gameday candidate. Same-disk limit, identical to the DVC remote's |
 | Port pre-check, now holder-aware (F-021, M4-S2) | `make ports` | RE-VERIFIED 2026-08-18 (M4-S2) against the LIVE cluster: `6 port(s) held by US — the 'mlops-taxi' cluster is up, which is expected`, each naming port, purpose and `-> container mlops-taxi-control-plane`, then `OK — 10 required port(s): 4 free, 6 held by us, 0 foreign.` **exit 0** — where it used to refuse and advise stopping the stack that holds the registry. The foreign refusal is UNSOFTENED: two unit tests use the same bound port and the same fake `docker ps`, differing only in the container NAME (`mlops-taxi-control-plane` → exit 0 · `somebody-elses-stack-web-1` → exit 2), and M0-S2's fake-listener red-team (no docker shim) still goes red |
@@ -1618,3 +1673,17 @@ subject matter made it visible: the change under test was a version stamp, so
 the predecessor answered `(unversioned)`. Ask of any readiness wait, could this
 condition be true right now for a reason that has nothing to do with my change?
 (#71, the third shape of #59/#65)**.
+Newest (M5-S3): **`json.dumps` emits the bare token `NaN` BY DEFAULT — valid
+Python output, invalid JSON — so a correct feature matrix serialises into a
+document no parser accepts and the failure comes back from the far side as a byte
+offset (`"loc":["body",1241]`) naming neither the feature nor the row. It had been
+answering 422 to ~1% of all trips since the endpoint existed. Missing travels as
+`null`, an infinity is REFUSED rather than laundered, and `allow_nan=False` makes
+the next such path fail loudly on THIS side (#72, F-030)**; and **a red team that
+goes GREEN under its own tampering has found something — read it before you
+loosen it. The parity drill's first arm rotated the request's input ORDER, on a
+property the client's docstring asserted, and measured 0.000e+00: the property was
+false (this runtime pairs by NAME, via the logged signature). Move the plant to a
+cause the system CAN express, and CORRECT the claim rather than delete it when the
+practice it prescribed is still right for other reasons (#73, F-031 — #51's
+question asked of a drill)**.
