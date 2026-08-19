@@ -1,5 +1,122 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (bf) — M6-S2: judgement, and the number an analogy got wrong
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE (Accountable)**
+(charter read at entry; refusals in play: no threshold set from a number just
+measured, no promotion, no gate condition touched, `@champion` never written).
+Boot reads: CLAUDE.md · HANDOFF (be) · M6 KICKOFF · AWAITING_PO. **Staleness
+check passed** — tree clean at `0bb362b`, no `automation/STOP`, no detached job
+pending (8 `.status` files, all M3/M4), cluster 3/3 Ready v1.36.1, monitoring 4
+pods Running, InferenceService Ready, `@champion` version 2.
+**M6-S2 COMPLETE.** PR **#35**, merged (`cfc9394`), reachable from origin/main.
+The cluster never went down. Nothing promoted, no alias moved, no gate condition
+edited (F-016 remains the PO's).
+
+**Two deliberate mutations of the wire, both in the deployments ledger**: the CPU
+request `200m -> 1500m` (**cost 0.5 s**, measured) and the seven alert rules
+provisioned into Prometheus (**no pod restart at all** — configmap-reload).
+
+### Done
+- **`docs/slo_serving.md`** — four SLOs, each with its instrument, its load shape
+  and its argument: **SLO-L1** 95% of quotes within **250 ms** server-side ·
+  **SLO-A1** 99.9% non-5xx monthly measured **at the edge** · **SLO-R1** <1% of
+  infers rejected, explicitly OUTSIDE A1's error budget · **SLO-C1** saturation as
+  an operating limit. §4 prices what every deploy costs, so an availability target
+  cannot forbid releasing.
+- **`infra/monitoring/alerting_rules.yml`** — 7 rules / 6 signal ids, a plain
+  `promtool`-shaped file and the ONLY copy. `scripts/render_alert_rules.py` parses
+  and refuses (no `expr`, no `severity`, unknown A-id, no `annotations.why`) then
+  nests them into the chart's values at deploy time; the chart's own key stays
+  empty and a test fails if it stops being. Read back off `/api/v1/rules`: **7
+  loaded, health=ok**.
+- **`make alert-fire-drill` GREEN 11/11**, prediction on disk BEFORE the
+  injection. ONE injection of two shapes the endpoint really produces (**662 x
+  422** malformed body, F-030's class; **661 x 500** signature-refused body,
+  F-032's class) fired **A-3 at T+150.5 s (predicted 150)** then **A-2 at
+  T+330.6 s (predicted 330)**, in the predicted ORDER, both held by
+  **Alertmanager**, all **five must-not-fire alerts inactive**, an ordinary quote
+  answering 39.0019 minutes mid-injection, both cleared **315.1 s** after the stop.
+- **CPU request `200m -> 1500m`** (limit and memory request unchanged so the
+  comparison has one cause), argued from M5-S4's 1.31 measured cores **plus ~15%**
+  and kept below the limit so the pod stays Burstable. Before/after `make load` at
+  M5's exact shape: p50 **29.4 -> 29.5**, p95 **84.4 -> 112.7** (inside this
+  shape's run-to-run spread — M5-S4 measured 104.2), and on the SLO's own
+  instrument **>=2 of 240 beyond 250 ms before vs 0 of 240 after**. The prediction
+  held; the tail's improvement is deliberately NOT claimed.
+- **F-035 CLOSED by disposition** — two PRR signals have no metric source here,
+  both because the fact lives in a CLIENT and no client is scraped. **Measured**: a
+  past-horizon `make quote` (exit 2) left the infer counter at **22 -> 22**, so the
+  kickoff's "A-3 can be fired for free by past-horizon quotes" is false against
+  this stack. A-4 needs served-version vs registry, and no mlserver metric carries
+  a version while MLflow exports none. Both documented with options, costs and an
+  M7-pushgateway landing; the renderer fails if the sets ever disagree.
+- **F-036 CLOSED** — `make serve` hung **15 minutes** then FAILED over a service
+  with every condition True and its pod Running 1/1. kubectl v1.36 ignores
+  conditions while `observedGeneration` trails `generation`; KServe v0.20.0 leaves
+  it behind on every re-deploy (observed 3 vs 2). Under `set -e` the timeout took
+  the accept check with it. Fixed to `--for=jsonpath=`, verified live end to end;
+  `rollout status` stays FIRST (gotcha #71 untouched).
+- **`make verify-m5` GREEN 49/49** after every mutation · `make monitoring-accept`
+  **GREEN 10/10** with 11/11 panels returning live series · **738 unit tests**
+  (26 new in `tests/unit/test_slo_and_alerts.py`), ruff clean.
+- Docs: `docs/monitoring_m6.md` §9 · CLAUDE.md (2 pin rows, a section, 3 command
+  rows, the traps paragraph) · gotchas **#79/#80** · findings **F-035/F-036** ·
+  deployments ledger row · field note.
+
+### Decisions
+- **A renderer, not a second copy of the rules.** Two files that can both hold
+  rules is the twin problem this repo has paid for four times; nesting is a
+  mechanical transformation so it belongs in code that runs at deploy time.
+- **SLO-L1's number is a bucket EDGE, not a percentile.** `histogram_quantile`
+  reported 111.6 ms where the client's whole-round-trip p95 was 84.4 ms —
+  arithmetically impossible, and explained by a 150 ms-wide bucket. So the target
+  was chosen to coincide with `le="0.25"` and A-1 counts. Re-bucketing mlserver is
+  not a knob this program has.
+- **A-2 at the EDGE, threshold 10%, and A-5 as its complement.** A dead predictor
+  cannot report its own absence; and at 4 req/s the longest healthy recovery ever
+  measured here is 6.1% of a 5-minute window, so a 5% bar would page for an
+  18-second self-heal. A ratio is blind on an idle service, so A-5 reads a replica
+  count and needs no traffic. A test fails if every rule becomes a ratio.
+- **Fixing F-036 inside this story** (craft-level, verified undo, in a deploy path
+  this story was already changing): leaving it means every `make serve` in
+  M6-S3/S4/S5 costs 15 minutes and then fails.
+- **The memory request was NOT changed** (1Gi against 236 MiB observed, ~4x over)
+  so the before/after p95 attributes to one cause. Noted in the SLO doc as known
+  and un-actioned.
+
+### Defects/Surprises
+- **The wrong prediction is this story's most useful output (#80).** The SLO doc's
+  first draft priced a model re-deploy at ~15-18 s by analogy with three measured
+  mutations. Measured: **0.5 s, one 502 of 400 samples** — at one replica
+  `maxUnavailable: 25%` floors to **zero**, so a surge pod must be ready before the
+  old one goes, while all three of the slower numbers destroy the only pod first.
+  Kept above its correction in §4.1. **M6-S4 inherits it**: a canary weight flip
+  is nearly free, and ~15 s belongs only to pod destruction.
+- F-036 above — and note the shape: a hung wait presented as a slow deploy, and
+  the one failure mode was a correct deploy reporting as broken (#55's family).
+- **gotcha #50 for the fourth time**: `tests/unit/test_deploy_champion.py`'s
+  wait-order test pinned the literal `--for=condition=Ready` and went RED for the
+  correct fix. Re-pinned to the ORDER of the two waits, derived by finding
+  whichever wait names `inferenceservice/` — strictly stronger than the literal.
+- No wall hit. F-036's root cause took 3 probes (api-versions, alternative wait
+  forms, generation vs observedGeneration) and landed inside the budget.
+
+### Next
+**Executor session → M6-S3** (ADR-004's canary/shadow spike recorded as
+**ADR-011**, plus the v1 shadow and its disagreement table + DA memo). What it
+inherits, precisely: **a re-deploy costs 0.5 s, not 15 s** (argue S4's timings
+from that) · **`make serve` works again** (F-036; S3 re-deploys at least once) ·
+the scrape discovers predictors **by label**, so a shadow isvc is scraped the
+moment it exists with no scrape-config edit · `docs/monitoring_m6.md` §9.7 lists
+the rest, including that **A-2 and A-5 have never fired from a real outage** (only
+injected 5xx), which the kickoff routes to S5's gameday. The ingress values file's
+own note — *"re-enable the admission webhook the day someone hand-writes an
+Ingress"* — becomes live at S3, which hand-authors a canary Ingress.
+Chain scheduled: `automation/next_session.sh executor 120`.
+
+
 ## Session 2026-08-19 (be) — M6-S1: the eyes, and three things that looked completely fine
 
 ### State
