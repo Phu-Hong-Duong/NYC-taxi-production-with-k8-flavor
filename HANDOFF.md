@@ -1,5 +1,126 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-19 (bg) — M6-S3: the spike, the shadow, and what "configured" is worth
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE (Accountable),
+MLOps (R), DA (R for the memo)** (charter read at entry; refusals in play:
+nothing promotes, `@champion` never written, the cluster never goes down, every
+wire mutation deliberate and recorded).
+Boot reads: CLAUDE.md · HANDOFF (bf) · M6 KICKOFF · AWAITING_PO.
+**Staleness check FOUND REALITY MOVED and it was reconciled before any work
+started.** The host had rebooted (`uptime` = 0 min): three pods were `Unknown`
+(flyte, mlflow, the predictor) and the monitoring pods had just restarted. The
+platform self-healed on its own — nothing was re-deployed, nothing was lost —
+and `make verify-m5` came back **GREEN 49/49** before the story began. That is
+gotcha #34's family behaving well, and worth knowing: **a WSL/Docker restart
+costs this platform nothing but the time to come back.**
+**M6-S3 COMPLETE.** PR **#36**. `@champion` version **2** and
+`configs/train.yaml: features.version` = **v2**, both untouched.
+
+### Done
+- **ADR-011** (`docs/decisions/ADR-011-canary-and-shadow-mechanism.md`) —
+  ADR-004's deferred spike DISCHARGED. Option **(ii)** confirmed for traffic,
+  **(iii)** dual-send for the v1 table, Knative pre-refused and unspent. Its
+  value is **two conditions nobody predicted**, each measured:
+  **Condition 1 — a canary backend needs its OWN Service.** Pointed at a Service
+  KServe's generated Ingress also claims: **0 of 200 moved** at weight 50,
+  `{weight: 0, weightTotal: 0}`, while the champion's backend genuinely listed it
+  under `alternativeBackends` — configured, linked, logged clean, inert. With a
+  dedicated Service: **100 of 200**, `noServer: true`, `{weight: 50,
+  weightTotal: 100}`.
+  **Condition 2 — both backends must serve the same V2 model NAME.** Canary
+  traffic returned **404**, not the 500-at-the-signature everyone predicts: the
+  V2 model name is in the URL path, so the signature is never reached.
+  `rewrite-target` on the canary changed the share by **0 points** (ingress-nginx
+  applies only `canary-*` annotations from a canary Ingress). Named remedy:
+  `MLSERVER_MODEL_NAME`, **recorded as UNPROVEN — S4 must prove it.**
+  `mirror-target` on the KServe-owned Ingress DOES work (survived a reconcile,
+  produced a real nginx `mirror` directive) — available for a same-schema,
+  same-name challenger.
+- **`make canary-spike` PASS 7/7**, prediction on disk before anything applied.
+- **`make shadow`** — registry version **1** on the wire as its own
+  InferenceService, **zero rider traffic**, its own host. Resolved BY VERSION
+  through F-009's identical two hops (`resolve_champion_storage.py --version N`),
+  feature set **derived from the version's `feature_set` tag** and REFUSED if
+  absent. Accept check is a prediction in the shadow's own 5-column matrix:
+  **64.1043 min** where the champion says **39.0019** for the identical request.
+  Teardown proven, then a from-scratch redeploy.
+- **`make shadow-run`** — the disagreement table, **1,016 dual-sent rows**
+  (250 each ordinary/airport/no-geometry/long-trip + parity's 16 hazards), each
+  target's matrix built through the ONE feature path.
+- **`docs/shadow_analysis_m6.md`, verdict NO-GO for v1** — and the margin is
+  **thinner than the kickoff predicted**: 8.61 vs 8.93 MAE, champion closer on
+  **54.4%**. Long trips are the only decisive segment (mean \|d\| 2.65, max
+  36.42, champion closer 63.6%). **Airports are a dead tie — 5.97 vs 5.99, with
+  the champion BEHIND on within-5-minutes** — giving `error_memo_m2.md` §7 row 2
+  a second, independent, wire-side measurement pointing the same way (**the row
+  stays open, now better evidenced**). On no-geometry rows the shadow is closer
+  MORE often (47.6%).
+- **F-037 CLOSED** (route wait) · **F-038 CLOSED** (isvc annotation rolls the
+  pod) · gotchas **#81–#84** · deployments ledger row · CLAUDE.md section, 3
+  command rows, traps paragraph · field note.
+- **753 unit tests** (15 new), ruff clean, **`make verify-m5` GREEN 49/49** with
+  the shadow live, **`make parity` still 0.000e+00** over 16 hazard rows.
+
+### Decisions
+- **The 404 rate IS the split measurement.** Using the v1 shadow as the canary
+  backend made the two backends distinguishable at the client with no server-side
+  attribution, so one experiment answered both "how much traffic moved?" and
+  "can mirroring shadow v1?".
+- **Scratch probe files DELETED rather than exempted from gitignore.** Three
+  `.yaml`/`.py` files under `automation/runs/` were invisible to review (only
+  `*.json` is tracked there) and one claimed in its own docstring to be tracked —
+  gotcha #69 on this story's own artifacts. They are superseded by the tracked
+  `scripts/canary_spike_probe.py`; the memo and module now state which artifact
+  is the record and which is a regenerable convenience.
+- **The admission webhook was NOT re-enabled**, though this story made its own
+  trigger live. Enabling it rolls the controller F-033 forced onto `Recreate` —
+  a real ~15 s outage of the only route in — and **S4 hand-authors the same
+  objects again**, so the outage is better spent once, there. Argued in ADR-011.
+- **F-037 not back-ported to `deploy_champion.sh`**: that Ingress has existed
+  since M5-S2, so there is no first-deploy path left to protect on this cluster.
+
+### Defects/Surprises
+- **F-038, and it was self-inflicted**: the spike's first run forced a reconcile
+  with `kubectl annotate isvc`, believing it spec-neutral. KServe copies isvc
+  annotations onto the pod template, so it rolled the champion's only predictor
+  **twice** — **174 of 200 requests returned 502**, with the controller logging
+  `connect() failed (111: Connection refused)` against the dead pod's IP. Caught
+  by the probe's own end-state batch, because the prediction was written first.
+  Record kept unedited at `automation/runs/m6-spike/attempt1-no-dedicated-service/`.
+- **The first run also measured the mirror question AFTER cleanup had removed the
+  annotation** — which measures nothing. The rewritten probe asks both mirror
+  questions (object persistence AND an actual nginx directive) while the
+  annotation is still in place.
+- **Two first-run predictions were wrong** and are kept verbatim under
+  `superseded_predictions`.
+- **Two of my own tests went red for their own reasons**: a ban keyed on the bare
+  call name `run` fired on `shadow.run()`, the module's own entry point (gotcha
+  #50, again), and a `.lower()` comparison against a capitalised needle. Both
+  fixed as the right property, not a looser bar.
+- **Wall count**: three attempts on "make the canary split traffic" (probe → 0%,
+  re-apply → 0%, dedicated Service → **100/200**, succeeded on the third); two on
+  "make the canary backend answer correctly" (rewrite-target → no change; stopped
+  there and recorded `MLSERVER_MODEL_NAME` as S4's to prove).
+
+### Next
+**Executor session → M6-S4** (canary 10→100 under load, traffic rollback <2 min,
+the alias rollback rehearsal). What it inherits, precisely:
+**ADR-011's two conditions are mandatory, not advisory** — a canary needs its own
+Service, and `MLSERVER_MODEL_NAME` on the canary isvc is an UNPROVEN remedy that
+must be proved before any weight is trusted · **observe 90/10 from traffic
+counters, never from the annotation** (condition 1's failure is silent) · **a
+re-deploy costs 0.5 s, not 15 s** (gotcha #80, inherited from S2) · **the
+admission webhook re-enable is routed here** with its ~15 s cost argued in
+ADR-011 · **the shadow isvc is LEFT RUNNING** for S4/S5 to read
+(`make shadow TEARDOWN=1` removes it cleanly) · the DA memo's NO-GO means S4's
+canary is the champion's own bytes under the challenger path, as the kickoff
+pre-registered, and the memo already covers its trivially-0.000 table · S4 must
+not `kubectl annotate isvc` (F-038).
+Chain scheduled: `automation/next_session.sh executor 120`.
+
+
 ## Session 2026-08-19 (bf) — M6-S2: judgement, and the number an analogy got wrong
 
 ### State
