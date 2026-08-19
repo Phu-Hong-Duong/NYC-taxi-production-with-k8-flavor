@@ -82,7 +82,10 @@ WEIGHT_PLACEHOLDER = "CANARY-WEIGHT-SET-AT-RUN-TIME"
 NAMESPACE = "serving"
 CHAMPION = "nyc-taxi-eta"
 CANARY_ISVC = "nyc-taxi-eta-canary"
-CANARY_INGRESS = "nyc-taxi-eta-canary"
+#: NOT `nyc-taxi-eta-canary` — that name belongs to the Ingress KServe generates
+#: for the canary InferenceService, and applying these annotations to it is
+#: accepted, reverted seconds later, and silent (F-039).
+CANARY_INGRESS = "nyc-taxi-eta-canary-route"
 CANARY_BACKEND_KEY = f"{NAMESPACE}-nyc-taxi-eta-canary-backend-80"
 ROUTE = "http://localhost:8081"
 PROM = "http://localhost:8081"
@@ -114,6 +117,34 @@ SHARE_TOLERANCE_POINTS = 5.0
 
 #: §9/M6's number. The revert must be possible in under two minutes under load.
 REVERT_BUDGET_SECONDS = 120.0
+
+#: ATTEMPT 1 WENT RED AND ITS RECORD IS KEPT UNEDITED at
+#: automation/runs/m6-canary/attempt1-ingress-name-collision/ — the M5-S4
+#: `attempt1-at-the-ceiling` and M6-S3 `attempt1-no-dedicated-service` precedent,
+#: third milestone running. What it found is F-039 and it is worth more than the
+#: green run: the failure it produced is BYTE-FOR-BYTE the failure this story was
+#: built to avoid.
+SUPERSEDED_PREDICTIONS = {
+    "run1_the_dedicated_service_was_enough": {
+        "predicted": (
+            "with ADR-011's two conditions satisfied — a dedicated backend Service and "
+            "MLSERVER_MODEL_NAME on the canary — weight 10 moves about a tenth of the traffic"
+        ),
+        "observed": (
+            "0 of 420 requests at weight 10, and 3 of 300 at weight 100 — the ingress "
+            "counter recorded no canary-labelled request at all"
+        ),
+        "why_it_was_wrong": (
+            "F-039, and it is NOT either ADR-011 condition. The canary Ingress was named "
+            "`nyc-taxi-eta-canary`, which is exactly the name KServe generates for the "
+            "InferenceService of that name. `kubectl apply` wrote the canary annotations "
+            "onto the CONTROLLER-OWNED object; KServe reconciled them away seconds later. "
+            "The three requests that did reach the canary pod at weight 100 are that "
+            "window. The route is now `nyc-taxi-eta-canary-route`, and this drill refuses "
+            "to weight any Ingress that carries ownerReferences."
+        ),
+    },
+}
 
 PREDICTION: dict[str, Any] = {
     "written_before_anything_was_applied": True,
@@ -247,7 +278,46 @@ def canary_is_live_in_nginx() -> bool:
     return bool((backend.get("trafficShapingPolicy") or {}).get("weight", 0))
 
 
-def apply_weight(weight: int) -> None:
+def refuse_an_owned_ingress() -> None:
+    """A hand-authored route must be owned by NOBODY — F-039.
+
+    KServe generates an Ingress per InferenceService and reconciles it forever.
+    Writing canary annotations onto one is accepted by the API server, works for
+    a few seconds, and is then quietly undone — which looks exactly like
+    ADR-011 condition 1's silently-inert canary. Asked BEFORE the first weight,
+    so the answer costs a second rather than a six-minute load run.
+    """
+    owners = kubectl(
+        "-n", NAMESPACE, "get", "ingress", CANARY_INGRESS,
+        "-o", "jsonpath={.metadata.ownerReferences[*].name}", check=False,
+    )
+    if owners:
+        raise RuntimeError(
+            f"ingress {CANARY_INGRESS} is OWNED by {owners} — a controller will revert "
+            "these annotations and the split will read 0% with no error anywhere (F-039)"
+        )
+
+
+def registered_canary_policy() -> dict[str, Any]:
+    """What the controller's OWN runtime configuration says about the canary."""
+    backend = backends().get(CANARY_BACKEND_KEY) or {}
+    return {
+        "present": bool(backend),
+        "noServer": backend.get("noServer"),
+        "trafficShapingPolicy": backend.get("trafficShapingPolicy"),
+    }
+
+
+def apply_weight(weight: int) -> dict[str, Any]:
+    """Apply the weight, then require the CONTROLLER to have accepted it.
+
+    Two different facts, and this program has now paid for confusing them twice:
+    the annotation is an INTENT (and can be reverted, or discarded, without a
+    word), while `noServer: true` plus a non-zero weight in the controller's
+    runtime configuration is the router agreeing to draw the canary. Neither is
+    the measurement — that is the counters', below — but a precondition that
+    fails loudly here saves a window that would otherwise measure nothing.
+    """
     text = INGRESS_MANIFEST.read_text()
     if WEIGHT_PLACEHOLDER not in text:
         raise RuntimeError(f"{INGRESS_MANIFEST} no longer carries {WEIGHT_PLACEHOLDER}")
@@ -258,6 +328,21 @@ def apply_weight(weight: int) -> None:
     )
     if proc.returncode != 0:
         raise RuntimeError(f"applying canary weight {weight} failed: {proc.stderr.strip()}")
+    refuse_an_owned_ingress()
+    deadline = time.perf_counter() + 30.0
+    policy = registered_canary_policy()
+    while time.perf_counter() < deadline:
+        if policy["noServer"] is True and (policy["trafficShapingPolicy"] or {}).get(
+            "weight"
+        ) == weight:
+            return policy
+        time.sleep(1.0)
+        policy = registered_canary_policy()
+    raise RuntimeError(
+        f"the controller did not register {CANARY_BACKEND_KEY} as a canary at weight "
+        f"{weight} within 30 s — it reports {policy}. Refusing to measure a window whose "
+        "split is not configured (ADR-011 condition 1 / F-039)."
+    )
 
 
 def remove_canary_route() -> None:
@@ -313,6 +398,7 @@ def main(argv: list[str] | None = None) -> int:
         "story": "M6-S4",
         "what": "canary 10% -> 100% -> revert, under sustained load",
         "prediction": PREDICTION,
+        "superseded_predictions": SUPERSEDED_PREDICTIONS,
         "shape": {
             "rate_per_second": RATE,
             "concurrency": CONCURRENCY,
@@ -359,17 +445,17 @@ def main(argv: list[str] | None = None) -> int:
         elif elapsed == T_CANARY_10 - 5:
             mark("baseline_end", elapsed)
         elif elapsed == T_CANARY_10:
-            apply_weight(10)
-            events.append({"at_s": elapsed, "action": "canary-weight: 10"})
-            print(f"[canary] t+{elapsed}s  canary-weight 10 applied")
+            policy = apply_weight(10)
+            events.append({"at_s": elapsed, "action": "canary-weight: 10", "registered": policy})
+            print(f"[canary] t+{elapsed}s  canary-weight 10 applied and REGISTERED {policy}")
         elif elapsed == T_CANARY_10 + SETTLE_SECONDS:
             mark("w10_start", elapsed)
         elif elapsed == T_CANARY_100 - 5:
             mark("w10_end", elapsed)
         elif elapsed == T_CANARY_100:
-            apply_weight(100)
-            events.append({"at_s": elapsed, "action": "canary-weight: 100"})
-            print(f"[canary] t+{elapsed}s  canary-weight 100 applied")
+            policy = apply_weight(100)
+            events.append({"at_s": elapsed, "action": "canary-weight: 100", "registered": policy})
+            print(f"[canary] t+{elapsed}s  canary-weight 100 applied and REGISTERED {policy}")
         elif elapsed == T_CANARY_100 + SETTLE_SECONDS:
             mark("w100_start", elapsed)
         elif elapsed == T_REVERT - 5:

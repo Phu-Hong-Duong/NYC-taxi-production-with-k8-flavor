@@ -53,6 +53,10 @@ SERVING_NS="serving"
 CHAMPION_NAME="nyc-taxi-eta"
 CANARY_NAME="nyc-taxi-eta-canary"
 CANARY_BACKEND="nyc-taxi-eta-canary-backend"
+# The hand-authored route. NOT `$CANARY_NAME`: that name belongs to the Ingress
+# KServe generates for this InferenceService, and writing canary annotations onto
+# it is accepted, reverted within seconds, and completely silent (F-039).
+CANARY_ROUTE="nyc-taxi-eta-canary-route"
 CANARY_MANIFEST="$REPO_ROOT/infra/manifests/inferenceservice-canary.yaml"
 BACKEND_MANIFEST="$REPO_ROOT/infra/manifests/canary-backend-service.yaml"
 
@@ -86,7 +90,7 @@ if [[ "$TEARDOWN" == "1" ]]; then
   # The Ingress first, in case a drill died holding a weight: a canary route
   # pointing at a Service that is about to disappear would send rider traffic to
   # a 503 for as long as it took to delete the rest.
-  "${KUBECTL[@]}" -n "$SERVING_NS" delete ingress "$CANARY_NAME" --ignore-not-found
+  "${KUBECTL[@]}" -n "$SERVING_NS" delete ingress "$CANARY_ROUTE" --ignore-not-found
   "${KUBECTL[@]}" -n "$SERVING_NS" delete svc "$CANARY_BACKEND" --ignore-not-found
   "${KUBECTL[@]}" -n "$SERVING_NS" delete inferenceservice "$CANARY_NAME" --ignore-not-found
   echo "ok  $CANARY_NAME removed (the champion was not touched)"

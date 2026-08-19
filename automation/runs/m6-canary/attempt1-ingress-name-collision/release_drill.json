@@ -2717,5 +2717,13 @@
     "c10_the_champion_pod_was_never_replaced": true,
     "c11_the_alias_never_moved": true
   },
-  "verdict": "FAIL"
+  "verdict": "FAIL",
+  "why_this_run_is_kept": {
+    "verdict": "FAIL 9/11 \u2014 0% of traffic moved at weight 10 AND at weight 100",
+    "cause": "F-039. The hand-authored canary Ingress was named nyc-taxi-eta-canary, which is EXACTLY the name KServe generates for the InferenceService nyc-taxi-eta-canary. kubectl apply succeeded and wrote the canary annotations onto the CONTROLLER-OWNED object; KServe reconciled them away within seconds. The Ingress kept its ownerReferences and its two generated hosts throughout.",
+    "the_tell": "3 of 300 requests reached the canary pod during the weight-100 window \u2014 the seconds between the apply and the reconcile \u2014 while the ingress counter recorded 0 canary-labelled requests at all. Nothing errored anywhere.",
+    "why_it_is_dangerous": "The symptom is identical to ADR-011 condition 1 (gotcha #81): a canary that is applied, accepted and completely inert. This program had just written a manifest, a script and a drill against condition 1, so the obvious reading of 0%% was the wrong one.",
+    "what_caught_it": "The drill measures the split from COUNTERS and not from its own configuration. A drill that asserted the annotation it had just applied would have gone green.",
+    "the_fix": "The canary Ingress is renamed nyc-taxi-eta-canary-route, and the drill now REFUSES to apply a weight to any Ingress carrying ownerReferences, and requires the controller to register the backend with noServer=true and the applied weight before a window is measured."
+  }
 }
