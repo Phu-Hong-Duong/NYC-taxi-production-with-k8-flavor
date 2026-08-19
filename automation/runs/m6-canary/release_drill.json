@@ -1,0 +1,24 @@
+{
+  "story": "M6-S4",
+  "what": "canary 10% -> 100% -> revert, under sustained load",
+  "prediction": {
+    "written_before_anything_was_applied": true,
+    "p1_weight_10_moves_about_a_tenth": "During the settled 90/10 window, 90/10 +/- 5.0 points of requests are attributed to the canary backend by nginx_ingress_controller_requests{canary!=''}.",
+    "p2_the_two_witnesses_agree": "The share computed from the ingress counter and the share computed from the two predictors' own rest_server_requests_total agree within 3 points, in BOTH weighted windows. They are different processes counting different things; a disagreement would mean one of them is not measuring what this drill thinks it is.",
+    "p3_weight_100_moves_essentially_all_of_it": "At canary-weight 100, >= 95% of settled-window requests reach the canary and the champion predictor's own counter is flat to within a handful of requests.",
+    "p4_a_weight_flip_costs_zero_requests": "ZERO failed requests across both weight changes and across the revert. No pod is created, destroyed or rescheduled by an Ingress edit, so this should not even cost the 0.5 s a model re-deploy costs (gotcha #80). If any request fails, that is a finding about ingress-nginx's reload and not a footnote.",
+    "p5_the_revert_is_seconds_not_minutes": "Deleting the canary Ingress returns the split to 100/0 in well under 10 s of wall-clock \u2014 measured from the controller's OWN backend configuration, polled \u2014 against the 120 s budget. One object is deleted and nginx reloads; nothing is scheduled, pulled or downloaded.",
+    "p6_the_version_stamp_proves_nothing_here": "Every response in every phase carries model_version 2, INCLUDING the fully-shifted window, because the canary is the champion's own bytes under the champion's own model name. This is stated as a prediction so that nobody later reads a constant version stamp in this record as evidence that no traffic moved.",
+    "p7_the_champion_pod_is_never_touched": "The champion predictor pod has the same UID at the end of the drill as at the start, and @champion is version 2 throughout. The only mutated object is the canary Ingress (F-038: an isvc annotation would not have been metadata)."
+  },
+  "shape": {
+    "rate_per_second": 4.0,
+    "concurrency": 8,
+    "mix": "hazards",
+    "seconds": 360,
+    "settle_seconds_after_each_weight_change": 15,
+    "scrape_interval_seconds": 15,
+    "note": "counters are cumulative and scraped every 15 s, so each window's covered interval is its stated length +/- one scrape. That moves the COUNTS and not the SHARE, which is what every check below is written against."
+  },
+  "phases": {}
+}
