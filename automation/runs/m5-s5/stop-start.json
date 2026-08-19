@@ -1,0 +1,55 @@
+{
+  "story": "M5-S5",
+  "phase": "stop-start-rehearsal",
+  "before": {
+    "conditions": {
+      "IngressReady": "True",
+      "PredictorReady": "True",
+      "Ready": "True",
+      "Stopped": "False"
+    },
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"serving.kserve.io/v1beta1\",\"kind\":\"InferenceService\",\"metadata\":{\"annotations\":{\"serving.kserve.io/deploymentMode\":\"RawDeployment\"},\"labels\":{\"app.kubernetes.io/part-of\":\"crosstown-eta\"},\"name\":\"nyc-taxi-eta\",\"namespace\":\"serving\"},\"spec\":{\"predictor\":{\"maxReplicas\":1,\"minReplicas\":1,\"model\":{\"env\":[{\"name\":\"MLSERVER_MODEL_VERSION\",\"value\":\"2\"}],\"modelFormat\":{\"name\":\"mlflow\"},\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"3Gi\"},\"requests\":{\"cpu\":\"200m\",\"memory\":\"1Gi\"}},\"runtime\":\"taxi-mlserver\",\"storageUri\":\"s3://mlflow-artifacts/6/models/m-04478c4795474ecc81756f74398dc1a3/artifacts\"},\"serviceAccountName\":\"taxi-serving\"}}}\n",
+      "modelFormat": "mlflow",
+      "serving.kserve.io/deploymentMode": "Standard"
+    },
+    "answering": true,
+    "spec_replicas": 1,
+    "ready_replicas": 1
+  },
+  "stop_command": "kubectl -n serving annotate inferenceservice nyc-taxi-eta serving.kserve.io/stop=true --overwrite",
+  "stop_stdout": "inferenceservice.serving.kserve.io/nyc-taxi-eta annotated",
+  "seconds_to_stop": 3.12,
+  "after_stop": {
+    "conditions": {
+      "IngressReady": "False",
+      "PredictorReady": "False",
+      "Ready": "False",
+      "Stopped": "True"
+    },
+    "spec_replicas": null,
+    "ready_replicas": 0,
+    "pods": "nyc-taxi-eta-predictor-7ff5ccd649-qrd6f   0/1   Completed   0     17m"
+  },
+  "start_command": "kubectl -n serving annotate inferenceservice nyc-taxi-eta serving.kserve.io/stop-",
+  "start_stdout": "inferenceservice.serving.kserve.io/nyc-taxi-eta annotated",
+  "seconds_to_serve_again": 18.24,
+  "after_start": {
+    "conditions": {
+      "IngressReady": "True",
+      "PredictorReady": "True",
+      "Ready": "True",
+      "Stopped": "False"
+    },
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"serving.kserve.io/v1beta1\",\"kind\":\"InferenceService\",\"metadata\":{\"annotations\":{\"serving.kserve.io/deploymentMode\":\"RawDeployment\"},\"labels\":{\"app.kubernetes.io/part-of\":\"crosstown-eta\"},\"name\":\"nyc-taxi-eta\",\"namespace\":\"serving\"},\"spec\":{\"predictor\":{\"maxReplicas\":1,\"minReplicas\":1,\"model\":{\"env\":[{\"name\":\"MLSERVER_MODEL_VERSION\",\"value\":\"2\"}],\"modelFormat\":{\"name\":\"mlflow\"},\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"3Gi\"},\"requests\":{\"cpu\":\"200m\",\"memory\":\"1Gi\"}},\"runtime\":\"taxi-mlserver\",\"storageUri\":\"s3://mlflow-artifacts/6/models/m-04478c4795474ecc81756f74398dc1a3/artifacts\"},\"serviceAccountName\":\"taxi-serving\"}}}\n",
+      "modelFormat": "mlflow",
+      "serving.kserve.io/deploymentMode": "Standard"
+    },
+    "pods": "nyc-taxi-eta-predictor-7ff5ccd649-xj2q6   1/1   Running   0     19s   10.244.1.12   mlops-taxi-worker   <none>   <none>",
+    "spec_replicas": 1,
+    "ready_replicas": 1,
+    "answering": true
+  },
+  "passed": true
+}
