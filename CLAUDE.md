@@ -124,6 +124,8 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | Grafana chart | **`grafana/grafana` 10.5.15** (appVersion **12.3.1**) | 2026-08-19 | `helm search repo grafana --versions` (M6-S1). Persistence **OFF** deliberately — the inverse of M1-S5's Metabase decision and for the same reason: Metabase's H2 file held the BOARDS, so losing it lost the work; here the boards and the datasource are provisioned from git on every start, so Grafana's sqlite holds only a human's UI preferences. Admin credential from Secret `monitoring/grafana-admin` (`admin.existingSecret`), never `--set` (readable by `ps`) and never the chart default (a published password) |
 | Predictor metrics endpoint | **`:8082/metrics`, PROBED** — and KServe's own pod annotation says **8080**, which returns **404** on this runtime | 2026-08-19 | `make probe-mlserver-metrics` against the live pod (M6-S1, **F-034**). 24 series, of which the load-bearing ones are `rest_server_requests_total{status_code=…}` (the 5xx-vs-422 split at source), `rest_server_request_duration_seconds_bucket` (a histogram, so a real server-side p95) and `model_infer_request_{success,failure}_total`. **The model VERSION is NOT in any mlserver metric** (`version="None"`) — so M6-S2's A-4 needs another source, and the response body is it |
 | ingress-nginx `updateStrategy` | **`Recreate`, and it is FORCED** (chart default is RollingUpdate) | 2026-08-19 | M6-S1, **F-033**. `hostPort` + `replicaCount: 1` + a single-node `nodeSelector` means the surge pod can never bind port 80 while the old pod holds it, so a RollingUpdate deadlocks — observed Pending for 10 minutes with the route serving 840/840 and the helm upgrade heading for its 20m timeout. Honest cost, unavoidable rather than chosen: every change to that Deployment now costs a real outage of the only route in. **Measured: 15.0 s** |
+| Predictor CPU **request** | **1500m** (limit unchanged at **2**; memory request unchanged at 1Gi) — was `200m`, an under-reservation of ~6.5× against M5-S4's measured **1.31 cores** at the SLO's own load shape | 2026-08-19 | `infra/manifests/inferenceservice-champion.yaml` (M6-S2), read back off the live Deployment. Argued from the measurement **plus ~15%**, never set equal to it, and deliberately BELOW the limit so the pod stays **Burstable**: request == limit would make it Guaranteed and reserve the saturation ceiling (~6 req/s) for load the SLO does not promise to serve, on a node with 20 allocatable cores. **Applying it cost 0.5 s of route unavailability, not the ~15 s three prior measurements implied** — gotcha #80 |
+| Serving alert rules | **7 rules across 6 signal ids** (A-1, A-2, A-3, A-5 ×2, A-6, A-7) in `infra/monitoring/alerting_rules.yml`, a plain Prometheus rules file · thresholds **5%** beyond 250 ms · **10%** edge 5xx · **1%** 4xx · **<1** available replica · **>2** restarts/15 m · **0.90** CFS-throttled fraction | 2026-08-19 | M6-S2, read back off `/api/v1/rules` (7 loaded, `health=ok`). Every threshold's argument lives in `docs/slo_serving.md`, and `scripts/render_alert_rules.py` REFUSES a rule with no `annotations.why`. **A-4 and A-3's client half have NO rule and that is recorded** (F-035) |
 | KServe `deploymentMode` | **`RawDeployment`** (ADR-004's Standard mode) — the chart default is `Knative` | 2026-08-19 | `infra/helm/kserve/values.yaml`, and READ BACK off `configmap/inferenceservice-config` by `scripts/deploy_serving.sh` rather than off the values that were submitted. Honest cost, landing on M6: **Standard mode has no canary** — `canaryTrafficPercent` requires Serverless (the prior-art ADOPT) |
 
 ## The data contract (M1-S1) — where the rules actually live
@@ -1583,6 +1585,80 @@ can never disagree (the port-family twins lesson, applied before it bit).
   version in any mlserver metric**, so A-4 needs the response body ·
   `serverFiles.alerting_rules.yml` already present and empty on purpose.
 
+## Judgement (M6-S2) — the SLOs, the alerts that fired, and the number the analogy got wrong
+- **`docs/slo_serving.md` OWNS every serving threshold** and nothing else may
+  invent one. Four targets: **SLO-L1** 95% of quotes within **250 ms**
+  server-side · **SLO-A1** 99.9% non-5xx monthly, measured **at the edge** ·
+  **SLO-R1** <1% of infers rejected as malformed, explicitly OUTSIDE A1's error
+  budget (a 4xx is a guard working) · **SLO-C1** saturation, an operating limit
+  and not a user promise. Every target states its **instrument** and its **load
+  shape**, and none is set equal to a number just measured (#63/#74 in bar-form).
+- **The p95 instrument cannot measure this service's p95, and the SLO is shaped
+  around that.** `histogram_quantile(0.95, …)` returned **111.6 ms** for a window
+  where the client's WHOLE-ROUND-TRIP p95 was **84.4 ms** — impossible for a real
+  measurement: mlserver's buckets jump `le` 0.1 → 0.25 and 13 of 259 observations
+  live in that 150 ms gap, so the estimate is interpolation. **So SLO-L1's number
+  IS a bucket edge and A-1 counts requests beyond it** — exact, no interpolation
+  anywhere. Its counters are fine; only its quantiles are unusable.
+- **A-2 is measured at the EDGE because a dead predictor cannot report its own
+  absence** — the series does not fall to zero, it stops existing. Its threshold
+  is **10%** and that is arithmetic, not laxity: at 4 req/s the longest healthy
+  recovery ever measured here (18.24 s) is **6.1%** of a 5-minute window, so a 5%
+  bar would page for a system that healed itself in eighteen seconds. Honest
+  blind spot, stated: **a ratio has no value when nobody is asking**, so A-2
+  cannot fire on an idle service — **A-5 is the complement**, reading a replica
+  count and needing no traffic. A test fails if every rule becomes a ratio.
+- **A-6's threshold could not have been guessed: this container is throttled at
+  every rate it has ever been measured at.** M5-S4's ramp, throttled fraction vs
+  client p50: **0.23 → 18.5 ms · 0.51 → 19.1 ms · 0.79 → 18.1 ms · ~1.00 →
+  115.5 ms**, with **zero errors on every row** (#74 as a table). "Any throttling"
+  fires on a healthy service, so the bar is **0.90** — between the last harmless
+  observation and the first harmful one — sustained 10m.
+- **`make alert-fire-drill` fired two alerts end to end, GREEN 11/11, and its
+  prediction was on disk first.** ONE injection carrying both shapes the endpoint
+  really produces (malformed body → 422, F-030's class; signature-refused body →
+  500, F-032's class) must fire two rules with different sustain windows **in a
+  predicted order**: **A-3 at T+150.5 s (predicted 150) then A-2 at T+330.6 s
+  (predicted 330)**, both reaching **Alertmanager** and not just Prometheus's UI,
+  all **five must-not-fire alerts inactive**, an ordinary quote succeeding
+  throughout (errors, not an outage), both cleared 315.1 s after the stop. The
+  negative predictions are the load-bearing half — a drill that predicts only
+  "something fires" cannot be wrong.
+- **F-035: two of the PRR's seven signals have no metric source, for the same
+  reason — the fact lives in a CLIENT and no client here is scraped.** Measured,
+  not assumed: a past-horizon `make quote` (exit 2, F-019's refusal raised before
+  a request is built) left the infer counter at **22 → 22**, so the kickoff's
+  "A-3 can be fired for free by past-horizon quotes" is false against this stack.
+  A-4 needs served-version vs registry and **no mlserver metric carries a
+  version** while MLflow exports no metrics — there are not two series. Both are
+  named absences with options, costs and an M7-pushgateway landing;
+  `render_alert_rules.py` FAILS if the implemented set and the documented
+  absences disagree, so the gap cannot be quietly forgotten OR quietly closed.
+- **The CPU request is 1500m on the wire and the p95 prediction held**: p50 29.4
+  → 29.5 ms, p95 84.4 → 112.7 ms (inside this shape's run-to-run spread — M5-S4
+  measured 104.2), and on the SLO's own instrument **≥2 of 240 beyond 250 ms
+  before vs 0 of 240 after**. The tail's improvement (p99 −73%, max −79%) is
+  deliberately NOT claimed: the before run's slow requests were mid-run, which is
+  host contention, and the flattering reading is the one this program names and
+  refuses.
+- **What this story predicted WRONG is the useful part (#80).** The SLO doc's
+  first draft priced a model re-deploy at ~15–18 s by analogy with three measured
+  mutations. Measured across a real `make serve`: **0.5 s, one 502 of 400
+  samples.** At ONE replica `RollingUpdate`'s `maxUnavailable: 25%` floors to
+  **zero**, so a surge pod must be ready before the old one goes; the other three
+  numbers all destroy the only pod first (kill · stop removes `spec.replicas` ·
+  ingress-nginx FORCED onto `Recreate` by its hostPort). **M6-S4 inherits this**:
+  a canary weight flip is nearly free.
+- **F-036, found by running the thing: `make serve` hung 15 minutes and then
+  FAILED over a healthy service.** kubectl v1.36 ignores a resource's conditions
+  while `observedGeneration` trails `generation`, and KServe v0.20.0 leaves it
+  behind on every re-deploy (observed 3 vs 2, all conditions `True`, pod Running
+  1/1). Under `set -e` the timeout took the accept check with it — the one failure
+  mode is a correct deploy reporting as broken (#55's family). Second wait leg is
+  now `--for=jsonpath=`; `rollout status` stays FIRST (#71 untouched). The M5 test
+  that pinned `--for=condition=Ready` went red for the correct fix and was
+  re-pinned to the ORDER of the two waits — **gotcha #50, fourth time.**
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -1699,6 +1775,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The monitoring stack (M6-S1) | `make deploy-monitoring` (`scripts/deploy_monitoring.sh`; `DRY_RUN=1` mutates NOTHING, helm included) — Prometheus + Alertmanager + kube-state-metrics + Grafana through the EXISTING 8081 route. **Installs no alert rule and no threshold** | VERIFIED 2026-08-19 (M6-S1): `prometheus 29.27.0` and `grafana 10.5.15` deployed into `monitoring`; the accept check **GREEN 10/10** with targets `kserve-predictors` 1/1, `kubernetes-service-endpoints` 6/6, `kubernetes-nodes-cadvisor` 3/3 (**none permanently red**). **Idempotent re-run = every pod 9–11 min old, 0 restarts** (the M4-S2 shape) — and the Prometheus pod does not restart when its config changes at all (configmap-reload sidecar). `DRY_RUN=1` verified to leave `helm list -A` untouched. Its wire change is the ingress-nginx metrics roll — **F-033**, measured at **15.0 s** — and `make verify-m5` was re-run **GREEN 49/49** after it. Transcript: `docs/monitoring_m6.md` |
 | Prove a rider's request becomes a number (M6-S1) | `make monitoring-accept` (`ACCEPT_ARGS=--json` writes the record) — the accept twin, re-runnable, ~1 min | VERIFIED 2026-08-19 (M6-S1): **GREEN 10/10.** It is not a target list (gotcha #59): it reads the inference counter, sends ONE real quote through the live endpoint (`2019-07-04T09:15:00 zone 132 -> 48 -> 39.0019 minutes` — the parity record's own value), waits 40 s for a scrape, and requires the counter to move (**17 → 18**). Then it parses **every panel's PromQL out of `analytics/grafana/dashboards/serving.json`** and executes all 11 against Prometheus, requiring live series from each — **an empty panel is a FAILURE**, because it is indistinguishable from a quiet system (gotcha #78). Its first run was green over three real defects |
 | Ask the predictor where its metrics really are (M6-S1) | `make probe-mlserver-metrics` | VERIFIED 2026-08-19 (M6-S1, **F-034**): `:8082/metrics -> HTTP 200, 119 lines, 24 series` · `:8080/metrics -> HTTP 404` — against KServe's own pod annotation `prometheus.kserve.io/port: "8080"`. Prints one WHOLE sample per serving-relevant series, because the LABELS are what a board and an alert are written against; that is how `status_code` (the 5xx/422 split) and `version="None"` (no model version in any mlserver metric) were both found before a rule was written |
+| Validate the alert rules (M6-S2) | `make alert-rules` (`scripts/render_alert_rules.py --check`; without `--check` it prints the helm values overlay the deploy passes) | VERIFIED 2026-08-19 (M6-S2): **7 rule(s) validated** across 6 signal ids, each printed with its `for:` and severity. It REFUSES a rule with no `expr`, no `labels.severity`, an unknown A-id or no `annotations.why` — *a threshold whose argument is not written beside it is a number nobody can review* — and it fails if the implemented-signal set and the documented absences (A-4, A-3's client half — F-035) ever disagree. It runs INSIDE `deploy_monitoring.sh` before helm, so a malformed rules file fails there instead of becoming a successful upgrade over a Prometheus with no rules. Read back off `/api/v1/rules`: 7 loaded, `health=ok`, all `inactive` |
+| Fire real alerts, prediction FIRST (M6-S2) | `make alert-fire-drill` (`DRILL_ARGS="--dry-run"` is the ~5 s preflight that writes the prediction and injects nothing; ~8 min, no outage) | VERIFIED 2026-08-19 (M6-S2): **GREEN 11/11.** Prediction written to `automation/runs/m6-slo/alert-fire-prediction.json` BEFORE anything was injected (the M4-S5/M5-S4 discipline). ONE injection of two shapes the endpoint really produces — **662 × 422** (malformed body, F-030's class) and **661 × 500** (signature-refused body, F-032's half-rollback class) — fired **A-3 at T+150.5 s (predicted 150)** then **A-2 at T+330.6 s (predicted 330)**, in the predicted order, both held by **Alertmanager**, all **five must-not-fire alerts inactive**, an ordinary quote answering **39.0019 minutes** mid-injection, and both back to `inactive` **315.1 s** after the stop. Deletes nothing, scales nothing, promotes nothing (pinned by an AST test); `@champion` read, never written |
+| Write the CPU-resize record from the runs (M6-S2) | `uv run python scripts/cpu_request_resize_record.py` | VERIFIED 2026-08-19 (M6-S2): derives the whole before/after comparison from the two tracked `make load` records and the availability probe rather than from typed numbers (the `error_memo_numbers.py` precedent). Prints `before p50 29.373 p95 84.437 p99 433.686 max 692.867` · `after p50 29.548 p95 112.677 p99 118.945 max 142.904` · `over the 250 ms SLO target: before >= 2/240, after >= 0/240` · `applying it cost the route 0.5 s` |
 | Measure what a wire change costs the route (M6-S1) | `uv run python scripts/route_availability_probe.py --seconds N --rate 2 --out <path> --label "…"` | VERIFIED 2026-08-19 (M6-S1): open-loop, one sample due every 1/rate seconds regardless of whether the last returned; **outage anchored first-failure → first-success** (gotcha #75) with the raw per-sample log kept so a reader can re-derive it differently. Observed **15.0 s / 30 failed of 600** across the ingress metrics roll — and **840/840 ok with `outage=None`** across the deadlocked rollout that never replaced anything, which is exactly why pod AGE and not the probe is what proves a rollout happened |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5 live; M6+ pending each milestone |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
@@ -1902,6 +1981,22 @@ Service, a `rate([1m])` at a 1-minute scrape interval, and one genuinely-down
 rbac-proxy endpoint). Execute every panel's own query and treat ZERO SERIES AS A
 FAILURE: an empty rectangle is what a quiet system looks like, so green must not be
 the default rendering of "no data" (#78, #59 applied to a dashboard)**.
+Newest (M6-S2), and both are about things that were *reasoned* rather than
+measured: **`kubectl wait --for=condition=X` silently requires the controller to
+have updated `observedGeneration`, so a perfectly healthy resource can be
+unwaitable forever — `make serve` hung fifteen minutes and then FAILED over an
+InferenceService with every condition `True` and its pod `Running 1/1`, because
+KServe v0.20.0 leaves observedGeneration behind on every re-deploy while kubectl
+v1.36 (correctly) refuses to read conditions that may describe the previous spec.
+The tell is that `--for=condition=` times out for EVERY condition on the object
+while the `--for=jsonpath=` form reading the same condition succeeds in the same
+second; one `kubectl get -o jsonpath` over generation/observedGeneration answers
+it (#79, F-036)**; and **a 15-second outage is what a DESTROYED pod costs, not
+what a DEPLOY costs — three mutations measured at 14.53/15.0/18.24 s made
+"a re-deploy is ~15 s" look like a safe analogy, and the real number is 0.5 s,
+because at one replica `maxUnavailable: 25%` floors to ZERO and a surge pod must
+be ready before the old one goes. Three numbers agreeing with each other is not
+evidence about a fourth mechanism (#80)**.
 Newest (M5-S4), and both are the same disease — **measure the quantity you will
 quote**: **a load test run at the CPU limit measures the QUOTA, not the service,
 and "held its rate with no errors" cannot detect that, because saturation shows
