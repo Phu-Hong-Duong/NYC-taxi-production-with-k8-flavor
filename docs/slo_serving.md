@@ -39,12 +39,13 @@ background refresh. That single fact sets the shape of every target here:
   and only one of them spends the error budget (§3, SLO-A1 vs SLO-R1). Folding
   F-019's typed refusal into an error rate would page the on-call for a
   data-horizon problem, and hiding it would let the horizon expire in silence.
-* **There is one replica and no canary**, so every deployment, every pod loss and
-  every configuration change is a full outage of the only route in. Measured
-  three times, within four seconds of each other: **14.53 s** (killed pod,
-  M5-S4) · **15.0 s** (ingress roll, M6-S1/F-033) · **18.24 s** (stop/start,
-  M5-S5). An availability target that forbids what every deploy costs is a
-  target the program plans to violate, so §3 prices them in explicitly.
+* **There is one replica and no canary**, so a pod loss is a full outage of the
+  only route in. Measured: **14.53 s** (killed pod, M5-S4) · **15.0 s** (ingress
+  roll, M6-S1/F-033) · **18.24 s** (stop/start, M5-S5) — and **0.5 s** for an
+  ordinary re-deploy, which is *not* in that family and which this story got
+  wrong before it measured it (§4.1). An availability target that forbids what
+  every deploy costs is a target the program plans to violate, so §4 prices them
+  in explicitly.
 
 ---
 
@@ -208,17 +209,50 @@ should be paged at 3am for a two-minute burst.
 
 ## 4. The error budget, and what it is spent on
 
-| Event | Measured cost | Budget share (30 d at 4 req/s) |
-|---|---|---|
-| Killed predictor pod, self-healed | 14.53 s | 0.56% |
-| Ingress controller roll (forced `Recreate`, F-033) | 15.0 s | 0.58% |
-| Stop/start of the InferenceService | 18.24 s | 0.70% |
-| A model re-deploy (`make serve`) | ~15–18 s | ~0.6% |
+| Event | Measured cost | Budget share (30 d at 4 req/s) | Why it costs that |
+|---|---|---|---|
+| **A model re-deploy (`make serve`)** | **0.5 s** | 0.02% | Rolling update, surge pod allowed |
+| Killed predictor pod, self-healed | 14.53 s | 0.56% | No surge — the pod is gone before a replacement exists |
+| Ingress controller roll (F-033) | 15.0 s | 0.58% | `Recreate` **forced** by a `hostPort` the surge pod could not bind |
+| Stop/start of the InferenceService | 18.24 s | 0.70% | `spec.replicas` removed entirely, then recreated from scratch |
 
-Five ordinary mutations a month spend **~3%** of the budget. This is written down
-so that a future proposal to deploy more often is answered with arithmetic rather
-than nerves — and so that the reverse claim, that the program cannot afford to
-deploy, is answerable too.
+Five ordinary mutations a month spend well under **1%** of the budget. This is
+written down so that a future proposal to deploy more often is answered with
+arithmetic rather than nerves — and so that the reverse claim, that the program
+cannot afford to deploy, is answerable too.
+
+### 4.1 The prediction in this section was wrong, and the correction is the useful part
+
+The first draft of this table said a model re-deploy costs **~15–18 s**, by
+analogy with the three numbers above it. Measured across the CPU-request roll
+this story performed (`automation/runs/m6-slo/cpu-request-roll.json`, a 2 req/s
+open-loop probe running across the whole `make serve`):
+
+```
+399/400 ok · 1 failed (one 502) · first failure +31.5 s -> first success +32.0 s
+outage 0.5 s        (anchored first-failure -> first-success, gotcha #75)
+new pod created +17.0 s, old pod terminated ~+31.5 s
+```
+
+**A re-deploy is not in the same family as the other three, and the mechanism
+says why.** The predictor Deployment's strategy is
+`RollingUpdate{maxSurge: 25%, maxUnavailable: 25%}`, and at **one replica**
+`maxUnavailable: 25%` floors to **zero** — the Deployment is *forbidden* from
+having no available pod, so a surge pod must become ready before the old one is
+removed. The other three all destroy the only pod first: a kill has nothing
+waiting, a stop removes `spec.replicas` altogether, and ingress-nginx was
+**forced** onto `Recreate` because its surge pod could never bind the `hostPort`
+the old one held (F-033). The 0.5 s that remains is the endpoint list switching.
+
+**What this measurement's resolution actually is**, stated because the number is
+small: the probe samples every 0.5 s, exactly one sample failed, so the true
+outage is somewhere in (0, 1.0] s and 0.5 s is the anchored figure. A finer probe
+would resolve it better; nothing in this document needs it to.
+
+**Why this matters beyond the table.** It is M6-S4's canary and rollback that
+inherit it: a weight flip or a re-deploy is nearly free, and the ~15 s figure —
+which was about to be quoted at those stories as the cost of a release step —
+belongs only to the mutations that destroy the pod first.
 
 ---
 

@@ -1,0 +1,3619 @@
+{
+  "label": "M6-S2: the predictor roll that applies the 200m -> 1500m CPU request change",
+  "started_unix": 1787123530.8655505,
+  "window_s": 200.0,
+  "rate_per_s": 2.0,
+  "samples": 400,
+  "ok": 399,
+  "failed": 1,
+  "first_failure_offset_s": 31.5,
+  "first_success_after_failure_offset_s": 32.0,
+  "outage_seconds": 0.5,
+  "outage_anchors": "first failure -> first success after it (NOT first error -> last error, gotcha #75)",
+  "status_counts": {
+    "200": 399,
+    "502": 1
+  },
+  "samples_raw": [
+    {
+      "index": 0,
+      "due_offset_s": 0.0,
+      "offset_s": 1787123530.866,
+      "latency_ms": 4.81,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 1,
+      "due_offset_s": 0.5,
+      "offset_s": 1787123531.366,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 2,
+      "due_offset_s": 1.0,
+      "offset_s": 1787123531.866,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 3,
+      "due_offset_s": 1.5,
+      "offset_s": 1787123532.366,
+      "latency_ms": 1.91,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 4,
+      "due_offset_s": 2.0,
+      "offset_s": 1787123532.866,
+      "latency_ms": 2.01,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 5,
+      "due_offset_s": 2.5,
+      "offset_s": 1787123533.366,
+      "latency_ms": 2.17,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 6,
+      "due_offset_s": 3.0,
+      "offset_s": 1787123533.866,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 7,
+      "due_offset_s": 3.5,
+      "offset_s": 1787123534.37,
+      "latency_ms": 10.29,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 8,
+      "due_offset_s": 4.0,
+      "offset_s": 1787123534.866,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 9,
+      "due_offset_s": 4.5,
+      "offset_s": 1787123535.366,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 10,
+      "due_offset_s": 5.0,
+      "offset_s": 1787123535.866,
+      "latency_ms": 2.66,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 11,
+      "due_offset_s": 5.5,
+      "offset_s": 1787123536.366,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 12,
+      "due_offset_s": 6.0,
+      "offset_s": 1787123536.866,
+      "latency_ms": 2.2,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 13,
+      "due_offset_s": 6.5,
+      "offset_s": 1787123537.366,
+      "latency_ms": 2.53,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 14,
+      "due_offset_s": 7.0,
+      "offset_s": 1787123537.866,
+      "latency_ms": 2.72,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 15,
+      "due_offset_s": 7.5,
+      "offset_s": 1787123538.366,
+      "latency_ms": 2.48,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 16,
+      "due_offset_s": 8.0,
+      "offset_s": 1787123538.866,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 17,
+      "due_offset_s": 8.5,
+      "offset_s": 1787123539.366,
+      "latency_ms": 2.49,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 18,
+      "due_offset_s": 9.0,
+      "offset_s": 1787123539.866,
+      "latency_ms": 2.52,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 19,
+      "due_offset_s": 9.5,
+      "offset_s": 1787123540.366,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 20,
+      "due_offset_s": 10.0,
+      "offset_s": 1787123540.866,
+      "latency_ms": 2.12,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 21,
+      "due_offset_s": 10.5,
+      "offset_s": 1787123541.366,
+      "latency_ms": 2.28,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 22,
+      "due_offset_s": 11.0,
+      "offset_s": 1787123541.866,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 23,
+      "due_offset_s": 11.5,
+      "offset_s": 1787123542.366,
+      "latency_ms": 2.5,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 24,
+      "due_offset_s": 12.0,
+      "offset_s": 1787123542.866,
+      "latency_ms": 2.01,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 25,
+      "due_offset_s": 12.5,
+      "offset_s": 1787123543.366,
+      "latency_ms": 2.33,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 26,
+      "due_offset_s": 13.0,
+      "offset_s": 1787123543.866,
+      "latency_ms": 2.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 27,
+      "due_offset_s": 13.5,
+      "offset_s": 1787123544.366,
+      "latency_ms": 1.94,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 28,
+      "due_offset_s": 14.0,
+      "offset_s": 1787123544.866,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 29,
+      "due_offset_s": 14.5,
+      "offset_s": 1787123545.366,
+      "latency_ms": 1.95,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 30,
+      "due_offset_s": 15.0,
+      "offset_s": 1787123545.866,
+      "latency_ms": 2.33,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 31,
+      "due_offset_s": 15.5,
+      "offset_s": 1787123546.366,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 32,
+      "due_offset_s": 16.0,
+      "offset_s": 1787123546.866,
+      "latency_ms": 2.47,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 33,
+      "due_offset_s": 16.5,
+      "offset_s": 1787123547.366,
+      "latency_ms": 2.02,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 34,
+      "due_offset_s": 17.0,
+      "offset_s": 1787123547.864,
+      "latency_ms": 2.09,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 35,
+      "due_offset_s": 17.5,
+      "offset_s": 1787123548.366,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 36,
+      "due_offset_s": 18.0,
+      "offset_s": 1787123548.866,
+      "latency_ms": 1.99,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 37,
+      "due_offset_s": 18.5,
+      "offset_s": 1787123549.366,
+      "latency_ms": 2.06,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 38,
+      "due_offset_s": 19.0,
+      "offset_s": 1787123549.866,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 39,
+      "due_offset_s": 19.5,
+      "offset_s": 1787123550.366,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 40,
+      "due_offset_s": 20.0,
+      "offset_s": 1787123550.866,
+      "latency_ms": 2.05,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 41,
+      "due_offset_s": 20.5,
+      "offset_s": 1787123551.366,
+      "latency_ms": 2.05,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 42,
+      "due_offset_s": 21.0,
+      "offset_s": 1787123551.866,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 43,
+      "due_offset_s": 21.5,
+      "offset_s": 1787123552.366,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 44,
+      "due_offset_s": 22.0,
+      "offset_s": 1787123552.866,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 45,
+      "due_offset_s": 22.5,
+      "offset_s": 1787123553.366,
+      "latency_ms": 1.9,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 46,
+      "due_offset_s": 23.0,
+      "offset_s": 1787123553.866,
+      "latency_ms": 2.43,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 47,
+      "due_offset_s": 23.5,
+      "offset_s": 1787123554.366,
+      "latency_ms": 2.8,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 48,
+      "due_offset_s": 24.0,
+      "offset_s": 1787123554.866,
+      "latency_ms": 2.36,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 49,
+      "due_offset_s": 24.5,
+      "offset_s": 1787123555.366,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 50,
+      "due_offset_s": 25.0,
+      "offset_s": 1787123555.866,
+      "latency_ms": 2.47,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 51,
+      "due_offset_s": 25.5,
+      "offset_s": 1787123556.366,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 52,
+      "due_offset_s": 26.0,
+      "offset_s": 1787123556.866,
+      "latency_ms": 2.42,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 53,
+      "due_offset_s": 26.5,
+      "offset_s": 1787123557.366,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 54,
+      "due_offset_s": 27.0,
+      "offset_s": 1787123557.866,
+      "latency_ms": 2.05,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 55,
+      "due_offset_s": 27.5,
+      "offset_s": 1787123558.366,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 56,
+      "due_offset_s": 28.0,
+      "offset_s": 1787123558.866,
+      "latency_ms": 2.27,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 57,
+      "due_offset_s": 28.5,
+      "offset_s": 1787123559.366,
+      "latency_ms": 2.17,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 58,
+      "due_offset_s": 29.0,
+      "offset_s": 1787123559.866,
+      "latency_ms": 2.29,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 59,
+      "due_offset_s": 29.5,
+      "offset_s": 1787123560.366,
+      "latency_ms": 5.08,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 60,
+      "due_offset_s": 30.0,
+      "offset_s": 1787123560.866,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 61,
+      "due_offset_s": 30.5,
+      "offset_s": 1787123561.366,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 62,
+      "due_offset_s": 31.0,
+      "offset_s": 1787123561.866,
+      "latency_ms": 2.29,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 63,
+      "due_offset_s": 31.5,
+      "offset_s": 1787123562.366,
+      "latency_ms": 1.58,
+      "status": 502,
+      "ok": false,
+      "error": "HTTP 502"
+    },
+    {
+      "index": 64,
+      "due_offset_s": 32.0,
+      "offset_s": 1787123562.866,
+      "latency_ms": 3.53,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 65,
+      "due_offset_s": 32.5,
+      "offset_s": 1787123563.366,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 66,
+      "due_offset_s": 33.0,
+      "offset_s": 1787123563.866,
+      "latency_ms": 5001.84,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 67,
+      "due_offset_s": 33.5,
+      "offset_s": 1787123564.366,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 68,
+      "due_offset_s": 34.0,
+      "offset_s": 1787123564.866,
+      "latency_ms": 5002.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 69,
+      "due_offset_s": 34.5,
+      "offset_s": 1787123565.366,
+      "latency_ms": 5002.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 70,
+      "due_offset_s": 35.0,
+      "offset_s": 1787123565.866,
+      "latency_ms": 2.67,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 71,
+      "due_offset_s": 35.5,
+      "offset_s": 1787123566.366,
+      "latency_ms": 2.09,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 72,
+      "due_offset_s": 36.0,
+      "offset_s": 1787123566.866,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 73,
+      "due_offset_s": 36.5,
+      "offset_s": 1787123567.366,
+      "latency_ms": 2.2,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 74,
+      "due_offset_s": 37.0,
+      "offset_s": 1787123567.866,
+      "latency_ms": 2.02,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 75,
+      "due_offset_s": 37.5,
+      "offset_s": 1787123568.366,
+      "latency_ms": 2.25,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 76,
+      "due_offset_s": 38.0,
+      "offset_s": 1787123568.866,
+      "latency_ms": 3.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 77,
+      "due_offset_s": 38.5,
+      "offset_s": 1787123569.366,
+      "latency_ms": 1.94,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 78,
+      "due_offset_s": 39.0,
+      "offset_s": 1787123569.866,
+      "latency_ms": 2.7,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 79,
+      "due_offset_s": 39.5,
+      "offset_s": 1787123570.366,
+      "latency_ms": 2.86,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 80,
+      "due_offset_s": 40.0,
+      "offset_s": 1787123570.866,
+      "latency_ms": 2.02,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 81,
+      "due_offset_s": 40.5,
+      "offset_s": 1787123571.366,
+      "latency_ms": 1.95,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 82,
+      "due_offset_s": 41.0,
+      "offset_s": 1787123571.866,
+      "latency_ms": 2.12,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 83,
+      "due_offset_s": 41.5,
+      "offset_s": 1787123572.366,
+      "latency_ms": 1.98,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 84,
+      "due_offset_s": 42.0,
+      "offset_s": 1787123572.866,
+      "latency_ms": 1.91,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 85,
+      "due_offset_s": 42.5,
+      "offset_s": 1787123573.366,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 86,
+      "due_offset_s": 43.0,
+      "offset_s": 1787123573.866,
+      "latency_ms": 1.98,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 87,
+      "due_offset_s": 43.5,
+      "offset_s": 1787123574.366,
+      "latency_ms": 2.05,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 88,
+      "due_offset_s": 44.0,
+      "offset_s": 1787123574.866,
+      "latency_ms": 2.39,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 89,
+      "due_offset_s": 44.5,
+      "offset_s": 1787123575.366,
+      "latency_ms": 2.09,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 90,
+      "due_offset_s": 45.0,
+      "offset_s": 1787123575.866,
+      "latency_ms": 2.29,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 91,
+      "due_offset_s": 45.5,
+      "offset_s": 1787123576.366,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 92,
+      "due_offset_s": 46.0,
+      "offset_s": 1787123576.866,
+      "latency_ms": 2.59,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 93,
+      "due_offset_s": 46.5,
+      "offset_s": 1787123577.366,
+      "latency_ms": 2.5,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 94,
+      "due_offset_s": 47.0,
+      "offset_s": 1787123577.865,
+      "latency_ms": 3.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 95,
+      "due_offset_s": 47.5,
+      "offset_s": 1787123578.366,
+      "latency_ms": 2.34,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 96,
+      "due_offset_s": 48.0,
+      "offset_s": 1787123578.866,
+      "latency_ms": 2.26,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 97,
+      "due_offset_s": 48.5,
+      "offset_s": 1787123579.366,
+      "latency_ms": 2.36,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 98,
+      "due_offset_s": 49.0,
+      "offset_s": 1787123579.866,
+      "latency_ms": 2.38,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 99,
+      "due_offset_s": 49.5,
+      "offset_s": 1787123580.366,
+      "latency_ms": 1.9,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 100,
+      "due_offset_s": 50.0,
+      "offset_s": 1787123580.866,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 101,
+      "due_offset_s": 50.5,
+      "offset_s": 1787123581.366,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 102,
+      "due_offset_s": 51.0,
+      "offset_s": 1787123581.866,
+      "latency_ms": 2.37,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 103,
+      "due_offset_s": 51.5,
+      "offset_s": 1787123582.366,
+      "latency_ms": 2.15,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 104,
+      "due_offset_s": 52.0,
+      "offset_s": 1787123582.866,
+      "latency_ms": 2.25,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 105,
+      "due_offset_s": 52.5,
+      "offset_s": 1787123583.366,
+      "latency_ms": 2.28,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 106,
+      "due_offset_s": 53.0,
+      "offset_s": 1787123583.866,
+      "latency_ms": 2.2,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 107,
+      "due_offset_s": 53.5,
+      "offset_s": 1787123584.366,
+      "latency_ms": 2.56,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 108,
+      "due_offset_s": 54.0,
+      "offset_s": 1787123584.866,
+      "latency_ms": 2.51,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 109,
+      "due_offset_s": 54.5,
+      "offset_s": 1787123585.366,
+      "latency_ms": 2.01,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 110,
+      "due_offset_s": 55.0,
+      "offset_s": 1787123585.866,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 111,
+      "due_offset_s": 55.5,
+      "offset_s": 1787123586.366,
+      "latency_ms": 2.15,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 112,
+      "due_offset_s": 56.0,
+      "offset_s": 1787123586.866,
+      "latency_ms": 2.6,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 113,
+      "due_offset_s": 56.5,
+      "offset_s": 1787123587.366,
+      "latency_ms": 2.39,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 114,
+      "due_offset_s": 57.0,
+      "offset_s": 1787123587.866,
+      "latency_ms": 2.38,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 115,
+      "due_offset_s": 57.5,
+      "offset_s": 1787123588.366,
+      "latency_ms": 2.52,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 116,
+      "due_offset_s": 58.0,
+      "offset_s": 1787123588.866,
+      "latency_ms": 2.62,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 117,
+      "due_offset_s": 58.5,
+      "offset_s": 1787123589.366,
+      "latency_ms": 2.41,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 118,
+      "due_offset_s": 59.0,
+      "offset_s": 1787123589.866,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 119,
+      "due_offset_s": 59.5,
+      "offset_s": 1787123590.366,
+      "latency_ms": 2.69,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 120,
+      "due_offset_s": 60.0,
+      "offset_s": 1787123590.866,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 121,
+      "due_offset_s": 60.5,
+      "offset_s": 1787123591.366,
+      "latency_ms": 2.82,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 122,
+      "due_offset_s": 61.0,
+      "offset_s": 1787123591.866,
+      "latency_ms": 2.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 123,
+      "due_offset_s": 61.5,
+      "offset_s": 1787123592.366,
+      "latency_ms": 2.27,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 124,
+      "due_offset_s": 62.0,
+      "offset_s": 1787123592.866,
+      "latency_ms": 1.98,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 125,
+      "due_offset_s": 62.5,
+      "offset_s": 1787123593.366,
+      "latency_ms": 2.06,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 126,
+      "due_offset_s": 63.0,
+      "offset_s": 1787123593.866,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 127,
+      "due_offset_s": 63.5,
+      "offset_s": 1787123594.366,
+      "latency_ms": 2.06,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 128,
+      "due_offset_s": 64.0,
+      "offset_s": 1787123594.866,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 129,
+      "due_offset_s": 64.5,
+      "offset_s": 1787123595.366,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 130,
+      "due_offset_s": 65.0,
+      "offset_s": 1787123595.866,
+      "latency_ms": 2.37,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 131,
+      "due_offset_s": 65.5,
+      "offset_s": 1787123596.366,
+      "latency_ms": 2.12,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 132,
+      "due_offset_s": 66.0,
+      "offset_s": 1787123596.866,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 133,
+      "due_offset_s": 66.5,
+      "offset_s": 1787123597.366,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 134,
+      "due_offset_s": 67.0,
+      "offset_s": 1787123597.866,
+      "latency_ms": 2.73,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 135,
+      "due_offset_s": 67.5,
+      "offset_s": 1787123598.366,
+      "latency_ms": 2.33,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 136,
+      "due_offset_s": 68.0,
+      "offset_s": 1787123598.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 137,
+      "due_offset_s": 68.5,
+      "offset_s": 1787123599.366,
+      "latency_ms": 2.17,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 138,
+      "due_offset_s": 69.0,
+      "offset_s": 1787123599.866,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 139,
+      "due_offset_s": 69.5,
+      "offset_s": 1787123600.366,
+      "latency_ms": 2.26,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 140,
+      "due_offset_s": 70.0,
+      "offset_s": 1787123600.866,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 141,
+      "due_offset_s": 70.5,
+      "offset_s": 1787123601.366,
+      "latency_ms": 2.49,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 142,
+      "due_offset_s": 71.0,
+      "offset_s": 1787123601.866,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 143,
+      "due_offset_s": 71.5,
+      "offset_s": 1787123602.366,
+      "latency_ms": 2.9,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 144,
+      "due_offset_s": 72.0,
+      "offset_s": 1787123602.866,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 145,
+      "due_offset_s": 72.5,
+      "offset_s": 1787123603.366,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 146,
+      "due_offset_s": 73.0,
+      "offset_s": 1787123603.866,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 147,
+      "due_offset_s": 73.5,
+      "offset_s": 1787123604.366,
+      "latency_ms": 2.1,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 148,
+      "due_offset_s": 74.0,
+      "offset_s": 1787123604.866,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 149,
+      "due_offset_s": 74.5,
+      "offset_s": 1787123605.366,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 150,
+      "due_offset_s": 75.0,
+      "offset_s": 1787123605.866,
+      "latency_ms": 2.35,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 151,
+      "due_offset_s": 75.5,
+      "offset_s": 1787123606.366,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 152,
+      "due_offset_s": 76.0,
+      "offset_s": 1787123606.866,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 153,
+      "due_offset_s": 76.5,
+      "offset_s": 1787123607.366,
+      "latency_ms": 1.9,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 154,
+      "due_offset_s": 77.0,
+      "offset_s": 1787123607.865,
+      "latency_ms": 2.41,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 155,
+      "due_offset_s": 77.5,
+      "offset_s": 1787123608.366,
+      "latency_ms": 1.92,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 156,
+      "due_offset_s": 78.0,
+      "offset_s": 1787123608.866,
+      "latency_ms": 2.33,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 157,
+      "due_offset_s": 78.5,
+      "offset_s": 1787123609.366,
+      "latency_ms": 2.06,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 158,
+      "due_offset_s": 79.0,
+      "offset_s": 1787123609.866,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 159,
+      "due_offset_s": 79.5,
+      "offset_s": 1787123610.366,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 160,
+      "due_offset_s": 80.0,
+      "offset_s": 1787123610.866,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 161,
+      "due_offset_s": 80.5,
+      "offset_s": 1787123611.366,
+      "latency_ms": 2.0,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 162,
+      "due_offset_s": 81.0,
+      "offset_s": 1787123611.866,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 163,
+      "due_offset_s": 81.5,
+      "offset_s": 1787123612.366,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 164,
+      "due_offset_s": 82.0,
+      "offset_s": 1787123612.866,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 165,
+      "due_offset_s": 82.5,
+      "offset_s": 1787123613.366,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 166,
+      "due_offset_s": 83.0,
+      "offset_s": 1787123613.866,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 167,
+      "due_offset_s": 83.5,
+      "offset_s": 1787123614.366,
+      "latency_ms": 2.09,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 168,
+      "due_offset_s": 84.0,
+      "offset_s": 1787123614.866,
+      "latency_ms": 2.1,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 169,
+      "due_offset_s": 84.5,
+      "offset_s": 1787123615.366,
+      "latency_ms": 2.37,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 170,
+      "due_offset_s": 85.0,
+      "offset_s": 1787123615.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 171,
+      "due_offset_s": 85.5,
+      "offset_s": 1787123616.366,
+      "latency_ms": 1.91,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 172,
+      "due_offset_s": 86.0,
+      "offset_s": 1787123616.866,
+      "latency_ms": 2.25,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 173,
+      "due_offset_s": 86.5,
+      "offset_s": 1787123617.366,
+      "latency_ms": 2.64,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 174,
+      "due_offset_s": 87.0,
+      "offset_s": 1787123617.866,
+      "latency_ms": 3.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 175,
+      "due_offset_s": 87.5,
+      "offset_s": 1787123618.366,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 176,
+      "due_offset_s": 88.0,
+      "offset_s": 1787123618.866,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 177,
+      "due_offset_s": 88.5,
+      "offset_s": 1787123619.366,
+      "latency_ms": 2.02,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 178,
+      "due_offset_s": 89.0,
+      "offset_s": 1787123619.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 179,
+      "due_offset_s": 89.5,
+      "offset_s": 1787123620.366,
+      "latency_ms": 2.37,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 180,
+      "due_offset_s": 90.0,
+      "offset_s": 1787123620.866,
+      "latency_ms": 2.17,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 181,
+      "due_offset_s": 90.5,
+      "offset_s": 1787123621.366,
+      "latency_ms": 2.05,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 182,
+      "due_offset_s": 91.0,
+      "offset_s": 1787123621.866,
+      "latency_ms": 1.99,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 183,
+      "due_offset_s": 91.5,
+      "offset_s": 1787123622.366,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 184,
+      "due_offset_s": 92.0,
+      "offset_s": 1787123622.866,
+      "latency_ms": 2.64,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 185,
+      "due_offset_s": 92.5,
+      "offset_s": 1787123623.366,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 186,
+      "due_offset_s": 93.0,
+      "offset_s": 1787123623.866,
+      "latency_ms": 2.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 187,
+      "due_offset_s": 93.5,
+      "offset_s": 1787123624.366,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 188,
+      "due_offset_s": 94.0,
+      "offset_s": 1787123624.866,
+      "latency_ms": 2.31,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 189,
+      "due_offset_s": 94.5,
+      "offset_s": 1787123625.366,
+      "latency_ms": 2.2,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 190,
+      "due_offset_s": 95.0,
+      "offset_s": 1787123625.866,
+      "latency_ms": 2.53,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 191,
+      "due_offset_s": 95.5,
+      "offset_s": 1787123626.366,
+      "latency_ms": 2.05,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 192,
+      "due_offset_s": 96.0,
+      "offset_s": 1787123626.866,
+      "latency_ms": 2.28,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 193,
+      "due_offset_s": 96.5,
+      "offset_s": 1787123627.366,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 194,
+      "due_offset_s": 97.0,
+      "offset_s": 1787123627.866,
+      "latency_ms": 3.0,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 195,
+      "due_offset_s": 97.5,
+      "offset_s": 1787123628.366,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 196,
+      "due_offset_s": 98.0,
+      "offset_s": 1787123628.866,
+      "latency_ms": 2.36,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 197,
+      "due_offset_s": 98.5,
+      "offset_s": 1787123629.366,
+      "latency_ms": 2.07,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 198,
+      "due_offset_s": 99.0,
+      "offset_s": 1787123629.866,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 199,
+      "due_offset_s": 99.5,
+      "offset_s": 1787123630.366,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 200,
+      "due_offset_s": 100.0,
+      "offset_s": 1787123630.866,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 201,
+      "due_offset_s": 100.5,
+      "offset_s": 1787123631.366,
+      "latency_ms": 2.27,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 202,
+      "due_offset_s": 101.0,
+      "offset_s": 1787123631.866,
+      "latency_ms": 2.29,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 203,
+      "due_offset_s": 101.5,
+      "offset_s": 1787123632.366,
+      "latency_ms": 2.15,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 204,
+      "due_offset_s": 102.0,
+      "offset_s": 1787123632.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 205,
+      "due_offset_s": 102.5,
+      "offset_s": 1787123633.366,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 206,
+      "due_offset_s": 103.0,
+      "offset_s": 1787123633.866,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 207,
+      "due_offset_s": 103.5,
+      "offset_s": 1787123634.366,
+      "latency_ms": 1.91,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 208,
+      "due_offset_s": 104.0,
+      "offset_s": 1787123634.866,
+      "latency_ms": 2.17,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 209,
+      "due_offset_s": 104.5,
+      "offset_s": 1787123635.366,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 210,
+      "due_offset_s": 105.0,
+      "offset_s": 1787123635.866,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 211,
+      "due_offset_s": 105.5,
+      "offset_s": 1787123636.366,
+      "latency_ms": 2.43,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 212,
+      "due_offset_s": 106.0,
+      "offset_s": 1787123636.866,
+      "latency_ms": 2.25,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 213,
+      "due_offset_s": 106.5,
+      "offset_s": 1787123637.366,
+      "latency_ms": 1.94,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 214,
+      "due_offset_s": 107.0,
+      "offset_s": 1787123637.865,
+      "latency_ms": 2.26,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 215,
+      "due_offset_s": 107.5,
+      "offset_s": 1787123638.366,
+      "latency_ms": 1.86,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 216,
+      "due_offset_s": 108.0,
+      "offset_s": 1787123638.866,
+      "latency_ms": 1.99,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 217,
+      "due_offset_s": 108.5,
+      "offset_s": 1787123639.366,
+      "latency_ms": 2.34,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 218,
+      "due_offset_s": 109.0,
+      "offset_s": 1787123639.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 219,
+      "due_offset_s": 109.5,
+      "offset_s": 1787123640.366,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 220,
+      "due_offset_s": 110.0,
+      "offset_s": 1787123640.866,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 221,
+      "due_offset_s": 110.5,
+      "offset_s": 1787123641.366,
+      "latency_ms": 2.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 222,
+      "due_offset_s": 111.0,
+      "offset_s": 1787123641.866,
+      "latency_ms": 2.52,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 223,
+      "due_offset_s": 111.5,
+      "offset_s": 1787123642.366,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 224,
+      "due_offset_s": 112.0,
+      "offset_s": 1787123642.866,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 225,
+      "due_offset_s": 112.5,
+      "offset_s": 1787123643.366,
+      "latency_ms": 2.37,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 226,
+      "due_offset_s": 113.0,
+      "offset_s": 1787123643.866,
+      "latency_ms": 3.35,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 227,
+      "due_offset_s": 113.5,
+      "offset_s": 1787123644.366,
+      "latency_ms": 2.1,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 228,
+      "due_offset_s": 114.0,
+      "offset_s": 1787123644.866,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 229,
+      "due_offset_s": 114.5,
+      "offset_s": 1787123645.366,
+      "latency_ms": 2.0,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 230,
+      "due_offset_s": 115.0,
+      "offset_s": 1787123645.866,
+      "latency_ms": 2.0,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 231,
+      "due_offset_s": 115.5,
+      "offset_s": 1787123646.366,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 232,
+      "due_offset_s": 116.0,
+      "offset_s": 1787123646.866,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 233,
+      "due_offset_s": 116.5,
+      "offset_s": 1787123647.366,
+      "latency_ms": 2.03,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 234,
+      "due_offset_s": 117.0,
+      "offset_s": 1787123647.866,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 235,
+      "due_offset_s": 117.5,
+      "offset_s": 1787123648.366,
+      "latency_ms": 1.97,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 236,
+      "due_offset_s": 118.0,
+      "offset_s": 1787123648.866,
+      "latency_ms": 2.08,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 237,
+      "due_offset_s": 118.5,
+      "offset_s": 1787123649.366,
+      "latency_ms": 1.98,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 238,
+      "due_offset_s": 119.0,
+      "offset_s": 1787123649.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 239,
+      "due_offset_s": 119.5,
+      "offset_s": 1787123650.366,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 240,
+      "due_offset_s": 120.0,
+      "offset_s": 1787123650.866,
+      "latency_ms": 2.17,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 241,
+      "due_offset_s": 120.5,
+      "offset_s": 1787123651.366,
+      "latency_ms": 2.26,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 242,
+      "due_offset_s": 121.0,
+      "offset_s": 1787123651.866,
+      "latency_ms": 2.01,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 243,
+      "due_offset_s": 121.5,
+      "offset_s": 1787123652.366,
+      "latency_ms": 1.95,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 244,
+      "due_offset_s": 122.0,
+      "offset_s": 1787123652.866,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 245,
+      "due_offset_s": 122.5,
+      "offset_s": 1787123653.366,
+      "latency_ms": 2.15,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 246,
+      "due_offset_s": 123.0,
+      "offset_s": 1787123653.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 247,
+      "due_offset_s": 123.5,
+      "offset_s": 1787123654.366,
+      "latency_ms": 2.08,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 248,
+      "due_offset_s": 124.0,
+      "offset_s": 1787123654.866,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 249,
+      "due_offset_s": 124.5,
+      "offset_s": 1787123655.366,
+      "latency_ms": 1.9,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 250,
+      "due_offset_s": 125.0,
+      "offset_s": 1787123655.866,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 251,
+      "due_offset_s": 125.5,
+      "offset_s": 1787123656.366,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 252,
+      "due_offset_s": 126.0,
+      "offset_s": 1787123656.866,
+      "latency_ms": 2.09,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 253,
+      "due_offset_s": 126.5,
+      "offset_s": 1787123657.366,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 254,
+      "due_offset_s": 127.0,
+      "offset_s": 1787123657.866,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 255,
+      "due_offset_s": 127.5,
+      "offset_s": 1787123658.366,
+      "latency_ms": 1.93,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 256,
+      "due_offset_s": 128.0,
+      "offset_s": 1787123658.866,
+      "latency_ms": 2.05,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 257,
+      "due_offset_s": 128.5,
+      "offset_s": 1787123659.366,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 258,
+      "due_offset_s": 129.0,
+      "offset_s": 1787123659.866,
+      "latency_ms": 2.5,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 259,
+      "due_offset_s": 129.5,
+      "offset_s": 1787123660.366,
+      "latency_ms": 2.07,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 260,
+      "due_offset_s": 130.0,
+      "offset_s": 1787123660.866,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 261,
+      "due_offset_s": 130.5,
+      "offset_s": 1787123661.366,
+      "latency_ms": 1.9,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 262,
+      "due_offset_s": 131.0,
+      "offset_s": 1787123661.866,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 263,
+      "due_offset_s": 131.5,
+      "offset_s": 1787123662.366,
+      "latency_ms": 2.29,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 264,
+      "due_offset_s": 132.0,
+      "offset_s": 1787123662.866,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 265,
+      "due_offset_s": 132.5,
+      "offset_s": 1787123663.366,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 266,
+      "due_offset_s": 133.0,
+      "offset_s": 1787123663.866,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 267,
+      "due_offset_s": 133.5,
+      "offset_s": 1787123664.366,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 268,
+      "due_offset_s": 134.0,
+      "offset_s": 1787123664.866,
+      "latency_ms": 2.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 269,
+      "due_offset_s": 134.5,
+      "offset_s": 1787123665.366,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 270,
+      "due_offset_s": 135.0,
+      "offset_s": 1787123665.866,
+      "latency_ms": 2.31,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 271,
+      "due_offset_s": 135.5,
+      "offset_s": 1787123666.366,
+      "latency_ms": 2.41,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 272,
+      "due_offset_s": 136.0,
+      "offset_s": 1787123666.866,
+      "latency_ms": 2.35,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 273,
+      "due_offset_s": 136.5,
+      "offset_s": 1787123667.366,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 274,
+      "due_offset_s": 137.0,
+      "offset_s": 1787123667.864,
+      "latency_ms": 2.31,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 275,
+      "due_offset_s": 137.5,
+      "offset_s": 1787123668.366,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 276,
+      "due_offset_s": 138.0,
+      "offset_s": 1787123668.866,
+      "latency_ms": 2.42,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 277,
+      "due_offset_s": 138.5,
+      "offset_s": 1787123669.366,
+      "latency_ms": 2.35,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 278,
+      "due_offset_s": 139.0,
+      "offset_s": 1787123669.866,
+      "latency_ms": 2.34,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 279,
+      "due_offset_s": 139.5,
+      "offset_s": 1787123670.366,
+      "latency_ms": 2.04,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 280,
+      "due_offset_s": 140.0,
+      "offset_s": 1787123670.866,
+      "latency_ms": 3.03,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 281,
+      "due_offset_s": 140.5,
+      "offset_s": 1787123671.366,
+      "latency_ms": 2.69,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 282,
+      "due_offset_s": 141.0,
+      "offset_s": 1787123671.866,
+      "latency_ms": 2.46,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 283,
+      "due_offset_s": 141.5,
+      "offset_s": 1787123672.366,
+      "latency_ms": 3.68,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 284,
+      "due_offset_s": 142.0,
+      "offset_s": 1787123672.866,
+      "latency_ms": 2.55,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 285,
+      "due_offset_s": 142.5,
+      "offset_s": 1787123673.366,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 286,
+      "due_offset_s": 143.0,
+      "offset_s": 1787123673.866,
+      "latency_ms": 2.88,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 287,
+      "due_offset_s": 143.5,
+      "offset_s": 1787123674.366,
+      "latency_ms": 2.35,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 288,
+      "due_offset_s": 144.0,
+      "offset_s": 1787123674.866,
+      "latency_ms": 2.95,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 289,
+      "due_offset_s": 144.5,
+      "offset_s": 1787123675.366,
+      "latency_ms": 2.55,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 290,
+      "due_offset_s": 145.0,
+      "offset_s": 1787123675.866,
+      "latency_ms": 2.79,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 291,
+      "due_offset_s": 145.5,
+      "offset_s": 1787123676.366,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 292,
+      "due_offset_s": 146.0,
+      "offset_s": 1787123676.866,
+      "latency_ms": 3.65,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 293,
+      "due_offset_s": 146.5,
+      "offset_s": 1787123677.366,
+      "latency_ms": 2.21,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 294,
+      "due_offset_s": 147.0,
+      "offset_s": 1787123677.866,
+      "latency_ms": 2.34,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 295,
+      "due_offset_s": 147.5,
+      "offset_s": 1787123678.366,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 296,
+      "due_offset_s": 148.0,
+      "offset_s": 1787123678.866,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 297,
+      "due_offset_s": 148.5,
+      "offset_s": 1787123679.366,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 298,
+      "due_offset_s": 149.0,
+      "offset_s": 1787123679.866,
+      "latency_ms": 2.43,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 299,
+      "due_offset_s": 149.5,
+      "offset_s": 1787123680.366,
+      "latency_ms": 2.17,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 300,
+      "due_offset_s": 150.0,
+      "offset_s": 1787123680.866,
+      "latency_ms": 2.38,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 301,
+      "due_offset_s": 150.5,
+      "offset_s": 1787123681.366,
+      "latency_ms": 2.1,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 302,
+      "due_offset_s": 151.0,
+      "offset_s": 1787123681.866,
+      "latency_ms": 2.33,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 303,
+      "due_offset_s": 151.5,
+      "offset_s": 1787123682.366,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 304,
+      "due_offset_s": 152.0,
+      "offset_s": 1787123682.866,
+      "latency_ms": 2.69,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 305,
+      "due_offset_s": 152.5,
+      "offset_s": 1787123683.366,
+      "latency_ms": 2.15,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 306,
+      "due_offset_s": 153.0,
+      "offset_s": 1787123683.866,
+      "latency_ms": 2.12,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 307,
+      "due_offset_s": 153.5,
+      "offset_s": 1787123684.366,
+      "latency_ms": 2.87,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 308,
+      "due_offset_s": 154.0,
+      "offset_s": 1787123684.866,
+      "latency_ms": 2.41,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 309,
+      "due_offset_s": 154.5,
+      "offset_s": 1787123685.366,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 310,
+      "due_offset_s": 155.0,
+      "offset_s": 1787123685.866,
+      "latency_ms": 2.54,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 311,
+      "due_offset_s": 155.5,
+      "offset_s": 1787123686.366,
+      "latency_ms": 2.53,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 312,
+      "due_offset_s": 156.0,
+      "offset_s": 1787123686.866,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 313,
+      "due_offset_s": 156.5,
+      "offset_s": 1787123687.366,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 314,
+      "due_offset_s": 157.0,
+      "offset_s": 1787123687.866,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 315,
+      "due_offset_s": 157.5,
+      "offset_s": 1787123688.366,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 316,
+      "due_offset_s": 158.0,
+      "offset_s": 1787123688.866,
+      "latency_ms": 2.49,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 317,
+      "due_offset_s": 158.5,
+      "offset_s": 1787123689.366,
+      "latency_ms": 2.26,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 318,
+      "due_offset_s": 159.0,
+      "offset_s": 1787123689.866,
+      "latency_ms": 2.25,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 319,
+      "due_offset_s": 159.5,
+      "offset_s": 1787123690.366,
+      "latency_ms": 2.18,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 320,
+      "due_offset_s": 160.0,
+      "offset_s": 1787123690.866,
+      "latency_ms": 2.16,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 321,
+      "due_offset_s": 160.5,
+      "offset_s": 1787123691.366,
+      "latency_ms": 2.8,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 322,
+      "due_offset_s": 161.0,
+      "offset_s": 1787123691.866,
+      "latency_ms": 2.35,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 323,
+      "due_offset_s": 161.5,
+      "offset_s": 1787123692.366,
+      "latency_ms": 2.34,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 324,
+      "due_offset_s": 162.0,
+      "offset_s": 1787123692.866,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 325,
+      "due_offset_s": 162.5,
+      "offset_s": 1787123693.366,
+      "latency_ms": 1.97,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 326,
+      "due_offset_s": 163.0,
+      "offset_s": 1787123693.866,
+      "latency_ms": 1.99,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 327,
+      "due_offset_s": 163.5,
+      "offset_s": 1787123694.366,
+      "latency_ms": 2.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 328,
+      "due_offset_s": 164.0,
+      "offset_s": 1787123694.866,
+      "latency_ms": 2.6,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 329,
+      "due_offset_s": 164.5,
+      "offset_s": 1787123695.366,
+      "latency_ms": 2.46,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 330,
+      "due_offset_s": 165.0,
+      "offset_s": 1787123695.866,
+      "latency_ms": 2.63,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 331,
+      "due_offset_s": 165.5,
+      "offset_s": 1787123696.366,
+      "latency_ms": 2.65,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 332,
+      "due_offset_s": 166.0,
+      "offset_s": 1787123696.866,
+      "latency_ms": 2.55,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 333,
+      "due_offset_s": 166.5,
+      "offset_s": 1787123697.366,
+      "latency_ms": 2.46,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 334,
+      "due_offset_s": 167.0,
+      "offset_s": 1787123697.865,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 335,
+      "due_offset_s": 167.5,
+      "offset_s": 1787123698.366,
+      "latency_ms": 2.15,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 336,
+      "due_offset_s": 168.0,
+      "offset_s": 1787123698.866,
+      "latency_ms": 2.48,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 337,
+      "due_offset_s": 168.5,
+      "offset_s": 1787123699.366,
+      "latency_ms": 3.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 338,
+      "due_offset_s": 169.0,
+      "offset_s": 1787123699.866,
+      "latency_ms": 2.1,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 339,
+      "due_offset_s": 169.5,
+      "offset_s": 1787123700.366,
+      "latency_ms": 2.4,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 340,
+      "due_offset_s": 170.0,
+      "offset_s": 1787123700.866,
+      "latency_ms": 2.28,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 341,
+      "due_offset_s": 170.5,
+      "offset_s": 1787123701.366,
+      "latency_ms": 2.55,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 342,
+      "due_offset_s": 171.0,
+      "offset_s": 1787123701.866,
+      "latency_ms": 2.85,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 343,
+      "due_offset_s": 171.5,
+      "offset_s": 1787123702.366,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 344,
+      "due_offset_s": 172.0,
+      "offset_s": 1787123702.866,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 345,
+      "due_offset_s": 172.5,
+      "offset_s": 1787123703.366,
+      "latency_ms": 2.4,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 346,
+      "due_offset_s": 173.0,
+      "offset_s": 1787123703.866,
+      "latency_ms": 2.57,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 347,
+      "due_offset_s": 173.5,
+      "offset_s": 1787123704.366,
+      "latency_ms": 2.23,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 348,
+      "due_offset_s": 174.0,
+      "offset_s": 1787123704.866,
+      "latency_ms": 2.66,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 349,
+      "due_offset_s": 174.5,
+      "offset_s": 1787123705.366,
+      "latency_ms": 2.29,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 350,
+      "due_offset_s": 175.0,
+      "offset_s": 1787123705.866,
+      "latency_ms": 2.07,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 351,
+      "due_offset_s": 175.5,
+      "offset_s": 1787123706.366,
+      "latency_ms": 2.27,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 352,
+      "due_offset_s": 176.0,
+      "offset_s": 1787123706.866,
+      "latency_ms": 2.06,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 353,
+      "due_offset_s": 176.5,
+      "offset_s": 1787123707.366,
+      "latency_ms": 2.02,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 354,
+      "due_offset_s": 177.0,
+      "offset_s": 1787123707.866,
+      "latency_ms": 3.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 355,
+      "due_offset_s": 177.5,
+      "offset_s": 1787123708.366,
+      "latency_ms": 2.42,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 356,
+      "due_offset_s": 178.0,
+      "offset_s": 1787123708.866,
+      "latency_ms": 2.63,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 357,
+      "due_offset_s": 178.5,
+      "offset_s": 1787123709.366,
+      "latency_ms": 2.58,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 358,
+      "due_offset_s": 179.0,
+      "offset_s": 1787123709.866,
+      "latency_ms": 2.54,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 359,
+      "due_offset_s": 179.5,
+      "offset_s": 1787123710.366,
+      "latency_ms": 2.36,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 360,
+      "due_offset_s": 180.0,
+      "offset_s": 1787123710.866,
+      "latency_ms": 2.44,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 361,
+      "due_offset_s": 180.5,
+      "offset_s": 1787123711.366,
+      "latency_ms": 2.52,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 362,
+      "due_offset_s": 181.0,
+      "offset_s": 1787123711.866,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 363,
+      "due_offset_s": 181.5,
+      "offset_s": 1787123712.366,
+      "latency_ms": 2.46,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 364,
+      "due_offset_s": 182.0,
+      "offset_s": 1787123712.866,
+      "latency_ms": 2.13,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 365,
+      "due_offset_s": 182.5,
+      "offset_s": 1787123713.366,
+      "latency_ms": 2.64,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 366,
+      "due_offset_s": 183.0,
+      "offset_s": 1787123713.866,
+      "latency_ms": 2.82,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 367,
+      "due_offset_s": 183.5,
+      "offset_s": 1787123714.366,
+      "latency_ms": 2.4,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 368,
+      "due_offset_s": 184.0,
+      "offset_s": 1787123714.866,
+      "latency_ms": 3.36,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 369,
+      "due_offset_s": 184.5,
+      "offset_s": 1787123715.366,
+      "latency_ms": 2.02,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 370,
+      "due_offset_s": 185.0,
+      "offset_s": 1787123715.866,
+      "latency_ms": 2.71,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 371,
+      "due_offset_s": 185.5,
+      "offset_s": 1787123716.366,
+      "latency_ms": 2.43,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 372,
+      "due_offset_s": 186.0,
+      "offset_s": 1787123716.866,
+      "latency_ms": 2.22,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 373,
+      "due_offset_s": 186.5,
+      "offset_s": 1787123717.366,
+      "latency_ms": 2.53,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 374,
+      "due_offset_s": 187.0,
+      "offset_s": 1787123717.866,
+      "latency_ms": 4.26,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 375,
+      "due_offset_s": 187.5,
+      "offset_s": 1787123718.366,
+      "latency_ms": 2.3,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 376,
+      "due_offset_s": 188.0,
+      "offset_s": 1787123718.866,
+      "latency_ms": 2.55,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 377,
+      "due_offset_s": 188.5,
+      "offset_s": 1787123719.366,
+      "latency_ms": 2.24,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 378,
+      "due_offset_s": 189.0,
+      "offset_s": 1787123719.866,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 379,
+      "due_offset_s": 189.5,
+      "offset_s": 1787123720.366,
+      "latency_ms": 2.15,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 380,
+      "due_offset_s": 190.0,
+      "offset_s": 1787123720.866,
+      "latency_ms": 2.09,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 381,
+      "due_offset_s": 190.5,
+      "offset_s": 1787123721.366,
+      "latency_ms": 1.99,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 382,
+      "due_offset_s": 191.0,
+      "offset_s": 1787123721.866,
+      "latency_ms": 2.06,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 383,
+      "due_offset_s": 191.5,
+      "offset_s": 1787123722.366,
+      "latency_ms": 2.01,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 384,
+      "due_offset_s": 192.0,
+      "offset_s": 1787123722.866,
+      "latency_ms": 2.45,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 385,
+      "due_offset_s": 192.5,
+      "offset_s": 1787123723.366,
+      "latency_ms": 2.32,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 386,
+      "due_offset_s": 193.0,
+      "offset_s": 1787123723.866,
+      "latency_ms": 2.54,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 387,
+      "due_offset_s": 193.5,
+      "offset_s": 1787123724.366,
+      "latency_ms": 2.01,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 388,
+      "due_offset_s": 194.0,
+      "offset_s": 1787123724.866,
+      "latency_ms": 2.49,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 389,
+      "due_offset_s": 194.5,
+      "offset_s": 1787123725.366,
+      "latency_ms": 1.98,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 390,
+      "due_offset_s": 195.0,
+      "offset_s": 1787123725.866,
+      "latency_ms": 2.25,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 391,
+      "due_offset_s": 195.5,
+      "offset_s": 1787123726.366,
+      "latency_ms": 2.54,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 392,
+      "due_offset_s": 196.0,
+      "offset_s": 1787123726.866,
+      "latency_ms": 2.42,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 393,
+      "due_offset_s": 196.5,
+      "offset_s": 1787123727.366,
+      "latency_ms": 2.19,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 394,
+      "due_offset_s": 197.0,
+      "offset_s": 1787123727.865,
+      "latency_ms": 2.26,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 395,
+      "due_offset_s": 197.5,
+      "offset_s": 1787123728.366,
+      "latency_ms": 3.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 396,
+      "due_offset_s": 198.0,
+      "offset_s": 1787123728.866,
+      "latency_ms": 2.0,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 397,
+      "due_offset_s": 198.5,
+      "offset_s": 1787123729.366,
+      "latency_ms": 1.95,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 398,
+      "due_offset_s": 199.0,
+      "offset_s": 1787123729.866,
+      "latency_ms": 2.14,
+      "status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "index": 399,
+      "due_offset_s": 199.5,
+      "offset_s": 1787123730.366,
+      "latency_ms": 2.11,
+      "status": 200,
+      "ok": true,
+      "error": null
+    }
+  ]
+}
