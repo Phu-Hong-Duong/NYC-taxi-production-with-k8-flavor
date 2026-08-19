@@ -80,7 +80,7 @@ echo "   model     resolved from the ALIAS at deploy time — never typed"
 if [[ "$DRY_RUN" == "1" ]]; then
   echo
   echo "== [1/7] secrets ==     DRY_RUN — WOULD run scripts/platform_secrets.sh (adds minio-serving-user)"
-  echo "== [2/7] minio ==       DRY_RUN — WOULD helm upgrade minio $MINIO_CHART_VERSION (adds the readonly 'serving' user)"
+  echo "== [2/7] minio ==       DRY_RUN — WOULD converge minio $MINIO_CHART_VERSION (adds the 'serving' user + the serving-readonly policy)"
   echo "== [3/7] resolve ==     DRY_RUN — WOULD read models:/$ISVC_NAME@champion (a READ; the alias is never moved)"
   echo "== [4/7] runtime ==     DRY_RUN — WOULD apply $RUNTIME_MANIFEST"
   echo "== [5/7] credential ==  DRY_RUN — WOULD apply serviceaccount/taxi-serving + secret/minio-serving in $SERVING_NS"
