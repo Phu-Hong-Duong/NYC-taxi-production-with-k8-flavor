@@ -1281,3 +1281,49 @@ the seed line are earned by THIS project.
     remedy that follows (deploy first, move the config line last) is a
     consequence of the measurement and must be rehearsed before it is trusted,
     not substituted mid-incident (F-040).
+
+87. **A `rate(...[5m])` window is EMPTY when an event begins, so a threshold
+    argued from the steady-state ratio is an argument about the wrong quantity.**
+    `docs/slo_serving.md` justified A-2's 10% edge-5xx bar arithmetically: at
+    4 req/s a ~15 s outage costs ~60 of the ~1,200 requests a 5-minute window
+    carries, so *"10% is unreachable by any single recovery ever measured here"*.
+    Gameday 1 killed the predictor at exactly that shape and the share **peaked
+    at 0.5000** — `ServingEdge5xxRateHigh` went `pending` at T+89.2 s and back at
+    T+103.2 s, `PredictorNoAvailableReplica` at T+59.1 s → T+74.1 s. Thirty
+    seconds into a load run the window holds thirty seconds of traffic, so the
+    denominator is small and nearly all of it is the outage; 6.1% is what the
+    ratio decays TO. **What prevents a self-heal from paging is the `for:`
+    sustain, not the threshold.** The same mechanism runs backwards on the way
+    up: A-6's throttled fraction needed **244 s** to climb 0.41 → 1.00 as its
+    window filled, so its 10-minute sustain started four minutes after the load
+    did and it fired at T+844.3 s = 244.1 + 600.2. When you write a bar, ask what
+    the denominator holds at t=0 — and write down that an on-call will watch
+    alerts sit `pending`, in red, through every ordinary self-heal (F-041).
+
+88. **Two alerts' arrival ORDER is decided by their `for:` windows, never by the
+    causal story about which condition happens first.** A-7's own `why`
+    annotation claimed it fires before A-5 *"because a pod that never initialises
+    never had a replica to lose"* — true about the cause, silent about the
+    sustains. Breaking the storage credential made both expressions true in the
+    SAME scrape (pending together at T+30.1 s); the 2m rule fired at T+150.2 s
+    and the 3m rule at T+210.2 s, sixty seconds later, deterministically. What a
+    pair of alerts actually buys is a SIGNATURE rather than an ordering (*A-5
+    alone* = the replica is gone; *A-5 then A-7* = the replacement cannot fetch
+    its model), and that holds whichever arrives first — so correct the claim,
+    not the threshold (F-042).
+
+89. **A component under stress is an unreliable reporter of its own stress.**
+    Fifteen minutes at 8 req/s (past the measured 2-core ceiling) made
+    `PredictorLatencySLOBurning` fire at T+349.3 s and go back to **inactive at
+    T+514.3 s while the load was still running**. The predictor's own `/metrics`
+    had gone from 4 ms to **`scrape_duration_seconds` 4.613 s with `up == 0`** —
+    a scrape that failed outright — while the IDLE second predictor, scraped by
+    the same job every 15 s, stayed at 0.004 s. A failed scrape makes the series
+    stale, a stale series makes the expression evaluate over nothing, and an
+    expression over nothing is not `> 0.05`. *"Measure at the edge because a dead
+    predictor cannot report its own absence"* is the loud version of this; this
+    is the quiet one, and **the tell is a firing alert going inactive while the
+    symptom persists**. Keep at least one signal for each subject on the other
+    side of the failing process (A-6 reads the kubelet's cAdvisor and fired
+    regardless), and note that an idle second instance of the same exporter is
+    the cheapest control there is (F-043).

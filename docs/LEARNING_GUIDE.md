@@ -9,6 +9,65 @@ months from now.
 
 ## M6
 
+### M6-S5 (leg 1) — Gameday 1: every alert behaved, and two of our written arguments did not (2026-08-19, role:SRE/MLOps)
+
+**What was built.** `make gameday` — four staged failures against the live
+serving stack with every prediction written to disk before the first injection —
+and `make restore-drill`, the first restore this program has ever performed. Plus
+two corrections to prose that had been standing as if it were measurement, one
+new open finding, and no threshold changes at all.
+
+**Why this way.** The positive control comes first because three of the four
+scenarios make a claim of the form *alert X did not fire*, and that sentence is
+worthless from an instrument nobody has just watched work. A Prometheus that had
+quietly lost its rules would produce a flawless run of silent alerts and a
+gameday that felt like a success. So scenario 0 fires two real alerts end to end
+— rule, pending, firing, Alertmanager — and only afterwards is a negative worth
+reading. Everything else follows from that same instinct: predictions are
+quantitative and name alert ids; each one says what must NOT fire, because a
+drill that predicts only "something breaks" cannot be wrong about a signature;
+and the committed prediction file is compared against the code by a unit test, so
+amending a prediction to match an outcome is a red test rather than a diff nobody
+reads.
+
+**The concept underneath: the difference between a system being correct and our
+account of it being correct.** Every alert did the right thing in every scenario.
+Two of the ARGUMENTS published beside them were inferences that had never been
+tested. A-2's 10% threshold was justified by dividing an outage's failures by a
+full window's traffic — but `rate(...[5m])` extrapolates from what is actually
+inside the window, and thirty seconds into a load run that is thirty seconds of
+traffic, so the share peaked at 0.5000 rather than the predicted 5%. What
+protects against paging is the `for: 5m` sustain, not the threshold. A-7's
+annotation claimed it fires before A-5, reasoning from cause; the two `for:`
+windows say 2m beats 3m by sixty seconds, and they do, every time. Neither
+correction moved a number. Both moved a sentence, which is the part a human at
+3 a.m. actually reads.
+
+**The surprise nobody had a prediction for.** Fifteen minutes of saturation made
+the predictor's own `/metrics` endpoint starve: scrape duration went from 4 ms to
+4.613 s and one scrape failed outright, so `PredictorLatencySLOBurning` cleared
+itself in the middle of the event it was firing about. The idle second predictor
+— the v1 shadow M6-S3 left running — was scraped by the same job every fifteen
+seconds throughout at 0.004 s, which rules out Prometheus, the network and the
+scrape config in one comparison. *A predictor does not have to die to stop
+reporting; it only has to be busy.* That is the loud principle already in the SLO
+document (measure at the edge, because a dead predictor cannot report its own
+absence) one notch quieter and therefore more dangerous.
+
+**What to look at.** `docs/gameday_m6.md` (§2.1 and §4.1 are the two wrong
+predictions; §4.2 is F-043) · `automation/runs/m6-gameday/predictions.json`
+alongside the four scenario records · the dated correction in
+`docs/slo_serving.md` §3, which is kept BESIDE the paragraph it corrects because
+decisions were made from the original · `scripts/restore_rehearsal.py`'s header
+for what a rehearsal is allowed to claim.
+
+**What to try yourself.** Take any alert you own and ask what its denominator
+contains one second after the event starts. Then look at whether its written
+justification is a measurement or an inference — and if it is an inference, the
+cheapest possible experiment is usually to cause the thing and watch. Second
+exercise: find a metric your service exports about itself, and ask what happens
+to it in the failure mode it exists to describe.
+
 ### M6-S4 — the release rehearsal: two ways to take a change back, and only one of them is cheap (2026-08-19, role:SRE/MLOps)
 
 **What was built.** `make canary-deploy` (a second InferenceService carrying the
