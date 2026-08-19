@@ -198,7 +198,27 @@ echo "   waiting for the predictor (first start downloads $STORAGE_URI)…"
 # replacing is not a wait.
 "${KUBECTL[@]}" -n "$SERVING_NS" rollout status \
   "deploy/$ISVC_NAME-predictor" --timeout="$WAIT_TIMEOUT"
-"${KUBECTL[@]}" -n "$SERVING_NS" wait --for=condition=Ready \
+# THE SECOND LEG IS A JSONPATH WAIT AND NOT `--for=condition=Ready` — F-036,
+# found by M6-S2 when this line hung for fifteen minutes over a healthy service.
+# kubectl v1.36 ignores a resource's conditions while
+# `status.observedGeneration < metadata.generation` (correctly: a condition that
+# describes the previous spec is not evidence about this one). KServe v0.20.0's
+# controller reconciles the new spec — `PredictorReady` transitions, naming the
+# NEW ReplicaSet — and then leaves `observedGeneration` behind: observed live at
+# generation=3 / observedGeneration=2 with every condition True. So the wait can
+# never be satisfied, on any re-deploy, no matter how healthy the result. It ends
+# in `error: timed out waiting for the condition` and, under `set -e`, takes the
+# accept check with it — i.e. the one honest failure mode is that a perfect
+# deploy reports as a broken one (gotcha #55's family: a verifier failing for its
+# own reasons and blaming the artifact).
+# `--for=jsonpath=` reads the condition directly and does not consult
+# observedGeneration; verified live to return `condition met` on the same object,
+# in the same second the `--for=condition=` form timed out. It keeps this leg's
+# intent — KServe itself considers the service serving — and it stays SECOND
+# because it is still satisfiable by the predecessor (gotcha #71); `rollout
+# status` above is the leg that cannot be.
+"${KUBECTL[@]}" -n "$SERVING_NS" wait \
+  --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
   "inferenceservice/$ISVC_NAME" --timeout="$WAIT_TIMEOUT"
 "${KUBECTL[@]}" -n "$SERVING_NS" get pods -o wide -l "serving.kserve.io/inferenceservice=$ISVC_NAME"
 

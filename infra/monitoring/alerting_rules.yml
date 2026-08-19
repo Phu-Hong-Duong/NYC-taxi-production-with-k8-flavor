@@ -1,0 +1,251 @@
+# alerting_rules.yml — the serving alert rules (M6-S2).
+#
+# WHAT THIS FILE IS. A plain Prometheus rules file: `groups` -> `rules`, the
+# format `promtool check rules` reads. It is CHECKED IN and PROVISIONED —
+# `scripts/render_alert_rules.py` nests it under the chart's
+# `serverFiles.alerting_rules.yml` at deploy time and `scripts/deploy_monitoring.sh`
+# passes the result to helm. Nothing here is ever clicked into a UI, for the same
+# reason M1-S5's Metabase boards are checked-in JSON: a rule that exists only in
+# a running process cannot be reviewed in a PR and cannot be rebuilt after
+# `make destroy`.
+#
+# EVERY THRESHOLD IN THIS FILE IS ARGUED IN docs/slo_serving.md AND THE ARGUMENT
+# IS NOT "THIS IS WHAT WE MEASURED". Gotchas #63/#74 in bar-form: a bar set equal
+# to the number just observed is a bar that reports the past. Each rule below
+# carries a one-line `why` pointing at the SLO section that owns its number, and
+# the numbers themselves are derived from MEASURED HEADROOM — the rate at which
+# the service is observed to degrade — not from the rate at which it is observed
+# to work.
+#
+# THE A-IDS ARE THE M5 PRR'S BOX 3, AND TWO OF THE SEVEN ARE DELIBERATELY ABSENT
+# FROM THIS FILE (F-035). They are named in `docs/slo_serving.md` §6 with their
+# reason and their landing:
+#   * A-3's CLIENT half — the count of `UncoveredDateError` refusals (F-019).
+#     The refusal is raised in the CLIENT before a request is built, so it moves
+#     no server counter. Measured this session: a past-horizon `make quote`
+#     (exit 2) left `rest_server_requests_total{path=~".*infer"}` at 22 -> 22.
+#     The rule below covers the SERVER half (a malformed or schema-invalid body
+#     that reaches mlserver, F-030's class); the client half needs a metric
+#     source this stack has not got, and its landing is M7's pushgateway.
+#   * A-4 — served version != registry `@champion`. No mlserver metric carries
+#     the model version (`version="None"`, M6-S1/F-034) and MLflow exports no
+#     Prometheus metrics at all, so the comparison has no two series to make.
+#     It lives as a live CHECK (`verify-m5` §2, `verify-m6`), not as an alert.
+#
+# WHY SO MANY OF THESE ARE MEASURED AT THE EDGE AND NOT AT THE MODEL.
+# When the predictor dies its /metrics endpoint dies with it — the series does
+# not go to zero, it STOPS EXISTING. An error-rate alert written against
+# mlserver's own counters therefore cannot fire for the outage that matters most.
+# ingress-nginx is a different process, on a different node, that survives the
+# predictor: it is the only witness present for the failure it is meant to
+# report. Same reasoning as M4-S4's "two witnesses must agree", one layer down.
+
+groups:
+  - name: crosstown-serving
+    # 15s, matching `server.global.evaluation_interval`. Every `for:` below is
+    # therefore honoured to within one evaluation.
+    interval: 15s
+    rules:
+      # --- A-1 · latency -----------------------------------------------------
+      # SLO-L1: 95% of inference requests complete within 250 ms server-side.
+      #
+      # THIS IS NOT A `histogram_quantile` AND THAT IS THE POINT. Measured
+      # 2026-08-19: over the SLO's own load shape the client (which times the
+      # whole round trip, i.e. strictly MORE than the server does) reported a p95
+      # of 84.4 ms while `histogram_quantile(0.95, ...)` on the same window
+      # reported 111.6 ms. A quantile estimated from a superset cannot legally
+      # exceed one estimated from a subset, so the 111.6 ms is an artefact:
+      # mlserver's default buckets jump 0.1 -> 0.25, and this service's tail
+      # lives inside that 150 ms-wide gap, so the estimate is linear
+      # interpolation across a bucket that holds 13 of 259 observations.
+      # The SLO's number is therefore chosen to BE a bucket edge (le="0.25"),
+      # which makes this expression an exact count of how many requests were
+      # slower than the target — no interpolation anywhere.
+      - alert: PredictorLatencySLOBurning
+        expr: |
+          (
+            sum(rate(rest_server_request_duration_seconds_count{job="kserve-predictors", path=~".*infer", status_code="200"}[5m]))
+            -
+            sum(rate(rest_server_request_duration_seconds_bucket{job="kserve-predictors", path=~".*infer", status_code="200", le="0.25"}[5m]))
+          )
+          /
+          sum(rate(rest_server_request_duration_seconds_count{job="kserve-predictors", path=~".*infer", status_code="200"}[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          signal: A-1
+          slo: SLO-L1
+        annotations:
+          summary: "More than 5% of quotes are slower than the 250 ms SLO target"
+          why: >-
+            docs/slo_serving.md §3 SLO-L1. 250 ms is a bucket EDGE, so this is a
+            count and not an interpolation. Observed at the SLO's stated shape
+            (4 req/s, 60 s, concurrency 8, hazard mix): 258 of 259 infers within
+            250 ms, i.e. 0.4% beyond it against a 5% budget.
+          sustain: >-
+            for 5m, because a single slow scrape window is what a cold model load
+            or one host hiccup looks like, and neither is a user-visible outage.
+
+      # --- A-2 · 5xx at the edge --------------------------------------------
+      # SLO-A1: 99.9% of requests to the quote route are answered non-5xx.
+      #
+      # THE THRESHOLD IS SET SO THAT ONE SELF-HEAL CANNOT PAGE, AND THAT IS AN
+      # ARITHMETIC CLAIM, NOT A PREFERENCE. A killed predictor costs 14.53 s
+      # (M5-S4), a route roll 15.0 s (M6-S1/F-033), a stop/start 18.24 s
+      # (M5-S5). At the SLO's stated 4 req/s, the worst of those is 73 failed
+      # requests inside a 5-minute rate window carrying ~1200 — 6.1%. A 5%
+      # threshold would page for a system that healed itself in eighteen
+      # seconds; 10% cannot be reached by any single recovery this program has
+      # ever measured, and is reached immediately by a service that is simply
+      # down. Sustained 5m on top (the prior-art ADOPT), so the 15-second blip
+      # also has to still be there five minutes later.
+      - alert: ServingEdge5xxRateHigh
+        expr: |
+          sum(rate(nginx_ingress_controller_requests{namespace="serving", ingress="nyc-taxi-eta", status=~"5.."}[5m]))
+          /
+          sum(rate(nginx_ingress_controller_requests{namespace="serving", ingress="nyc-taxi-eta"}[5m]))
+          > 0.10
+        for: 5m
+        labels:
+          severity: critical
+          signal: A-2
+          slo: SLO-A1
+        annotations:
+          summary: "More than 10% of quote-route requests are 5xx at the edge, sustained"
+          why: >-
+            docs/slo_serving.md §3 SLO-A1. Measured at the EDGE because when the
+            predictor dies its exporter dies with it — mlserver cannot report
+            its own absence.
+          blind_spot: >-
+            A ratio has no value when nobody is asking. This rule is blind on an
+            idle service, which is exactly why A-5 exists and does not need
+            traffic to fire.
+
+      # --- A-3 · request rejections (the SERVER half; see the header) --------
+      - alert: PredictorRequestRejectionRateHigh
+        expr: |
+          sum(rate(rest_server_requests_total{job="kserve-predictors", path=~".*infer", status_code=~"4.."}[5m]))
+          /
+          sum(rate(rest_server_requests_total{job="kserve-predictors", path=~".*infer"}[5m]))
+          > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          signal: A-3
+          slo: SLO-R1
+        annotations:
+          summary: "More than 1% of inference requests are being REJECTED as malformed (4xx)"
+          why: >-
+            docs/slo_serving.md §3 SLO-R1. A 4xx here is the REQUEST's fault and
+            is a working guard, not an outage — which is why it is separated from
+            SLO-A1's error budget entirely rather than folded into it. F-030 is
+            the worked example: ~1% of all riders got a 422 for a whole milestone
+            because the client serialised NaN, and nothing anywhere said so.
+          sustain: >-
+            for 2m, not 5m. A malformed body is a client-version or encoding
+            defect; it does not self-heal, so the sustain window only has to
+            outlast a probe or a single bad caller.
+
+      # --- A-5 · the replica ------------------------------------------------
+      # This is the rule that fires with NO traffic at all, which is why the
+      # error-ratio rules are allowed to be blind on an idle service.
+      - alert: PredictorNoAvailableReplica
+        expr: |
+          kube_deployment_status_replicas_available{namespace="serving", deployment=~".*-predictor"} < 1
+        for: 2m
+        labels:
+          severity: critical
+          signal: A-5
+        annotations:
+          summary: "The predictor Deployment has had no available replica for 2 minutes"
+          why: >-
+            docs/slo_serving.md §3 SLO-A1. 2m is 6.6x the longest healthy
+            recovery this program has ever measured (18.24 s, the stop/start
+            rehearsal), so a normal replacement cannot page and a pod that
+            cannot come back does. One replica, no canary: this alert IS the
+            outage.
+          sustain: >-
+            for 2m, not 5m. This is the rule that fires with NO traffic, so it is
+            the only witness to an outage nobody is currently experiencing —
+            waiting five minutes to say "there is no server" is four minutes of
+            silence bought for nothing. 2m is chosen against the measured
+            recoveries, not against the ADOPTed default.
+
+      - alert: PredictorRestartFlapping
+        expr: |
+          increase(kube_pod_container_status_restarts_total{namespace="serving", container="kserve-container"}[15m]) > 2
+        for: 0m
+        labels:
+          severity: warning
+          signal: A-5
+        annotations:
+          summary: "The predictor container has restarted more than twice in 15 minutes"
+          why: >-
+            docs/slo_serving.md §3. Steady state is 0 restarts (observed since
+            M5-S2). Two is a coincidence; three inside a quarter hour is a loop,
+            and each one costs a full outage because there is one replica.
+          sustain: >-
+            for 0m deliberately — `increase(...[15m])` IS the window. Adding a
+            `for:` on top would mean a flapping pod has to keep flapping after
+            it has already been detected flapping.
+
+      # --- A-6 · CPU throttling ---------------------------------------------
+      # GOTCHA #74 AS A RULE. Saturation shows up as latency, never as failure,
+      # so no health check and no error-rate alert can see it.
+      #
+      # THE THRESHOLD IS THE INTERESTING PART AND IT COULD NOT HAVE BEEN GUESSED.
+      # This container is throttled at EVERY rate it has ever been measured at,
+      # including ones where it is demonstrably healthy. M5-S4's ramp, fraction
+      # of CFS periods throttled: 0.23 at 2 req/s (p50 18.5 ms) · 0.51 at
+      # 4 req/s (p50 19.1 ms) · 0.79 at 6 req/s (p50 18.1 ms) · ~1.00 at
+      # 8 req/s (p50 115.5 ms, 6.4x worse). So "any throttling" fires on a
+      # healthy service, and the bar has to come from where throttling starts to
+      # HURT — between the last harmless observation (0.79) and the first
+      # harmful one (~1.00). 0.90, sustained 10m.
+      - alert: PredictorCpuThrottledSustained
+        expr: |
+          sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace="serving", container="kserve-container"}[5m]))
+          /
+          sum by (pod) (rate(container_cpu_cfs_periods_total{namespace="serving", container="kserve-container"}[5m]))
+          > 0.90
+        for: 10m
+        labels:
+          severity: warning
+          signal: A-6
+        annotations:
+          summary: "The predictor is spending >90% of CFS periods throttled — it is at its CPU ceiling"
+          why: >-
+            docs/slo_serving.md §3 SLO-L1's capacity note. At 0.79 the p50 is
+            unchanged; at ~1.00 it is 6.4x worse with ZERO errors. This is the
+            only signal that can tell those apart.
+          sustain: >-
+            for 10m, because the honest response is "add a replica or raise the
+            limit", which nobody should be paged for at 3am over a two-minute
+            burst.
+
+      # --- A-7 · the storage initializer -------------------------------------
+      - alert: PredictorStorageInitializerNotReady
+        expr: |
+          kube_pod_init_container_status_ready{namespace="serving", container="storage-initializer"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          signal: A-7
+        annotations:
+          summary: "A predictor pod's storage-initializer has not become ready for 3 minutes"
+          why: >-
+            docs/slo_serving.md §3 SLO-A1. Two real classes land here and BOTH
+            look like "the model is broken" when they are not: MinIO's built-in
+            `readonly` policy omitting s3:ListBucket (a 403 on HeadBucket,
+            M5-S2), and F-009's empty-prefix download that SUCCEEDS and leaves
+            mlserver with no MLmodel. A healthy init takes seconds; 3m is a
+            failure, and this alert fires before A-5 does because a pod that
+            never initialises never had a replica to lose.
+          sustain: >-
+            for 3m, not 5m. A healthy storage-initializer on this cluster
+            completes in seconds (the artifact is ~5 MB from an in-cluster MinIO),
+            so 3m is already two orders of magnitude of slack — and it is set
+            BELOW A-5's 2m-plus-detection so that "the model could not be
+            fetched" arrives distinguishable from "the replica is gone", which is
+            the whole point of having both.

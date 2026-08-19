@@ -1,0 +1,111 @@
+{
+  "story": "M6-S2",
+  "change": {
+    "field": "spec.predictor.model.resources.requests.cpu",
+    "from": "200m",
+    "to": "1500m",
+    "limit_unchanged": "2",
+    "memory_request_unchanged": "1Gi",
+    "argued_in": "docs/slo_serving.md \u00a77 and infra/manifests/inferenceservice-champion.yaml",
+    "measured_usage_that_argued_it": {
+      "mean_cores_at_slo_shape": 1.308,
+      "core_seconds_per_request": 0.3258,
+      "source": "automation/runs/m5-load/headline.json (M5-S4)"
+    }
+  },
+  "prediction_written_before_the_change": {
+    "throttling_unchanged": "throttling is the LIMIT's doing and the limit is not moving",
+    "p95_does_not_move_materially": "a request is what the scheduler reserves and what sets CPU weight; on a node with 20 allocatable cores and no contention it buys correct scheduling arithmetic, not speed",
+    "if_p95_moves_materially_that_is_a_finding": true
+  },
+  "what_applying_it_cost_the_route": {
+    "outage_seconds": 0.5,
+    "ok": 399,
+    "failed": 1,
+    "status_counts": {
+      "200": 399,
+      "502": 1
+    },
+    "anchors": "first failure -> first success after it (NOT first error -> last error, gotcha #75)",
+    "sample_interval_s": 0.5,
+    "note": "0.5 s, not the ~15 s the first draft of the SLO document predicted. A rolling re-deploy at one replica has maxUnavailable floor to 0, so a surge pod must be ready before the old one goes \u2014 see docs/slo_serving.md \u00a74.1."
+  },
+  "before": {
+    "label": "before-cpu-request-resize",
+    "measured_at": "2026-08-19T06:49:52Z",
+    "shape": {
+      "target_rate_per_second": 4.0,
+      "window_seconds": 60.0,
+      "concurrency": 8,
+      "mix": "hazards",
+      "rows_per_request": 1,
+      "achieved_rate_per_second": 4.015,
+      "wall_seconds": 59.779
+    },
+    "requests": {
+      "sent": 240,
+      "ok": 240,
+      "errors": 0,
+      "error_rate": 0.0
+    },
+    "latency_ms": {
+      "min": 11.543,
+      "p50": 29.373,
+      "p95": 84.437,
+      "p99": 433.686,
+      "max": 692.867
+    },
+    "seconds_containing_a_request_over_slo_target": [
+      {
+        "second": 10,
+        "p95_latency_ms": 692.867
+      },
+      {
+        "second": 11,
+        "p95_latency_ms": 433.686
+      }
+    ],
+    "at_least_n_requests_over_slo_target": 2
+  },
+  "after": {
+    "label": "after-cpu-request-resize",
+    "measured_at": "2026-08-19T07:28:21Z",
+    "shape": {
+      "target_rate_per_second": 4.0,
+      "window_seconds": 60.0,
+      "concurrency": 8,
+      "mix": "hazards",
+      "rows_per_request": 1,
+      "achieved_rate_per_second": 4.015,
+      "wall_seconds": 59.77
+    },
+    "requests": {
+      "sent": 240,
+      "ok": 240,
+      "errors": 0,
+      "error_rate": 0.0
+    },
+    "latency_ms": {
+      "min": 11.537,
+      "p50": 29.548,
+      "p95": 112.677,
+      "p99": 118.945,
+      "max": 142.904
+    },
+    "seconds_containing_a_request_over_slo_target": [],
+    "at_least_n_requests_over_slo_target": 0
+  },
+  "deltas_ms": {
+    "p50": 0.175,
+    "p95": 28.24,
+    "p99": -314.741,
+    "max": -549.963
+  },
+  "verdict": {
+    "p50_unchanged": true,
+    "slo_held_before": true,
+    "slo_held_after": true,
+    "extreme_tail_improved": true,
+    "reading": "The body did not move: p50 29.4 -> 29.5 ms. p95 moved 84.4 -> 112.7 ms, which is INSIDE the run-to-run spread of this identical shape \u2014 M5-S4 measured 104.2 ms on the same four requests per second \u2014 so it is not attributable to the change. The extreme tail improved sharply (p99 433.7 -> 118.9, max 692.9 -> 142.9), and that is NOT claimed as an effect of the change either: the before run carried a ~700 ms stall in its 10th and 11th seconds, mid-run rather than at start-up, which is the signature of host contention on a laptop and not of a scheduler's arithmetic. On the SLO's own instrument both runs pass with room: at most 2 of 240 requests beyond 250 ms before, 0 of 240 after, against a 5% budget. The prediction holds."
+  }
+}

@@ -55,9 +55,15 @@ scrapeConfigs:
       insecure_skip_verify: true
 
 serverFiles:
-  # M6-S2 fills this in. Empty here ON PURPOSE and not omitted: the file must
-  # exist for `rule_files` to load it, and a rules file that appears for the
-  # first time in S2 would make S2's diff about plumbing instead of about alerts.
+  # M6-S2 FILLED THIS IN, AND NOT HERE. The rules live in
+  # `infra/monitoring/alerting_rules.yml` as a plain Prometheus rules file —
+  # `promtool`-shaped, reviewable in a diff, and the ONLY copy — and
+  # `scripts/render_alert_rules.py` nests them under this key at deploy time as a
+  # second `--values` overlay, which helm merges on top of this map. Keeping the
+  # empty map here is deliberate: it documents the key the overlay lands on, and
+  # a run that somehow skipped the renderer would install zero rules rather than
+  # fail obscurely. Editing rules HERE would create the twin this program has
+  # been bitten by four times; a test fails if this map stops being empty.
   alerting_rules.yml: {}
 
 extraScrapeConfigs: |

@@ -1156,3 +1156,39 @@ the seed line are earned by THIS project.
     the default rendering of "no data" — this is #59 ("assert on the positive
     artifact") applied to a dashboard, where the artifact is a series and not a
     rectangle (F-034's neighbourhood).
+
+79. **`kubectl wait --for=condition=X` silently requires the controller to have
+    updated `observedGeneration`, so a perfectly healthy resource can be
+    unwaitable forever.** `make serve` hung for fifteen minutes and then FAILED
+    over an InferenceService whose every condition read `True` and whose pod was
+    `Running 1/1`. kubectl v1.36 ignores a resource's conditions while
+    `status.observedGeneration < metadata.generation` — which is *correct*: a
+    condition describing the previous spec is not evidence about this one. But
+    KServe v0.20.0 reconciles the new spec completely (`PredictorReady`
+    transitions, naming the NEW ReplicaSet) and then leaves `observedGeneration`
+    behind; observed at `generation=3` / `observedGeneration=2`. The tell is that
+    `--for=condition=` times out for **every** condition on the object while the
+    `--for=jsonpath=` form reading the same condition returns `condition met` on
+    the same object in the same second — so the question to ask is not "is my
+    condition true?" but "does this controller maintain observedGeneration?", and
+    a single `kubectl get <res> -o jsonpath` over `.metadata.generation` and
+    `.status.observedGeneration` answers it. Worst part: under `set -e` the
+    timeout takes the deploy's accept check with it, so the ONE failure mode is
+    that a correct deploy reports as a broken one — #55's family, a verifier
+    failing for its own reasons and blaming the artifact (F-036).
+
+80. **A 15-second outage is what a *destroyed* pod costs, not what a *deploy*
+    costs, and quoting one for the other overstates a release by 30x.** This
+    program had measured three serving mutations at 14.53 s (killed pod), 15.0 s
+    (ingress roll) and 18.24 s (stop/start), and an SLO document written from
+    them predicted "a model re-deploy ~15-18 s" by analogy. Measured across a
+    real `make serve`: **0.5 s**, one failed request of 400. The mechanism is the
+    one thing the analogy ignored — at ONE replica `RollingUpdate`'s
+    `maxUnavailable: 25%` floors to **zero**, so the Deployment is *forbidden*
+    from having no available pod and a surge pod must become ready before the old
+    one is removed. All three of the slower numbers destroy the only pod first (a
+    kill has nothing waiting, a stop removes `spec.replicas`, and ingress-nginx
+    was FORCED onto `Recreate` by a `hostPort` its surge pod could never bind —
+    F-033). Before quoting an outage as the cost of a *class* of change, ask what
+    the rollout strategy is allowed to do: three numbers agreeing with each other
+    is not evidence about a fourth mechanism (docs/slo_serving.md §4.1).

@@ -1,0 +1,166 @@
+{
+  "story": "M6-S2",
+  "measured_at": "2026-08-19T07:10:20Z",
+  "injection": {
+    "rate_per_second": 4.0,
+    "seconds_requested": 420.0,
+    "responses_by_status": {
+      "422": 662,
+      "500": 661
+    }
+  },
+  "prediction": {
+    "must_fire": [
+      {
+        "alert": "PredictorRequestRejectionRateHigh",
+        "signal": "A-3",
+        "for_seconds": 120,
+        "expected_fire_after_s": 150,
+        "why": "half the injected requests are malformed bodies answered 422, so the 4xx share of infers goes to ~0.5 against a 0.01 bar within one scrape; the rule then holds for its 2m sustain."
+      },
+      {
+        "alert": "ServingEdge5xxRateHigh",
+        "signal": "A-2",
+        "for_seconds": 300,
+        "expected_fire_after_s": 330,
+        "why": "the other half are bodies the model's logged signature refuses, answered 500 and counted at the EDGE by ingress-nginx; the 5xx share goes to ~0.5 against a 0.10 bar, then holds for its 5m sustain."
+      }
+    ],
+    "must_fire_in_this_order": [
+      "PredictorRequestRejectionRateHigh",
+      "ServingEdge5xxRateHigh"
+    ],
+    "must_not_fire": [
+      {
+        "alert": "PredictorLatencySLOBurning",
+        "signal": "A-1",
+        "why": "it selects status_code=\"200\" only; a rejected request is not a slow one."
+      },
+      {
+        "alert": "PredictorNoAvailableReplica",
+        "signal": "A-5",
+        "why": "nothing is deleted or scaled; the replica stays available throughout."
+      },
+      {
+        "alert": "PredictorRestartFlapping",
+        "signal": "A-5",
+        "why": "a rejected request does not restart a container."
+      },
+      {
+        "alert": "PredictorCpuThrottledSustained",
+        "signal": "A-6",
+        "why": "a 422 is refused before the model runs and a signature refusal is cheap; neither approaches the CPU ceiling at this rate."
+      },
+      {
+        "alert": "PredictorStorageInitializerNotReady",
+        "signal": "A-7",
+        "why": "the pod is already initialised and is not being replaced."
+      }
+    ],
+    "must_clear_after_injection_stops": true,
+    "the_service_stays_up": "an ordinary quote must still succeed during the injection \u2014 this drill provokes errors, it does not cause an outage."
+  },
+  "observed": {
+    "pending_at_s": {
+      "PredictorRequestRejectionRateHigh": 30.0,
+      "ServingEdge5xxRateHigh": 30.0
+    },
+    "fired_at_s": {
+      "PredictorRequestRejectionRateHigh": 150.5,
+      "ServingEdge5xxRateHigh": 330.6
+    },
+    "firing_order": [
+      "PredictorRequestRejectionRateHigh",
+      "ServingEdge5xxRateHigh"
+    ],
+    "cleared_after_stop_s": {
+      "PredictorRequestRejectionRateHigh": 315.1,
+      "ServingEdge5xxRateHigh": 315.1
+    },
+    "never_fired": [
+      "PredictorCpuThrottledSustained",
+      "PredictorLatencySLOBurning",
+      "PredictorNoAvailableReplica",
+      "PredictorRestartFlapping",
+      "PredictorStorageInitializerNotReady"
+    ],
+    "alertmanager_received": [
+      "PredictorRequestRejectionRateHigh",
+      "ServingEdge5xxRateHigh"
+    ],
+    "quote_during_injection": {
+      "exit_code": 0,
+      "stdout": "[quote] 2019-07-04T09:15:00  zone 132 -> 48, 1 passenger(s)  ->  39.0019 minutes"
+    },
+    "timeline": [
+      {
+        "t_plus_s": 30.0,
+        "alert": "PredictorRequestRejectionRateHigh",
+        "state": "pending"
+      },
+      {
+        "t_plus_s": 30.0,
+        "alert": "ServingEdge5xxRateHigh",
+        "state": "pending"
+      },
+      {
+        "t_plus_s": 150.5,
+        "alert": "PredictorRequestRejectionRateHigh",
+        "state": "firing"
+      },
+      {
+        "t_plus_s": 330.6,
+        "alert": "ServingEdge5xxRateHigh",
+        "state": "firing"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "passed": true,
+      "check": "A-3 PredictorRequestRejectionRateHigh FIRED (predicted it would)"
+    },
+    {
+      "passed": true,
+      "check": "A-2 ServingEdge5xxRateHigh FIRED (predicted it would)"
+    },
+    {
+      "passed": true,
+      "check": "the firing order was the predicted one: ['PredictorRequestRejectionRateHigh', 'ServingEdge5xxRateHigh']"
+    },
+    {
+      "passed": true,
+      "check": "A-1 PredictorLatencySLOBurning stayed inactive (predicted)"
+    },
+    {
+      "passed": true,
+      "check": "A-5 PredictorNoAvailableReplica stayed inactive (predicted)"
+    },
+    {
+      "passed": true,
+      "check": "A-5 PredictorRestartFlapping stayed inactive (predicted)"
+    },
+    {
+      "passed": true,
+      "check": "A-6 PredictorCpuThrottledSustained stayed inactive (predicted)"
+    },
+    {
+      "passed": true,
+      "check": "A-7 PredictorStorageInitializerNotReady stayed inactive (predicted)"
+    },
+    {
+      "passed": true,
+      "check": "Alertmanager received every fired alert: ['PredictorRequestRejectionRateHigh', 'ServingEdge5xxRateHigh']"
+    },
+    {
+      "passed": true,
+      "check": "an ordinary quote succeeded DURING the injection \u2014 errors, not an outage"
+    },
+    {
+      "passed": true,
+      "check": "every fired alert returned to inactive after the injection stopped: ['PredictorRequestRejectionRateHigh', 'ServingEdge5xxRateHigh']"
+    }
+  ],
+  "verdict": "GREEN",
+  "note": "The prediction in this file is byte-identical to the one written to alert-fire-prediction.json BEFORE the injection began \u2014 it is carried here so a reader has predicted and observed side by side."
+}

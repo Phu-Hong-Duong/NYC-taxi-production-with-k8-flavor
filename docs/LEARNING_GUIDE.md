@@ -9,6 +9,91 @@ months from now.
 
 ## M6
 
+### M6-S2 — judgement: what a number needs before it is allowed to be a threshold (2026-08-19, role:SRE)
+
+**What was built.** `docs/slo_serving.md` (four SLOs, every target carrying its
+argument and its instrument) · `infra/monitoring/alerting_rules.yml` (seven rules
+across six of the PRR's seven signal ids) · `scripts/render_alert_rules.py`, which
+validates them and nests them into the chart's values at deploy time ·
+`make alert-fire-drill`, which fired two of them for real with its prediction
+written to disk first · and the CPU request moved `200m → 1500m` on the wire with
+a before/after measurement either side of it.
+
+**Why this way.** Three decisions, and the third is the one that generalises.
+
+*The threshold has to survive the day it was written.* The kickoff's rule was
+"argued from harm and measured headroom, never set equal to the number just
+observed", and applying it honestly produced numbers that look wrong until you
+read the argument. SLO-L1 is **250 ms** when the service delivers 99.6% inside it
+— because the alternative bucket edge, 100 ms, sits at **94.6%** today, i.e. an
+SLO in breach on the day it was written. A-2's threshold is **10%** 5xx when the
+availability target is 0.1% — because at 4 req/s the longest *healthy* recovery
+this program has ever measured is 6.1% of a five-minute window, so a 5% page
+fires for a system that healed itself in eighteen seconds. The budget still pays
+for those blips; it pays *silently*, which is what a budget is for and what a page
+is not.
+
+*One copy of the rules, and a renderer instead of a paste.* The chart wants the
+rules nested under a values key; the reviewable form is a plain
+`promtool`-shaped file. Rather than keep both, a script parses the file and emits
+the nesting — so a malformed rule fails *before* helm reports success over a
+Prometheus that quietly loaded nothing. The same script refuses any rule without
+an `annotations.why`, which is the mechanical half of the kickoff's discipline: a
+number with no reasoning beside it cannot be reviewed, only inherited.
+
+*Predict a sequence, and predict the negatives.* The drill fires two rules with
+different sustain windows from ONE injection, so it must get an **order** right
+(A-3 at T+150.5 s against a predicted 150; A-2 at T+330.6 s against 330), and it
+names the five alerts that must **not** fire and why. A drill that predicts only
+"something will fire" is satisfied by almost any behaviour. The negatives are what
+make a signature *distinguishable*, which is the property S5's gameday is graded
+on — rehearsed here for the price of one injection.
+
+**The concept underneath.** *An instrument's resolution is part of its answer, and
+a number reasoned by analogy is not a measurement.* Both halves cost this story
+something.
+
+The first: `histogram_quantile(0.95, …)` on the predictor's own histogram reported
+**111.6 ms** for a window in which the client — timing the whole round trip, so
+strictly *more* — measured **84.4 ms**. A quantile over a superset cannot exceed
+one over a subset, so the histogram's answer was not a measurement at all: its
+buckets jump `le` 0.1 → 0.25 and this service's tail lives inside that 150 ms gap.
+The fix was not a better estimator but a different question — the SLO's number was
+chosen to *be* a bucket edge, so the rule counts requests instead of estimating a
+percentile. When an instrument disagrees with a stricter one, work out which
+disagreement is arithmetically impossible before deciding which number is wrong.
+
+The second: this story wrote "a model re-deploy costs ~15–18 s" into an SLO
+document, by analogy with three real measurements (14.53 s a killed pod, 15.0 s an
+ingress roll, 18.24 s a stop/start). Three numbers within four seconds of each
+other feel like a law. The measured cost of an actual re-deploy is **0.5 s** — one
+failed request of 400 — because at one replica `RollingUpdate`'s
+`maxUnavailable: 25%` floors to **zero**, so a surge pod must be ready before the
+old one is removed, while all three of the "law's" data points destroy the only
+pod first. The analogy had generalised over the *outcome* (a pod is replaced) and
+ignored the *mechanism* (is the Deployment allowed to have zero available pods?).
+That is a 30× error inside a document whose entire job is to hold honest numbers,
+and it was found only because the change was measured rather than assumed.
+
+**What to look at.** `docs/slo_serving.md` §2.1 (the impossible quantile, with the
+bucket counts) and §4.1 (the wrong prediction, kept above its correction) ·
+`infra/monitoring/alerting_rules.yml` — read the `why` and `sustain` annotations,
+which are the actual deliverable · `automation/runs/m6-slo/alert-fire-prediction.json`
+next to `alert-fire-drill.json`, in that order · `tests/unit/test_slo_and_alerts.py`,
+particularly the test asserting the drill watches *every* rule in the file · and
+`ledgers/findings.md` F-035 (two PRR signals that cannot be Prometheus rules,
+because the fact lives in a client and no client here is scraped) and F-036.
+
+**What to try yourself.** Change A-2's threshold from `0.10` to `0.05`, re-run
+`make alert-rules`, and work out from the numbers in §3 whether a single
+self-healing pod loss would now page you — the arithmetic is four numbers and it
+is the whole argument. Then run
+`kubectl get isvc nyc-taxi-eta -o jsonpath='{.metadata.generation} {.status.observedGeneration}'`
+and, if they differ, try `kubectl wait --for=condition=Ready` against it with a
+20-second timeout: that is F-036 in two commands, and it is the cheapest way to
+learn that a wait can be unsatisfiable for reasons that have nothing to do with
+health.
+
 ### M6-S1 — the eyes, and three things that looked completely fine (2026-08-19, role:SRE)
 
 **What was built.** `make deploy-monitoring` — Prometheus 29.27.0 (v3.14.0) +

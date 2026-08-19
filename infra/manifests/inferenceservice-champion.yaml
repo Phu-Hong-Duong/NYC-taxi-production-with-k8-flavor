@@ -62,9 +62,38 @@ spec:
         # which champion this pod is.
         - name: MLSERVER_MODEL_VERSION
           value: CHAMPION-VERSION-RESOLVED-AT-DEPLOY-TIME
+      # THE CPU REQUEST WAS 200m UNTIL M6-S2, AND IT WAS WRONG BY ~6.5x.
+      # M5-S4 measured this container using **1.31 cores** across the load shape
+      # the SLO is written against (4 req/s, 60 s, concurrency 8), and 0.326
+      # core-seconds per request. M5 deliberately did not change it — editing a
+      # deployed workload's resources is a change to what is on the wire, and
+      # that story was a measurement — so the recommendation was routed to M6,
+      # which is the milestone those refusals were routed TO (M6 law 2).
+      #
+      # WHY 1500m AND NOT 1308m, AND NOT 2. A request is not a cap: it is what
+      # the SCHEDULER reserves and what sets the container's CPU weight under
+      # contention. So it should be close to real usage BY DESIGN — but not equal
+      # to a measured mean, which is under-reserved half the time by
+      # construction. 1500m is the measured mean plus ~15%, which covers the
+      # per-request variance visible in this service's bimodal latency. It stays
+      # BELOW the 2-core limit on purpose: request == limit would make the pod
+      # Guaranteed and reserve the whole saturation ceiling (~6 req/s) for load
+      # the SLO does not promise to serve, on a node with 20 allocatable cores
+      # where nothing needs protecting from this pod yet.
+      #
+      # WHAT IT DOES NOT DO, PREDICTED IN WRITING BEFORE THE CHANGE (see
+      # docs/slo_serving.md §7): it does not reduce CFS throttling, because
+      # throttling is the LIMIT's doing and the limit is not moving; and it should
+      # not move p95 on an uncontended node. The before/after `make load` records
+      # are in automation/runs/m6-slo/ and the measurement is the point — if p95
+      # moved materially, that is a finding, not a footnote.
+      #
+      # The memory request is deliberately UNCHANGED at 1Gi (observed peak 236
+      # MiB, i.e. over-reserved ~4x) so that the before/after comparison has one
+      # cause. It is noted in the SLO document as a known, un-actioned number.
       resources:
         requests:
-          cpu: 200m
+          cpu: 1500m
           memory: 1Gi
         limits:
           cpu: "2"
