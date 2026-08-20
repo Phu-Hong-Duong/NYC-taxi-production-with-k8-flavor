@@ -431,3 +431,35 @@ failure**.
 
 [cards] 36 card(s) executed, 0 failure(s) — an EMPTY panel is a failure (gotcha #78)
 ```
+
+---
+
+## §5 A sanity net, run once, and the thing it tells leg 2
+
+Before the M7 gate exists, one throwaway pass asked the cheapest possible
+question: **does every 3-4 decimal number in `docs/drift_memo_m7.md` appear in
+the twin script's output at all?**
+
+```text
+191 3-4dp numbers in the memo, 0 not found in the script output
+```
+
+Two honest limits on that line, both of which are `make verify-m7`'s work and not
+this one's:
+
+1. **It checks presence, not placement.** A number that belongs in the airport row
+   and was typed into the duration row passes this and is still wrong. The gate's
+   prose-vs-record leg has to bind each claim to the query that produces it, the
+   way `verify-m5` section 6 binds the runbook's numbers to the record each one
+   cites.
+2. **Trailing zeros had to be normalised, and the first pass reported 15 false
+   misses because of it.** DuckDB's `round()` prints `1.061`; a table padded to a
+   consistent width writes `1.0610`. That is gotcha #76's tokenisation problem
+   arriving from the other direction - and it must be handled *without* letting a
+   bare substring match through, since `13.75` rendered at zero decimals as `14`
+   is exactly what let a planted value survive `verify-m6`'s first run
+   (gotcha #90). The safe rule: compare at the precision the DOCUMENT wrote, with
+   a floor of one decimal, and strip trailing zeros on both sides.
+
+The throwaway was deleted rather than committed; the finding is recorded here so
+leg 2 does not pay for it twice.
