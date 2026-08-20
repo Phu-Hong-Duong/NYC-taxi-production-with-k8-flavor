@@ -48,14 +48,28 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RULES_FILE = REPO_ROOT / "infra" / "monitoring" / "alerting_rules.yml"
 
-# The M5 PRR box 3 signal ids. Every rule must claim exactly one of these.
-KNOWN_SIGNALS = {"A-1", "A-2", "A-3", "A-4", "A-5", "A-6", "A-7"}
+# The M5 PRR box 3 signal ids (A-1..A-7) plus the three drift signals M7-S3 adds
+# (A-8 input drift, A-9 volume collapse, A-10 drift-job staleness). Every rule
+# must claim exactly one of these.
+KNOWN_SIGNALS = {f"A-{n}" for n in range(1, 11)}
 
-# The signals this stack CAN alert on, and therefore must. A-3's client half and
-# A-4 have no metric source here (F-035) — they are documented absences in
-# docs/slo_serving.md §6, not forgotten ones, and this set is what makes the
-# difference checkable.
-IMPLEMENTED_SIGNALS = {"A-1", "A-2", "A-3", "A-5", "A-6", "A-7"}
+# The signals this stack CAN alert on, and therefore must.
+#
+# M7-S3 CLOSED F-035 AND THIS SET IS THE PROOF. It used to omit A-3 and A-4,
+# because both facts live in a CLIENT and no client here was scraped. The
+# pushgateway M7-S3 installs for drift makes a client able to speak, so both got
+# a real metric source and a real rule; the documented-absence list is now EMPTY.
+# Leaving that list empty is deliberate rather than tidy: `validate()` fails in
+# BOTH directions, so this closure could not have been claimed in prose without
+# the rules actually existing, and a future absence cannot be created by quietly
+# deleting a rule.
+IMPLEMENTED_SIGNALS = set(KNOWN_SIGNALS)
+
+#: Signals named in the PRR/SLO doc with no metric source in this stack. Empty
+#: since M7-S3 — see above. Kept as a named, empty set rather than deleted: the
+#: next honest absence must be RECORDED here and in docs/slo_serving.md §6
+#: together, which is what the error message below instructs.
+DOCUMENTED_ABSENCES: set[str] = KNOWN_SIGNALS - IMPLEMENTED_SIGNALS
 
 REQUIRED_ANNOTATIONS = ("summary", "why")
 

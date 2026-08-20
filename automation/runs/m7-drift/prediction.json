@@ -1,0 +1,87 @@
+{
+  "alias": {
+    "champion_after": 2,
+    "champion_before": 2,
+    "this_drill_never_writes": true
+  },
+  "bars_argued_in": "docs/slo_serving.md \u00a78, from the headroom leg (2019 only)",
+  "must_fire": [
+    {
+      "alert": "ScoringVolumeCollapse",
+      "because": "2,948,237 rows over 31 days is ~95,100 trips/day against the reference's ~243,000 \u2014 a ratio near 0.39, comfortably under the 0.50 bar. Volume is the marginal PSI is structurally blind to, which is the whole reason A-9 exists separately from A-8.",
+      "confidence": "high",
+      "month": "2020-03",
+      "signal": "A-9"
+    }
+  ],
+  "must_not_fire": [
+    {
+      "alert": "ScoringVolumeCollapse",
+      "because": "~202,600 trips/day, a ratio near 0.83 \u2014 an ordinary year-on-year dip.",
+      "month": "2020-01",
+      "signal": "A-9"
+    },
+    {
+      "alert": "ScoringVolumeCollapse",
+      "because": "~213,300 trips/day, a ratio near 0.88.",
+      "month": "2020-02",
+      "signal": "A-9"
+    },
+    {
+      "alert": "DriftMetricsStale",
+      "because": "every push carries a fresh timestamp; 40 days cannot have elapsed.",
+      "signal": "A-10"
+    },
+    {
+      "alert": "ServedVersionNotChampion",
+      "because": "the endpoint serves version 2 and @champion is version 2. This drill reads the alias and never writes it (M7 law 3).",
+      "signal": "A-4"
+    },
+    {
+      "alert": "QuoteHorizonRefusals",
+      "because": "no quote is sent by this drill at all, in horizon or out of it.",
+      "signal": "A-3"
+    },
+    {
+      "alert": "PredictorLatencySLOBurning",
+      "because": "nothing touches the wire \u2014 this drill sends the endpoint no traffic.",
+      "signal": "A-1"
+    },
+    {
+      "alert": "ServingEdge5xxRateHigh",
+      "because": "same: no traffic, no errors, no injection anywhere.",
+      "signal": "A-2"
+    },
+    {
+      "alert": "PredictorNoAvailableReplica",
+      "because": "no pod is deleted, scaled or annotated.",
+      "signal": "A-5"
+    },
+    {
+      "alert": "PredictorCpuThrottledSustained",
+      "because": "the drift job is a HOST process reading DuckDB. It is not on the predictor's CPU path at all \u2014 which is also why drift metrics are structurally outside F-043's exporter-starvation class.",
+      "signal": "A-6"
+    }
+  ],
+  "numeric": {
+    "2020-01": {
+      "volume_ratio_about": 0.83
+    },
+    "2020-02": {
+      "volume_ratio_about": 0.88
+    },
+    "2020-03": {
+      "volume_ratio_about": 0.39
+    },
+    "psi_ordering": "max input PSI should rise 2020-01 -> 2020-03; the geography columns (PULocationID/DOLocationID) should be the largest movers, because a demand shock is spatial before it is temporal."
+  },
+  "the_open_question": {
+    "alert": "ModelInputDrift",
+    "because": "F-045's mechanism, applied to PSI. 68.23% of March 2020's surviving rows are 01-10 March, which is an ordinary New York month; only 3.32% are 22-31 March. A monthly aggregate is weighted by exactly the rows that did NOT vanish, so the mix over the whole month may barely move even though the last third of it is a different city. If A-8 fires anyway, the monthly window is more sensitive than F-045 suggested and that is worth a paragraph; if it does not, A-9 is what caught the largest demand shock in the city's history and \u00a78.4's argument is vindicated rather than lucky. EITHER WAY NO BAR MOVES \u2014 the bars were argued from 2019 headroom before this ran.",
+    "confidence": "low \u2014 this is the prediction most likely to be wrong",
+    "month": "2020-03",
+    "predicted": "DOES NOT FIRE at monthly grain",
+    "signal": "A-8"
+  },
+  "written_before": "any 2020 drift comparison is computed or pushed"
+}
