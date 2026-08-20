@@ -109,7 +109,18 @@ class Spec:
     #: "floor" | "artisan" | "automation" — the track that produced it.
     track: str
     #: v1 | v2, and it is CHECKED against the loaded booster's own feature names.
-    feature_set: str
+    #:
+    #: **`None` means "whatever the loaded model eats" and is legal for the
+    #: alias-resolved row ONLY** (F-022, option (a), decided by ARCH at the M4
+    #: boundary 2026-08-19; landed here at M7-S4). Pre-registration is the point
+    #: for an arm declared before its number existed — it stops a losing arm
+    #: quietly becoming a different arm at write-up time — and it is exactly
+    #: wrong for a pointer that is DESIGNED to move. The incumbent cell of the
+    #: 2x2 has always meant "the champion, whatever it is now"; between M3-S5's
+    #: own `--promote-winner` moving the alias to a v2 model and this change, the
+    #: alias said v2 while this Spec said v1, and every invocation died at
+    #: `_load_booster` with a refusal that was correct one layer too late.
+    feature_set: str | None
     #: How the hyperparameters were chosen. The other axis of the 2x2 (DR-03).
     hyperparameters: str
     #: ("floor", floor-name) | ("registry-alias", alias) |
@@ -130,10 +141,15 @@ CONTENDERS: tuple[Spec, ...] = (
         source=("floor", "configs/train.yaml: gate.floor"),
     ),
     Spec(
-        label="champion v1",
-        track="artisan",
-        feature_set="v1",
-        hyperparameters="hand (configs/train.yaml: model)",
+        # The label carries no version and no track claim on purpose: this row is
+        # the ALIAS, and the alias moves. It read "champion v1" through M3, which
+        # was true on the day it was written and false the moment the bake-off's
+        # own promotion ran. `automation/runs/m3s5/bakeoff.json` keeps the M3-era
+        # label — a record is not rewritten (docs/bakeoff_m3.md §3's precedent).
+        label="champion (alias)",
+        track="incumbent",
+        feature_set=None,  # F-022: read off the loaded model. See Spec.feature_set.
+        hyperparameters="whatever the serving champion was fitted with",
         source=("registry-alias", "champion"),
     ),
     Spec(
@@ -182,6 +198,13 @@ class Loaded:
     best_iteration: int | None
     predictor: Any = None
     metrics: dict[str, Any] = field(default_factory=dict)
+    #: The CONCRETE feature set this contender eats. For the four pre-registered
+    #: arms it equals `spec.feature_set` and the equality is checked; for the
+    #: alias row `spec.feature_set` is None and this is derived from the loaded
+    #: booster's own feature names (F-022). Everything downstream reads THIS,
+    #: never the Spec — the matrix a contender is scored on must come from the
+    #: artifact, not from a declaration the artifact could contradict.
+    feature_set: str = ""
 
 
 def main() -> int:
@@ -255,14 +278,18 @@ def main() -> int:
     # the choice is made inside this loop — before the holdout split has been
     # loaded, let alone scored. That ordering is the fix: not "we rank on val by
     # convention" but "no holdout number exists yet to rank on".
-    sets_needed = tuple(sorted({spec.feature_set for spec in CONTENDERS}))
+    # From the RESOLVED contenders and not from CONTENDERS: since F-022 the
+    # incumbent row's set is known only after its artifact is loaded, and a matrix
+    # built from the declaration would be exactly the matrix the declaration was
+    # wrong about.
+    sets_needed = tuple(sorted({item.feature_set for item in loaded}))
     all_metrics = []
     winner: Loaded | None = None
     for split in ("val", holdout):
         splits = _load_split(split, data_cfg, train_cfg, sets_needed, args.smoke_rows)
         y = splits[sets_needed[0]].y.to_numpy()
         for item in loaded:
-            matrix = splits[item.spec.feature_set].features
+            matrix = splits[item.feature_set].features
             prediction = item.predictor(matrix)
             if isinstance(prediction, baselines.Prediction):
                 values, unseen = prediction.values, prediction.unseen_rate
@@ -297,7 +324,7 @@ def main() -> int:
         decisions[item.spec.label] = decision
         print("-" * 78)
         print(f"[gate] contender : {item.spec.label}  ({item.spec.track} track, features "
-              f"{item.spec.feature_set}, hyperparameters {item.spec.hyperparameters})")
+              f"{item.feature_set}, hyperparameters {item.spec.hyperparameters})")
         if item.spec is CONTENDERS[0]:
             print("[gate] this row is the FLOOR judged against ITSELF — an expected REFUSE "
                   "at +0.00%, printed because a gate only ever shown passing is a gate "
@@ -354,7 +381,8 @@ def _resolve(spec: Spec, train_cfg: dict[str, Any]) -> Loaded:
     kind, address = spec.source
     if kind == "floor":
         return Loaded(spec=spec, name="(fitted below)", run_id=None, family="group-by",
-                      recorded_val_mae=None, best_iteration=None)
+                      recorded_val_mae=None, best_iteration=None,
+                      feature_set=spec.feature_set or "v1")
 
     run_id = _resolve_run_id(kind, address, train_cfg)
     return _load_booster(spec, run_id, train_cfg)
@@ -438,7 +466,10 @@ def _load_booster(spec: Spec, run_id: str, train_cfg: dict[str, Any]) -> Loaded:
     booster = flavor.load_model(info.model_uri)
 
     best_iteration = int(run.data.params["best_iteration"])
-    features_cfg = sets.resolve_set(spec.feature_set)
+    actual = (list(booster.feature_name()) if family == "lgbm"
+              else list(booster.feature_names))
+    feature_set = spec.feature_set or _feature_set_of(actual, spec.label)
+    features_cfg = sets.resolve_set(feature_set)
     expected = quote_time.feature_names(features_cfg)
     predictor = TunedModel(
         family=family,
@@ -449,21 +480,51 @@ def _load_booster(spec: Spec, run_id: str, train_cfg: dict[str, Any]) -> Loaded:
         best_iteration=best_iteration,
         feature_names=expected,
     )
-    actual = (list(booster.feature_name()) if family == "lgbm"
-              else list(booster.feature_names))
     if actual != expected:
         raise SystemExit(
-            f"{spec.label} eats {actual} but feature set {spec.feature_set!r} is "
+            f"{spec.label} eats {actual} but feature set {feature_set!r} is "
             f"{expected}. Scoring it would silently reorder columns — the same refusal "
             "score.py makes about the champion."
         )
     recorded = run.data.metrics.get("val_mae")
-    print(f"[resolve] {spec.label:<12} {run.info.run_name:<18} family={family:<8} "
-          f"features={spec.feature_set} ({len(expected)}) trees={best_iteration} "
+    derived = " (DERIVED from the artifact — F-022)" if spec.feature_set is None else ""
+    print(f"[resolve] {spec.label:<16} {run.info.run_name:<18} family={family:<8} "
+          f"features={feature_set} ({len(expected)}){derived} trees={best_iteration} "
           f"recorded val MAE {recorded}")
     return Loaded(spec=spec, name=run.info.run_name, run_id=run_id, family=family,
                   recorded_val_mae=None if recorded is None else float(recorded),
-                  best_iteration=best_iteration, predictor=predictor.predict)
+                  best_iteration=best_iteration, predictor=predictor.predict,
+                  feature_set=feature_set)
+
+
+def _feature_set_of(feature_names: list[str], label: str) -> str:
+    """Which declared feature set does this booster actually eat? (F-022)
+
+    Derived from the ARTIFACT, never from the run's `feature_set` param: the param
+    is the fitting script's claim about what it built, and the whole point of this
+    check is to catch a disagreement between a claim and a model. Matching is on
+    the ORDERED name list, because `_load_booster`'s next refusal is about order.
+
+    It requires exactly ONE match. Two sets with identical column lists would make
+    "which set is this?" unanswerable from the artifact, and answering it by taking
+    the first would put a contender's provenance at the mercy of dict ordering in
+    a YAML file.
+    """
+    from taxi_mlops.features import quote_time, sets
+
+    matches = [
+        name for name in sets.set_names()
+        if quote_time.feature_names(sets.resolve_set(name)) == feature_names
+    ]
+    if len(matches) != 1:
+        raise SystemExit(
+            f"{label} eats {len(feature_names)} column(s) matching {len(matches)} declared "
+            f"feature set(s) {matches} in configs/features.yaml. The incumbent row reads its "
+            "feature set off the loaded model (F-022), and a model whose columns match no "
+            "declared set — or more than one — cannot be scored against a matrix this "
+            "program knows how to build."
+        )
+    return matches[0]
 
 
 def _load_split(split: str, data_cfg: Any, train_cfg: dict[str, Any],
@@ -569,10 +630,11 @@ def _banner(smoke: bool, args: argparse.Namespace) -> None:
 
 def _print_declaration(train_cfg: dict[str, Any]) -> None:
     print("\n[bakeoff] the 2x2 (+ floor), declared before a number is measured:\n")
-    print(f"  {'contender':<14} {'track':<11} {'features':<9} hyperparameters")
-    print(f"  {'-' * 14} {'-' * 11} {'-' * 9} {'-' * 40}")
+    print(f"  {'contender':<16} {'track':<11} {'features':<13} hyperparameters")
+    print(f"  {'-' * 16} {'-' * 11} {'-' * 13} {'-' * 40}")
     for spec in CONTENDERS:
-        print(f"  {spec.label:<14} {spec.track:<11} {spec.feature_set:<9} "
+        declared = spec.feature_set or "(the model's)"
+        print(f"  {spec.label:<16} {spec.track:<11} {declared:<13} "
               f"{spec.hyperparameters}")
     print(f"\n  configs/train.yaml: features.version is {train_cfg['features']['version']!r} "
           "(what is SERVING; it moves only as part of a promotion)")
@@ -602,21 +664,52 @@ def _select_winner(loaded: list[Loaded], holdout: str) -> Loaded:
     return winner
 
 
+#: The 2x2's origin cell: **v1 features, hand-chosen hyperparameters**. Both M3
+#: tracks started there and searched one axis each (DR-03's disjoint axes), so it
+#: is the only reference under which "features alone" and "tuning alone" are
+#: comparable quantities. It is a DESCRIPTION of a cell, not a pointer: in M3 the
+#: alias happened to hold exactly this model and the square read the incumbent row
+#: for it, which is why the square broke the moment F-022 was landed.
+SQUARE_BASE = ("v1", "hand")
+
+
 def _print_square(loaded: list[Loaded], holdout: str) -> None:
     """The arithmetic the 2x2 exists to do: features, tuning, or both?
 
-    Computed against `champion v1` because that is the cell both tracks started
-    from — the artisan track held v1's hyperparameters and searched features, the
-    automation track held the features and searched hyperparameters (DR-03's
-    disjoint axes). Any other reference makes the two deltas incomparable.
+    Printed only when a contender still occupies the origin cell. Through M3 that
+    was the incumbent row — the alias held `lightgbm-v1`, v1 features and hand
+    hyperparameters — and the square simply read it by label. F-022 made the
+    incumbent row mean "whatever is serving", and what is serving is now a TUNED
+    v2 model, i.e. the "both" cell. Computing the square against it would report
+    `auto-on-v2 +0.00%` and `artisan v2 −0.03%` — arithmetic that is correct,
+    reads as a result, and answers a different question from the one the 2x2 asks.
+
+    So the degeneracy is stated instead of rendered. M3's answer is measured,
+    recorded and unchanged; it is not this invocation's to re-derive.
     """
     by_label = {item.spec.label: item for item in loaded}
-    base = by_label["champion v1"].metrics[holdout].mae
+    base_row = next(
+        (item for item in loaded
+         if item.feature_set == SQUARE_BASE[0]
+         and item.spec.hyperparameters.startswith(SQUARE_BASE[1])),
+        None,
+    )
+    if base_row is None:
+        print(f"\n[bakeoff] the 2x2 is NOT printed: no contender occupies its origin cell "
+              f"(features {SQUARE_BASE[0]}, {SQUARE_BASE[1]} hyperparameters).")
+        print("[bakeoff] Through M3 the incumbent row held it, because the alias held "
+              "lightgbm-v1. Since F-022 that row means 'whatever is serving', and what "
+              "serves is a tuned v2 model — the square's OWN 'both' cell.")
+        print("[bakeoff] M3's answer stands as measured: docs/bakeoff_m3.md §6 "
+              "(features +0.56%, tuning on top of them +0.07 points).")
+        return
+
+    base = base_row.metrics[holdout].mae
 
     def pct(label: str) -> str:
         return f"{100.0 * (base - by_label[label].metrics[holdout].mae) / base:+.2f}%"
 
-    print(f"\n[bakeoff] the 2x2, on {holdout}, all relative to champion v1 "
+    print(f"\n[bakeoff] the 2x2, on {holdout}, all relative to {base_row.spec.label} "
           f"({base:.4f} min):")
     print(f"  features alone  (v1 -> v2, hand params)      artisan v2  {pct('artisan v2')}")
     print(f"  tuning alone    (v1 features, tuned params)  auto-on-v1  {pct('auto-on-v1')}")
@@ -658,7 +751,7 @@ def _payload(loaded, decisions, winner, train_cfg, floor, train_months, train_ro
                 "label": item.spec.label,
                 "name": item.name,
                 "track": item.spec.track,
-                "feature_set": item.spec.feature_set,
+                "feature_set": item.feature_set,
                 "hyperparameters": item.spec.hyperparameters,
                 "run_id": item.run_id,
                 "family": item.family,
@@ -732,9 +825,9 @@ def _promote_winner(winner: Loaded, decision, train_cfg: dict[str, Any]) -> int:
         return 1
 
     configured = train_cfg["features"]["version"]
-    if configured != winner.spec.feature_set:
+    if configured != winner.feature_set:
         raise SystemExit(
-            f"the winner eats feature set {winner.spec.feature_set!r} and "
+            f"the winner eats feature set {winner.feature_set!r} and "
             f"configs/train.yaml: features.version says {configured!r}. That line is "
             "what `score.py` and `verify-m2` check the champion against, so promoting "
             "now would mint a version the next `make predictions` refuses to score. "

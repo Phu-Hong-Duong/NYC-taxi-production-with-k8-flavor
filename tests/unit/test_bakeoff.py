@@ -60,12 +60,18 @@ def test_the_square_is_complete_and_declared(bakeoff):
     cells = {
         (spec.feature_set, spec.track)
         for spec in bakeoff.CONTENDERS
-        if spec.track != "floor"
+        if spec.track not in {"floor", "incumbent"}
     }
-    assert cells == {("v1", "artisan"), ("v2", "artisan"),
-                     ("v1", "automation"), ("v2", "automation")}
+    # Three declared cells, not four: since F-022 the origin cell (v1 features,
+    # hand hyperparameters) is not DECLARED here at all — through M3 the incumbent
+    # row happened to hold it, which is precisely the coupling F-022 broke. The
+    # square is printed only when a contender occupies it; see
+    # `test_the_square_is_not_printed_against_a_cell_it_is_not_about`.
+    assert cells == {("v2", "artisan"), ("v1", "automation"), ("v2", "automation")}
     floors = [spec for spec in bakeoff.CONTENDERS if spec.track == "floor"]
     assert len(floors) == 1, "the gate's floor is the fifth row and there is exactly one"
+    incumbents = [spec for spec in bakeoff.CONTENDERS if spec.track == "incumbent"]
+    assert len(incumbents) == 1, "exactly one row means 'what is serving'"
     assert len(bakeoff.CONTENDERS) == 5
 
 
@@ -77,8 +83,16 @@ def test_the_two_search_axes_stay_disjoint(bakeoff):
     assert "hand" in by_track["artisan v2"].hyperparameters
     assert "tuned" in by_track["auto-on-v1"].hyperparameters
     assert "tuned" in by_track["auto-on-v2"].hyperparameters
-    assert by_track["champion v1"].feature_set == by_track["auto-on-v1"].feature_set
     assert by_track["artisan v2"].feature_set == by_track["auto-on-v2"].feature_set
+    # The incumbent row is NOT part of either axis and declares no feature set:
+    # since F-022 it means "whatever is serving" and reads its set off the loaded
+    # model. `assert champion.feature_set == auto-on-v1.feature_set` was true when
+    # the alias held lightgbm-v1 and is an M3-era FACT, not the DR-03 property this
+    # test is about (gotcha #50).
+    incumbent = next(s for s in bakeoff.CONTENDERS if s.source[0] == "registry-alias")
+    assert incumbent.feature_set is None
+    assert [s.feature_set for s in bakeoff.CONTENDERS if s.source[0] != "registry-alias"] \
+        .count(None) == 0
 
 
 def test_f015_is_attached_to_the_row_it_belongs_to_and_to_no_other(bakeoff):
@@ -93,7 +107,8 @@ def test_f015_is_attached_to_the_row_it_belongs_to_and_to_no_other(bakeoff):
     v2_caveats = " ".join(by_label["auto-on-v2"].caveats)
     assert "F-015" in v1_caveats and "MID-DESCENT" in v1_caveats
     assert "F-015" in v2_caveats and "does NOT attach" in v2_caveats
-    assert not by_label["champion v1"].caveats and not by_label["artisan v2"].caveats
+    incumbent = next(s for s in bakeoff.CONTENDERS if s.source[0] == "registry-alias")
+    assert not incumbent.caveats and not by_label["artisan v2"].caveats
 
 
 def test_no_contender_is_identified_by_a_hardcoded_run_id(source):
@@ -239,7 +254,7 @@ def test_a_refused_winner_moves_nothing_and_exits_nonzero(bakeoff):
     The gate's refusal must reach the shell, exactly as `make train`'s does."""
     spec = next(s for s in bakeoff.CONTENDERS if s.label == "auto-on-v2")
     winner = bakeoff.Loaded(spec=spec, name="auto-lgbm-v2", run_id="r", family="lgbm",
-                            recorded_val_mae=3.38, best_iteration=791)
+                            recorded_val_mae=3.38, best_iteration=791, feature_set="v2")
     assert bakeoff._promote_winner(winner, _Decision(False), {"features": {"version": "v2"}}) == 1
 
 
@@ -251,7 +266,7 @@ def test_the_alias_cannot_move_to_a_model_the_config_does_not_describe(bakeoff):
     happen."""
     spec = next(s for s in bakeoff.CONTENDERS if s.label == "auto-on-v2")
     winner = bakeoff.Loaded(spec=spec, name="auto-lgbm-v2", run_id="r", family="lgbm",
-                            recorded_val_mae=3.38, best_iteration=791)
+                            recorded_val_mae=3.38, best_iteration=791, feature_set="v2")
     with pytest.raises(SystemExit) as excinfo:
         bakeoff._promote_winner(winner, _Decision(True), {"features": {"version": "v1"}})
     message = str(excinfo.value)
@@ -273,7 +288,8 @@ def _ranked(bakeoff, rows):
     for label, val_mae, test_mae in rows:
         spec = next(s for s in bakeoff.CONTENDERS if s.label == label)
         item = bakeoff.Loaded(spec=spec, name=label, run_id="r", family="lgbm",
-                              recorded_val_mae=val_mae, best_iteration=1)
+                              recorded_val_mae=val_mae, best_iteration=1,
+                              feature_set=spec.feature_set or "v2")
         item.metrics["val"] = m("val", val_mae)
         item.metrics["test"] = m("test", test_mae)
         loaded.append(item)
@@ -289,7 +305,7 @@ def test_the_winner_is_ranked_on_val_even_when_the_holdout_disagrees(bakeoff):
     everybody read."""
     loaded = _ranked(bakeoff, [
         ("floor", 9.9, 9.9),
-        ("champion v1", 3.4760, 3.2608),
+        ("champion (alias)", 3.4760, 3.2608),
         ("artisan v2", 3.3800, 3.2500),   # best on val
         ("auto-on-v2", 3.3900, 3.2000),   # best on test
     ])
@@ -303,7 +319,7 @@ def test_the_floor_is_the_bar_and_never_a_candidate_to_serve(bakeoff):
     still gets a holdout number and a verdict of its own, but it is not ranked."""
     loaded = _ranked(bakeoff, [
         ("floor", 0.1, 0.1),             # absurdly good, still not a candidate
-        ("champion v1", 3.4760, 3.2608),
+        ("champion (alias)", 3.4760, 3.2608),
         ("artisan v2", 3.3800, 3.2500),
     ])
     assert bakeoff._select_winner(loaded, "test").spec.label == "artisan v2"
@@ -361,3 +377,121 @@ def test_the_make_target_exists_and_promotes_nothing_by_default():
     recipe = makefile.split("bakeoff:")[1].splitlines()[1]
     assert "scripts/bakeoff_m3.py $(BAKEOFF_ARGS)" in recipe
     assert "--promote-winner" not in recipe
+
+
+# ------------------------------------------------- F-022: the incumbent row ----
+
+
+def test_the_incumbent_row_declares_no_feature_set(bakeoff):
+    """Prevents: F-022 regressing — an alias-resolved contender pinned to a
+    feature set by declaration.
+
+    The bake-off died at `_load_booster` for every invocation between M3-S5's own
+    `--promote-winner` and M7-S4, because the Spec said `feature_set="v1"` while
+    the alias it resolves had moved to a v2 model. Pre-registration is right for
+    an arm declared before its number existed and wrong for a pointer designed to
+    move; option (a) (ARCH, M4 boundary) separates the two."""
+    incumbent = [s for s in bakeoff.CONTENDERS if s.source[0] == "registry-alias"]
+    assert len(incumbent) == 1, "exactly one row means 'what is serving'"
+    assert incumbent[0].feature_set is None
+    assert "v1" not in incumbent[0].label, (
+        "the incumbent row's LABEL must not claim a version either — that is the "
+        "same defect one layer up, and it is what made the M3 record's label false "
+        "the moment the alias moved"
+    )
+
+
+def test_the_feature_set_is_derived_from_the_artifact_and_must_be_unambiguous(bakeoff):
+    """Prevents: the derivation guessing. It matches the booster's ORDERED feature
+    names against every set declared in configs/features.yaml and requires exactly
+    one hit — a model matching none cannot be scored on a matrix this program can
+    build, and one matching two has no answerable provenance."""
+    from taxi_mlops.features import quote_time, sets
+
+    by_columns: dict[tuple[str, ...], list[str]] = {}
+    for name in sets.set_names():
+        cols = tuple(quote_time.feature_names(sets.resolve_set(name)))
+        by_columns.setdefault(cols, []).append(name)
+    for cols, names in by_columns.items():
+        if len(names) == 1:
+            assert bakeoff._feature_set_of(list(cols), "probe") == names[0]
+        else:
+            # MEASURED, not assumed: `v1_g5` and `redteam_g5_leaky` declare the
+            # SAME ordered columns — the red-team set differs only in how its
+            # aggregates were FITTED (M3-S3's leaky arm), which no artifact can
+            # report. So a model fitted on either is genuinely unidentifiable from
+            # its own feature names, and the derivation refuses rather than picks.
+            # It is the safe direction: no such model is promotable (g5 was
+            # DROPPED and the leaky set exists only for `leakage_redteam.py`), and
+            # a wrong answer here would score a champion on a matrix built from a
+            # different definition of the same columns.
+            assert sorted(names) == ["redteam_g5_leaky", "v1_g5"]
+            with pytest.raises(SystemExit) as ambiguous:
+                bakeoff._feature_set_of(list(cols), "probe")
+            assert "2 declared feature set" in str(ambiguous.value)
+
+    with pytest.raises(SystemExit) as unknown:
+        bakeoff._feature_set_of(["not", "a", "declared", "set"], "probe")
+    assert "0 declared feature set" in str(unknown.value)
+
+    v2 = quote_time.feature_names(sets.resolve_set("v2"))
+    with pytest.raises(SystemExit) as reordered:
+        bakeoff._feature_set_of(list(reversed(v2)), "probe")
+    assert "0 declared feature set" in str(reordered.value), (
+        "matching must be on the ORDERED list: _load_booster's very next refusal "
+        "is about column order, so an order-insensitive match here would hand it a "
+        "set it then rejects for a reason this function already knew"
+    )
+
+
+def test_nothing_downstream_of_resolution_reads_the_declared_feature_set(source):
+    """Prevents: a matrix built from the declaration the artifact could contradict.
+
+    Everything after `_resolve` must read `Loaded.feature_set` — the concrete one.
+    `spec.feature_set` may appear only where the declaration itself is the
+    subject: the two resolution sites and the declaration table."""
+    assert "item.spec.feature_set" not in source
+    assert "winner.spec.feature_set" not in source
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Attribute) and node.attr == "feature_set"):
+            continue
+        inner = node.value
+        if not (isinstance(inner, ast.Attribute) and inner.attr == "spec"):
+            continue
+        owner = _enclosing_function(tree, node.lineno)
+        assert owner in {"_resolve", "_load_booster", "_print_declaration"}, (
+            f"line {node.lineno} (in {owner}) reads the DECLARED feature set outside "
+            "resolution; everything downstream must read Loaded.feature_set"
+        )
+
+
+def _enclosing_function(tree, lineno: int) -> str:
+    best, best_start = "<module>", -1
+    for fn in ast.walk(tree):
+        if isinstance(fn, ast.FunctionDef) and fn.lineno <= lineno <= (fn.end_lineno or fn.lineno):
+            if fn.lineno > best_start:
+                best, best_start = fn.name, fn.lineno
+    return best
+
+
+def test_the_square_is_not_printed_against_a_cell_it_is_not_about(source):
+    """Prevents: the 2x2 quietly re-basing onto whatever holds the alias.
+
+    With the alias on a tuned v2 model the square would report `auto-on-v2
+    +0.00%` — arithmetic that is correct and answers a different question."""
+    assert "SQUARE_BASE" in source
+    tree = ast.parse(source)
+    keys = {
+        node.slice.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant)
+        and isinstance(node.slice.value, str)
+    }
+    assert "champion v1" not in keys, (
+        "the square must find its origin cell by DESCRIPTION (v1 features, hand "
+        "hyperparameters), never by INDEXING a label that used to hold it. This "
+        "assertion is on the parsed code and not on the text, because the script "
+        "explains the change in prose that quotes the old label (#53/#68)"
+    )
+    assert "the 2x2 is NOT printed" in source
