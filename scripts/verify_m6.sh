@@ -862,7 +862,30 @@ try:
         no(f"the kill and the storage break produced the same alert set ({sorted(kill_fired)}) — "
            f"the signatures are not distinguishable")
 
-    # (i) the undo was STAGED BEFORE the injection and it worked. A drill with no
+    # (i) THE KILL'S OUTAGE MUST RECONCILE WITH ITS OWN PER-REQUEST ANCHORS.
+    # gotcha #75, replayed against the gameday's record the way `verify-m5` §5
+    # replays it against M5-S4's: an outage is anchored on the first FAILURE and
+    # closed by the first SUCCESS after it, so it is strictly LONGER than the
+    # span from the first error to the last one — and by at most the gap between
+    # two arrivals, because the next sample is what closes it. The bound is
+    # derived from the run's own rate; no number is typed. `last_error -
+    # first_error` is the wrong quantity and it once reported 182 s for a
+    # 13-second outage.
+    kill_obs = scen["kill"]["observed"]
+    ew = kill_obs["load"]["error_window"]
+    rate = kill_obs["load"]["shape"]["target_rate_per_second"]
+    outage = kill_obs["outage_seconds"]
+    slack = 2.0 / rate
+    if ew["span_s"] < outage <= ew["span_s"] + slack:
+        ok(f"the kill's {outage} s outage reconciles with its own anchors: strictly longer than the "
+           f"{ew['span_s']} s error SPAN and inside one arrival gap of it (2/{rate:g} req/s = "
+           f"{slack:g} s) — the span itself is gotcha #75's wrong quantity")
+    else:
+        no(f"the recorded outage {outage} s does not reconcile with the run's anchors: the error "
+           f"span is {ew['span_s']} s and recovery closes on the next success, so the outage must "
+           f"lie in ({ew['span_s']}, {ew['span_s'] + slack:g}] at {rate:g} req/s")
+
+    # (j) the undo was STAGED BEFORE the injection and it worked. A drill with no
     # rehearsed undo is a gamble (the M2 red-team rule).
     st = scen["storage"]["observed"]
     if st.get("undo_exit_code") == 0 and all(v == "inactive" for v in st["after_undo_states"].values()):
@@ -875,7 +898,7 @@ except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the gameday check itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 9 "the gameday check"
+expect_verdicts 10 "the gameday check"
 
 # ------------------------------------------- 7. the restore, the prose, the alias
 section "7. the restore's honest label, the prose against the records, and the alias law"
@@ -984,7 +1007,26 @@ try:
     control = json.loads((base / "control.json").read_text())
 
     def written(value):
-        forms = {f"{value:.{d}f}".rstrip("0").rstrip(".") for d in range(0, 5)}
+        """Is this record's number in the write-up, at any precision it holds?
+
+        A prose document sensibly writes `13.75 s` for a record holding 13.75
+        and `844.3` for 844.3 — a number that has been through a round trip
+        exists only at the precision it was written at (gotcha #42). So the
+        comparison is made at every precision the record's own value renders to.
+
+        THE FLOOR IS ONE DECIMAL, AND THAT IS NOT A DETAIL. Allowing `d=0` lets
+        13.75 render as "14", and "14" appears in almost any document — so the
+        check passed against a record whose outage had been rewritten to 13.501,
+        which is exactly the fault `verify_m6_redteam.sh` plants. Its own red
+        team found this on its first run: gotcha #76 a second time, in the
+        ROUNDING direction rather than the substring one. An integer-valued
+        record (an error count) still renders as "55" because the trailing zero
+        is stripped, so nothing legitimate is lost.
+
+        The match is anchored on both sides for #76's original reason: a bare
+        substring search accepts `13` inside `13.75`.
+        """
+        forms = {f"{value:.{d}f}".rstrip("0").rstrip(".") for d in range(1, 5)}
         return any(re.search(rf"(?<![\d.]){re.escape(f)}(?![\d.]?\d)", doc) for f in forms)
 
     quoted = {
