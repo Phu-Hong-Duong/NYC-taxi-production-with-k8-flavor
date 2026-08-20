@@ -204,19 +204,29 @@ try:
 
     # (f) The 2025 leg was a MEASUREMENT and it came back VALIDATED — the
     # blueprint's premise SURPASSED. The probe must also have acquired nothing.
-    probe = json.loads(Path("automation/runs/m7-s1/contract_probe_2025-01.json").read_text())
+    # The probe record is FOUND, not named — the month it covers is its own
+    # field. A gate that typed the year would have to be edited before anybody
+    # could probe a different one.
+    probes = [json.loads(p.read_text())
+              for p in sorted(Path("automation/runs/m7-s1").glob("contract_probe_*.json"))
+              if "fixture" not in p.name]
     manifest = json.loads(Path("data/raw_manifest.json").read_text())
-    keys = manifest.get("files", manifest)
-    acquired_2025 = [k for k in keys if "2025" in str(k)]
-    if probe["outcome"].upper().startswith("VALID") and probe["exit_code"] == 0 and not acquired_2025:
-        events = probe.get("schema_events") or []
-        ok(f"the REAL 2025-01 file came back {probe['outcome']} (exit {probe['exit_code']}, "
-           f"{probe['rows_read']:,} rows, {len(probe['columns_as_delivered'])} columns, "
-           f"{len(events)} schema event(s)) and the probe acquired NOTHING — no 2025 entry in "
-           f"data/raw_manifest.json. A structural verdict, measured rather than assumed")
+    keys = list(manifest.get("files", manifest))
+    validated = [p for p in probes
+                 if str(p.get("outcome", "")).upper().startswith("VALID") and p["exit_code"] == 0]
+    acquired = sorted({p["month"] for p in probes
+                       if any(p["month"][:4] in str(k) for k in keys)})
+    if probes and len(validated) == len(probes) and not acquired:
+        p = validated[0]
+        events = p.get("schema_events") or []
+        ok(f"the REAL {p['month']} file came back {p['outcome']} (exit {p['exit_code']}, "
+           f"{p['rows_read']:,} rows, {len(p['columns_as_delivered'])} columns, "
+           f"{len(events)} schema event(s)) and the probe acquired NOTHING — no entry for its "
+           f"year in data/raw_manifest.json. A structural verdict, measured rather than assumed, "
+           f"and a SURPASS over the blueprint's premise that a future year would refuse")
     else:
-        no(f"the 2025 probe records outcome={probe.get('outcome')} exit={probe.get('exit_code')}; "
-           f"manifest entries mentioning 2025: {acquired_2025}")
+        no(f"{len(probes)} probe record(s), {len(validated)} validated; "
+           f"probed year(s) that nevertheless entered the manifest: {acquired}")
 
     # (g) …and because it validated, the REFUSAL had to be watched somewhere
     # else. Three fixtures, three shapes, and the exit code is the assertion: a
