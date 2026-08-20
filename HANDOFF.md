@@ -1,5 +1,143 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bj) — M6-S5 leg 2: the M6 gate, and the two stale claims it found in our own prose
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE (Accountable),
+MLOps (R)** (charter read at entry; refusals in play: nothing promotes, no
+registry version minted, no alias moved, the cluster never goes down, and the
+gate itself may not mutate ANYTHING).
+Boot reads: CLAUDE.md · HANDOFF (bi) · M6 KICKOFF · AWAITING_PO.
+**Staleness check passed** — `automation/STOP` ABSENT (the PO lifted the park
+recorded at AWAITING_PO 2026-08-19-2), tree clean at `ee9545d`, no detached job
+pending, 3 nodes Ready v1.36.1, `@champion` version 2, `features.version` v2,
+both isvcs (champion + the v1 shadow (bi) left running) Ready, all 7 alert rules
+loaded/healthy/inactive. The monitoring pods had restarted ~3 min before boot
+(host/Docker Desktop restart) and were all Ready — no action needed.
+**M6-S5 LEG 2 COMPLETE — and with it M6-S5 and MILESTONE M6.** PR **#39**,
+merged (`9a514a5`), reachable from origin/main.
+End state is exactly M5's: `@champion` **2**, `features.version` **v2**,
+`make verify-m5` **GREEN**, `make verify-m6` **GREEN 63/63**, `make parity`
+**0.000e+00** over 16 hazard rows.
+
+### Done
+- **`make verify-m6` — GREEN, 63 sub-checks in 7 sections, 2.147 s, exit 0.**
+  Sections: the eyes · the judgement · shadow BEFORE canary · 90/10 observed ·
+  rollback under load · Gameday 1 · the restore label, the prose and the alias.
+  **It re-runs nothing** — no gameday (~55 min including a deliberate ~5 min
+  total outage), no alert injection, no traffic shift, no alias move, no
+  restore, no deploy — and asks the live system exactly three questions: one
+  PromQL query, one rules-API read, one prediction. No skip flag, no fast mode
+  (M1's rule, **sixth** inheritance). Transcript: `docs/verify_m6_transcripts.md`
+  §1; §0 answers §9/M6's accept-when **clause by clause** with the observed
+  number beside each.
+- **`make verify-m6-redteam` — PASSED.** Plants gotcha #75's wrong anchor
+  (`automation/runs/m6-gameday/kill.json`'s `observed.outage_seconds`
+  **13.75 → 13.501**, the record's OWN `error_window.span_s`, wrong by 0.249 s)
+  → **RED exit 1 with 2 FAILs from TWO DIFFERENT ARTIFACTS** (the record stops
+  reconciling with its own arrivals; `docs/gameday_m6.md` quotes a number no
+  record holds), **61 sub-check lines still passing**, sha256-verified
+  byte-identical restore (`f73324ffa333…`), `git status` clean, **GREEN 63/63**.
+- **`tests/unit/test_verify_m6.py` — 17 tests** pinning what the gate may not
+  do: run any drill, inject, kill, shift traffic, deploy, touch the Prometheus
+  admin/reload API, mutate the registry, type a threshold or a version, or let a
+  leg die silently; plus that every replayed record is git-tracked (F-029) and
+  that the prose precision floor stays at one decimal.
+- **F-044 (new, CLOSED)** · gotchas **#90** and **#91** · CLAUDE.md section + 2
+  command rows + the backup row corrected + traps paragraph · deployments ledger
+  (M6-S5 row gains the compound label; the M4-S2 row gains a DATED note beside
+  its original sentence) · `scripts/platform_backup.sh` runtime label · field
+  note.
+- **806 unit tests** (17 new), ruff clean, CI green.
+
+### Decisions
+- **The red team plants in the GAMEDAY record, not in the canary or rollback
+  one.** The gameday is what §9/M6 grades the milestone on, and its outage is
+  the number with a history of being computed wrongly here (gotcha #75, which
+  once turned a 13-second outage into a reported 182). Planting a value DERIVED
+  from the record keeps it plausible; planting `999` would go green on the prose
+  leg and teach nothing.
+- **`verify-m6` deliberately does NOT check the v1 shadow, and the shadow is
+  LEFT RUNNING.** It is an M6-S3 leftover that leg 1 kept on purpose (it is the
+  accidental idle control in F-043, which is open and routed to this boundary);
+  making it a gate condition would turn an optional artifact into a requirement,
+  and tearing it down is a wire mutation this story does not need.
+  `make shadow TEARDOWN=1` removes it whenever the boundary decides.
+- **The historical M4-S2 ledger row was NOT rewritten.** Its "RESTORE IS NOT
+  REHEARSED" sentence stands with a dated note beside it — decisions were made
+  from what it said (the `error_memo_m2.md` §9 precedent). Only the current
+  (M6-S5) row states the new label.
+- **No threshold, no version, no pod name and no measured number is typed in the
+  gate.** Thresholds are parsed out of `infra/monitoring/alerting_rules.yml` and
+  looked for in `docs/slo_serving.md`; the served version comes from the alias;
+  the outage bound is computed from the run's own rate. A test enforces each.
+- **`automation/runs/m5-parity/parity.json` was rewritten by the story-exit
+  `make parity`** — its diff is **one timestamp**, every measured value
+  byte-identical. Said out loud because a tracked record changing in a gate
+  story deserves a sentence.
+
+### Defects/Surprises
+- **F-044 — the restore's honest label moved everywhere except the two places
+  that matter, and CLAUDE.md asserted it had moved everywhere.** Leg 1 updated
+  the backup script's header, the `MANIFEST.txt` it writes, `docs/gameday_m6.md`
+  and CLAUDE.md; it did NOT update the `echo` the script **PRINTS on every run**
+  (still `restore NOT rehearsed (M6 gameday candidate)` — the only version an
+  operator sees) nor `ledgers/deployments.md`. Found by the gate's §7 on its
+  FIRST run. **The header is for review; the printed line is for 3am**
+  (gotcha #91). Both fixed; the check now asserts the COMPOUND claim in every
+  artifact and separately refuses a runtime `echo` mentioning rehearsal without
+  saying "scratch".
+- **Gotcha #90 — the red team's first run FAILED, and the fault was in the
+  gate.** Only one of the two witnesses spoke: §7's prose leg rendered a
+  recorded `13.75` at **zero** decimals as `14`, and `14` appears in almost any
+  document, so the planted `13.501` rendered as `14` too and matched. The
+  precision floor is one decimal now. This is **gotcha #76 a second time,
+  arriving through ROUNDING instead of tokenisation** — and the two properties
+  are independent (#76's anchors stop `13` matching inside `13.75`; this floor
+  stops `13.75` becoming `14`).
+- **`test_the_gate_re_runs_nothing_expensive` went red twice for matching WORDS
+  not INVOCATIONS** — the gate legitimately READS `scripts/platform_backup.sh`
+  as a file, and then the launcher pattern's `sh` alternative matched inside the
+  filename `platform_backup.sh` itself. **Gotcha #68, twice in one function.**
+- **Two smaller first-run reds, both the gate's own**: `infra/helm/prometheus/
+  values.yaml` does not exist (the file is `infra/helm/monitoring/
+  prometheus-values.yaml`), and `must_not_fire` is a list of OBJECTS carrying
+  each alert's signal and reason, not of strings.
+- **Wall count**: none.
+
+### Next
+**ARCHITECT session → the M6 boundary.** M6 carries **no ◆** (BLUEPRINT §9: REV
+gates are M2, M3, M7), so the milestone exits straight to the architect for
+boundary triage and the M7 kickoff. What the boundary inherits:
+- **The gate is green and its red team is real**, but the **sign-off row is not
+  written** — producer ≠ approver (ORG.md independence rule 2), so
+  `ledgers/signoffs.md` gains its M6 row from the approver, who should re-run
+  `make verify-m6` at the boundary as every previous approver has. Its
+  accept-when table is pre-built at `docs/verify_m6_transcripts.md` §0.
+- **Open findings, all routed here and none blocking**: **F-043** (the
+  predictor's exporter starves under saturation; three options costed in
+  `ledgers/findings.md`, recommendation is the honest cheap one — state the
+  limit in the SLO document and lean on the node-side signals) · **F-042's
+  recommendation** (shorten A-7 below A-5's 2m — deliberately NOT done, it would
+  be an edit made on the authority of the number just measured) · **F-041's
+  operational fact** (an on-call sees A-2 and A-5 sit `pending` through every
+  ordinary self-heal) · **F-040's reordered rollback remedy** (named, UNPROVEN,
+  needs two more alias moves) · **`docs/error_memo_m2.md` §7 row 2**, the airport
+  gap, now with two independent measurements pointing the same way.
+- **Still standing with the PO, all non-blocking**: AWAITING_PO 2026-08-18-1
+  (**F-016**, the incumbent gate margin — a gate-condition fork, and **it becomes
+  blocking at M7's first retrain**, which is the next milestone) · 2026-08-17-1
+  (host `libgomp1`) · 2026-08-16-2 (the allowlist paste).
+- **Deferred with a trigger, unchanged**: the admission webhook re-enable (~15 s
+  outage of the only route in, re-routed from S3 and S4) · D-001's registry
+  pattern, Flyte's declared 8080 route and the monitoring hostPorts, all waiting
+  on the next PO-sanctioned rebuild · **the v1 shadow is still up** and
+  `make shadow TEARDOWN=1` removes it.
+- **Carries due at M7**: **F-020** (the tuned config is 15%-sample-optimal
+  applied unchanged at full scale) and **F-022** (the bake-off script has been
+  un-runnable since its own promotion moved the alias) — both with quoted
+  landings in §9/M7's retrain scope.
+
 ## Session 2026-08-19 (bi) — M6-S5 leg 1: Gameday 1, the first restore, and two arguments that were not measurements
 
 ### State
