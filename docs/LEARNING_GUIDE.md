@@ -3591,3 +3591,77 @@ green; running *all thirty-six* took twenty lines and is now `make board-cards`.
 Gotcha #78 said an empty panel is a failure, and the Grafana boards learned it
 the expensive way at M6-S1. Applying an existing lesson to the next surface it
 fits costs almost nothing and is the cheapest verification in the repo.
+
+---
+
+## M7-S5 leg 2 — the M7 gate: what a milestone gate is for, once you have six of them
+
+**A gate's first run is a survey of soft ground, and this one found twelve
+pieces in three minutes.** None of them was a defect in M7's work. Two were the
+gate calling an API it had guessed at; one was a record whose field is named
+`rows_validated` and means *rows read*; one was a doc table quoting `202,574.4`
+where the check compared `202574.4`; one was a board's own *prose* saying the
+daily series was "flat at its floor", matched by a scan for a forbidden column
+called `floor`; one was the sentence `KPI-09/KPI-10 belong to the held-out
+split` reading as a published value because `KPI-10` contains `10`. **Writing
+the checks is how you find out what your records actually say**, and the yield
+is highest on the first run and drops to almost nothing by the third.
+
+**The most useful thing this gate did was go red about the world rather than
+about the repository.** Its one live PromQL query returned zero drift series
+against three tracked records saying there should be three. Nothing had drifted:
+the pushgateway pod had restarted after a host reboot, and a bulletin board
+keeps nothing. The consequence is the finding — **A-10 exists to catch a stale
+drift number and cannot fire on an absent one**, because `time() - max by
+(month)(...)` over no series is no series. The SLO document had argued, correctly
+and at length, that a pushed metric *persists* after its producer dies; it is
+the same property, and the guard built from it is blind to the case where the
+board itself went away. **Any rule of the form "this value is too old" is silent
+about the value not existing**, and only `absent()` sees the second one.
+
+**Then the design question, which is the part worth keeping.** Making that a
+FAIL would turn the M7 gate red for a laptop reboot with no defect behind it —
+gotcha #50, which this program has now watched fire six times. Making it a pass
+would hide a real hole. The way out was to ask the **pair**: either the series
+are present, or the gateway restarted since the drill pushed them, checked on
+two clocks. An absence with nothing accounting for it is still a FAIL, so the
+check degrades in the correct direction, and the passing line names the finding
+and prints the one command that fixes it. **When a check has a state it cannot
+honestly call good or bad, the fix is usually a second clause that explains the
+state, not a looser bar.**
+
+**Gotcha #50 fired again while this was being written, on a neighbour.**
+`verify-m6` had gone RED — not from anything in this story, but because M7-S3
+had *closed* F-035, and the leg required the documented-absence list to be
+NON-EMPTY. A guard asserting "there are still two signals we cannot alert on"
+is a guard that fails the day somebody fixes them. The repair is the one this
+program keeps re-learning: assert the **agreement** (the rules implement exactly
+what the renderer declares, and whatever is absent is documented), which is true
+before the closure and after it. Same leg also read the renderer's sets with
+`ast.literal_eval` and silently got nothing once they became comprehensions —
+**a guard degrading into a guard about its own parser** is the quiet version of
+the same disease.
+
+**And the checker-of-the-checker lesson, which was new.** Three needles in
+`test_verify_m7.py` matched words instead of invocations, and all three were the
+gate quoting *itself*: `--push` inside the advice line it prints for an
+operator, `ingest_month` inside the `ingest_months` view it reads, `retrain(`
+inside the sentence reporting what `ast` had found about `retrain`'s signature.
+#35 and #68 said prose must not sit where a parser reads it as code. This is the
+mirror image: **the more a checker explains itself, the more of its own
+vocabulary ends up in its output, and the more surface it offers the checker
+above it.** For the third one no anchor helps — the sentence is legitimate — so
+the property had to change: the gate must never *import* the callable it
+inspects.
+
+**Craft note.** The red team's value is entirely in how plausible the plant is.
+This one rewrites a volume ratio from a ratio of RATES to a ratio of TOTALS,
+derived from the record's own fields, wrong by one percentage point, and still
+under the bar — so the alert still fires and the story still reads the same. It
+is F-045 itself, the finding this whole milestone is about, turned against the
+milestone. And the drill asserts one leg must stay **GREEN**: the bar-daylight
+check has no reason to complain about the planted value, and a gate that went
+red there too would be a gate that fails on any edit rather than on a wrong
+number. **Assert what must not fire. A drill that only predicts "something goes
+red" cannot be wrong.**
+

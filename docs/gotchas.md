@@ -1469,3 +1469,35 @@ the seed line are earned by THIS project.
     creating a twin. Argparse also exits 2 on a usage error, which happens to
     collide with the same word: **a vocabulary built on small integers shares
     them with every tool it passes through** (M7-S4 completion leg).
+
+98. **A pushgateway keeps nothing across a restart, and the staleness rule
+    written to catch a stopped producer cannot fire on an ABSENT series.**
+    `make verify-m7`'s one live query returned **zero** `taxi_drift_*` series
+    against three tracked records saying there should be three. Nothing had
+    drifted: the gateway pod had restarted after a host reboot, and a bulletin
+    board with no persistence loses its board. The trap is what happens next.
+    `docs/slo_serving.md` §8.5 argues — correctly — that a pushed metric
+    **persists** after its producer dies, which is why A-10 compares
+    `time()` against the newest `*_last_run_timestamp_seconds`. Over no series
+    that expression **is no series**, so A-10 sits `inactive`, the drift board
+    renders empty, and both are indistinguishable from a healthy month.
+    **Gotcha #78's empty-panel disease one layer up**: the guard written against
+    *a number nobody refreshed* is blind to *a number nobody has*, and the only
+    rule shape that can see it is `absent()`. Generalises past pushgateways —
+    any rule of the form "this value is too old" is silent about the value not
+    existing, and the two states need different rules (F-050, M7-S5 leg 2).
+
+99. **Three needles in one test file matched WORDS instead of INVOCATIONS —
+    and all three were the gate quoting itself.** `test_verify_m7.py`'s first run
+    failed on `--push` (inside the advice line the gate PRINTS for an operator),
+    on `ingest_month` (a prefix of `ingest_months`, the analyst-layer VIEW the
+    gate legitimately reads), and on `retrain(` (inside the sentence reporting
+    what `ast` had just found about `retrain`'s signature). #35 and #68 said
+    prose must not sit where a parser reads it as code; this is the same lesson
+    arriving from the opposite direction — **the more a checker EXPLAINS itself,
+    the more surface it offers a checker of the checker**, and the more of its
+    own vocabulary appears in its output. The fixes are anchors at both ends,
+    command position, and — for the third — picking a property the sentence
+    cannot satisfy: the gate must never IMPORT the callable it inspects
+    (M7-S5 leg 2).
+

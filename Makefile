@@ -253,7 +253,7 @@ verify-m6-redteam: ## prove verify-m6 goes RED: rewrite ONE recorded field, watc
 	@bash scripts/verify_m6_redteam.sh
 
 # ---- M7 drift & retrain loop (role:SRE + role:MLE + role:DA) ----
-.PHONY: predictions-scoring retrain retrain-prediction-check retrain-schedule drift-report verify-m7
+.PHONY: predictions-scoring retrain retrain-prediction-check retrain-schedule verify-m7 verify-m7-redteam
 predictions-scoring: ## score the REGISTERED champion on the SCORING months and publish the rows (M7-S2; then make duckdb, make marts). SCORING_ARGS="--months YYYY-MM" narrows; monitoring ids KPI-14..17, never KPI-09/10
 	uv run python -m taxi_mlops.training score-scoring $(SCORING_ARGS)
 retrain: ## M7-S4: fit the CHAMPION's configuration re-derived at the scale it is fitted at (F-020) and let the gate decide. Promotes NOTHING (CLI exit 0 promote-worthy · 1 refused · 2 could not build · 3 no verdict · 4 crashed — and see the `detach` header: make collapses every one of those to 2). RETRAIN_ARGS="--plan-only" is the seconds-long provenance check
@@ -265,9 +265,10 @@ retrain-prediction-check: ## M7-S4: judge the retrain RECORD against the predict
 	@uv run python scripts/retrain_prediction_check.py $(PREDICTION_CHECK_ARGS)
 retrain-schedule: ## M7-S4: deploy the retrain task and its two triggers, then read them back off the SERVER (never off the file that was submitted)
 	@bash scripts/retrain_schedule.sh $(SCHEDULE_ARGS)
-drift-report: ## Evidently reference-vs-MONTH -> pushgateway + MLflow artifact
-	@echo "TODO(M7): MONTH=$(MONTH)"
-verify-m7: ; @echo "TODO(M7): 2020-03 drift alarm + 2025-01 schema refusal (distinct signatures) + DA memo"
+verify-m7: ## the scoring months + the two failure signatures + the predictions table + the drift bars + the retrain that said no; re-runs NOTHING
+	@bash scripts/verify_m7.sh
+verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watch its anchors, its second witness and the memo contradict it, restore
+	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
 .PHONY: deploy-feast verify-m8

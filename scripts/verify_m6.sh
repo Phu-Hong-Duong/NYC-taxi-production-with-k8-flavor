@@ -331,24 +331,37 @@ try:
     # (e) the implemented signal set and the DOCUMENTED ABSENCES must agree, and
     # neither may quietly change. F-035: two of the PRR's seven have no metric
     # source in this stack, and both the gap and its closure must be visible.
-    import ast
-    tree = ast.parse(Path("scripts/render_alert_rules.py").read_text())
-    consts = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
-            try:
-                consts[node.targets[0].id] = ast.literal_eval(node.value)
-            except Exception:  # noqa: BLE001
-                pass
-    known = set(consts.get("KNOWN_SIGNALS", set()))
-    implemented = set(consts.get("IMPLEMENTED_SIGNALS", set()))
+    # The sets are COMPUTED in that module (a comprehension over a range, and a
+    # set difference), so they are read by IMPORTING it. `ast.literal_eval` used
+    # to be enough and silently stopped being: it returned nothing, `implemented`
+    # came back empty, and the leg then failed for a reason that had nothing to
+    # do with the signals — gotcha #50's quieter cousin, a guard degrading into
+    # a guard about its own parser.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_rar", "scripts/render_alert_rules.py")
+    rar = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rar)
+    known = set(rar.KNOWN_SIGNALS)
+    implemented = set(rar.IMPLEMENTED_SIGNALS)
     in_rules = {r["labels"]["signal"] for r in on_disk if r.get("labels", {}).get("signal")}
     absent = known - implemented
     documented = {f"A-{n}" for n in re.findall(r"###\s*A-(\d)\b", slo)}
-    if in_rules == implemented and absent and absent <= documented:
+    # AN EMPTY ABSENCE LIST IS LEGAL, AND SAYING SO IS THE FIX FOR A REAL RED.
+    # This leg used to require `absent` to be non-empty, which was true on the
+    # day it was written and stopped being true the moment M7-S3 CLOSED F-035 by
+    # giving A-3's client half and A-4 a metric source. A guard that fires
+    # because the program did the right thing teaches the next session to edit
+    # assertions (gotcha #50, sixth time). The property that holds at every
+    # state is the AGREEMENT: the rules implement exactly what the renderer
+    # declares, and whatever is still absent has a named section in the SLO doc.
+    if in_rules == implemented and absent <= documented:
+        closed = ("and the documented-absence list is EMPTY — every signal now has a metric "
+                  "source (F-035 closed at M7-S3)" if not absent else
+                  f"and the {len(absent)} absent one(s) {sorted(absent)} each have a named "
+                  f"section in the SLO document")
         ok(f"the implemented signals {sorted(in_rules)} are exactly the ones with a metric source, "
-           f"and the {len(absent)} absent one(s) {sorted(absent)} each have a named section in the "
-           f"SLO document (F-035 — the gap cannot be quietly forgotten OR quietly closed)")
+           f"{closed} — the gap cannot be quietly forgotten OR quietly closed")
     else:
         no(f"signals in rules={sorted(in_rules)}, declared implemented={sorted(implemented)}, "
            f"absent={sorted(absent)}, documented absences={sorted(documented)}")
