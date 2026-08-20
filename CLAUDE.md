@@ -2306,6 +2306,69 @@ can never disagree (the port-family twins lesson, applied before it bit).
   set is now *what `main` awaits*, asked of the AST, so it stays true for
   additions nobody has thought of.
 
+## The drift memo and the fourth board (M7-S5 leg 1) — what a monthly average is weighted by
+- **Every honest monthly number about March 2020 understates it, and by the same
+  ratio.** Mean duration **13.1645** against January's 13.2123 (**0.36%**);
+  whole-month KPI-14 **3.3227** against 3.0295; max input PSI **0.0217**, lower
+  than an *accepted* July 2019's 0.0323. None is wrong; all are dominated by the
+  head of the month — **68.231% of March's rows fall before the 11th, 3.321%
+  after the 21st**. A row-weighted average of a collapse **is weighted by exactly
+  the rows that disappeared** (F-045, stated in the form that generalises).
+- **The memo cuts March in three and declares the cut ONCE** (`PERIOD_SQL` in
+  `scripts/drift_memo_numbers.py`), from the data and not from a news archive:
+  the daily series is flat through the 10th, falls continuously from the 11th,
+  and sits at its floor from the 22nd. Peak **240,520 trips (03-05)** →
+  **5,361 (03-29)**, a **97.8%** fall in 24 days.
+- **The world changed in a way PSI is structurally blind to, and the memo says
+  which way.** Mean duration **−26.6%** while mean distance **+6.1%** — the
+  median trip went **49.3% faster** (10.2062 → 15.2339 mph). The night ended
+  (21:00–03:00 loses 46–67% of its share; 01:00 goes 1.888% → 0.676%) and the
+  morning arrived earlier (06:00 **1.935% → 4.461%**), so the day's busiest hour
+  moves from **18:00 to 14:00**. Passengers per trip 1.5180 → 1.3028. The
+  contract had nothing to say: **1.9766% rejected against January's 1.9548%**,
+  same rules in the same order.
+- **KPI-16, the signed bias, is the number that reads as a diagnosis.** It climbs
+  **+0.0369 (03-09) → +5.3197 (03-26)** and never turns negative after the 9th:
+  on the 26th the mean actual trip was **9.699 min** and the champion's mean
+  quote **15.019**. An absolute error cannot distinguish a model quoting too long
+  from one quoting too short, and in this month those are opposite diagnoses with
+  opposite fixes. March's worst day (**KPI-14 6.3693**, KPI-15 **53.723%**) is
+  **78% worse** than January's worst.
+- **The model's best days in the collapse are the days it was already told the
+  city would be quiet.** Weekend error sat **31.4% below** weekday error in late
+  March against **13.5%** in January, and the daily-series dips land exactly on
+  03-21/22/28/29. `dayofweek` is the champion's only vocabulary for "quiet city"
+  and it is a seven-valued one — it had a word for the event and could reach it
+  two days in seven.
+- **`docs/error_memo_m2.md` §7 row 2 gets its THIRD measurement, and this one
+  can rule something out.** The airport gap sits at **1.86–2.00×** in the three
+  ordinary periods and **2.07–2.35×** through the collapse; between January and
+  late March the airport MAE rose 85% and the ordinary MAE 79%, so the *ratio*
+  barely moved. If the penalty were carried by DISTANCE — the one term whose
+  minutes-per-mile changed when the roads emptied — the ratio had to move. **A
+  quantity that holds constant across a regime change discriminates between
+  hypotheses a quantity measured once cannot**; the memo recommends an airport
+  flag evaluated as a *regime* indicator, not a distance proxy.
+- **§9.7 row 5's condition is honoured by REFUSING the comparison.** The mart
+  carries no floor column and no margin column: the honest floor is fitted on the
+  2019 train months, so a 2020 margin would publish a comparison no gate ever
+  made against a bar chosen for a different world. Pinned by a board test that
+  fails if any card's SQL says `floor`, `margin` or `kpi_13`.
+- **The board is the fourth, and every card cites a MONITORING id.**
+  `Predictions & drift (M7)` (id 5, 8 cards) over `marts.scoring_daily`, checked-in
+  JSON converged by name. Board laws now tested: only KPI-14/15/16/17 may appear ·
+  KPI-16 must be on it AND be a series · ≥3 cards must plot the DAILY grain and
+  none may `GROUP BY month` · the tolerance is read off the mart, never typed ·
+  `model_version` is visible somewhere (a spliced series averages two champions
+  into invisibility).
+- **`make board-cards` is gotcha #78 applied to Metabase.** `--verify` executes
+  ONE card per dashboard — enough for the connection and the credentials, not
+  enough for the board. The new reader runs the SQL a reviewer reads in the
+  checked-in JSON straight at the one Postgres and **treats an empty card as a
+  FAILURE**: **36 cards across 4 boards, 0 failures**. It is deliberately NOT
+  wired into `verify-m1`, because widening a gate's behaviour late in a session
+  is how a guard goes red for a correct system (gotcha #50).
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2466,6 +2529,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Judge the retrain record against the prediction written BEFORE the fit (M7-S4 completion leg) | `make retrain-prediction-check` (a READER: two files, no live system, no fit; exit 1 on any exact mismatch) | VERIFIED 2026-08-20 (M7-S4 completion leg): **REPRODUCED — all 20 exact claims and 3 path properties hold.** `automation/runs/m7-retrain/rerun-prediction.json` was committed BEFORE the re-run was launched, which is the only thing that makes a repeat of a 27-minute fit evidence rather than a do-over; the record `automation/runs/m7-retrain/latest.json` then came back at **3.2412 / 81.568% / val 3.3811 / 779 of 2400 / early_stopping / REFUSE on both incumbent conditions**, every field compared **at the precision the prediction was written at** (gotcha #42) under a **one-decimal floor** (gotcha #90). Two MLflow runs of one configuration agreeing to the last kept digit (`d2f69f90…`, `8fcc7b98…`) is this program's second determinism observation, after M3-S3's `3.47603843547682` twice. **The LOOSE block prints what did NOT hold rather than dropping it** (gotcha #94's failure direction): the exit code was predicted 1 and the status file holds 2 — gotcha #97, a fact about `make`, not about the fit. RED-TEAMED in unit form four ways (a 0.0001 move in the challenger's MAE, a REFUSE relabelled PROMOTE, the failing checks swapped to the floor's, and a path outside the repo — the last found a defect in the checker itself, #55's family). Registry read live afterwards: `@champion -> 2`, `VERSIONS: ['1','2']` — **no version 3 exists**, which is the strong form of "nothing was promoted" |
 | Register the retrain's SCHEDULE and read it back off the server (M7-S4) | `make retrain-schedule` (`DRY_RUN=1` resolves and deploys nothing) | VERIFIED 2026-08-20 (M7-S4): **Flyte 2.6.1 / chart v2.0.42 carries triggers natively** — asked of the tooling, not read off a version table (gotcha #70's family) — so the kickoff's recorded cron fallback is **NOT executed and stays armed**. Deployed `taxi-pipeline-train.retrain` (version `6d5b536b975b…`, image `taxi-mlops-pipeline:72a4013`) with two triggers **declared in code with their inputs** (the CLI form cannot pass inputs, so a CLI-created trigger fires the DEFAULTS), then read them back **off the control plane**: `retrain-schedule-proof … every 20 minutes starting at now … True` and `retrain-monthly … cron: 0 3 1 * * (UTC) … **False**`. The monthly one is registered and inactive ON PURPOSE — hours of CPU under a 6-core limit on a laptop nobody watches; one field and a PO's call. **Its F-026 guard fired on this story's own commit** (`scripts/retrain_schedule.sh` not in the image) and the image was rebuilt rather than the guard narrowed |
 | Prove the bake-off can be RUN again (M7-S4, F-022) | `make bakeoff BAKEOFF_ARGS="--smoke-rows 20000"` | VERIFIED 2026-08-20 (M7-S4): **exit 0**, past contender resolution for the first time since M3-S5's own promotion moved the alias. `[resolve] champion (alias) auto-lgbm-v2 family=lgbm features=v2 (24) **(DERIVED from the artifact — F-022)** trees=791` — the row that used to declare `v1` now reads its set off the loaded booster's ordered feature names. Five verdicts printed, **no JSON written, nothing promoted**, and the 2x2 **declines to print** because no contender occupies its origin cell (v1 features, hand params) — computing it against the alias would report `auto-on-v2 +0.00%`, correct arithmetic answering a different question. Transcript: `docs/retrain_m7_transcripts.md` §1 |
+| Reprint every number in the drift memo (M7-S5) | `uv run python scripts/drift_memo_numbers.py [section…]` | VERIFIED 2026-08-20 (M7-S5 leg 1): the M2-S4 twin-script precedent applied to `docs/drift_memo_m7.md` — 19 queries across 7 sections, each printing the SQL it ran, over three sources whose difference IS the meaning: `analyst.*` (facts about the WORLD), `main_marts.scoring_daily` (facts about the CHAMPION's error, under **monitoring** ids), and `automation/runs/m7-drift/*.json` **read back as data** rather than retyped (`read_json_auto` / `json_keys`, so the record's own month keys are DERIVED, not typed). The March cut is declared ONCE as `PERIOD_SQL` so no two sections can disagree about it. Read-only, writes nothing, seconds. Transcript: `docs/drift_memo_m7_transcripts.md` §1 |
+| The predictions & drift board (M7-S5) | `make boards` (`--verify` is the read-only twin) | VERIFIED 2026-08-20 (M7-S5 leg 1): **`Predictions & drift (M7)` created, id 5, 8 cards**, over `marts.scoring_daily`; the three existing boards reported `card updated` and kept their ids (idempotent BY NAME, M1-S5). `--verify` GREEN across all four dashboards — `card 'KPI-17 · trips scored per day' RAN and returned 91 row(s)` and `no card claims KPI-09/KPI-10` on every board. Six board laws added as unit tests, five of them M7-specific (monitoring ids only · KPI-16 present AND a series · ≥3 daily-grain cards, none rolled up to the month · the tolerance read off the mart · the model version visible) |
+| Execute EVERY board card; an empty panel is a FAILURE (M7-S5) | `make board-cards` (`BOARD="…"` scopes it to one board) | VERIFIED 2026-08-20 (M7-S5 leg 1): **36 cards across all 4 boards, 0 failures.** It exists because `--verify` runs ONE card per dashboard, which proves the connection and the credentials and not the board — and an empty panel is indistinguishable from a quiet system (**gotcha #78**, learned expensively on the Grafana boards at M6-S1). It runs the SQL a reviewer reads in the checked-in JSON straight at the one Postgres over the `make marts` transport, so what is under test is the reviewed artifact. **Deliberately NOT wired into `verify-m1`**: widening a gate's behaviour late in a session is how a guard goes red for a correct system (gotcha #50) |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |

@@ -3533,3 +3533,61 @@ assumed otherwise. Gotcha #55's family, in the artifact I was writing to avoid
 exactly that class of thing. A verifier that dies formatting its own header
 reports a defect in whatever it was pointed at.
 
+
+---
+
+## M7-S5 leg 1 (2026-08-20) — the average was weighted by exactly the rows that vanished
+
+**Every honest monthly number about March 2020 understates it by roughly the same
+ratio, and the ratio is 68:3.** The month's mean trip duration is 13.1645
+minutes against January's 13.2123 — a 0.36% move, smaller than an ordinary
+month-to-month wobble. Its whole-month MAE is 3.3227 against 3.0295. Its most
+moved input column sits at PSI 0.0217, *lower than an accepted July 2019*. None
+of those numbers is wrong. All of them are dominated by the ten ordinary days at
+the head of the month: 68.231% of March's rows fall before the 11th and 3.321%
+after the 21st. **A row-weighted average of a collapse is weighted by exactly the
+rows that disappeared** — which is the mechanism behind F-045, and it is worth
+saying in that form because it generalises past this dataset to every aggregate
+computed over a period in which the population changed size.
+
+**The alert that mattered was the one measuring a quantity that cannot be
+averaged away.** PSI is a distance between shares; halve every count and it is
+exactly zero. So input drift correctly stayed silent — the city did not start
+taking different taxi trips, it stopped taking taxi trips — and volume, a
+marginal nobody would have added if PSI had felt sufficient, is the only
+instrument that fired. Writing that argument down *before* the run (M7-S3 did)
+is what turned a lucky catch into a demonstrated design.
+
+**The signed error is the number that reads as a diagnosis.** KPI-14 says March
+was worse. KPI-16 says the champion was quoting **five minutes too long** on the
+26th — mean actual 9.699 minutes against a mean quote of 15.019 — and had been
+climbing steadily since the 9th without once going negative. Those are opposite
+fixes: a model that is too slow and a model that is too fast look identical
+under an absolute error and share no remedy. **An unsigned metric can tell you a
+model is wrong; it cannot tell you which way, and "which way" is the whole
+content of the incident report.**
+
+**The best days in the collapse are the days the model was already told the city
+would be quiet.** Weekend error sat 31.4% below weekday error in late March,
+against 13.5% in an ordinary January, and the dips in the daily series land
+exactly on the four weekend dates. `dayofweek` is the model's only vocabulary
+for "quiet city" and it is a seven-valued one — so the model had a word for what
+was happening and could reach it two days in seven. That is a more useful way to
+read a feature's contribution than any importance plot: **look for the days the
+model was accidentally right, and ask what it already knew on them.**
+
+**And a ratio that refuses to move is evidence.** The airport error gap has been
+open in `docs/error_memo_m2.md` §7 row 2 since M2, with two readings — distance,
+or dwell and traffic. Here the roads emptied and the median trip went 49.3%
+faster, and the gap sat at 1.86–2.00× in ordinary periods and 2.07–2.35× through
+the collapse. If the penalty were carried by distance, the one term whose
+minutes-per-mile changed, the ratio had to move. It did not. **A quantity that
+holds constant across a regime change discriminates between hypotheses that a
+quantity measured once cannot** — three measurements, from three instruments, in
+two different worlds, and only the third could rule anything out.
+
+**Craft note, cheap and reusable:** `--verify` ran one card per dashboard and was
+green; running *all thirty-six* took twenty lines and is now `make board-cards`.
+Gotcha #78 said an empty panel is a failure, and the Grafana boards learned it
+the expensive way at M6-S1. Applying an existing lesson to the next surface it
+fits costs almost nothing and is the cheapest verification in the repo.
