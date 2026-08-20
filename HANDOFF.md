@@ -1,5 +1,165 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (br) — M7-S5 leg 1: the drift memo, the fourth board, and a ratio that refused to move
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block DA (Accountable)**
+(charter refusals in play: M7 law 2 — the 2019 trees untouched; law 3 — the alias
+moves only through the gate; law 4 — no threshold set from a number just measured;
+gotcha #15 — reported numbers come from `evaluate` only; the cluster never goes
+down). Boot reads: CLAUDE.md · HANDOFF (bq) · M7 KICKOFF · AWAITING_PO.
+**Staleness check: (bq)'s Next was accurate in every particular.** No
+`automation/STOP`, tree clean at `dcc8294`, 3 nodes Ready v1.36.1, the champion
+the only isvc (the v1 shadow was torn down at M7-S1 as the boundary decided),
+`@champion` **2**, Metabase up, `marts.scoring_daily` published with 91 rows,
+`retrain-schedule-proof` still firing every 20 minutes as instructed.
+**One story, one leg: M7-S5 leg 1** — the DA drift memo and the predictions &
+drift board. **`make verify-m7` is NOT built and that is the kickoff's own
+declared cut** ("Safe stopping point: leg 1 merged with the gate unbuilt — the
+M4-S5/M6-S5 precedent; say so"). PR **#48**, merged `cdce389`, reachable from
+origin/main. End state: `@champion` **2** (read once, never written) ·
+`features.version` **v2** · champion serving · `make verify-m5` **GREEN 49/49** ·
+912 unit tests green · nothing detached, nothing pending.
+
+### Done
+- **`docs/drift_memo_m7.md`** — interpretation, not detection, in nine sections.
+  Its spine: **a row-weighted monthly average of March 2020 is weighted by exactly
+  the rows that disappeared.** 68.231% of the month's rows fall before the 11th
+  and 3.321% after the 21st, so the whole-month duration (13.1645) sits 0.36%
+  from January's, the whole-month KPI-14 (3.3227) reads as an ordinary bad month,
+  and the max input PSI (0.0217) is **lower than an accepted July 2019's 0.0323**.
+  All three are correct and all three understate the same event by the same ratio
+  — F-045 from a fourth side, in the form that generalises past this dataset.
+- **What changed, in domain terms**: peak **240,520 trips (03-05) → 5,361
+  (03-29)**, a 97.8% fall in 24 days · mean duration **−26.6%** while mean
+  distance **+6.1%**, i.e. the median trip went **49.3% faster** (10.2062 →
+  15.2339 mph) · the night ended (21:00–03:00 loses 46–67% of its share) and the
+  morning arrived earlier (06:00 **1.935% → 4.461%**), moving the busiest hour
+  from 18:00 to **14:00** · passengers/trip 1.5180 → 1.3028 · and **the contract
+  had nothing to say**: 1.9766% rejected against January's 1.9548%, same rules in
+  the same order.
+- **KPI-16 is the number that reads as a diagnosis, and the memo says so.** It
+  climbs **+0.0369 (03-09) → +5.3197 (03-26)** and never turns negative after the
+  9th: on the 26th the mean actual trip was 9.699 min against a mean quote of
+  15.019. The champion was systematically **over**-quoting — nothing was broken,
+  the world stopped matching the training set. March's worst day (KPI-14 6.3693,
+  KPI-15 **53.723%**) is 78% worse than January's worst.
+- **`docs/error_memo_m2.md` §7 row 2 gets its THIRD measurement, and this one can
+  rule something out.** The airport gap sits at **1.86–2.00×** in three ordinary
+  periods and **2.07–2.35×** through the collapse (airport MAE +85%, ordinary
+  +79% — both roughly doubled, the ratio barely moved). **If the penalty were
+  carried by distance — the one term whose minutes-per-mile changed when the
+  roads emptied — the ratio had to move.** It did not, which is evidence for the
+  dwell/traffic reading and against the distance one. Recommendation to MLE: an
+  airport flag evaluated as a **regime** indicator, not a distance proxy.
+- **§9.7 row 5's condition is honoured by REFUSING the comparison** (memo §6.1):
+  the mart carries no floor and no margin column, because the honest floor is
+  fitted on the 2019 train months and a 2020 margin would publish a comparison no
+  gate ever made against a bar chosen for a different world. Pinned by a board
+  test that fails on `floor`/`margin`/`kpi_13` in any card's SQL.
+- **`scripts/drift_memo_numbers.py`** — the memo's twin (M2-S4 precedent): 19
+  queries in 7 sections, each printing its SQL, over three sources whose
+  difference IS the meaning (world / model error / instrument). The tracked drift
+  records are **read back as data** (`read_json_auto`, `json_keys`) so the record's
+  own month keys are derived, not typed; the March cut is declared once as
+  `PERIOD_SQL` so no two sections can disagree about it.
+- **`Predictions & drift (M7)`** — the fourth board, id 5, **8 cards** over
+  `marts.scoring_daily`, checked-in JSON converged by name. `--verify` GREEN on
+  all four dashboards (`KPI-17 · trips scored per day` **RAN and returned 91
+  rows**; `no card claims KPI-09/KPI-10` everywhere). **Six board laws added as
+  unit tests**, five M7-specific: monitoring ids only · KPI-16 present AND a
+  series · at least 3 daily-grain cards with none rolled up to the month · the
+  tolerance read off the mart · the model version visible somewhere.
+- **`make board-cards` — gotcha #78 applied to Metabase**: `--verify` executes
+  ONE card per dashboard, which proves the connection and not the board.
+  **36 cards across 4 boards, 0 failures**, running the SQL a reviewer reads in
+  the checked-in JSON straight at the one Postgres, treating an empty card as a
+  FAILURE.
+- Docs/ledgers: `docs/drift_memo_m7_transcripts.md` (§1 the full numbers run,
+  §2 the board created, §3 `--verify`, §4 `board-cards`, §5 the sanity net and
+  the precision rule it hands leg 2) · deployments ledger row · field note ·
+  CLAUDE.md story section + three command rows.
+
+### Decisions
+- **`make board-cards` is deliberately NOT wired into `verify-m1`.** It would
+  strengthen the M1 gate and it is the kind of widening that turns a guard red for
+  a correct system when some legitimately-empty card appears (gotcha #50, and
+  M2-S4 has a card whose whole point is listing segments where the floor wins —
+  a set that can legally empty). It stands alone, and leg 2 may call it.
+- **No threshold, no window and no retrain recommendation was decided here**
+  (M7 law 4). §7 prices the monthly window's cost exactly and routes the decision
+  to ARCH; §8 states in writing that the memo does **not** claim the champion
+  should be retrained on 2020 data, and why — fitting a ten-day regime is how a
+  model learns an emergency as if it were a season, and the fork behind it is
+  live at AWAITING_PO 2026-08-18-1.
+- **No signoff row was written.** M7's gate is leg 2; a producer does not sign
+  their own gate, and there is no gate yet to sign.
+- The throwaway memo-vs-script cross-check was **deleted rather than committed**,
+  with its finding recorded in transcripts §5 — leg 2 needs the real, per-claim
+  version, and a half-check in the repo would look like the real one.
+
+### Defects/Surprises
+- **The first cross-check reported 15 false misses, all trailing zeros.**
+  DuckDB's `round()` prints `1.061`; a table padded to fixed width writes
+  `1.0610`. That is gotcha #76 arriving from the opposite direction, and the
+  repair must not become a bare substring match — `13.75` rendered at zero
+  decimals as `14` is what let a planted value survive `verify-m6`'s first run
+  (gotcha #90). Rule for leg 2, written down in transcripts §5: compare at the
+  precision the DOCUMENT wrote, floor of one decimal, trailing zeros stripped on
+  both sides.
+- **Three arithmetic slips in the memo's first draft, all caught before commit**
+  by recomputing every derived percentage against the script's own columns: a
+  duration fall written as 29.4% when it is **26.6%**, "loses more than half its
+  share everywhere" when two of the seven night hours lose 46–47%, and an
+  airport-gap range quoted as 1.9–2.1× when the measured ordinary range is
+  **1.86–2.00×**. A memo's *derived* numbers are the ones its twin script does not
+  print, and they are therefore the ones to check by hand.
+- **`make board-cards BOARD="…"` needed the quoting fixed and then the empty
+  argument handled** — an unset `BOARD` passes `""`, which is "every board" and
+  not "the board whose name is the empty string". Pinned in the script with the
+  reason beside it.
+- **Wall count**: none.
+
+### Next
+- **M7-S5 leg 2 is the only work left in M7**: `make verify-m7` + `make
+  verify-m7-redteam`, under every inherited law (seventh inheritance — re-runs
+  nothing expensive and mints nothing it counts; no retrain, no drift job, no
+  ingest; reads tracked records, the live registry, the live Prometheus, the
+  committed docs; every literal derived on both sides; one prediction, one
+  PromQL query, one rules read; prose vs records at one decimal or better; Python
+  legs guarded by `expect_verdicts`; the red team plants ONE derived-plausible
+  value, RED from two artifacts, sha256 restore, GREEN after).
+- **Material leg 2 will want, all tracked and all green today**: this session's
+  memo + `scripts/drift_memo_numbers.py` + `make board-cards` · the drift drill's
+  prediction and records (`automation/runs/m7-drift/`) · the retrain record and
+  `make retrain-prediction-check` (a seconds-long reader that already proves the
+  fit's numbers against a prior claim) · the two triggers, read off the control
+  plane · the F-020 provenance chain · `marts.scoring_daily` (91 rows).
+- **The §9/M7 "Show" leg the kickoff names — the two failure signatures asserted
+  DISTINGUISHABLE from the records — has its material in
+  `docs/scoring_months_m7.md` §8**: statistical drift = contract passes, exit 0,
+  2,948,237 rows written, a distribution that moved; schema drift =
+  `SchemaEventError`, exit 1, **no output, no sidecar, no report and therefore no
+  drift metric at all**. The second is the dangerous one, and the contract-probe
+  fixture records (`automation/runs/m7-s1/`) are the evidence.
+- **`retrain-schedule-proof` is ACTIVE and fires every 20 minutes** — still
+  deliberate. **Do not delete it before `verify-m7` reads it**: a schedule that
+  fired once and was removed is indistinguishable from one that never fired.
+- **M7 is ◆-marked**, so when leg 2 lands the successor is **rev**, not executor.
+- **Two OPEN findings routed to ARCH at the M7 boundary, both still deliberately
+  not acted on**: **F-048** (the scheduled retrain cannot see `automation/runs/`,
+  so every proof-trigger firing reports `rescale_factor: null`) and **F-047**
+  (`make image-smoke` RED since M5-S5 for the same `.dockerignore` reason). They
+  share a lever and should be decided together. This memo adds a third for the
+  same desk: **the drift WINDOW** (§7, recommendation 2) — monthly grain is the
+  kickoff's specification and it shipped; the daily series already exists, and
+  moving the window after seeing that A-8 stayed quiet would be exactly the
+  threshold-walking law 4 forbids.
+- Standing with the PO, all non-blocking: **2026-08-18-1 (F-016)**, 2026-08-17-1,
+  2026-08-16-2.
+
+
+
 ## Session 2026-08-20 (bq) — M7-S4 completion leg, part 2: the record landed, and the exit code lied a third time
 
 ### State
