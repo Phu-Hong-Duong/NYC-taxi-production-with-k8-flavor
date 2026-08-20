@@ -82,7 +82,13 @@ human() { numfmt --to=iec-i --suffix=B --format='%.1f' "$1" 2>/dev/null || echo 
 
 echo "== platform backup =="
 echo "[backup] destination $DEST"
-echo "[backup] limits: same physical disk · restore NOT rehearsed (M6 gameday candidate) · per-database snapshot"
+# The RUNTIME label, and it is the one an operator actually reads — the header
+# above is for review, this line is for 3am. It said "restore NOT rehearsed
+# (M6 gameday candidate)" until 2026-08-19, three days after the drill made that
+# false and one session after the header, the MANIFEST text and CLAUDE.md all
+# moved; `make verify-m6` §7 is what found it. Both halves travel together on
+# purpose: "scratch-rehearsed" alone overstates the drill.
+echo "[backup] limits: same physical disk · restore SCRATCH-REHEARSED 2026-08-19 (full restore over a dead platform still NOT) · per-database snapshot"
 
 if ! "${KUBECTL[@]}" -n "$NAMESPACE" get pod "$POD" >/dev/null 2>&1; then
   echo "[backup] FAIL: $NAMESPACE/$POD is not there — is the cluster up?" >&2
