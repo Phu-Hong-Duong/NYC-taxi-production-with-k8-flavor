@@ -276,6 +276,90 @@ source text — is in `docs/retrain_m7.md` §7.1.
 
 ### §5.2 — Attempt 2: the same fit, through the repaired writer
 
-*(Filled by the re-run; the record is `automation/runs/m7-retrain/latest.json` and
-what it must reproduce was written down first, in
-`automation/runs/m7-retrain/rerun-prediction.json`.)*
+Launched detached at **2026-08-20T06:43:37Z**, finished **07:10:36Z**, 1,618.4 s
+of fitting. It produced what attempt 1 could not:
+`automation/runs/m7-retrain/latest.json` and its stamped twin
+`retrain_2026-08-20T06-43-37Z.json`, both tracked.
+
+```
+[promote] SKIPPED — the gate refused. Nothing registered, no alias moved.
+
+[retrain] the fit ended by EARLY_STOPPING: best_iteration 779 of a 2400-round cap, 1,618.4s
+[retrain] record -> automation/runs/m7-retrain/retrain_2026-08-20T06-43-37Z.json
+[retrain] record -> automation/runs/m7-retrain/latest.json
+```
+
+The gate block above it is identical to §5.1's, line for line, including the two
+`FAIL` lines against the incumbent and the `+3.30%` against the floor.
+
+**The comparison against the prediction is a command, not a claim.**
+`automation/runs/m7-retrain/rerun-prediction.json` was committed before the
+launch; `make retrain-prediction-check` resolves each of its `predicted_exactly`
+fields against the record, at the precision the prediction was written at
+(gotcha #42), with a floor of one decimal (gotcha #90):
+
+```
+$ make retrain-prediction-check
+prediction : automation/runs/m7-retrain/rerun-prediction.json
+             written 2026-08-20T06:40:00+00:00 by EXECUTOR/Opus, BEFORE the re-run was launched
+record     : automation/runs/m7-retrain/latest.json
+             generated 2026-08-20T06:43:38+00:00
+
+EXACT — a mismatch here is the result, not an inconvenience
+  ok   verdict                  predicted 'REFUSE'               record REFUSE
+  ok   challenger_mae_test      predicted 3.2412                 record 3.2412137166 -> 3.2412
+  ok   challenger_within_test   predicted 81.568                 record 81.567991573 -> 81.568
+  ok   challenger_mae_val       predicted 3.3811                 record 3.3810865330 -> 3.3811
+  ok   challenger_within_val    predicted 80.57                  record 80.57009752 -> 80.57
+  ok   floor                    predicted 'baseline-group-median-od-fallback' record baseline-group-median-od-fallback
+  ok   floor_mae_test           predicted 3.3518                 record 3.3517593019 -> 3.3518
+  ok   floor_within_test        predicted 80.733                 record 80.733452221 -> 80.733
+  ok   incumbent_version        predicted '2'                    record 2
+  ok   incumbent_mae            predicted 3.2403                 record 3.2403000000 -> 3.2403
+  ok   incumbent_within         predicted 81.577                 record 81.577000000 -> 81.577
+  ok   observed_pct_vs_floor    predicted 3.3                    record 3.2981362 -> 3.3
+  ok   required_pct_vs_floor    predicted 2.0                    record 2.0000000 -> 2.0
+  ok   best_iteration           predicted 779                    record 779
+  ok   round_cap                predicted 2400                   record 2400
+  ok   ended_by                 predicted 'early_stopping'       record early_stopping
+  ok   n_test_rows              predicted 5950708                record 5950708
+  ok   checks_passed            predicted 2                      record 2
+  ok   checks_failed            predicted 2                      record 2
+  ok   which_checks_fail        structural: failed: ['KPI-09 does not regress against the serving champion (v2)', 'KPI-10 does not regress against the serving champion (v2)']
+
+MUST HOLD REGARDLESS — properties of the path, not of the numbers
+  ok   promoted is false                False
+  ok   champion_alias_version is 2      '2'
+  ok   the record is full-data          sampled=False
+
+LOOSE — reported, never fatal; a loose field that DIFFERS is printed as differs
+  ..   fit_seconds          predicted ~1680 s on the host; wall-clock is a property of the machine, not of the model, and is NOT a determinism claim
+                            observed  1618.4
+  ..   exit_code            predicted 1
+                            observed  2
+  ..   status_file_word     predicted FAILED 1 — and 1 means REFUSED, which is the gate working (HANDOFF (bo)'s decoding key)
+                            observed  FAILED 2 2026-08-20T07:10:36Z  (m7-s4-retrain-rerun.status)
+  ..   mlflow_run_id        predicted new, different from d2f69f90a5a84e00b02e670b6a409990 — a second run of the same configuration is a second run
+                            observed  8fcc7b984659498792bb559d2eb6f30d
+  DIFFERS: the CLI's exit code was predicted 1 and the status file holds 2. It is not a wrong
+  prediction about the fit — `make` exits 2 for ANY failed recipe, so the retrain's 0/1/2/3/4
+  vocabulary does not survive being detached as a make TARGET. docs/retrain_m7.md §4, gotcha #97.
+
+REPRODUCED — all 20 exact claims and 3 path properties hold.
+```
+
+**Twenty of twenty exact claims held, and the one loose field that did not is a
+finding about `make`, not about the fit** (§4, gotcha #97). The MLflow run id is
+new as predicted (`8fcc7b98…` against attempt 1's `d2f69f90…`) — a second run of
+the same configuration is a second run, and that is what makes the identical
+numbers a determinism observation rather than a cached answer.
+
+The registry was read live after the run and is exactly where it was:
+
+```
+ALIAS @champion -> 2 | run 92b73bd4f77d4a05b92472bfcfb3cccf | feature_set v2
+VERSIONS: ['1', '2']
+```
+
+A refused challenger leaves the registry exactly as it found it — no version 3
+exists, and the alias never moved.
