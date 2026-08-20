@@ -474,6 +474,15 @@ groups:
             disagreeing while every InferenceService condition still reads
             Ready — no restart, no event, no probe. Critical because the failure
             is silent by construction.
+          sustain: >-
+            for 2m, shorter than the ADOPTed 5m default and deliberately so.
+            The other rules sustain to avoid paging for a transient — a slow
+            scrape window, a self-heal in progress. This condition has no
+            transient form: the wire and the registry either agree or they do
+            not, and the state they are in is the state somebody left them in.
+            The 2m is there only to let a re-deploy's own brief window close
+            (M6-S4 measured a rollback's second move at 27.93 s, and a
+            re-deploy at 0.5 s), not to wait out noise.
           freshness: >-
             The `and on() (time() - ..._last_run_timestamp_seconds < 1800)` is
             not decoration. A pushed pair persists after its pusher dies and

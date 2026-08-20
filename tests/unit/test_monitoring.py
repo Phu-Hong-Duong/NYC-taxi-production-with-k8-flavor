@@ -126,9 +126,25 @@ def test_the_predictor_job_discovers_by_label_not_by_name(prom_values):
 # --- what is on, what is off, and why ------------------------------------------
 
 def test_the_footprint_choices_are_the_argued_ones(prom_values):
-    assert prom_values["prometheus-node-exporter"]["enabled"] is False
-    assert prom_values["prometheus-pushgateway"]["enabled"] is False, (
-        "pushgateway is M7's (drift), named in the M6 kickoff's out-of-scope list"
+    assert prom_values["prometheus-node-exporter"]["enabled"] is False, (
+        "node-exporter has no reader: container CPU and CFS throttling come from the "
+        "kubelet's cAdvisor, which the chart already scrapes"
+    )
+    # ON from M7-S3. It was `enabled: false` through M6 with the note that one
+    # value flips it when the drift metrics arrive; they have.
+    assert prom_values["prometheus-pushgateway"]["enabled"] is True, (
+        "the drift job is a batch process that is gone before any scrape interval "
+        "elapses — M7-S3's metrics have nowhere to live without the gateway"
+    )
+    assert prom_values["prometheus-pushgateway"]["persistentVolume"]["enabled"] is False, (
+        "the gateway's contents are re-derivable by re-running the drift job over "
+        "DVC-pinned data, so a lost PVC costs one command"
+    )
+    assert "serviceAnnotations" not in prom_values["prometheus-pushgateway"], (
+        "annotating the gateway would get it scraped by the chart's generic "
+        "kubernetes-service-endpoints job, which does NOT set honor_labels — the pushed "
+        "`job` label would be overwritten and every drift rule would match nothing while "
+        "sitting quietly inactive. It has its own job in extraScrapeConfigs."
     )
     assert prom_values["kube-state-metrics"]["enabled"] is True
     assert prom_values["alertmanager"]["enabled"] is True, (

@@ -143,7 +143,14 @@ def run(
         value = metric.get("value")
         if kind.endswith("ValueDrift") and isinstance(value, (int, float)):
             column = str(config.get("column"))
-            threshold = float(config.get("threshold", 0.1))
+            # NO DEFAULT. Evidently always reports its own threshold in
+            # `config`, and inventing a fallback here would (a) put a
+            # bar-shaped constant inside a package whose whole design rule is
+            # that it holds no thresholds — the AST test caught exactly that on
+            # this line — and (b) silently substitute OUR guess for THEIR
+            # verdict the day their payload shape changes, which is precisely
+            # how a second witness stops being independent.
+            threshold = float(config["threshold"])
             scores[column] = float(value)
             methods[column] = str(config.get("method", "unknown"))
             drifted[column] = float(value) >= threshold

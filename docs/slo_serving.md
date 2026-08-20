@@ -528,6 +528,18 @@ months' average, so it is **calendar arithmetic**, the least model-meaningful
 move a month can make. The largest genuinely-behavioural number is
 `PULocationID` at **0.0137**.
 
+### 8.2a The rules these targets are implemented by
+
+| Signal | Alert | Target | `for:` |
+|---|---|---|---|
+| **A-8** | `ModelInputDrift` | SLO-D1 | 5m |
+| **A-9** | `ScoringVolumeCollapse` | SLO-D2 | 5m |
+| **A-10** | `DriftMetricsStale` | SLO-D3 | — |
+
+and the two F-035 landings that ride the same gateway (§6's dated update):
+**A-3**'s client half as `QuoteHorizonRefusals`, and **A-4** as
+`ServedVersionNotChampion`.
+
 ### 8.3 SLO-D1 · input drift — *fewer than two of the five monitored input columns at PSI ≥ 0.10*
 
 **The per-column bar is 0.10.** Two independent arguments have to agree before a

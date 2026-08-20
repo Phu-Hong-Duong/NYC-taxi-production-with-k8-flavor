@@ -32,6 +32,9 @@ REPO = Path(__file__).resolve().parents[2]
 RULES = REPO / "infra" / "monitoring" / "alerting_rules.yml"
 RENDERER = REPO / "scripts" / "render_alert_rules.py"
 DRILL = REPO / "scripts" / "alert_fire_drill.py"
+#: M7-S3's drill. There are two from here on, and the coverage test takes their
+#: union — see `test_the_drill_watches_every_rule_in_the_file`.
+DRIFT_DRILL = REPO / "scripts" / "drift_fire_drill.py"
 DEPLOY = REPO / "scripts" / "deploy_monitoring.sh"
 PROM_VALUES = REPO / "infra" / "helm" / "monitoring" / "prometheus-values.yaml"
 SLO_DOC = REPO / "docs" / "slo_serving.md"
@@ -167,15 +170,34 @@ def test_the_implemented_signal_set_and_the_documented_absences_agree(renderer_m
     prose must name the same gaps, and adding a rule for one without saying so
     fails here."""
     absent = renderer_module.KNOWN_SIGNALS - renderer_module.IMPLEMENTED_SIGNALS
-    assert absent == {"A-3", "A-4"} - renderer_module.IMPLEMENTED_SIGNALS | absent
-    assert "A-4" in absent, "A-4 has no metric source in this stack (F-034/F-035)"
+
+    # M7-S3 REWROTE THIS ASSERTION, AND THE REASON IS GOTCHA #50 FOR THE FIFTH
+    # TIME. It used to read `assert "A-4" in absent` — an M6-era FACT encoded as
+    # a literal — so the moment F-035 was legitimately CLOSED by giving A-3's
+    # client half and A-4 real metric sources, this guard went red for the
+    # program doing exactly the right thing. A guard that fires when the
+    # behaviour improves teaches the next session to edit assertions.
+    #
+    # The PROPERTY that holds at every state is coherence, in both directions:
+    # whatever the renderer calls an absence must be explained in §6, and
+    # whatever §6 explains must actually be absent from the rules.
+    assert absent == renderer_module.DOCUMENTED_ABSENCES, (
+        "render_alert_rules.py's two sets disagree with each other"
+    )
     assert "F-035" in slo_text, "the SLO document does not carry the finding for the gaps"
     for signal in sorted(absent):
         assert signal in slo_text, f"{signal} is absent from the rules and unexplained in §6"
-    # §6 must state the landing, not merely the gap.
+    # §6 must state each gap's LANDING, not merely the gap — and when there are
+    # no gaps left it must say how they were closed rather than going silent.
     assert "pushgateway" in slo_text, (
-        "the documented absences do not name where they land (M7's pushgateway)"
+        "§6 must name where the absences land (M7's pushgateway) — or, once they have "
+        "landed, what closed them"
     )
+    if not absent:
+        assert "CLOSED at M7-S3" in slo_text, (
+            "the renderer claims no signal is absent, but §6 does not record the closure. "
+            "An empty absence list is a claim and needs its evidence in the document."
+        )
 
 
 def test_the_slo_document_names_every_implemented_alert(all_rules, slo_text):
@@ -268,14 +290,35 @@ def test_the_drill_watches_every_rule_in_the_file(all_rules):
         ):
             prediction = ast.literal_eval(node.value)
     assert prediction is not None, "the drill has no literal PREDICTION to review"
+
+    # THE UNION OF THE DRILLS, because there are two of them from M7-S3 on.
+    #
+    # The property worth keeping is "no rule has fallen out of every drill's
+    # sight", and that was the same as "this drill watches every rule" only
+    # while one drill existed. The serving injection drill cannot sensibly
+    # predict a drift rule's behaviour (it pushes no drift metric and its
+    # 422/500 injection cannot move one), and the drift drill has no business
+    # predicting the storage-initializer alert. Demanding either cover the
+    # other's rules would push a session toward padding a prediction list with
+    # entries nobody reasoned about — which is how a positive control becomes a
+    # formality by a different route than the one this test was written for.
     watched = {e["alert"] for e in prediction["must_fire"]} | {
         e["alert"] for e in prediction["must_not_fire"]
     }
+    drift_source = ast.parse(DRIFT_DRILL.read_text())
+    for node in ast.walk(drift_source):
+        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "PREDICTION":
+            other = ast.literal_eval(node.value)
+            watched |= {e["alert"] for e in other["must_fire"]}
+            watched |= {e["alert"] for e in other["must_not_fire"]}
+            watched.add(other["the_open_question"]["alert"])
+
     declared = {rule["alert"] for rule in all_rules}
-    assert watched == declared, (
-        f"the drill watches {sorted(watched)} but the rules file declares {sorted(declared)}. "
-        "Every rule must be predicted to fire or predicted not to — an unlisted rule is a "
-        "rule the drill has stopped covering."
+    assert watched >= declared, (
+        f"the two drills between them watch {sorted(watched)} but the rules file declares "
+        f"{sorted(declared)}; {sorted(declared - watched)} is covered by neither. Every rule "
+        "must be predicted to fire or predicted not to by SOME drill — an unlisted rule is a "
+        "rule that has stopped being exercised."
     )
 
 

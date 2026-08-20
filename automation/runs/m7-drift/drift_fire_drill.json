@@ -4,24 +4,23 @@
   ],
   "champion_after": "2",
   "champion_before": "2",
-  "failures": [
-    "A-9 ScoringVolumeCollapse fired and was predicted INACTIVE",
-    "A-9 ScoringVolumeCollapse fired and was predicted INACTIVE"
-  ],
-  "finished_at": "2026-08-20T04:35:10Z",
+  "cleared_after_seconds": 40.01446843147278,
+  "failures": [],
+  "final_state": "2020-01..03 drift metrics on the gateway; A-9 will re-fire for 2020-03 after its 5m sustain, which is the correct standing state: the volume collapse is real and the decision it asks for is M7-S4's retrain.",
+  "finished_at": "2026-08-20T04:45:54Z",
   "fired_at_seconds": {
-    "ScoringVolumeCollapse": 341.4773669242859
+    "ScoringVolumeCollapse@2020-03": 331.5499198436737
   },
   "months": {
     "2020-01": {
       "current_rows": 6279806,
       "max_input_psi": 0.010266357363217994,
       "psi": {
-        "DOLocationID": 0.008248580520447102,
-        "PULocationID": 0.008195303016543594,
+        "DOLocationID": 0.008248580520447095,
+        "PULocationID": 0.00819530301654359,
         "dayofweek": 0.010266357363217994,
-        "hour": 0.002416378687027414,
-        "passenger_count": 0.006860559511183405,
+        "hour": 0.0024163786870274144,
+        "passenger_count": 0.006860559511183406,
         "trip_duration_minutes": 0.01266904126046244
       },
       "record": "automation/runs/m7-drift/drift-2020-01.json",
@@ -38,11 +37,11 @@
     },
     "2020-02": {
       "current_rows": 6185309,
-      "max_input_psi": 0.008724857791745635,
+      "max_input_psi": 0.00872485779174562,
       "psi": {
-        "DOLocationID": 0.00858309932573421,
-        "PULocationID": 0.008724857791745635,
-        "dayofweek": 0.0061078707357144655,
+        "DOLocationID": 0.008583099325734216,
+        "PULocationID": 0.00872485779174562,
+        "dayofweek": 0.006107870735714465,
         "hour": 0.0015194096507573718,
         "passenger_count": 0.005152203160864912,
         "trip_duration_minutes": 0.007516433450739668
@@ -61,13 +60,13 @@
     },
     "2020-03": {
       "current_rows": 2948237,
-      "max_input_psi": 0.021666901450341558,
+      "max_input_psi": 0.02166690145034156,
       "psi": {
-        "DOLocationID": 0.015114526743265324,
-        "PULocationID": 0.014301722476400922,
-        "dayofweek": 0.021666901450341558,
+        "DOLocationID": 0.015114526743265333,
+        "PULocationID": 0.014301722476400928,
+        "dayofweek": 0.02166690145034156,
         "hour": 0.009790060767708815,
-        "passenger_count": 0.017085618281808157,
+        "passenger_count": 0.017085618281808154,
         "trip_duration_minutes": 0.012484979364000852
       },
       "record": "automation/runs/m7-drift/drift-2020-03.json",
@@ -89,7 +88,7 @@
     "predicted": "DOES NOT FIRE at monthly grain",
     "prediction_correct": true
   },
-  "passed": false,
+  "passed": true,
   "prediction": {
     "alias": {
       "champion_after": 2,
@@ -182,8 +181,8 @@
     "2020-02": 0.8776340568603828,
     "2020-03": 0.3913368667803675
   },
-  "pushed_at": "2026-08-20T04:28:33Z",
-  "started_at": "2026-08-20T04:28:21Z",
+  "pushed_at": "2026-08-20T04:38:35Z",
+  "started_at": "2026-08-20T04:37:52Z",
   "states_after": {
     "DriftMetricsStale": "inactive",
     "ModelInputDrift": "inactive",
@@ -207,7 +206,7 @@
         "ScoringVolumeCollapse": "inactive",
         "ServedVersionNotChampion": "inactive"
       },
-      "t_plus_seconds": 11.4
+      "t_plus_seconds": 11.5
     },
     {
       "states": {
@@ -217,7 +216,7 @@
         "ScoringVolumeCollapse": "pending",
         "ServedVersionNotChampion": "inactive"
       },
-      "t_plus_seconds": 41.4
+      "t_plus_seconds": 31.5
     },
     {
       "states": {
@@ -227,7 +226,7 @@
         "ScoringVolumeCollapse": "firing",
         "ServedVersionNotChampion": "inactive"
       },
-      "t_plus_seconds": 341.5
+      "t_plus_seconds": 331.5
     }
   ]
 }
