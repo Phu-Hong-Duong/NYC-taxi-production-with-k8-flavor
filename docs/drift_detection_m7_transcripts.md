@@ -315,5 +315,73 @@ $ make push-serving-version A4_ARGS=--no-push
 [a-4] agree: the wire and the registry are both version 2
 ```
 
-Two series where F-034 said there were none. The push itself and the quote
-client's refusal counter are in §10.
+Two series where F-034 said there were none.
+
+### §9.1 Pushed, read back, and A-3's client half FIRED
+
+Through a port-forward (the gateway has no hostPort — M7 law 1):
+
+```
+$ uv run python scripts/push_serving_version.py --pushgateway http://localhost:9098
+[a-4] agree: the wire and the registry are both version 2
+[a-4] pushed 3 series -> http://localhost:9098/metrics/job/taxi-serving-version/model/nyc-taxi-eta
+
+$ uv run python -m taxi_mlops.serving --at 2031-07-04T09:15:00 --pu 132 --do 48 \
+      --push-metrics http://localhost:9098
+[quote] REFUSED (422): … covers through 2030 … Extend the table: make holidays HOLIDAYS_TO=2031
+$ … and again for 2032-01-04
+
+$ curl -s http://localhost:9098/metrics | grep -E "^taxi_(quote|serving|registry)"
+taxi_quote_client_last_run_timestamp_seconds{instance="make-quote",job="taxi-quote-client",reason="uncovered_date"} 1.787201488e+09
+taxi_quote_refusals_total{instance="make-quote",job="taxi-quote-client",reason="uncovered_date"} 2
+taxi_registry_champion_version{job="taxi-serving-version",model="nyc-taxi-eta",namespace="serving"} 2
+taxi_serving_model_version{job="taxi-serving-version",model="nyc-taxi-eta",namespace="serving"} 2
+taxi_serving_version_last_run_timestamp_seconds{job="taxi-serving-version",…} 1.787201479e+09
+
+$ (Prometheus)  increase(taxi_quote_refusals_total[1h])  ->  1.2141051861458905
+
+$ (rules)  QuoteHorizonRefusals  pending -> FIRING after 60.0s of watching
+           labels {'signal': 'A-3', 'slo': 'SLO-R1', 'reason': 'uncovered_date',
+                   'instance': 'make-quote', 'job': 'taxi-quote-client'}
+           ServedVersionNotChampion  inactive   (the two versions agree — correct)
+```
+
+**A-3's client half fired end to end** — the alert M6-S2 measured as impossible
+on this stack (`22 -> 22` on the infer counter, because the refusal never
+reaches the server). The `increase()` value is 1.214 rather than 1 because
+Prometheus extrapolates over the range; the rule reads `> 0`, so extrapolation
+cannot change its verdict.
+
+**An honest limitation this exercise exposed, recorded rather than smoothed
+over.** `increase()` needs the counter to move *while Prometheus is watching*.
+A single refusal that happens before the series is ever scraped appears as a
+constant, and a constant has no increase. So the guarantee A-3's client half
+offers is "a horizon expiry that produces more than one refusal across a scrape
+interval will page", not "every single refusal will". That is fine for what this
+signal is actually for — an expired holiday table refuses *every* quote from
+that moment on, so refusals arrive in a stream, not alone — and it is exactly
+why `verify-m6`'s coverage check stays in place as the complement that catches
+the expiry *before* the first rider meets it.
+
+The counter group was deleted afterwards: those two refusals were a drill, not
+real traffic, and leaving them would leave a real alert firing about a fake
+event for an hour. In a real deployment nothing would delete it and it would
+self-clear once the rise left the 1-hour window — which is the correct
+behaviour and is worth knowing before an incident rather than during one.
+
+---
+
+## §10 End state
+
+```
+ModelInputDrift            inactive   — correct: no input column drifted in any month
+ScoringVolumeCollapse      FIRING     — correct: March 2020 really did lose 61% of its trips
+DriftMetricsStale          inactive   — every push carries a fresh stamp
+QuoteHorizonRefusals       inactive   — the drill's counter was removed after it fired
+ServedVersionNotChampion   inactive   — the wire and @champion are both version 2
+
+@champion 2 · features.version v2 · 862 unit tests · make alert-rules 12/12
+```
+
+The board deliberately ends with **A-9 firing**, because it is true. The
+decision that alert is asking for is M7-S4's retrain.
