@@ -139,9 +139,18 @@ its verdict is the next session's first act (see Next).
 - **Wall count**: none. The schedule probe succeeded on attempt 1 of 3.
 
 ### Next
-- **FIRST ACT: read `automation/runs/m7-retrain-fulldata.status`.**
-  **DONE** → the verdict is in `automation/runs/m7-retrain/latest.json` and the
-  log. Then: (a) fill `docs/retrain_m7.md` §7 and
+- **FIRST ACT: read `automation/runs/m7-retrain/latest.json`, NOT the status
+  word.** `run_detached.sh`'s vocabulary is `DONE 0` / `FAILED <rc>`, and this
+  job speaks `make train`'s exit codes — where **a REFUSE is exit 1 on purpose**,
+  because from M4 on a gate that says no while exiting 0 is a gate the pipeline
+  cannot hear (M3-S1's landing). So the two vocabularies disagree by design and
+  `automation/runs/m7-retrain-fulldata.status` must be read with this key:
+  **`DONE 0` = the gate PASSED the challenger · `FAILED 1` = the gate REFUSED it,
+  which is the gate WORKING and ends this story green · `FAILED 2` = the
+  challenger could not be built (a real failure — read the log) · `FAILED 3` = no
+  verdict was issued.** The record is the authority in every case.
+  **DONE `0` or FAILED `1`** → the verdict is in
+  `automation/runs/m7-retrain/latest.json` and the log. Then: (a) fill `docs/retrain_m7.md` §7 and
   `docs/retrain_m7_transcripts.md` §5 with the pasted numbers, (b) update F-020's
   ledger row with the measured KPI-09 **beside the 3.2403 that stands**, (c)
   record `ended_by` — if it says `round_cap` the number is a FLOOR for this
@@ -152,7 +161,7 @@ its verdict is the next session's first act (see Next).
   cutover → parity — which is a **second leg by size**; the kickoff sanctions
   stopping at the recorded verdict with the alias unmoved, and the detached job
   promotes nothing by construction, so that state is already coherent.
-  **FAILED or KILLED** → the log says how far it got; the story is not done and
+  **FAILED `2`, or KILLED** → the log says how far it got; the story is not done and
   the fit is re-runnable with `make retrain` (nothing it wrote is a partial
   registry state — it mints an MLflow run and nothing else).
 - Then `make verify-m5` (§2's coherence check is the story's own accept
