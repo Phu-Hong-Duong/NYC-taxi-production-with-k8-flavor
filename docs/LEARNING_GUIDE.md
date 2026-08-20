@@ -9,6 +9,69 @@ months from now.
 
 ## M7
 
+### M7-S2 — the check a monitoring table cannot make for itself (2026-08-20, role:MLE)
+
+**The one-sentence version.** The champion scored 15.4M rows it was never judged
+on and published them as a product — and the interesting engineering was not the
+scoring, it was noticing that these numbers have nothing to disagree with, and
+buying them an anchor from a month that does.
+
+**What was built.** `taxi_mlops.training.batch` (the callable a schedule will
+wrap), a fourth output tree with its own column contract, a sixth analyst
+reconciliation, a daily Postgres mart, four new KPI ids, twenty tests.
+
+**The problem nobody states out loud about monitoring numbers.** M2-S4's
+predictions have a hard anchor: the registry says the champion was promoted at
+KPI-09 3.2403 on the holdout, so re-scoring must return 3.2403 or nothing is
+published. That single check catches the two failures that have no other symptom
+— a different model loaded, or a feature matrix built differently from the one
+that fitted it. Now write the same command for 2020-03. **What does 3.32 get
+compared against?** Nothing. No gate ever asked. And the failure mode is worse
+than "a wrong number": a wrong-but-plausible MAE on a COVID month *reads exactly
+like drift*, and the next story is being built specifically to believe it.
+
+So the path re-scores the **holdout** before it writes a single monitoring row,
+and refuses unless the champion's own tag comes back. A month with a known
+answer proves the loader, the feature path and the booster; only then is a month
+with no known answer written. It costs two minutes. **The concept underneath: an
+unverifiable output can borrow verifiability from a verifiable one that shares
+its machinery** — you cannot check the answer, so you check the instrument, on
+the one input whose answer is on file.
+
+**The measurement that will outlive the story.** March 2020's whole-month error
+is 3.3227, which is unremarkable. Split at the collapse: the first ten days are
+**68.23% of the month's rows** and score 3.0463 — January, to two decimals — and
+the last ten days are **3.32% of the rows** at 5.3128, with 62% of quotes inside
+five minutes instead of 83%. A row-weighted monthly average is weighted by
+exactly the rows that vanished. F-045 found this on the input side at S1; it is
+worse on the output side, which kills the tempting reading that "the error metric
+will catch it anyway".
+
+**And the column that says which thing broke.** Mean actual duration in those ten
+days is 9.69 minutes; the champion quotes 13.83. An absolute error cannot tell
+over-quoting from under-quoting, and in a month where the traffic vanished those
+are opposite diagnoses — so KPI-16 is *signed*, unbounded, and reads +4.14. The
+model did not rot. The world moved and the model kept describing the old one.
+
+**The discipline that was hardest to keep.** Every number above is a reason to
+set a drift threshold, and setting one here would have been the story's most
+satisfying paragraph. M7 law 4 forbids it: the window, the reference and the bar
+are S3's, argued before the job runs. A bar chosen from the number just measured
+is a bar that agrees with itself.
+
+**What to look at.** `src/taxi_mlops/training/batch.py` — read `_self_check`
+first, then the AST test that pins it before any write ·
+`analytics/dbt/tests/assert_scoring_daily_reconcile.sql`, whose comment explains
+why the ingest report and not the predictions file is the authority ·
+`docs/batch_inference_m7.md` §4 · the `pending`-vs-`NO` branch in the sixth
+reconciliation, which is gotcha #50 written as code.
+
+**What to try yourself.** Delete two-thirds of one month's scoring predictions
+and run `make duckdb`. The MAE it produces is completely ordinary; the
+reconciliation is the only thing in the system that objects. Then re-read how
+many published numbers in any project you have worked on had a check like that
+standing behind them.
+
 ### M7-S1 — a new kind of month, and the difference between a file being wrong and a world being different (2026-08-20, role:DE)
 
 **The one-sentence version.** The program learned to ingest months it will never
