@@ -1340,7 +1340,6 @@ try:
 
     # (b) §9/M7 asks the memo to CITE the predictions table. It must name the
     # mart, not merely describe an error series.
-    manifest = json.loads(Path("data/scoring_predictions/scoring_predictions.json").read_text())
     kpi_cited = sorted(set(re.findall(r"KPI-1[4-7]", memo)))
     if "scoring_daily" in memo and len(kpi_cited) >= 3:
         ok(f"the memo cites the predictions table by name (marts.scoring_daily) and reads it "

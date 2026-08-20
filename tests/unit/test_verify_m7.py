@@ -478,13 +478,6 @@ def test_the_records_the_accept_when_rests_on_say_what_it_needs():
     drill = json.loads((root / "drift_fire_drill.json").read_text())
     headroom = json.loads((root / "headroom.json").read_text())
     retrain = json.loads((REPO / "automation/runs/m7-retrain/latest.json").read_text())
-    manifest = json.loads(
-        (REPO / "data/scoring_predictions/scoring_predictions.json").read_text())
-
-    # "the predictions table for the scored month exists" — with the version on
-    # it and a self-check that anchored it to a month with a known answer.
-    assert manifest["months"] and manifest["model"]["version"]
-    assert manifest["self_check"]["registry_kpi_09"] and manifest["self_check"]["measured_kpi_09"]
 
     # "the two failure signatures" — the drift side needs a per-month record with
     # anchors, the schema side needs a refusal with an exit code.
@@ -505,3 +498,37 @@ def test_the_records_the_accept_when_rests_on_say_what_it_needs():
     # The retrain's verdict is data, and the pointer did not move.
     assert retrain["verdict"]["verdict"] in {"PROMOTE", "REFUSE"}
     assert retrain["promoted"] is False
+
+
+def test_the_scoring_manifest_contract_when_the_batch_path_has_been_run():
+    """The predictions manifest is DELIBERATELY untracked — M2-S4's argument,
+    inherited: it is model OUTPUT, regenerable from DVC-pinned inputs plus a
+    registry version, and its real provenance is the registry rather than a
+    `.dvc` pin that would be stale by design. So a fresh clone (CI) has no such
+    file, and this contract can only be asserted on a machine that has run
+    `make predictions-scoring`.
+
+    It is a separate test with a SPOKEN skip rather than a branch inside the
+    tracked-record contract, because a guard folded into that test would let the
+    tracked half go quietly unasserted the day somebody deletes the manifest.
+    CI proves the tracked contract unconditionally; this one proves the rest
+    where the rest exists."""
+    import pytest
+
+    manifest_path = REPO / "data/scoring_predictions/scoring_predictions.json"
+    if not manifest_path.exists():
+        pytest.skip(
+            "data/scoring_predictions/scoring_predictions.json is gitignored regenerable "
+            "output (M2-S4's argument) — run `make predictions-scoring` to assert this half"
+        )
+    manifest = json.loads(manifest_path.read_text())
+    # "the predictions table for the scored month exists" — with the version on
+    # it and a self-check that anchored it to a month with a known answer.
+    assert manifest["months"] and manifest["model"]["version"]
+    assert manifest["model"]["alias"], "the manifest does not record which alias it resolved"
+    assert manifest["self_check"]["registry_kpi_09"] and manifest["self_check"]["measured_kpi_09"]
+    for month in manifest["months"]:
+        for key in ("kpi_14_mae_minutes", "kpi_15_within_tolerance_pct",
+                    "kpi_16_mean_signed_error_minutes", "kpi_17_scored_trips"):
+            assert key in month, f"{month['month']} lost {key} — a monitoring id with no value"
+
