@@ -183,6 +183,81 @@ models:
         description: "KPI-12's tolerance, published ON the row so a card can never render the rate without it (KPI-08's rule, applied to a rate)."
         tests: [not_null]
 
+  - name: scoring_daily
+    description: >
+      MONITORING, not a gate result (M7-S2). One row per (month, pickup_date)
+      over the scoring months: what the champion quoted on data it was never
+      judged on, at the grain F-045 showed the drift actually lives at. Its ids
+      are KPI-14..17 and never KPI-09/KPI-10 — a different window is a different
+      id, and these numbers may not be read as model-quality results.
+      Grain and end-to-end counts are asserted by the two singular tests
+      `assert_scoring_daily_grain_is_unique` and `assert_scoring_daily_reconcile`.
+    columns:
+      - name: month
+        description: "The scoring month, a config literal carried from the ingest (configs/data.yaml: scoring.months)."
+        tests: [not_null]
+      - name: pickup_date
+        description: "The calendar date of the pickup. The grain's second half, and the column the monthly aggregate cannot be un-averaged back into."
+        tests: [not_null]
+      - name: model_name
+        tests: [not_null]
+      - name: model_version
+        description: "The registry version that produced these quotes, carried at day grain because M7's alias may legitimately move through the gate."
+        tests: [not_null]
+      - name: model_versions_seen
+        description: >
+          How many distinct registry versions produced this day's rows. It must
+          be 1: a day whose quotes came from two models is a spliced series, and
+          averaging it would hide exactly the event a monitoring board exists to
+          show.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 1}
+      - name: kpi_17_scored_trips
+        description: "KPI-17 — trips scored that day. Summed per month it equals the batch job's row count AND the ingest report's rows_out, which assert_scoring_daily_reconcile checks."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 1}
+      - name: kpi_14_mae_min
+        description: "KPI-14 — monitoring ETA MAE in minutes on a scoring month. NOT KPI-09: different window, different id, no gate verdict behind it."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 120}
+      - name: kpi_15_within_tol_pct
+        description: "KPI-15 — monitoring within-tolerance rate, percent, with its tolerance on the same row (KPI-10's discipline, inherited)."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}
+      - name: tolerance_minutes
+        description: "KPI-15's tolerance, published ON the row so a card can never render the rate without it."
+        tests: [not_null]
+      - name: kpi_16_mean_signed_error_min
+        description: >
+          KPI-16 — mean signed error in minutes, positive when the champion
+          over-quotes. No accepted_range: bounding it would bound the finding,
+          and the sign is the diagnosis (KPI-13's rule, for the same reason).
+        tests: [not_null]
+      - name: mean_actual_min
+        description: "The day's mean actual duration — half of what KPI-14 is a difference of."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 120}
+      - name: mean_predicted_min
+        description: "The day's mean quoted duration — the other half. 'The model got worse' and 'the world got faster' produce the same KPI-14 and are told apart by these two."
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 120}
+      - name: median_actual_min
+        tests: [not_null]
+      - name: median_predicted_min
+        tests: [not_null]
+
 seeds:
   - name: redteam_bad_trips
     description: >

@@ -82,6 +82,11 @@ SCORING_VIEWS = (
     "scoring_rejections",
 )
 
+#: The champion's rows on the scoring months (M7-S2). Optional for the same
+#: reason as `predictions`, one tree along: `make data-scoring` ingests and
+#: `make predictions-scoring` scores, and between them is a normal state.
+SCORING_PREDICTION_VIEWS = ("scoring_predictions",)
+
 
 def database_path(cfg: DataConfig) -> Path:
     """Where the catalogue lives (configs/data.yaml:analyst.database_path)."""
@@ -235,6 +240,49 @@ def _predictions_sql(cfg: DataConfig, months: list[str]) -> str:
     )
 
 
+def scored_scoring_months(cfg: DataConfig) -> list[str]:
+    """The scoring months the champion has actually been scored on (M7-S2).
+
+    Read off disk rather than off config, like `predicted_months`: the catalogue
+    must build on a repo where the batch job has never run, and a month that was
+    ingested but not yet scored is a normal intermediate state (`make
+    data-scoring` and `make predictions-scoring` are two commands on purpose).
+    """
+    return [
+        month
+        for month in cfg.scoring_months
+        if cfg.scoring_predictions_path(month).exists()
+    ]
+
+
+def _scoring_predictions_sql(cfg: DataConfig, months: list[str]) -> str:
+    """The champion's row-level output on the scoring months (M7-S2).
+
+    `month` comes from the parquet, exactly as it does in `predictions` and for
+    the identical reason: these rows were labelled by
+    `taxi_mlops.training.batch` at the moment the model was scored, and the
+    label is part of the model's claim. If the file says `2020-03` and the config
+    does not, the honest answer is that they disagree — which the reconciliation
+    reports — not that the config wins and the disagreement disappears.
+
+    Derived error columns are computed HERE, once, so every mart, card and memo
+    query means the same thing by "error" (`predictions.py: DERIVED_IN_SQL`).
+    There is no floor column and therefore no `margin_vs_floor`: the floor is the
+    gate's other half, fitted on the 2019 train months, and a margin against it
+    on 2020 data would be a comparison no gate ever made.
+    """
+    branches = [
+        f"SELECT * FROM read_parquet({_sql_str(cfg.scoring_predictions_path(month))})"
+        for month in months
+    ]
+    return (
+        "CREATE OR REPLACE VIEW scoring_predictions AS\nSELECT *,\n"
+        "       predicted_minutes - actual_minutes                  AS signed_error_minutes,\n"
+        "       ABS(predicted_minutes - actual_minutes)             AS abs_error_minutes\n"
+        "FROM (\n" + "\nUNION ALL\n".join(branches) + "\n)"
+    )
+
+
 def _prediction_runs_sql(cfg: DataConfig) -> str:
     """The evaluator's OWN numbers, read back from the manifest it wrote (M2-S4).
 
@@ -361,6 +409,9 @@ FROM ingest_months m JOIN raw_manifest r USING (month)""",
     scoring = ingested_scoring_months(cfg)
     if scoring:
         statements.extend(_scoring_sql(cfg, scoring))
+    scored = scored_scoring_months(cfg)
+    if scored:
+        statements.append(_scoring_predictions_sql(cfg, scored))
     months = predicted_months(cfg)
     if months:
         statements.append(_predictions_sql(cfg, months))
@@ -565,6 +616,45 @@ def prediction_reconciliation(cfg: DataConfig) -> list[tuple[str, str, int, int,
     ]
 
 
+def scoring_prediction_reconciliation(cfg: DataConfig) -> list[tuple[str, int, int, bool]]:
+    """Every scoring row got exactly one prediction, or `make duckdb` exits 1 (M7-S2).
+
+    The sixth reconciliation, and it guards `prediction_reconciliation`'s lie in
+    the place it will actually be told. A batch job that scored 14 of 15.4M rows
+    — because one month's parquet was half-written, or because a month was
+    dropped from a `--months` list and nobody re-ran it — produces a perfectly
+    plausible monitoring MAE, and the next story reads that number as evidence
+    about the world. The count is checked against the SAME authority every other
+    view is checked against: the ingest report's `rows_out`.
+
+    FULL OUTER JOIN, like its two siblings: a month present only in the
+    predictions is a mislabelled file, and a month present only in
+    `scoring_months` is one the batch job never covered. The second is a NORMAL
+    state (the two commands are separate) and is reported as `pending` by
+    `report` rather than as a failure — a month with no predictions at all is
+    visibly not-yet-scored, whereas a month with SOME predictions is a lie.
+    """
+    con = connect(cfg, read_only=True)
+    try:
+        rows = con.execute(
+            """
+            SELECT COALESCE(p.month, m.month) AS month,
+                   COALESCE(p.observed, 0)    AS observed,
+                   COALESCE(m.rows_out, 0)    AS expected
+            FROM (SELECT month, COUNT(*) AS observed
+                  FROM scoring_predictions GROUP BY 1) p
+            FULL OUTER JOIN (SELECT month, rows_out FROM scoring_months) m USING (month)
+            ORDER BY month
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        (month, observed, expected, observed == expected)
+        for month, observed, expected in rows
+    ]
+
+
 def report(cfg: DataConfig | None = None) -> bool:
     """Build, then print every reconciliation. Returns True when everything agrees."""
     cfg = cfg or load_config()
@@ -675,7 +765,42 @@ def report(cfg: DataConfig | None = None) -> bool:
             f"{'yes' if predicted_agreed else 'NO':>5}"
         )
 
-    ok = agreed and rejected_agreed and predicted_agreed and scoring_agreed
+    # ---- the sixth reconciliation: one prediction per scoring row (M7-S2).
+    scored_agreed = True
+    scored = scored_scoring_months(cfg)
+    print("\n[duckdb] batch predictions vs the scoring rows they claim to cover (M7-S2)")
+    if not scored:
+        print(
+            "  none — no model output under "
+            f"{cfg.scoring_predictions_dir}/ yet. Run `make predictions-scoring`; "
+            "neither the settled path nor the scoring ingest depends on it."
+        )
+    else:
+        scored_rows = scoring_prediction_reconciliation(cfg)
+        print("  month    prediction rows      rows_out    agree")
+        print("  -------  ---------------  ------------  -----")
+        for month, observed, expected, row_ok in scored_rows:
+            # A month ingested but not yet scored is a normal intermediate state
+            # and says so; a month scored PARTIALLY is the failure this exists
+            # for, and it is the one that produces a plausible number.
+            verdict = "yes" if row_ok else ("pending" if observed == 0 else "NO")
+            print(
+                f"  {month}  {observed:>15,}  {expected:>12,}  {verdict:>5}"
+            )
+        scored_agreed = all(row_ok or observed == 0 for _, observed, _, row_ok in scored_rows)
+        print(
+            f"  {'ALL':<7}  {sum(r[1] for r in scored_rows):>15,}"
+            f"  {sum(r[2] for r in scored_rows):>12,}  "
+            f"{'yes' if scored_agreed else 'NO':>5}"
+        )
+
+    ok = (
+        agreed
+        and rejected_agreed
+        and predicted_agreed
+        and scoring_agreed
+        and scored_agreed
+    )
     print(
         f"[duckdb] {'GREEN' if ok else 'RED'} — {len(rows)} month(s), "
         f"every count reconciled: {ok}"

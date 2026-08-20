@@ -81,6 +81,11 @@ class DataConfig:
     #: model's other knobs live, and every reader resolves it through here rather
     #: than spelling the path a second time. Added M2-S4.
     predictions_dir: str = "data/predictions"
+    #: From configs/train.yaml (`evaluate.scoring_predictions_dir`) — the champion's
+    #: rows on the SCORING months (M7-S2). A fourth output tree, never a
+    #: subdirectory of the third: see the config's own argument for why a 2020 file
+    #: under `predictions_dir` would reach the `error_segments` mart.
+    scoring_predictions_dir: str = "data/scoring_predictions"
 
     def path_for(self, key: str) -> Path:
         """Resolve a configured directory/file key against the repo root."""
@@ -198,6 +203,38 @@ class DataConfig:
         """Provenance beside the rows: which champion, which floor, what it measured."""
         return repo_root() / self.predictions_dir / "predictions.json"
 
+    # ---- the scoring PREDICTIONS tree (M7-S2). Named separately for the same
+    # reason `scoring_path` is not `processed_path`: every existing caller of the
+    # two methods above means "the champion's rows on the held-out 2019 months".
+
+    def scoring_predictions_path(self, month: str) -> Path:
+        """Row-level champion output for one scoring month.
+
+        Laid out by MONTH and not by split, because a scoring month has no split
+        — that is what makes it a scoring month. Asking for a month this config
+        does not list as a scoring month is refused rather than answered: a path
+        computed for `2019-07` here would write a file the `predictions` view
+        never reads and the `scoring_predictions` view would label 'scoring'.
+        """
+        if not self.is_scoring(month):
+            raise KeyError(
+                f"month {month!r} is not in configs/data.yaml `scoring.months` "
+                f"({', '.join(self.scoring_months) or 'none configured'}). The champion's "
+                "rows on a SPLIT month belong under `predictions_path` — they are the "
+                "gate's evidence, judged against the registry's own tags; these are "
+                "monitoring rows on a month no model was judged on."
+            )
+        return (
+            repo_root()
+            / self.scoring_predictions_dir
+            / month
+            / f"scoring_predictions_{month}.parquet"
+        )
+
+    def scoring_predictions_manifest_path(self) -> Path:
+        """Provenance beside the rows: which champion, which months, what it measured."""
+        return repo_root() / self.scoring_predictions_dir / "scoring_predictions.json"
+
 
 def load_config(
     data_config: str | Path = "configs/data.yaml",
@@ -230,4 +267,5 @@ def load_config(
         splits=splits,
         scoring=scoring,
         predictions_dir=train["evaluate"]["predictions_dir"],
+        scoring_predictions_dir=train["evaluate"]["scoring_predictions_dir"],
     )

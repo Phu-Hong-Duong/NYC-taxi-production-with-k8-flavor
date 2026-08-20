@@ -271,6 +271,100 @@ is not a segmentation of it.
 
 ---
 
+## Monitoring KPIs (added M7-S2 — the scoring months' ids)
+
+**Read rule 4 and rule 5 together before reading these four.** These are the
+same arithmetic as KPI-09/KPI-10 (plus two new measures) over a **different
+window**: a SCORING month — a month the champion was never fitted on, never
+tuned on and, crucially, **never judged on**. There is no gate verdict behind
+these numbers and no registry tag records them, which is exactly why they get
+their own ids. Rendering a scoring-month MAE as KPI-09 would put a number with
+no verdict behind it under an id whose entire meaning is "the number a promotion
+was argued with".
+
+The instrument does not change: the values come from
+`taxi_mlops.training.evaluate` through `taxi_mlops.training.batch` (per month,
+recorded in `data/scoring_predictions/scoring_predictions.json`) and are
+re-aggregated in SQL over that path's own published rows — one per scoring trip
+— catalogued as the `scoring_predictions` view. No prediction is recomputed and
+no model is re-scored.
+
+**What makes them trustworthy is a detour, and it is worth understanding.** The
+segment ids (KPI-11..13) are checkable because rolled up over a whole split they
+must equal KPI-09/KPI-10, and a dbt test fails the build if they do not. **These
+ids have no such anchor** — nothing says what the champion "should" score on
+2020-03. So `taxi_mlops.training.batch` re-scores the HOLDOUT month first and
+refuses to write a single monitoring row unless the champion's own
+`gate_challenger_mae` tag comes back to four decimals. A month with a known
+answer proves the loader, the feature path and the booster; only then is a month
+with no known answer written. The chain is: registry tag → self-check → these
+rows → this mart.
+
+**Why the grain is DAILY.** F-045, measured at M7-S1: 2020-03's mean trip
+duration is 13.1645 against 2020-01's 13.2123 — a **0.36%** move, *smaller than
+the ordinary Jan→Feb wobble* — while its daily series runs 240,520 trips at
+14.878 min on the 5th to 5,361 trips at 9.715 min on the 29th. A monthly
+monitoring row shows the most drifted month this program will ever hold as
+unremarkable. Monthly numbers are a `GROUP BY month` away from these rows; the
+reverse is not true.
+
+### KPI-14 — Scoring-month ETA absolute error (MAE) **[MONITORING]**
+- **Formula:** `AVG(ABS(predicted_minutes − actual_minutes))` over one
+  (scoring month, pickup date)
+- **Source:** `scoring_daily` mart, column `kpi_14_mae_min` ← the
+  `scoring_predictions` view ← `taxi_mlops.training.batch`, whose own per-month
+  figure comes from `taxi_mlops.training.evaluate`
+- **Window:** one day of one scoring month (2020-01..03). **Never a held-out
+  split** — that window belongs to KPI-09 and this id may not be used for it
+- **Owner:** DA (reports) · MLE (acts on it) · SRE (consumes for M7-S3's drift
+  alert)
+- **Outlier treatment:** none. The rows are exactly the rows the contract
+  admitted (duration 1–120 min), identical treatment to KPI-09's
+- **Read it as:** *what the model is doing in production*, not *how good the
+  model is*. It moves for two reasons that look identical in this column alone —
+  the model is wrong, or the world changed — which is why `mean_actual_min` and
+  `mean_predicted_min` are published on the same row, and why KPI-16 exists
+
+### KPI-15 — Scoring-month within-tolerance rate **[MONITORING]**
+- **Formula:** `P(ABS(predicted_minutes − actual_minutes) ≤ tolerance)` over one
+  (scoring month, pickup date), as a percentage
+- **Source:** `scoring_daily` mart, column `kpi_15_within_tol_pct`
+- **Window:** one day of one scoring month; **tolerance from
+  `configs/train.yaml: evaluate.tolerance_minutes` (5.0)** and published on every
+  row as `tolerance_minutes` — KPI-10's and KPI-12's rule, inherited unchanged
+- **Owner:** DA (reports) · SRE (consumes)
+- **Read it as:** the rider-facing half. KPI-14 can improve while this falls (a
+  month of shorter trips shrinks absolute errors without quoting anyone better),
+  so the pair is read together or not at all
+
+### KPI-16 — Scoring-month mean signed error (bias) **[MONITORING]**
+- **Formula:** `AVG(predicted_minutes − actual_minutes)` over one
+  (scoring month, pickup date). **Positive = the champion over-quotes**
+- **Source:** `scoring_daily` mart, column `kpi_16_mean_signed_error_min`
+- **Window:** one day of one scoring month
+- **Owner:** DA (reports) · MLE (acts on it)
+- **Outlier treatment:** none, and **no bound** — a bounded bias would be a
+  bounded finding (KPI-13's rule, for the same reason)
+- **Read it as:** the direction KPI-14 cannot see. An absolute error cannot tell
+  a model quoting three minutes too long from one quoting three minutes too
+  short, and in a month where the traffic vanished those are opposite
+  diagnoses — a model trained on congested streets should over-quote an empty
+  city, and a KPI-14 that rose without KPI-16 moving would mean something else
+  entirely
+
+### KPI-17 — Scored trips per day **[MONITORING]**
+- **Formula:** `COUNT(*)` over one (scoring month, pickup date)
+- **Source:** `scoring_daily` mart, column `kpi_17_scored_trips`
+- **Window:** one day of one scoring month
+- **Owner:** DA (reports) · DE (consulted — it reconciles to the ingest report)
+- **Read it as:** the marginal that cannot be averaged away, and the reason it is
+  an id rather than a supporting count. KPI-01 is trips ingested per MONTH; this
+  is a different window and therefore a different id (rule 5). Summed per month
+  it must equal both the batch job's row count and the ingest report's
+  `rows_out`, which `assert_scoring_daily_reconcile` fails the build over
+
+---
+
 ## Segment dimensions every board should support
 
 Named once here so each board does not reinvent them, and so M2's error memo and
@@ -307,6 +401,10 @@ define.
 | KPI-11 | `error_segments` | `kpi_11_mae_min`, with `trips` and `share_of_split_pct` on the same row |
 | KPI-12 | `error_segments` | `kpi_12_within_tol_pct` **with** `tolerance_minutes` — the two travel together, by rule |
 | KPI-13 | `error_segments` | `kpi_13_margin_vs_floor_pct`, with `floor_mae_min` beside it |
+| KPI-14 | `scoring_daily` | `kpi_14_mae_min` — **MONITORING**, with `mean_actual_min`/`mean_predicted_min` on the same row |
+| KPI-15 | `scoring_daily` | `kpi_15_within_tol_pct` **with** `tolerance_minutes` — the two travel together, by rule |
+| KPI-16 | `scoring_daily` | `kpi_16_mean_signed_error_min` — signed, unbounded, positive = over-quoting |
+| KPI-17 | `scoring_daily` | `kpi_17_scored_trips`, with `model_version` on the same row |
 
 Three notes the boards must honour:
 

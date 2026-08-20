@@ -66,6 +66,10 @@ MARTS: tuple[str, ...] = (
     "monthly_kpis",
     "rejections_by_rule",
     "error_segments",
+    # M7-S2. A MONITORING mart (KPI-14..17), published for the same reason the
+    # others are: Metabase can only query Postgres, and the drift memo's series
+    # lives in DuckDB until something moves it. ~91 rows for three months.
+    "scoring_daily",
 )
 
 #: The one mart that is published by month rather than wholesale, and the column

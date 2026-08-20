@@ -31,6 +31,24 @@ sources:
           marts may read what the model wrote, model code never reads marts.
           Present only after `make predictions`; the whole data path builds
           without it.
+      - name: scoring_months
+        description: >
+          One row per SCORING month (2020-01..03), written by the same ingest
+          under `data/scoring/` (M7-S1): rows_in, rows_out, rows_rejected. The
+          sibling of `ingest_months` and deliberately not the same view — the
+          scoring months are not a fourth split, and a consumer that wants them
+          has to ask for them by name. It is the reconciliation AUTHORITY for
+          everything downstream of the scoring ingest.
+      - name: scoring_predictions
+        description: >
+          One row per SCORING trip, written by `taxi_mlops.training.batch` under
+          `data/scoring_predictions/` (M7-S2): the identity columns the champion
+          saw, the pickup date, the actual duration and the champion's quote,
+          stamped with the registry version that produced it. MODEL OUTPUT, read
+          through the analyst layer (ADR-009's one-way door). There is no floor
+          column: the floor is the gate's other half and a margin against it on
+          2020 data would be a comparison no gate ever made. Present only after
+          `make predictions-scoring`; the whole data path builds without it.
       - name: prediction_runs
         description: >
           Provenance for the rows above, read from the manifest the same command

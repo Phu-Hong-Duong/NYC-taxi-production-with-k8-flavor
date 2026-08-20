@@ -106,6 +106,28 @@ def main(argv: list[str] | None = None) -> int:
         "data/predictions/ to be untouched; scripts/predictions_redteam.sh wraps it",
     )
 
+    batch = sub.add_parser(
+        "score-scoring",
+        help="score the REGISTERED champion on the SCORING months (M7-S2) and publish "
+        "the row-level predictions under configs/train.yaml: "
+        "evaluate.scoring_predictions_dir. Monitoring numbers, new ids (KPI-14..17) — "
+        "never KPI-09/KPI-10, which belong to a held-out split",
+    )
+    batch.add_argument(
+        "--months",
+        nargs="+",
+        default=None,
+        metavar="YYYY-MM",
+        help="narrow to a subset of the CONFIGURED scoring months. It cannot "
+        "introduce one: a month absent from configs/data.yaml `scoring.months` is "
+        "refused before a row is read",
+    )
+    batch.add_argument(
+        "--no-write",
+        action="store_true",
+        help="print the numbers, publish nothing — for checking the champion resolves",
+    )
+
     # A training run redirected to a log file is block-buffered by default, so a
     # 40-minute fit prints nothing until it ends and reads exactly like a hang.
     # Observed on this story's first full run.
@@ -167,6 +189,26 @@ def main(argv: list[str] | None = None) -> int:
             )
         except ChampionError as exc:
             print(f"[score] FAIL: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if args.command == "score-scoring":
+        # Same reason as `train` and `predict`: the shim may re-exec, and
+        # re-execing after loading a scoring month would do that work twice.
+        from .openmp import ensure_openmp
+
+        print(f"[openmp] {ensure_openmp()}")
+
+        from .batch import score_scoring_months
+        from .score import ChampionError
+
+        try:
+            score_scoring_months(
+                months=tuple(args.months) if args.months else None,
+                write=not args.no_write,
+            )
+        except ChampionError as exc:
+            print(f"[batch] FAIL: {exc}", file=sys.stderr)
             return 2
         return 0
     return 2

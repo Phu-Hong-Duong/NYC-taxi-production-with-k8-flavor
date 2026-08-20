@@ -38,6 +38,8 @@ data/scoring_rejected/
 # downloaded to be measured. Not DVC's, not the repo's, and not the image's.
 data/probe/
 data/predictions/
+# Model output on the scoring months (M7-S2), on data/predictions/'s terms.
+data/scoring_predictions/
 data/analyst.duckdb
 data/analyst.duckdb.wal
 .venv/

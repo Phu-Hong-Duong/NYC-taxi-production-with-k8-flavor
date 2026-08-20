@@ -2029,6 +2029,72 @@ can never disagree (the port-family twins lesson, applied before it bit).
   NONE is chosen here: the window, the reference and the bar are S3's to argue
   before the job runs (M7 law 4).
 
+## Batch inference as a product (M7-S2) — the check a monitoring table cannot make for itself
+- **`make predictions-scoring` is the whole path**: resolve `@champion` (F-009's
+  two hops) → **prove the path on the holdout** → score every scoring month →
+  parquet + manifest. **15,413,352 rows across 2020-01..03**, `@champion`
+  version **2** before and after, no run minted, no version created, no pointer
+  moved (AST-tested, not grepped).
+- **The self-check is the story's centre, and it exists because these rows can
+  be checked against NOTHING.** M2-S4's rows have an anchor — the champion's
+  `gate_challenger_mae` tag says 3.2403 on the holdout, so re-scoring must
+  return 3.2403 or nothing publishes. No tag says what the champion scores on
+  2020-03, because no gate ever asked, and **a wrong-but-plausible MAE on a
+  COVID month reads exactly like drift** — which is what the next story will be
+  asked to believe. So the path re-scores the HOLDOUT first and refuses to write
+  a single monitoring row unless the tag comes back: **measured 3.2403, MATCH.**
+  A month with a known answer proves the loader, the feature path and the
+  booster; only then is a month with no known answer written. ~2 min of the run,
+  and deliberately not optional.
+- **A fourth output tree, and the reason is specific rather than tidy.**
+  `data/scoring_predictions/` is NOT a subdirectory of `data/predictions/`,
+  because that directory is globbed by `predicted_months`, read by the
+  `predictions` view and aggregated by `error_segments` — whose `overall` row is
+  asserted EQUAL to the evaluator's KPI-09/KPI-10 by a dbt test. A 2020 file
+  inside it either turns that test red for a correct batch run or lets a board
+  render a monitoring number under a promotion KPI's id. Gitignored, not
+  DVC-tracked, on M2-S4's terms exactly.
+- **KPI-14/15/16/17 are new ids because the WINDOW is new** — a scoring month
+  the champion was never *judged* on. Same instrument (`evaluate`, gotcha #15),
+  new window, new ids, and the manifest SPELLS them in its keys so a reader
+  cannot mistake one for the other. **KPI-16 (signed bias) is the one that says
+  which thing broke**: an absolute error cannot tell a model quoting three
+  minutes too long from one quoting three minutes too short, and in a month
+  where the traffic vanished those are opposite diagnoses.
+- **The monthly row hides the month, and this is F-045 measured on the OUTPUT
+  side.** 2020-03's whole-month KPI-14 is **3.3227** — ordinary beside
+  2020-01's 3.0295. Split at the collapse: **Mar 01–10 is 68.23% of the month's
+  rows at KPI-14 3.0463** (January, to two decimals) · Mar 11–21 is 28.45% at
+  3.7534 · **Mar 22–31 is 3.32% of the rows at KPI-14 5.3128, KPI-15 62.118%
+  and KPI-16 +4.1412**. A row-weighted average is weighted by exactly the rows
+  that vanished. Worst day **6.3693** (2020-03-26) against January's worst of
+  3.5757; mean actual falls to 9.69 min while the champion keeps quoting 13.83 —
+  *the world changed and the model did not follow*. **No threshold is set here**
+  (M7 law 4): the window, the reference and the bar are S3's.
+- **The mart is DAILY for that reason** — `marts.scoring_daily`, 91 rows,
+  full-refresh, `dbt build` **PASS=80** (was 57). Monthly numbers are a
+  `GROUP BY month` away from these rows; the reverse is not true.
+  `model_versions_seen` must be **1** per day, asserted: M7's alias may move
+  through the gate, and a spliced series would be averaged into invisibility.
+  **No floor column and no margin**: the floor is fitted on the 2019 train
+  months, and a 2020 margin against it would publish a comparison no gate ever
+  made against a bar chosen for a different world.
+- **`make duckdb` now runs SIX reconciliations over 17 views**, exit 1 on any.
+  The new one's authority is the INGEST REPORT, not the predictions file —
+  comparing the mart against the predictions alone would prove SQL can sum a
+  column, since a job that scored 14 of 15.4M rows would have both agreeing and
+  both wrong. It distinguishes **pending** (ingested, not yet scored — normal,
+  stays GREEN; a guard that fails on a correct system is gotcha #50) from **NO**
+  (scored PARTLY — the failure, because half a month produces an ordinary MAE
+  over rows nobody chose). Observed **15,413,352 == 15,413,352**, and again in
+  dbt via `assert_scoring_daily_reconcile`, which travels with the mart into the
+  publish.
+- **Host-rehearsed, not on-cluster, and said out loud.** The entry point is a
+  plain callable in `src/` importing no orchestrator (the boundary law);
+  **S4 wires the Flyte stage**, and pays gotcha #66's cold cache once — this
+  story commits under `src/`, `scripts/` and `analytics/`, so the next
+  on-cluster run rebuilds its image regardless.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2098,6 +2164,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Analyst layer, now five reconciliations (M7-S1) | `make duckdb` | RE-VERIFIED 2026-08-20 (M7-S1): **16 views** (four added) and **five** reconciliations, exit 1 on any. New: scoring rows vs their reports (**15,413,352 == 15,413,352**) and the scoring sidecar per (month, rule) (**298,710 == 298,710, 30 pairs, 0 disagreements**). The settled numbers unmoved — 56,127,878 · 914,459 · 12,140,456. Both new legs RED-TEAMED in unit form: a truncated scoring month, and a report whose per-rule counts were shuffled **with its monthly total left correct** (the shape a per-month check cannot see). `trips_clean` still returns exactly `{train,val,test}`, by test |
 | Ask a month what the contract says, writing nothing (M7-S1) | `make contract-probe PROBE_ARGS="--month YYYY-MM"` (**exit 0 = VALIDATED · 1 = REFUSED · 2 = the probe itself failed**; `--fixture`, `--rows`, `--out` for a tracked record) | VERIFIED 2026-08-20 (M7-S1): the REAL `yellow_tripdata_2025-01.parquet` (59,158,238 bytes, sha256 `9af277e4c0d3…`, 3,475,226 rows, 20 columns) came back **VALIDATED** with one schema event, `alias applied: 'Airport_fee' -> 'airport_fee'` — the year-aware contract's first encounter with real 2025 bytes, and a **SURPASS** over the blueprint's premise. It **acquires nothing**: the file lands in `data/probe/` (gitignored, not DVC-tracked) under its own manifest, `data/raw` and `data/raw_manifest.json` are untouched, and `--raw-dir data/raw` is refused outright. An AST test forbids it calling any writer or the ingest |
 | Watch the contract REFUSE (M7-S1) | `make contract-probe-fixtures` (`PROBE_MONTH=`/`PROBE_ROWS=` are the levers) | VERIFIED 2026-08-20 (M7-S1): **PASSED — 3 refusal shapes, exit 1 each, nothing written.** `drop-required` (a field disappears) · `rename-required` (a field moves) · `unknown-column` (a field arrives) — all derived from the REAL 2025-01 file, all `SchemaEventError`, and all four data trees checked empty for the probed month afterwards. **The exit code is the assertion**: a refusal that exits 0 is a refusal a pipeline cannot hear. `rename-required` found a real defect — the message named the absent column and said nothing about the unknown one that had replaced it, because the missing branch raises before the unknown branch can run. Both are named now, with `aliases:` offered as the fix |
+| Score the champion on the SCORING months (M7-S2) | `make predictions-scoring` (`SCORING_ARGS="--months YYYY-MM"` narrows to configured months and cannot introduce one; `--no-write` prints the numbers and publishes nothing) | VERIFIED 2026-08-20 (M7-S2): `models:/nyc-taxi-eta@champion -> version 2`, feature set `v2` read off the version's own tag, 24 columns matching the config. **The self-check ran first and MATCHED**: re-scoring the 2019-08 holdout (5,950,708 rows) measured **3.2403** against the version's own `gate_challenger_mae` of **3.2403** — a month with a known answer proving the loader, the feature path and the booster before a month with no known answer is written. Then **15,413,352 rows** across 2020-01..03: **KPI-14 3.0295 / 2.9802 / 3.3227 · KPI-15 83.226 / 83.768 / 80.569% · KPI-16 +0.2836 / −0.1703 / +0.5468**, every number from `taxi_mlops.training.evaluate` under MONITORING ids. `@champion` **2** before and after; `versions: ['1','2']` unchanged. Transcript: `docs/batch_inference_m7_transcripts.md` §1 |
+| Analyst layer, now SIX reconciliations (M7-S2) | `make duckdb` | RE-VERIFIED 2026-08-20 (M7-S2): **17 views** (one added) and **six** reconciliations, exit 1 on any. New: batch predictions vs the scoring rows they claim to cover — **15,413,352 == 15,413,352**, per month, against the INGEST REPORT's `rows_out` and not against the predictions file. Settled numbers unmoved: 56,127,878 · 914,459 · 12,140,456 · 15,413,352. RED-TEAMED in unit form three ways: a **partly** scored month (3 rows of 7 — the failure that produces a plausible MAE) goes RED, an **unscored** month reads `pending` and stays GREEN, and a **mislabelled** month surfaces through the FULL OUTER JOIN as a month only the predictions know about |
+| The monitoring mart (M7-S2) | `make marts` (`scoring_daily` is the sixth mart, full-refresh) | VERIFIED 2026-08-20 (M7-S2): `dbt build` **PASS=80** (was 57 — one model, two singular tests, the column tests), publish printed **`COPY 91`** (31+29+31 days). Read back OUT OF POSTGRES, not off the publish log: `sum(kpi_17_scored_trips)` = 6,279,806 + 6,185,309 + 2,948,237 = **15,413,352**, `model_version` **2**, **`versions_seen = 1`** on every month. Worst day KPI-14 **6.3693** (2020-03) against **3.5757** (2020-01) — the daily grain seeing what the monthly row averages away |
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
 | Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1. **WIDENED + RE-VERIFIED 2026-08-17 (M2-S1): 16/16** — it now wipes and re-derives `data/rejected/` too and asks DVC about BOTH `.dvc` files (`data/processed.dvc: up to date` · `data/rejected.dvc: up to date`). A proof that re-derives half a command's output proves half a command |
 | Baselines + LightGBM v1 (M2-S2) | `python -m taxi_mlops.training train` (`--ablation` adds the log1p variant; `--train-months` is the sample-first override; `--no-mlflow` is a smoke test, never a result) | VERIFIED 2026-08-17 (M2-S2): 43,987,422 train rows, 4 MLflow runs in `m2-modeling`, `lightgbm-v1` logged WITH signature + input example (7 artifacts in MinIO). The two floors came back **7.8866** and **3.7170** val MAE — the EDA's SQL numbers to four decimals, from different code. Registry left EMPTY on purpose (S3's) |
