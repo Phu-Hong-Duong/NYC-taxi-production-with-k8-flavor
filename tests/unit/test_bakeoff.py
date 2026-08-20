@@ -469,9 +469,10 @@ def test_nothing_downstream_of_resolution_reads_the_declared_feature_set(source)
 def _enclosing_function(tree, lineno: int) -> str:
     best, best_start = "<module>", -1
     for fn in ast.walk(tree):
-        if isinstance(fn, ast.FunctionDef) and fn.lineno <= lineno <= (fn.end_lineno or fn.lineno):
-            if fn.lineno > best_start:
-                best, best_start = fn.name, fn.lineno
+        if (isinstance(fn, ast.FunctionDef)
+                and fn.lineno <= lineno <= (fn.end_lineno or fn.lineno)
+                and fn.lineno > best_start):
+            best, best_start = fn.name, fn.lineno
     return best
 
 

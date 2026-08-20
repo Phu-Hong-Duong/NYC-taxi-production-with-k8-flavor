@@ -238,9 +238,13 @@ verify-m6-redteam: ## prove verify-m6 goes RED: rewrite ONE recorded field, watc
 	@bash scripts/verify_m6_redteam.sh
 
 # ---- M7 drift & retrain loop (role:SRE + role:MLE + role:DA) ----
-.PHONY: predictions-scoring drift-report verify-m7
+.PHONY: predictions-scoring retrain retrain-schedule drift-report verify-m7
 predictions-scoring: ## score the REGISTERED champion on the SCORING months and publish the rows (M7-S2; then make duckdb, make marts). SCORING_ARGS="--months YYYY-MM" narrows; monitoring ids KPI-14..17, never KPI-09/10
 	uv run python -m taxi_mlops.training score-scoring $(SCORING_ARGS)
+retrain: ## M7-S4: fit the CHAMPION's configuration re-derived at the scale it is fitted at (F-020) and let the gate decide. Promotes NOTHING (exit 0 promote-worthy · 1 refused · 3 no verdict). RETRAIN_ARGS="--plan-only" is the seconds-long provenance check
+	uv run python -m taxi_mlops.training retrain $(RETRAIN_ARGS)
+retrain-schedule: ## M7-S4: deploy the retrain task and its two triggers, then read them back off the SERVER (never off the file that was submitted)
+	@bash scripts/retrain_schedule.sh $(SCHEDULE_ARGS)
 drift-report: ## Evidently reference-vs-MONTH -> pushgateway + MLflow artifact
 	@echo "TODO(M7): MONTH=$(MONTH)"
 verify-m7: ; @echo "TODO(M7): 2020-03 drift alarm + 2025-01 schema refusal (distinct signatures) + DA memo"

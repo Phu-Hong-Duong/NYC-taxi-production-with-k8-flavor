@@ -118,6 +118,29 @@ class TrainResult:
 
 
 @dataclass(frozen=True)
+class RetrainResult:
+    """What one scheduled retrain produced. A verdict is a VALUE, never an exception."""
+
+    challenger: str
+    champion_version: str
+    target_rows: int
+    rescale_factor: float | None
+    round_cap: int
+    plan_only: bool
+    sampled: bool
+    #: "PROMOTE" | "REFUSE" | "NO_VERDICT" | "PLAN_ONLY"
+    decision: str
+    promoted: bool
+    challenger_mae: float | None = None
+    incumbent_version: str | None = None
+    best_iteration: int | None = None
+    #: "early_stopping" | "round_cap" — F-020's second half, reported rather than
+    #: left to be inferred from a results table that cannot show it.
+    ended_by: str | None = None
+    fit_seconds: float | None = None
+
+
+@dataclass(frozen=True)
 class SplitMetrics:
     contender: str
     split: str
@@ -501,6 +524,66 @@ def publish_marts(
         months_reconciled=len(summary["reconciled"]),
         fact_rows_published=published,
         approx_rows=summary["approx_rows"],
+    )
+
+
+def retrain(
+    *,
+    train_months: tuple[str, ...] | None = None,
+    plan_only: bool = False,
+    experiment: str | None = None,
+    story: str = "M7-S4",
+    run_dir: str | None = None,
+) -> RetrainResult:
+    """M7's loop, as a stage: the champion's configuration re-derived, then gated.
+
+    It is ONE stage and not seven, and that is a statement about what a retrain
+    is. The monthly pipeline's six upstream stages exist to turn a new month of
+    TLC parquet into a feature matrix; a retrain reads the SETTLED training window
+    (2019-01..06, DVC-pinned, already on the volume) and changes nothing about the
+    data. Wrapping it in the ingest chain would re-derive months it does not use
+    and would make the retrain's cache key depend on a month it never reads.
+
+    Like every other body in this module it adds no rule of its own — the
+    hyperparameter transfer is `taxi_mlops.training.retrain` and the fit, the
+    evaluation and the gate are `taxi_mlops.training.run`, both reached through
+    the one entry point `make retrain` also uses. **It cannot promote**: the
+    function it calls passes `promote=False` unconditionally and takes no
+    parameter that changes it, which is the property that lets this run on a
+    schedule at 03:00 with nobody watching.
+    """
+    from taxi_mlops.training.retrain_run import DEFAULT_EXPERIMENT as RETRAIN_EXPERIMENT
+    from taxi_mlops.training.retrain_run import DEFAULT_RUN_DIR
+    from taxi_mlops.training.retrain_run import retrain as retrain_impl
+
+    record = retrain_impl(
+        run_dir=run_dir or DEFAULT_RUN_DIR,
+        experiment=experiment or RETRAIN_EXPERIMENT,
+        story=story,
+        plan_only=plan_only,
+        train_months=train_months,
+    )
+    verdict = record.get("verdict")
+    fit = record.get("fit") or {}
+    return RetrainResult(
+        challenger=record["challenger"],
+        champion_version=record["champion"]["version"],
+        target_rows=int(record["target_rows"]),
+        rescale_factor=record["rescale"]["factor"],
+        round_cap=int(record["round_budget"]["derived"]),
+        plan_only=plan_only,
+        sampled=bool(record.get("sampled")),
+        # "NO_VERDICT" is DATA here for the same reason it is in `register`: a
+        # sampled retrain is a successful run of a working gate that was not
+        # entitled to judge (F-008), and modelling it as a failure would attach a
+        # retry to the program's one honest silence.
+        decision="PLAN_ONLY" if plan_only else (verdict or {}).get("verdict", "NO_VERDICT"),
+        promoted=False,
+        challenger_mae=(verdict or {}).get("challenger_mae"),
+        incumbent_version=(verdict or {}).get("incumbent_version"),
+        best_iteration=fit.get("best_iteration"),
+        ended_by=fit.get("ended_by"),
+        fit_seconds=fit.get("seconds"),
     )
 
 
