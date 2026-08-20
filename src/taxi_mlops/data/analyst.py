@@ -60,6 +60,28 @@ VIEWS = (
 #: absent the view is skipped OUT LOUD, never silently.
 OPTIONAL_VIEWS = ("predictions", "prediction_runs")
 
+#: The scoring layer (M7-S1). Four views mirroring the four the split months
+#: get, and deliberately SEPARATE from them rather than unioned in.
+#:
+#: `trips_clean` is what the training matrix, the dbt marts and every Metabase
+#: board read. Unioning 2020 into it would put COVID months behind numbers whose
+#: definitions, windows and KPI ids were all written about the settled 2019 data
+#: — silently, with every query still returning a plausible answer, which is the
+#: exact failure mode M1-S2's catalogue reconciliation exists to catch one layer
+#: up. So the scoring months get their own names, and a consumer that wants them
+#: has to say so.
+#:
+#: Optional for `predictions`' reason: `make data`, `make rebuild-proof` and the
+#: whole M1 gate run on a repo where no scoring month has ever been ingested,
+#: and a data layer that refuses to build without one would make the settled
+#: path depend on the new one. Skipped OUT LOUD, never silently.
+SCORING_VIEWS = (
+    "trips_scoring",
+    "trips_scoring_rejected",
+    "scoring_months",
+    "scoring_rejections",
+)
+
 
 def database_path(cfg: DataConfig) -> Path:
     """Where the catalogue lives (configs/data.yaml:analyst.database_path)."""
@@ -109,6 +131,64 @@ def _trips_rejected_sql(cfg: DataConfig) -> str:
         for month in cfg.splits.months
     ]
     return "CREATE OR REPLACE VIEW trips_rejected AS\n" + "\nUNION ALL\n".join(branches)
+
+
+def ingested_scoring_months(cfg: DataConfig) -> list[str]:
+    """The scoring months that are actually on disk (M7-S1).
+
+    Both trees are required, exactly as `build` requires both for the split
+    months: a kept file with no sidecar is a month whose rejections cannot be
+    reconciled, and the whole point of the sidecar is that they can be.
+    """
+    return [
+        month
+        for month in cfg.scoring_months
+        if cfg.scoring_path(month).exists() and cfg.scoring_rejected_path(month).exists()
+    ]
+
+
+def _scoring_sql(cfg: DataConfig, months: list[str]) -> list[str]:
+    """The four scoring views, same shapes as their settled-month counterparts.
+
+    `split` is the literal 'scoring' rather than a config lookup, and it is a
+    column rather than an omission on purpose: these frames are unioned into
+    memos and boards beside the 2019 ones, and a row with no label is a row
+    somebody will label by hand. The MONTH is a config literal, like everywhere
+    else in this file — a renamed file must not be able to relabel data.
+    """
+    label = _sql_str("scoring")
+
+    def union(statements: list[str]) -> str:
+        return "\nUNION ALL\n".join(statements)
+
+    trips = [
+        f"SELECT {label} AS split, {_sql_str(m)} AS month, * "
+        f"FROM read_parquet({_sql_str(cfg.scoring_path(m))})"
+        for m in months
+    ]
+    rejected = [
+        f"SELECT {label} AS split, {_sql_str(m)} AS month, * "
+        f"FROM read_parquet({_sql_str(cfg.scoring_rejected_path(m))})"
+        for m in months
+    ]
+    monthly = [
+        f"SELECT {label} AS split, month, rows_in, rows_out, rows_rejected, rejected_fraction "
+        f"FROM read_json_auto({_sql_str(cfg.scoring_rejections_path(m))})"
+        for m in months
+    ]
+    rules = [
+        f"SELECT {label} AS split, month, "
+        "rule.name AS rule, rule.rejected_by AS rejected_by, rule.matched AS matched "
+        "FROM (SELECT month, unnest(rules) AS rule "
+        f"FROM read_json_auto({_sql_str(cfg.scoring_rejections_path(m))}))"
+        for m in months
+    ]
+    return [
+        "CREATE OR REPLACE VIEW trips_scoring AS\n" + union(trips),
+        "CREATE OR REPLACE VIEW trips_scoring_rejected AS\n" + union(rejected),
+        "CREATE OR REPLACE VIEW scoring_months AS\n" + union(monthly),
+        "CREATE OR REPLACE VIEW scoring_rejections AS\n" + union(rules),
+    ]
 
 
 def predicted_months(cfg: DataConfig) -> list[str]:
@@ -278,6 +358,9 @@ FROM ingest_months m JOIN raw_manifest r USING (month)""",
         # health board that costs a 56M-row scan every refresh gets turned off.
         _unknown_domains_sql(cfg),
     ]
+    scoring = ingested_scoring_months(cfg)
+    if scoring:
+        statements.extend(_scoring_sql(cfg, scoring))
     months = predicted_months(cfg)
     if months:
         statements.append(_predictions_sql(cfg, months))
@@ -385,6 +468,65 @@ def rejection_reconciliation(cfg: DataConfig) -> list[tuple[str, str, str, int, 
     ]
 
 
+def scoring_reconciliation(cfg: DataConfig) -> list[tuple[str, int, int, bool]]:
+    """Scoring-view rows vs the ingest report that wrote them (M7-S1).
+
+    The same question `reconciliation` asks of the settled months, asked of the
+    new tree, and it is not optional politeness: the scoring months are what
+    M7's drift numbers are computed over, and a view pointing at two months of
+    three answers every drift query happily and just describes less of the world.
+    """
+    con = connect(cfg, read_only=True)
+    try:
+        rows = con.execute(
+            """
+            SELECT c.month, c.observed, m.rows_out
+            FROM (SELECT month, COUNT(*) AS observed FROM trips_scoring GROUP BY month) c
+            FULL OUTER JOIN (SELECT month, rows_out FROM scoring_months) m USING (month)
+            ORDER BY month
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        (month, observed or 0, expected or 0, (observed or 0) == (expected or 0))
+        for month, observed, expected in rows
+    ]
+
+
+def scoring_rejection_reconciliation(cfg: DataConfig) -> list[tuple[str, str, int, int, bool]]:
+    """The scoring sidecar per (month, rule) vs what the report counted (M7-S1).
+
+    Per RULE and not per month, for M2-S1's reason: a sidecar that files every
+    row under the wrong rule has a perfect monthly total and is useless for the
+    one question it exists to answer. FULL OUTER for the same reason too — a
+    rule name appearing only on one side is what a renamed rule looks like
+    mid-change, and only a full join sees it.
+    """
+    con = connect(cfg, read_only=True)
+    try:
+        rows = con.execute(
+            f"""
+            SELECT COALESCE(r.month, s.month)   AS month,
+                   COALESCE(r.rule,  s.rule)    AS rule,
+                   COALESCE(s.observed, 0)      AS observed,
+                   COALESCE(r.rejected_by, 0)   AS expected
+            FROM scoring_rejections r
+            FULL OUTER JOIN (
+                SELECT month, {RULE_COLUMN} AS rule, COUNT(*) AS observed
+                FROM trips_scoring_rejected GROUP BY 1, 2
+            ) s USING (month, rule)
+            ORDER BY month, rule
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        (month, rule, observed, expected, observed == expected)
+        for month, rule, observed, expected in rows
+    ]
+
+
 def prediction_reconciliation(cfg: DataConfig) -> list[tuple[str, str, int, int, bool]]:
     """Every held-out row got exactly one prediction, or `make duckdb` exits 1.
 
@@ -467,6 +609,46 @@ def report(cfg: DataConfig | None = None) -> bool:
         f"{len(disagreed)} disagreement(s)"
     )
 
+    # ---- the fourth and fifth reconciliations: the scoring tree (M7-S1).
+    scoring_agreed = True
+    scoring = ingested_scoring_months(cfg)
+    print(
+        "\n[duckdb] scoring months (M7): view rows vs the ingest report, "
+        "and the sidecar per rule"
+    )
+    if not scoring:
+        print(
+            "  none — no month of "
+            f"{list(cfg.scoring_months) or '(none configured)'} is ingested under "
+            f"{cfg.scoring.get('dir', 'data/scoring')}/. Run `make ingest-scoring`; "
+            "the settled 2019 path does not depend on it."
+        )
+    else:
+        scoring_rows = scoring_reconciliation(cfg)
+        print("  month     view rows     rows_out    agree")
+        print("  -------  ------------  ------------  -----")
+        for month, observed, expected, row_ok in scoring_rows:
+            print(
+                f"  {month}  {observed:>12,}  {expected:>12,}  "
+                f"{'yes' if row_ok else 'NO':>5}"
+            )
+        scoring_rules = scoring_rejection_reconciliation(cfg)
+        scoring_bad = [r for r in scoring_rules if not r[4]]
+        for month, rule, observed, expected, _ok in scoring_bad:
+            print(f"  {month}  rule {rule}: sidecar {observed:,} != rejected_by {expected:,}   NO")
+        scoring_agreed = all(r[3] for r in scoring_rows) and not scoring_bad
+        print(
+            f"  {'ALL':<7}  {sum(r[1] for r in scoring_rows):>12,}"
+            f"  {sum(r[2] for r in scoring_rows):>12,}  "
+            f"{'yes' if scoring_agreed else 'NO':>5}"
+        )
+        print(
+            f"  {len(scoring_rules)} (month, rule) pair(s) checked, "
+            f"{len(scoring_bad)} disagreement(s); sidecar rows "
+            f"{sum(r[2] for r in scoring_rules):,} == counted "
+            f"{sum(r[3] for r in scoring_rules):,}"
+        )
+
     # ---- the third reconciliation: one prediction per held-out row (M2-S4).
     predicted_agreed = True
     months = predicted_months(cfg)
@@ -493,7 +675,7 @@ def report(cfg: DataConfig | None = None) -> bool:
             f"{'yes' if predicted_agreed else 'NO':>5}"
         )
 
-    ok = agreed and rejected_agreed and predicted_agreed
+    ok = agreed and rejected_agreed and predicted_agreed and scoring_agreed
     print(
         f"[duckdb] {'GREEN' if ok else 'RED'} — {len(rows)} month(s), "
         f"every count reconciled: {ok}"

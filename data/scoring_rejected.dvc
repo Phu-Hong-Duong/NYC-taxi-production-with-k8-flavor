@@ -1,0 +1,6 @@
+outs:
+- md5: 61dfd07b791e0242455dcfb5dbd95eb7.dir
+  size: 8946612
+  nfiles: 3
+  hash: md5
+  path: scoring_rejected

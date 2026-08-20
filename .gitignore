@@ -16,6 +16,12 @@ data/analyst.duckdb.wal
 # that is stale by design is worse than no pin, because it looks like provenance.
 # The real provenance is data/predictions/predictions.json plus the registry.
 data/predictions/
+# `make contract-probe`'s throwaway acquisition directory (M7-S1). The probe
+# downloads a REAL TLC file to measure what the contract says about it, then
+# writes nothing else — so these bytes are not data this program owns, and they
+# are deliberately not DVC-tracked either. data/raw stays the only acquisition
+# the manifest pins.
+data/probe/
 mlruns/
 .dvc/cache/
 .pytest_cache/

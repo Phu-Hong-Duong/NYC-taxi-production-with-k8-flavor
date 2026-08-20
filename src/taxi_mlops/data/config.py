@@ -6,7 +6,7 @@ month is train/val/test) and everything else from configs/data.yaml.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +72,10 @@ class DataConfig:
     write: dict[str, Any]
     analyst: dict[str, Any]
     splits: Splits
+    #: configs/data.yaml:scoring — the months ingested for SCORING and DRIFT
+    #: (M7-S1). Deliberately not a fourth split: they live in their own trees
+    #: under their own DVC pins so the settled 2019 bytes cannot move (M7 law 2).
+    scoring: dict[str, Any] = field(default_factory=dict)
     #: From configs/train.yaml (`evaluate.predictions_dir`), like `splits` and for
     #: the same reason: the model's output directory is declared once, where the
     #: model's other knobs live, and every reader resolves it through here rather
@@ -126,6 +130,70 @@ class DataConfig:
             / f"predictions_{month}.parquet"
         )
 
+    # ---- the scoring tree (M7-S1). Separate methods, never a polymorphic
+    # `processed_path`: every existing caller of the three methods above means
+    # "the settled 2019 months" and must keep meaning it. A dispatcher that
+    # quietly answered for 2020 would put a scoring month wherever any of them
+    # is called — which is the training matrix, the marts and every board.
+
+    @property
+    def scoring_months(self) -> tuple[str, ...]:
+        return tuple(self.scoring.get("months") or ())
+
+    def is_scoring(self, month: str) -> bool:
+        return month in self.scoring_months
+
+    def label_of(self, month: str) -> str:
+        """'train'/'val'/'test' for a split month, 'scoring' for a scoring month.
+
+        The label the ingest prints and the analyst views carry. It comes from
+        config membership, never from a path — a renamed file must not be able
+        to relabel data (M1-S2's law), and that law does not weaken for a tree
+        whose directories happen to be named after their months.
+        """
+        if self.is_scoring(month):
+            return "scoring"
+        try:
+            return self.splits.split_of(month)
+        except KeyError:
+            raise KeyError(
+                f"month {month!r} is named nowhere: not a split in configs/train.yaml "
+                f"and not in configs/data.yaml `scoring.months`. Ingesting a month no "
+                f"config knows about would write rows nothing downstream can label."
+            ) from None
+
+    def scoring_path(self, month: str) -> Path:
+        name = self.source["filename_pattern"].format(month=month)
+        return repo_root() / self.scoring["dir"] / month / name
+
+    def scoring_rejections_path(self, month: str) -> Path:
+        return self.scoring_path(month).with_suffix(".rejections.json")
+
+    def scoring_rejected_path(self, month: str) -> Path:
+        name = self.source["filename_pattern"].format(month=month)
+        return repo_root() / self.scoring["rejected_dir"] / month / name
+
+    # ---- what `ingest_month` writes through: one code path, the tree chosen by
+    # which list the month is in. The contract, the cast, the rules and the
+    # writer options are identical for both — that is the point.
+
+    def output_path(self, month: str) -> Path:
+        return self.scoring_path(month) if self.is_scoring(month) else self.processed_path(month)
+
+    def report_path(self, month: str) -> Path:
+        return (
+            self.scoring_rejections_path(month)
+            if self.is_scoring(month)
+            else self.rejections_path(month)
+        )
+
+    def sidecar_path(self, month: str) -> Path:
+        return (
+            self.scoring_rejected_path(month)
+            if self.is_scoring(month)
+            else self.rejected_path(month)
+        )
+
     def predictions_manifest_path(self) -> Path:
         """Provenance beside the rows: which champion, which floor, what it measured."""
         return repo_root() / self.predictions_dir / "predictions.json"
@@ -137,6 +205,21 @@ def load_config(
 ) -> DataConfig:
     raw = load_yaml(data_config)
     train = load_yaml(train_config)
+    splits = load_splits(train_config)
+    scoring = raw.get("scoring") or {}
+
+    # The one mistake the two-file separation makes possible, checked rather
+    # than trusted: a month in both lists would be fitted on AND scored for
+    # drift, and its drift reference would contain itself.
+    both = [m for m in (scoring.get("months") or ()) if m in splits.months]
+    if both:
+        raise ValueError(
+            f"configs/data.yaml names {both} under `scoring.months` while "
+            f"configs/train.yaml already assigns them to a split. A month is "
+            f"either data a model is fitted/judged on or data it is scored "
+            f"against — never both."
+        )
+
     return DataConfig(
         source=raw["source"],
         contract=raw["contract"],
@@ -144,6 +227,7 @@ def load_config(
         rejected=raw["rejected"],
         write=raw["write"],
         analyst=raw["analyst"],
-        splits=load_splits(train_config),
+        splits=splits,
+        scoring=scoring,
         predictions_dir=train["evaluate"]["predictions_dir"],
     )

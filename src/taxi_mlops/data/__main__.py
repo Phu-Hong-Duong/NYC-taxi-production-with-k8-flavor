@@ -38,6 +38,12 @@ def main(argv: list[str] | None = None) -> int:
         dest="months",
         help="ingest only this month (repeatable); default = every month in configs/train.yaml",
     )
+    run.add_argument(
+        "--scoring",
+        action="store_true",
+        help="default the work list to configs/data.yaml `scoring.months` (M7-S1) instead of "
+        "the split months; the tree a month lands in always comes from config membership",
+    )
 
     sub.add_parser(
         "duckdb",
@@ -67,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        ingest(args.months, cfg)
+        ingest(args.months, cfg, scoring=args.scoring)
     except IngestError as exc:
         print(f"\n[ingest] REFUSED — {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1

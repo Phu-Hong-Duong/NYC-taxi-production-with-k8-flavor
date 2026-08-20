@@ -14,7 +14,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from .clean import RejectionReport, clean, sort_deterministically
-from .config import DataConfig, load_config
+from .config import DataConfig, load_config, repo_root
 from .contract import dtypes_table, validate_input, validate_output
 from .download import ensure_month, load_manifest, save_manifest
 from .errors import CorruptSourceError
@@ -50,12 +50,25 @@ def write_processed(df: pd.DataFrame, dest: Path, cfg: DataConfig) -> None:
     tmp.replace(dest)
 
 
+def _display(path: Path) -> str:
+    """Repo-relative when it is under the repo, absolute otherwise.
+
+    The absolute branch is not decoration: the unit suite runs ingest against a
+    throwaway config under /tmp, and a printer that ASSUMED the repo root used
+    to raise ValueError from inside a success message.
+    """
+    try:
+        return str(path.relative_to(repo_root()))
+    except ValueError:
+        return str(path)
+
+
 def ingest_month(
     month: str, cfg: DataConfig, manifest: dict[str, dict], *, show_dtypes: bool = True
 ) -> RejectionReport:
     """One month, end to end. Raises an IngestError subclass rather than writing bad data."""
-    split = cfg.splits.split_of(month)
-    print(f"\n=== {month} (split: {split}) ===")
+    label = cfg.label_of(month)
+    print(f"\n=== {month} ({label}) ===")
 
     action = ensure_month(cfg, month, manifest)
     raw = cfg.raw_path(month)
@@ -77,21 +90,24 @@ def ingest_month(
     kept = sort_deterministically(kept, cfg)
     kept = validate_output(kept, month, cfg)
 
-    dest = cfg.processed_path(month)
+    # Which TREE this month lands in is the only thing the scoring months change
+    # (M7-S1). The acquisition, the contract, the one cast, the rules, the
+    # refusals and the writer options above are identical — a scoring month is
+    # not a second pipeline, it is the same pipeline pointed somewhere else.
+    dest = cfg.output_path(month)
+    sidecar = cfg.sidecar_path(month)
     write_processed(kept, dest, cfg)
-    report.write(cfg.rejections_path(month))
+    report.write(cfg.report_path(month))
     # The sidecar is written LAST and only once the month has survived every
     # refusal above it: a month that is refused leaves nothing behind at all,
     # and that includes its rejects (F-005's own condition, configs/data.yaml).
     # Sorted by the same pinned keys as the output so it is re-derivable too;
     # rows whose timestamps are missing sort last, deterministically.
     rejected = sort_deterministically(rejected, cfg)
-    write_processed(rejected, cfg.rejected_path(month), cfg)
-    print(f"  wrote {dest.relative_to(cfg.path_for('processed_dir').parent.parent)}")
-    print(f"  wrote {cfg.rejections_path(month).name}")
-    print(f"  wrote {cfg.rejected_path(month).parent.parent.name}/"
-          f"{cfg.rejected_path(month).parent.name}/{cfg.rejected_path(month).name} "
-          f"({len(rejected):,} rejected row(s) retained)")
+    write_processed(rejected, sidecar, cfg)
+    print(f"  wrote {_display(dest)}")
+    print(f"  wrote {cfg.report_path(month).name}")
+    print(f"  wrote {_display(sidecar)} ({len(rejected):,} rejected row(s) retained)")
     return report
 
 
@@ -115,10 +131,28 @@ def summary_table(reports: list[RejectionReport]) -> str:
     return "\n".join(lines)
 
 
-def ingest(months: list[str] | None = None, cfg: DataConfig | None = None) -> list[RejectionReport]:
-    """Ingest the configured months (or a subset). One command, all 8 months."""
+def ingest(
+    months: list[str] | None = None,
+    cfg: DataConfig | None = None,
+    *,
+    scoring: bool = False,
+) -> list[RejectionReport]:
+    """Ingest the configured months (or a subset). One command, all 8 split months.
+
+    `scoring=True` swaps the DEFAULT work list to `configs/data.yaml:
+    scoring.months` (M7-S1). It is a work-list selector and nothing more — an
+    explicit `--month` resolves its own tree from config membership either way,
+    so the two lists cannot be crossed by a flag.
+    """
     cfg = cfg or load_config()
-    months = list(months) if months else list(cfg.splits.months)
+    default = cfg.scoring_months if scoring else cfg.splits.months
+    months = list(months) if months else list(default)
+    if not months:
+        raise ValueError(
+            "no months to ingest: configs/data.yaml `scoring.months` is empty"
+            if scoring
+            else "no months to ingest: configs/train.yaml names no split months"
+        )
     manifest_path = cfg.path_for("manifest_path")
     manifest = load_manifest(manifest_path)
 

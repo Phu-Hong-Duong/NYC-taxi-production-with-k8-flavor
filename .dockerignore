@@ -29,6 +29,14 @@
 data/raw/
 data/processed/
 data/rejected/
+# The scoring trees (M7-S1) — DVC's, exactly as data/.gitignore names them.
+# 15.4M rows of 2020 that a task pod reads off the staged PVC like every other
+# tree, never out of the image.
+data/scoring/
+data/scoring_rejected/
+# `make contract-probe`'s throwaway acquisition dir (M7-S1): a real TLC file
+# downloaded to be measured. Not DVC's, not the repo's, and not the image's.
+data/probe/
 data/predictions/
 data/analyst.duckdb
 data/analyst.duckdb.wal

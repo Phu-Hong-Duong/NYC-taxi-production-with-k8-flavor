@@ -39,13 +39,22 @@ verify-m0: ## M0 gate: platform healthy + org docs present (BLUEPRINT §9/M0)
 	@bash scripts/verify_m0.sh
 
 # ---- M1 data & analytics platform (role:DE, role:DA) ----
-.PHONY: ingest data duckdb rebuild-proof marts marts-redteam deploy-metabase boards verify-m1
+.PHONY: ingest data duckdb ingest-scoring data-scoring contract-probe rebuild-proof marts \
+        marts-redteam deploy-metabase boards verify-m1
 ingest: ## download->contract->clean->split, counted rejections, sha256 manifest (M1-S1)
 	uv run python -m taxi_mlops.data ingest
 data: ## ingest + duckdb layer + dvc add/push (byte-identical rebuilds; SKIP_DVC=1 leaves the pin alone)
 	@bash scripts/data_pipeline.sh
 duckdb: ## (re)build the DuckDB analyst views and reconcile their counts against the ingest report
 	uv run python -m taxi_mlops.data duckdb
+ingest-scoring: ## ingest configs/data.yaml scoring.months into data/scoring/ — same contract, separate trees (M7-S1)
+	uv run python -m taxi_mlops.data ingest --scoring
+data-scoring: ## ingest-scoring + duckdb + dvc pin of the scoring trees; the 2019 pins are asserted untouched (M7-S1)
+	@bash scripts/data_pipeline_scoring.sh
+contract-probe: ## run any month's REAL file through the contract and report validate-or-refuse; writes nothing (M7-S1)
+	uv run python scripts/contract_probe.py $(PROBE_ARGS)
+contract-probe-fixtures: ## watch the contract REFUSE three schema-break shapes, exit 1 each, nothing written (M7-S1)
+	@bash scripts/contract_probe_fixtures.sh
 rebuild-proof: ## wipe data/processed, rebuild from DVC-pinned raw, diff every sha256 (M1-S2 gate leg)
 	@bash scripts/rebuild_proof.sh
 marts: ## dbt build (models+tests) + publish gold marts to Postgres (SKIP_PUBLISH=1 stops at DuckDB)

@@ -7,6 +7,101 @@ months from now.
 
 ---
 
+## M7
+
+### M7-S1 — a new kind of month, and the difference between a file being wrong and a world being different (2026-08-20, role:DE)
+
+**The one-sentence version.** The program learned to ingest months it will never
+train on — 2020-01, 02 and 03, through the same contract, the same one cast and
+the same counted rejections, into trees the settled 2019 pins cannot see — and
+the two most useful things it learned were that COVID-March passes the contract
+without a murmur, and that a drift metric averaged over that month would too.
+
+**What was built.** `configs/data.yaml` gained a `scoring` block naming three
+months and two directories. `ingest_month` gained nothing except three path
+methods that dispatch on which list a month is in. Four analyst views, two more
+reconciliations, two Make targets, a probe, a fixture drill, fourteen tests.
+
+**Why the trees are separate, and why that is the whole design.** The tempting
+implementation is a fourth split: add `scoring` to the split enum, write into
+`data/processed/scoring/`, done in twenty lines. It would work, and it would be
+a trapdoor. `data/processed` is globbed by the rebuild proof, the analyst's
+`trips_clean`, the dbt sources and — through those — the training matrix, the
+marts and every Metabase card. Every one of those globs was written when that
+directory meant *the settled 2019 months*. Put a 2020 row inside it and nothing
+raises; the numbers simply become numbers about a different world, and each of
+them still looks entirely plausible. So: separate trees, separate DVC pins, and
+the old path methods left refusing scoring months so a future caller cannot
+reach the new data by accident. **The check that this held is one command** —
+`dvc status data/processed.dvc data/rejected.dvc` — and it is the story-exit
+invariant the kickoff asked for.
+
+**The concept underneath: a config split needs its crossing guarded.** Split
+months live in `train.yaml`, scoring months in `data.yaml`, because they are
+different kinds of fact. Splitting a list across two files creates exactly one
+new failure — the same item in both — so `load_config` raises on it. That is the
+general shape: when you separate two things that used to be one, name the
+mistake the separation makes possible and check it, rather than trusting nobody
+will make it.
+
+**The measurement that was allowed to come back either way.** The kickoff could
+have said "demonstrate the contract refusing a 2025 file". It said *measure* what
+the contract does with 2025, and record whichever answer comes back. It
+validated: the `Airport_fee` alias fired, `cbd_congestion_fee` was required and
+present, and THE cast absorbed 2025's int32 id columns. Three mechanisms written
+at M1-S1 against a schema that did not exist yet, meeting the real bytes for the
+first time two milestones later, and agreeing. That is a SURPASS — and it is only
+a SURPASS because nobody had pre-decided the answer. **Note what it does not
+claim**: passing the *structural* contract is not "2025 works". The cleaning
+profile, the rejection rate and whether a 2019-fitted champion means anything on
+2025 data are all unasked.
+
+**Because it validated, the refusal had to be arranged — and arranging it found
+a bug.** A contract whose refusal has never been watched is a claim. So three
+fixtures break the real file's structure in the three ways TLC could actually
+break it, and each must exit **1**. The `rename-required` fixture reported
+`required column(s) absent: ['VendorID']` and said nothing at all about
+`VendorID_v2` sitting in the same frame — because `check_columns` raises in the
+missing branch before the unknown branch can run. Each branch is individually
+correct. An operator reading that message goes looking for a deletion when the
+field has merely moved. **Reading the code would not have shown this; running
+the fixture did.** Both are named now, and the message offers `aliases:` as the
+fix.
+
+**The finding that matters most, and why it was worth stopping to write down.**
+March 2020 is the most drifted month this program will ever hold. Its mean trip
+duration is **13.1645 minutes**. January 2020's is **13.2123**. That is a 0.36%
+move — *less than the ordinary January-to-February wobble of +2.71%*. By its
+marginal distributions, COVID-March is the most normal month of the three. Look
+inside it and the daily series runs from **240,520 trips at 14.878 min on the
+5th** to **5,361 trips at 9.715 min on the 29th**: the city stopped, and the
+month's average is dominated by the ten ordinary days at its head.
+
+A drift job with a monthly window on `trip_duration_minutes` could look straight
+at that and report nothing. The temptation, when that happens two stories from
+now, will be to lower the threshold until the alert agrees — which is precisely
+the move this program's law 4 forbids, and it would be fixing the bar when the
+*instrument* is what has the wrong shape. **Finding it now, before the drift job
+exists, makes that mistake unavailable.** The finding is routed with three
+costed readings and no recommendation, because choosing the window from a number
+just measured is the same error one level up.
+
+**What to look at.** `docs/scoring_months_m7.md` §8 (the two signatures, side by
+side — statistical drift writes 2.9M rows, schema drift writes *nothing*, so a
+schema break produces no drift metric at all and an empty dashboard looks
+healthy) · §9 (F-045's table) · `tests/unit/test_data_scoring.py`, in particular
+the two red teams: a truncated month, and a sidecar relabelled under the wrong
+rule *with its monthly total left correct*.
+
+**What to try yourself.** Run `make contract-probe PROBE_ARGS="--month 2025-02"`
+— a different month of the same year, thirty seconds, writes nothing. Then run
+`--fixture unknown-column` against it and watch the exit code, not the message.
+Then ask the layer the one question this story exists to make askable:
+`SELECT month, ROUND(AVG(trip_duration_minutes),4) FROM trips_scoring GROUP BY 1`
+— and then ask it again grouped by day, and see how much a monthly mean can hide.
+
+---
+
 ## M6
 
 ### M6-S5 (leg 2) — the gate that graded a milestone, and the two things it caught in our own prose (2026-08-20, role:SRE)
