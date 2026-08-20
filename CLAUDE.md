@@ -2101,7 +2101,7 @@ can never disagree (the port-family twins lesson, applied before it bit).
   of its requests March 2020 is not a strange month: the city did not start
   taking different taxi trips, it stopped taking taxi trips. Volume ratio
   **0.3913** against the reference's trips/day. So **A-8 (input drift) correctly
-  stayed inactive and A-9 (volume) FIRED at T+341.5 s** — and had A-9 not existed
+  stayed inactive and A-9 (volume) FIRED at T+331.5 s** — and had A-9 not existed
   as a separate signal this stack would have watched the collapse in silence with
   every drift panel green. `docs/slo_serving.md` §8.1 argued *before the run* that
   **PSI is a distance between SHARES, so halve every count and PSI is exactly

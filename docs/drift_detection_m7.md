@@ -17,7 +17,7 @@ through a drift monitor comparing it with the champion's training distribution:
 | max **input** column PSI | 0.0103 | 0.0087 | **0.0217** | 0.0323 (val) · 0.0137 (test) |
 | trips/day ÷ reference | 0.8336 | 0.8776 | **0.3913** | 0.8216 (val) · 0.7899 (test) |
 | A-8 input drift (bar: 2 columns ≥ 0.10) | inactive | inactive | **inactive** | — |
-| A-9 volume (bar: < 0.50) | inactive | inactive | **FIRED at T+341.5 s** | — |
+| A-9 volume (bar: < 0.50) | inactive | inactive | **FIRED at T+331.5 s** | — |
 
 **Read the top row twice.** COVID March's most-moved input column sits at PSI
 **0.0217** — *lower than an ordinary July 2019 does* (0.0323). By the shape of
@@ -100,7 +100,7 @@ including A-9 itself *for the two ordinary months*, which is the prediction that
 distinguishes a working bar from a bar so low that any month trips it.
 
 ```
-A-9 ScoringVolumeCollapse   month=2020-03   pending T+41.4s -> FIRING T+341.5s
+A-9 ScoringVolumeCollapse   month=2020-03   pending T+31.5s -> FIRING T+331.5s
                                             (5m sustain, honoured to 1.5 s)
 A-9                         month=2020-01   never fired    — as predicted
 A-9                         month=2020-02   never fired    — as predicted
