@@ -1364,3 +1364,49 @@ the seed line are earned by THIS project.
     without saying "scratch"). Historical ledger rows are corrected with a dated
     note BESIDE the original, never rewritten: decisions were made from what
     they said (the `error_memo_m2.md` §9 precedent).
+
+92. **A pushed metric arrives with the WRONG `job` label unless one flag says
+    otherwise, and every rule that selects on it then matches nothing —
+    silently.** Prometheus overwrites a scraped sample's `job` and `instance`
+    with the target's own, which is correct for a service reporting on itself
+    and exactly wrong for a pushgateway reporting on somebody else. Without
+    `honor_labels: true` the drift series arrive as `job="pushgateway"`, the
+    pusher's `job="taxi-drift"` is demoted to `exported_job`, and every rule in
+    the `crosstown-drift` group **evaluates over nothing**. Nothing errors: the
+    rules stay `health=ok` and sit `inactive` forever, which is indistinguishable
+    from a healthy system (#78's family). The related trap is worse and was
+    avoided by luck as much as design: had the gateway ALSO carried a
+    `prometheus.io/scrape` annotation it would have been picked up by the chart's
+    generic endpoints job, which does not set the flag — so a *correct* dedicated
+    job and a *label-mangling* accidental one would both have scraped it, giving
+    two contradictory copies of every number. One gateway, one scrape job, one
+    flag (M7-S3).
+
+93. **A checker whose unit of judgement is coarser than the fact it is judging
+    reports a failure over a system behaving exactly as predicted.** The drift
+    drill predicts that A-9 FIRES for 2020-03 *and* stays quiet for 2020-01 and
+    2020-02 — three statements about one rule name — while its `fired_at` map was
+    keyed on the alert name alone. So it printed `ok A-9 FIRED — as predicted`
+    and `FAIL A-9 fired and was predicted INACTIVE` in the same run, both correct
+    readings of a prediction it could not express, and went RED over a perfect
+    result. #67 with the grain wrong instead of the population wrong. The repair
+    is never a looser bar: read Prometheus's per-series `alerts` array, which is
+    **strictly the stronger claim** — a bar so low that an ordinary January trips
+    it passes a name-level check and fails a per-series one. And note what
+    survived the repair unchanged: the PREDICTION object, because the defect was
+    in the judge (M7-S3).
+
+94. **A second witness that cannot be READ reports maximum disagreement, which
+    is the most alarming thing it could say and the least true.** The Evidently
+    corroboration printed `the two instruments DISAGREE` for every column with an
+    empty ranking on one side; nothing had disagreed, the parser was looking for
+    a `metric_id` and a `status` field that the payload does not have (it carries
+    `metric_name`, a structured `config` and `value`). Two lessons, and the
+    second is the general one. First: read a third-party payload's SHAPE off a
+    real object before parsing it — one throwaway script printing `snapshot.dict()`
+    answered it in seconds. Second: **check the failure DIRECTION of any
+    cross-instrument check you write.** A comparison that degrades toward "they
+    agree" hides its own breakage; one that degrades toward "they disagree"
+    screams — and both are wrong, so what the code must do is distinguish "no
+    verdict" from "a verdict of disagreement". A quiet `nan` in the output column
+    was the only honest signal in that run, and it was easy to read past (M7-S3).
