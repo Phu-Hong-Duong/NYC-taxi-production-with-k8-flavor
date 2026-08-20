@@ -39,7 +39,7 @@ if [[ ! -f "$MANIFEST" ]]; then
   echo "[schedule] FAIL: $MANIFEST is missing — run 'make image-load' first" >&2
   exit 1
 fi
-IMAGE_REF="$(python3 -c "import json,sys;print(json.load(open('$MANIFEST'))['image'])")"
+IMAGE_REF="$(python3 -c "import json,sys;print(json.load(open('$MANIFEST'))['image_ref'])")"
 IMAGE_SHA="${IMAGE_REF##*:}"
 echo "[schedule] task image: $IMAGE_REF"
 
