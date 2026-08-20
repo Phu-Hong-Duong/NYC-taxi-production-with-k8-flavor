@@ -104,6 +104,16 @@ QUERIES: list[tuple[str, str, str]] = [
         """,
     ),
     (
+        "1",
+        "the whole-month row — the number a monthly window would look at",
+        """
+        select month, count(*) as trips,
+               round(avg(trip_duration_minutes), 4) as mean_duration_min,
+               round(avg(trip_distance), 4) as mean_distance_mi
+        from analyst.trips_scoring group by 1 order by 1
+        """,
+    ),
+    (
         "2",
         "the three Marches, and the two ordinary months beside them",
         f"""

@@ -158,9 +158,14 @@ def test_the_boards_are_exactly_the_ones_the_gates_name():
     error-segment board by name. An unnamed fourth board is a different
     deliverable; a missing one is a missing gate leg.
 
-    Widened at M2-S4 rather than deleted: the assertion's value is that the set is
-    CLOSED, not that it has two members."""
-    assert {b["name"] for b in boards()} == {"Data health", "KPI board", "Error segments (M2)"}
+    Widened at M2-S4 and again at M7-S5 rather than deleted: the assertion's value
+    is that the set is CLOSED, not that it has two members."""
+    assert {b["name"] for b in boards()} == {
+        "Data health",
+        "KPI board",
+        "Error segments (M2)",
+        "Predictions & drift (M7)",
+    }
 
 
 def test_every_card_cites_a_kpi_id_that_the_kpi_doc_actually_defines():
@@ -221,13 +226,87 @@ def test_every_card_queries_a_mart_and_never_a_raw_table_or_a_parquet_path():
     analyst DuckDB, would give the repo a second definition of `split`/`month`
     and would not be reachable by Metabase anyway."""
     marts = {"marts.trips_clean", "marts.zone_hourly_stats", "marts.monthly_kpis",
-             "marts.rejections_by_rule", "marts.error_segments"}
+             "marts.rejections_by_rule", "marts.error_segments", "marts.scoring_daily"}
     for board in boards():
         for card in board["cards"]:
             sql = card["sql"]
             assert any(m in sql for m in marts), f"{card['name']} queries no mart"
             assert "read_parquet" not in sql and ".parquet" not in sql
             assert "analyst" not in sql
+
+
+# ------------------------------------- the predictions & drift board (M7-S5) ----
+
+DRIFT_BOARD = "Predictions & drift (M7)"
+MONITORING_IDS = {"KPI-14", "KPI-15", "KPI-16", "KPI-17"}
+
+
+def drift_board():
+    (board,) = [b for b in boards() if b["name"] == DRIFT_BOARD]
+    return board
+
+
+def test_the_drift_board_cites_only_MONITORING_ids():
+    """KPI-14..17 are new ids because the WINDOW is new — a scoring month the
+    champion was never judged on. A promotion id (KPI-09/10) or a segment id
+    (KPI-11/12/13) on this board would put a number measured on the 2019 holdout
+    beside numbers measured on 2020 data under the same heading, which is exactly
+    the confusion the id law exists to prevent."""
+    cited = {c["kpi"] for c in drift_board()["cards"]}
+    assert cited <= MONITORING_IDS, f"non-monitoring id: {cited - MONITORING_IDS}"
+
+
+def test_no_drift_card_computes_a_margin_against_a_floor():
+    """docs/drift_memo_m7.md §6.1. The honest floor is FITTED on the 2019 train
+    months; a margin computed against it on 2020 data would publish a comparison
+    no gate ever made, against a bar chosen for a different world. The mart
+    carries no floor column — this keeps a card from inventing one."""
+    for card in drift_board()["cards"]:
+        sql = card["sql"].lower()
+        assert "floor" not in sql, card["name"]
+        assert "margin" not in sql, card["name"]
+        assert "kpi_13" not in sql, card["name"]
+
+
+def test_kpi_16_the_signed_bias_is_on_the_board_and_is_a_series():
+    """The one published number that distinguishes over-quoting from
+    under-quoting. In March 2020 it climbs +0.0369 -> +5.3197 and never turns
+    negative — a diagnosis, where KPI-14 alone is only a degradation. A scalar
+    would average a monotone climb into a shrug."""
+    kpi16 = [c for c in drift_board()["cards"] if c["kpi"] == "KPI-16"]
+    assert kpi16, "the drift board renders no signed bias"
+    assert any(c["display"] in {"line", "bar"} for c in kpi16)
+
+
+def test_the_daily_series_is_plotted_daily_and_not_rolled_up_to_the_month():
+    """F-045, three times measured: at monthly grain the input signal is flat
+    through a catastrophe because 68.231% of March 2020's rows pre-date it. A
+    board that only ever GROUPs BY month reproduces the blindness the mart's
+    daily grain exists to remove."""
+    dailies = [
+        c for c in drift_board()["cards"]
+        if c["display"] in {"line", "bar"} and "pickup_date" in c["sql"]
+    ]
+    assert len(dailies) >= 3, "the drift board barely uses the daily grain"
+    for card in dailies:
+        assert "GROUP BY month" not in card["sql"]
+
+
+def test_the_within_tolerance_card_reads_the_tolerance_off_the_mart():
+    """The tolerance travels on every row of scoring_daily, from
+    configs/train.yaml. A card hardcoding 5 keeps rendering happily after the
+    configured tolerance changes, under a name that no longer describes it."""
+    kpi15 = [c for c in drift_board()["cards"] if c["kpi"] == "KPI-15"]
+    assert kpi15
+    assert any("tolerance_minutes" in c["sql"] for c in kpi15)
+
+
+def test_the_board_shows_which_model_version_produced_the_series():
+    """A spliced series — two champions in one line — averages two different
+    models into invisibility. The mart asserts model_versions_seen = 1 per day
+    by dbt test; the board has to make the version visible for that to matter to
+    a reader."""
+    assert any("model_version" in c["sql"] for c in drift_board()["cards"])
 
 
 def test_board_cards_declare_a_grid_position_that_fits_metabases_24_columns():

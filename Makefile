@@ -53,7 +53,7 @@ verify-m0: ## M0 gate: platform healthy + org docs present (BLUEPRINT §9/M0)
 
 # ---- M1 data & analytics platform (role:DE, role:DA) ----
 .PHONY: ingest data duckdb ingest-scoring data-scoring contract-probe rebuild-proof marts \
-        marts-redteam deploy-metabase boards verify-m1
+        marts-redteam deploy-metabase boards board-cards verify-m1
 ingest: ## download->contract->clean->split, counted rejections, sha256 manifest (M1-S1)
 	uv run python -m taxi_mlops.data ingest
 data: ## ingest + duckdb layer + dvc add/push (byte-identical rebuilds; SKIP_DVC=1 leaves the pin alone)
@@ -78,6 +78,8 @@ deploy-metabase: ## Metabase container, app-db in Postgres, port 3030, boards fr
 	@bash scripts/deploy_metabase.sh
 boards: ## converge the Metabase boards from analytics/metabase/boards/*.json (no deploy)
 	uv run python scripts/metabase_boards.py
+board-cards: ## execute EVERY board card against the warehouse; an EMPTY panel is a FAILURE (gotcha #78)
+	@uv run python scripts/board_cards_execute.py "$(BOARD)"
 verify-m1: ## M1 gate: rebuild + DVC match; corrupt-file refusal; dbt tests green (one red-teamed); boards render
 	@bash scripts/verify_m1.sh
 

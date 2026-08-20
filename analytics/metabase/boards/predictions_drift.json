@@ -1,0 +1,96 @@
+{
+  "name": "Predictions & drift (M7)",
+  "description": "What the serving champion (models:/nyc-taxi-eta@champion, registry version 2, feature set v2) quoted on the 2020 SCORING months, and what happened to those quotes when the world moved. Source: marts.scoring_daily - the daily monitoring mart M7-S2 published from taxi_mlops.training.evaluate's row-level output. Every card cites a MONITORING id (KPI-14/15/16/17): same instrument as everything else in this program, new window - a scoring month the champion was never judged on. KPI-09/KPI-10 belong to the held-out 2019-08 test month and appear on NO card here, by law (gotcha #15). There is no floor column and no margin column in this mart on purpose: the honest floor is fitted on the 2019 train months, so a margin computed against it on 2020 data would publish a comparison no gate ever made. Companion document: docs/drift_memo_m7.md.",
+  "cards": [
+    {
+      "name": "KPI-17 · trips scored per day — the collapse, and everything else is downstream of it",
+      "kpi": "KPI-17",
+      "display": "line",
+      "row": 0, "col": 0, "size_x": 16, "size_y": 6,
+      "sql": "SELECT pickup_date, kpi_17_scored_trips AS trips_scored FROM marts.scoring_daily ORDER BY pickup_date",
+      "visualization_settings": {
+        "graph.dimensions": ["pickup_date"],
+        "graph.metrics": ["trips_scored"],
+        "card.description": "The daily series is the whole reason this mart is daily. 2020-03-05 peaks at 240,520 trips; 2020-03-29 reads 5,361 - a 97.8% fall in 24 days. The month's own average is dominated by the ten ordinary days at its head (68.231% of March's rows fall before the 11th), which is why the input-drift alert stayed silent at monthly grain and the VOLUME alert is what fired. docs/drift_memo_m7.md sections 1.2 and 2."
+      }
+    },
+    {
+      "name": "KPI-14 / KPI-15 · the monitoring headline, per month",
+      "kpi": "KPI-14",
+      "display": "table",
+      "row": 0, "col": 16, "size_x": 8, "size_y": 6,
+      "sql": "SELECT month, SUM(kpi_17_scored_trips) AS kpi_17_trips, ROUND((SUM(kpi_14_mae_min * kpi_17_scored_trips) / SUM(kpi_17_scored_trips))::numeric, 4) AS kpi_14_mae_min, ROUND((SUM(kpi_15_within_tol_pct * kpi_17_scored_trips) / SUM(kpi_17_scored_trips))::numeric, 3) AS kpi_15_within_pct, ROUND((SUM(kpi_16_mean_signed_error_min * kpi_17_scored_trips) / SUM(kpi_17_scored_trips))::numeric, 4) AS kpi_16_bias_min, MAX(model_version) AS model_version FROM marts.scoring_daily GROUP BY month ORDER BY month",
+      "visualization_settings": {
+        "card.description": "Read at this grain March 2020 looks like a slightly worse month: KPI-14 3.3227 against January's 3.0295. It was not a slightly worse month - see every other card. The row-weighted monthly average is weighted by exactly the rows that disappeared. model_version is on the card because a spliced series (two champions in one line) would average two different models into invisibility; the mart asserts model_versions_seen = 1 per day by dbt test."
+      }
+    },
+    {
+      "name": "KPI-14 · daily MAE — where the event actually is",
+      "kpi": "KPI-14",
+      "display": "line",
+      "row": 6, "col": 0, "size_x": 16, "size_y": 6,
+      "sql": "SELECT pickup_date, ROUND(kpi_14_mae_min::numeric, 4) AS kpi_14_mae_min FROM marts.scoring_daily ORDER BY pickup_date",
+      "visualization_settings": {
+        "graph.dimensions": ["pickup_date"],
+        "graph.metrics": ["kpi_14_mae_min"],
+        "card.description": "January and February sit between 2.40 and 3.58. March climbs from 2.8598 on the 9th to 6.3693 on the 26th - 78% worse than January's worst day. The dips are Saturdays and Sundays: dayofweek is the model's only vocabulary for 'the city is quiet today', and on the two days a week it expected a quiet city its quotes were less wrong (drift memo section 6.4)."
+      }
+    },
+    {
+      "name": "KPI-16 · signed bias — the number that says WHICH WAY it broke",
+      "kpi": "KPI-16",
+      "display": "line",
+      "row": 6, "col": 16, "size_x": 8, "size_y": 6,
+      "sql": "SELECT pickup_date, ROUND(kpi_16_mean_signed_error_min::numeric, 4) AS kpi_16_bias_min FROM marts.scoring_daily WHERE month = '2020-03' ORDER BY pickup_date",
+      "visualization_settings": {
+        "graph.dimensions": ["pickup_date"],
+        "graph.metrics": ["kpi_16_bias_min"],
+        "card.description": "An absolute error cannot tell a model quoting three minutes too LONG from one quoting three minutes too SHORT, and in a month when the streets emptied those are opposite diagnoses with opposite fixes. This climbs +0.0369 (03-09) to +5.3197 (03-26) and never goes negative after the 9th: the champion was systematically OVER-quoting, because it kept describing the city it was fitted on. This is why KPI-16 is a separate id and not a footnote on KPI-14."
+      }
+    },
+    {
+      "name": "KPI-14 · what was quoted against what happened (2020-03)",
+      "kpi": "KPI-14",
+      "display": "line",
+      "row": 12, "col": 0, "size_x": 12, "size_y": 6,
+      "sql": "SELECT pickup_date, ROUND(mean_actual_min::numeric, 3) AS mean_actual_min, ROUND(mean_predicted_min::numeric, 3) AS mean_quoted_min FROM marts.scoring_daily WHERE month = '2020-03' ORDER BY pickup_date",
+      "visualization_settings": {
+        "graph.dimensions": ["pickup_date"],
+        "graph.metrics": ["mean_actual_min", "mean_quoted_min"],
+        "card.description": "The two lines separate on 2020-03-11 and never rejoin. On 2020-03-26 the mean actual trip took 9.699 minutes and the champion's mean quote was 15.019. Nothing was broken: the median trip went 49.3% faster (10.2 to 15.2 mph, drift memo section 3.1) while the requests themselves looked entirely ordinary, so the model answered the question it was trained on."
+      }
+    },
+    {
+      "name": "KPI-15 · within-5-minutes rate, daily — the rider's view",
+      "kpi": "KPI-15",
+      "display": "line",
+      "row": 12, "col": 12, "size_x": 12, "size_y": 6,
+      "sql": "SELECT pickup_date, ROUND(kpi_15_within_tol_pct::numeric, 3) AS kpi_15_within_pct, tolerance_minutes FROM marts.scoring_daily ORDER BY pickup_date",
+      "visualization_settings": {
+        "graph.dimensions": ["pickup_date"],
+        "graph.metrics": ["kpi_15_within_pct"],
+        "card.description": "The tolerance travels on every row of the mart (tolerance_minutes, from configs/train.yaml) rather than living in this SQL - a card that hardcoded 5 would keep rendering after the configured tolerance changed. On 2020-03-26 this reads 53.723% against a fleet norm above 83%: barely half of riders got a usable quote."
+      }
+    },
+    {
+      "name": "KPI-14 / KPI-17 · the three Marches (and the two ordinary months beside them)",
+      "kpi": "KPI-14",
+      "display": "table",
+      "row": 18, "col": 0, "size_x": 12, "size_y": 5,
+      "sql": "WITH p AS (SELECT CASE WHEN month <> '2020-03' THEN month WHEN pickup_date <= DATE '2020-03-10' THEN '2020-03 (01-10)' WHEN pickup_date <= DATE '2020-03-21' THEN '2020-03 (11-21)' ELSE '2020-03 (22-31)' END AS period, kpi_17_scored_trips AS trips, kpi_14_mae_min, kpi_15_within_tol_pct, kpi_16_mean_signed_error_min FROM marts.scoring_daily) SELECT period, SUM(trips) AS kpi_17_trips, ROUND((SUM(kpi_14_mae_min * trips) / SUM(trips))::numeric, 4) AS kpi_14_mae_min, ROUND((SUM(kpi_15_within_tol_pct * trips) / SUM(trips))::numeric, 3) AS kpi_15_within_pct, ROUND((SUM(kpi_16_mean_signed_error_min * trips) / SUM(trips))::numeric, 4) AS kpi_16_bias_min FROM p GROUP BY period ORDER BY period",
+      "visualization_settings": {
+        "card.description": "The memo's analytical device, rendered. The cut dates are chosen from the data, not from a news archive: the daily series is flat through the 10th, falls continuously from the 11th, and is flat at its floor from the 22nd. 68.231% of March's rows are 'before', 3.321% are 'after' - so a monthly aggregate of this month is mostly a description of an ordinary month."
+      }
+    },
+    {
+      "name": "KPI-14 · the worst day of each month, and the best",
+      "kpi": "KPI-14",
+      "display": "table",
+      "row": 18, "col": 12, "size_x": 12, "size_y": 5,
+      "sql": "WITH ranked AS (SELECT month, pickup_date, kpi_14_mae_min, kpi_17_scored_trips, ROW_NUMBER() OVER (PARTITION BY month ORDER BY kpi_14_mae_min) AS best, ROW_NUMBER() OVER (PARTITION BY month ORDER BY kpi_14_mae_min DESC) AS worst FROM marts.scoring_daily) SELECT month, MAX(CASE WHEN best = 1 THEN pickup_date END) AS best_day, ROUND(MAX(CASE WHEN best = 1 THEN kpi_14_mae_min END)::numeric, 4) AS best_mae, MAX(CASE WHEN worst = 1 THEN pickup_date END) AS worst_day, ROUND(MAX(CASE WHEN worst = 1 THEN kpi_14_mae_min END)::numeric, 4) AS worst_mae FROM ranked WHERE best = 1 OR worst = 1 GROUP BY month ORDER BY month",
+      "visualization_settings": {
+        "card.description": "January's worst day is 3.5757 and March's is 6.3693. The two best days are worth a second look as well: 2020-01-19 is a Sunday and 2020-02-17 is Presidents' Day - a federal holiday the feature set knows about by name, from the table make holidays derives (F-019)."
+      }
+    }
+  ]
+}
