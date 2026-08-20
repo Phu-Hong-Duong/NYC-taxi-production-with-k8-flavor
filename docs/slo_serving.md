@@ -583,11 +583,24 @@ January's reassuring number is still pinned to the wall*. This is gotcha #78's
 empty-panel disease inverted — not a blank rectangle that looks like calm, but a
 stale number that looks like health.
 
-**40 days**, because the cadence is monthly: a month plus a week plus a weekend.
-One late run does not page; a stopped job does. Every push carries
+**40 days — `3456000` seconds, which is the literal the rule contains** — because
+the cadence is monthly: a month plus a week plus a weekend. One late run does not
+page; a stopped job does. Every push carries
 `taxi_drift_last_run_timestamp_seconds` and
-`taxi_mlops.monitoring.pushgateway.push_metrics` **refuses a payload without
-it** — a guard in a type rather than in a habit.
+`taxi_mlops.monitoring.pushgateway.push_metrics` **refuses a payload without a
+metric named `*_last_run_timestamp_seconds`** — a guard in a type rather than in
+a habit.
+
+The seconds are written here, and not just "40 days", on purpose: a check that
+compares a rule against the document arguing it has to compare the number the
+rule actually holds. Rendering `3456000` as "40 days" in the doc and leaving the
+check to do the arithmetic is how a threshold ends up argued nowhere (the first
+run of `test_every_rule_threshold_appears_in_the_document_that_argues_it` failed
+on exactly this, and passed A-4's `1800` **by accident** — `"1800".rstrip("0")`
+is `"18"`, which matches `18.24 s` in §7.1. Gotcha #76, found by the test on
+itself.)
+
+**A-4's freshness window is 30 minutes — `1800` seconds** (§6's dated update).
 
 ### 8.6 What these targets deliberately do not cover
 

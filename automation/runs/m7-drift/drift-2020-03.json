@@ -1,0 +1,261 @@
+{
+  "columns": [
+    {
+      "column": "hour",
+      "current_bins": 24,
+      "kind": "categorical",
+      "psi": 0.009790060767708815,
+      "reference_bins": 24,
+      "top_moves": [
+        {
+          "bin": "23",
+          "current_share": 0.032226717187254623,
+          "delta": -0.008765660133698623,
+          "reference_share": 0.04099237732095325
+        },
+        {
+          "bin": "22",
+          "current_share": 0.0443522688304909,
+          "delta": -0.008153104182730929,
+          "reference_share": 0.05250537301322183
+        },
+        {
+          "bin": "21",
+          "current_share": 0.04879119283829624,
+          "delta": -0.007307070888093542,
+          "reference_share": 0.056098263726389784
+        },
+        {
+          "bin": "8",
+          "current_share": 0.05189881274809318,
+          "delta": 0.005403498701273157,
+          "reference_share": 0.04649531404682002
+        },
+        {
+          "bin": "17",
+          "current_share": 0.06414206184916613,
+          "delta": 0.0045303164734084855,
+          "reference_share": 0.05961174537575764
+        }
+      ],
+      "unseen_share": 0
+    },
+    {
+      "column": "dayofweek",
+      "current_bins": 7,
+      "kind": "categorical",
+      "psi": 0.021666901450341558,
+      "reference_bins": 7,
+      "top_moves": [
+        {
+          "bin": "6",
+          "current_share": 0.10687200520175277,
+          "delta": -0.03723848620190348,
+          "reference_share": 0.14411049140365625
+        },
+        {
+          "bin": "1",
+          "current_share": 0.15171982442388451,
+          "delta": 0.02658493927421604,
+          "reference_share": 0.12513488514966847
+        },
+        {
+          "bin": "0",
+          "current_share": 0.13972859034060017,
+          "delta": 0.016705490691796027,
+          "reference_share": 0.12302309964880415
+        },
+        {
+          "bin": "5",
+          "current_share": 0.13896406564329802,
+          "delta": -0.01658058073311386,
+          "reference_share": 0.15554464637641188
+        },
+        {
+          "bin": "2",
+          "current_share": 0.1577498688199083,
+          "delta": 0.013472261462059487,
+          "reference_share": 0.1442776073578488
+        }
+      ],
+      "unseen_share": 0
+    },
+    {
+      "column": "PULocationID",
+      "current_bins": 259,
+      "kind": "categorical",
+      "psi": 0.014301722476400922,
+      "reference_bins": 263,
+      "top_moves": [
+        {
+          "bin": "138",
+          "current_share": 0.01740870900134555,
+          "delta": -0.008780391146419417,
+          "reference_share": 0.026189100147764967
+        },
+        {
+          "bin": "264",
+          "current_share": 0.005720367799467953,
+          "delta": -0.003976040414680173,
+          "reference_share": 0.009696408214148126
+        },
+        {
+          "bin": "238",
+          "current_share": 0.023564591313384915,
+          "delta": 0.0035663518166487787,
+          "reference_share": 0.019998239496736136
+        },
+        {
+          "bin": "140",
+          "current_share": 0.021339193558726793,
+          "delta": 0.0032383600977433334,
+          "reference_share": 0.01810083346098346
+        },
+        {
+          "bin": "263",
+          "current_share": 0.021759444712212757,
+          "delta": 0.0030856974760141917,
+          "reference_share": 0.018673747236198565
+        }
+      ],
+      "unseen_share": 0
+    },
+    {
+      "column": "DOLocationID",
+      "current_bins": 261,
+      "kind": "categorical",
+      "psi": 0.015114526743265324,
+      "reference_bins": 263,
+      "top_moves": [
+        {
+          "bin": "264",
+          "current_share": 0.0036811830256522795,
+          "delta": -0.004809562351514857,
+          "reference_share": 0.008490745377167137
+        },
+        {
+          "bin": "230",
+          "current_share": 0.02577099466562559,
+          "delta": -0.004289666766180984,
+          "reference_share": 0.030060661431806576
+        },
+        {
+          "bin": "236",
+          "current_share": 0.044679243900676915,
+          "delta": 0.0033160560330178362,
+          "reference_share": 0.04136318786765908
+        },
+        {
+          "bin": "75",
+          "current_share": 0.015522497004141798,
+          "delta": 0.003098172614319635,
+          "reference_share": 0.012424324389822163
+        },
+        {
+          "bin": "140",
+          "current_share": 0.0211807938099956,
+          "delta": 0.0027979251799585894,
+          "reference_share": 0.018382868630037012
+        }
+      ],
+      "unseen_share": 0
+    },
+    {
+      "column": "passenger_count",
+      "current_bins": 11,
+      "kind": "categorical",
+      "psi": 0.017085618281808157,
+      "reference_bins": 11,
+      "top_moves": [
+        {
+          "bin": "1",
+          "current_share": 0.7262564034031186,
+          "delta": 0.0266994937028866,
+          "reference_share": 0.699556909700232
+        },
+        {
+          "bin": "2",
+          "current_share": 0.13593751112953267,
+          "delta": -0.01367891785782649,
+          "reference_share": 0.14961642898735916
+        },
+        {
+          "bin": "5",
+          "current_share": 0.03243226375627197,
+          "delta": -0.009709555784777738,
+          "reference_share": 0.04214181954104971
+        },
+        {
+          "bin": "None",
+          "current_share": 0.01265332468183528,
+          "delta": 0.00821498774087975,
+          "reference_share": 0.004438336940955531
+        },
+        {
+          "bin": "3",
+          "current_share": 0.0355972060590787,
+          "delta": -0.006518924320191993,
+          "reference_share": 0.04211613037927069
+        }
+      ],
+      "unseen_share": 0
+    },
+    {
+      "column": "trip_duration_minutes",
+      "current_bins": 12,
+      "kind": "numeric",
+      "psi": 0.012484979364000852,
+      "reference_bins": 13,
+      "top_moves": [
+        {
+          "bin": "[30,45)",
+          "current_share": 0.046287662762525536,
+          "delta": -0.01280541161678226,
+          "reference_share": 0.059093074379307796
+        },
+        {
+          "bin": "[5,7.5)",
+          "current_share": 0.1648785358843268,
+          "delta": 0.011117603952466831,
+          "reference_share": 0.15376093193185997
+        },
+        {
+          "bin": "[3,5)",
+          "current_share": 0.11254760048123676,
+          "delta": 0.009763263631489119,
+          "reference_share": 0.10278433684974764
+        },
+        {
+          "bin": "[7.5,10)",
+          "current_share": 0.15032203991741505,
+          "delta": 0.007605424244871206,
+          "reference_share": 0.14271661567254385
+        },
+        {
+          "bin": "[45,60)",
+          "current_share": 0.0113976590077392,
+          "delta": -0.00695092709489714,
+          "reference_share": 0.01834858610263634
+        }
+      ],
+      "unseen_share": 0
+    }
+  ],
+  "computed_at": "2026-08-20T04:28:33+00:00",
+  "current_rows": 2948237,
+  "current_trips_per_day": 95104.41935483871,
+  "max_input_psi": 0.021666901450341558,
+  "month": "2020-03",
+  "reference": "train-2019",
+  "reference_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "reference_rows": 43987422,
+  "reference_trips_per_day": 243024.43093922653,
+  "volume_ratio": 0.3913368667803675
+}

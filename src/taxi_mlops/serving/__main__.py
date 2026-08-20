@@ -63,6 +63,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pu", type=int, default=132, help="PULocationID (132 = JFK)")
     parser.add_argument("--do", dest="do", type=int, default=48, help="DOLocationID")
     parser.add_argument("--passengers", type=float, default=1.0)
+    # M7-S3, F-035's client half. OFF BY DEFAULT, and that is the honest
+    # setting: the gateway has no hostPort (M7 law 1), so a host-side caller
+    # needs a port-forward, and a quote that tried to push by default would fail
+    # its metrics leg on every laptop that has not opened one. The refusal
+    # itself is unaffected either way — exit 2 is the signal, the counter is the
+    # record of it. `record_refusal` is written so it cannot break a quote.
+    parser.add_argument(
+        "--push-metrics",
+        default=None,
+        metavar="URL",
+        help="pushgateway base URL; a REFUSAL increments taxi_quote_refusals_total "
+        "there (A-3's client half). Absent, nothing is pushed.",
+    )
     args = parser.parse_args(argv)
 
     endpoint = Endpoint(
@@ -81,6 +94,14 @@ def main(argv: list[str] | None = None) -> int:
         response = infer([request], endpoint, features_cfg=features_cfg)
     except QuoteRefused as refusal:
         print(f"[quote] REFUSED ({refusal.http_status}): {refusal}", file=sys.stderr)
+        if args.push_metrics:
+            # Imported here, not at module scope: the quote path must not gain a
+            # monitoring import it only needs when a flag is passed, and
+            # `taxi_mlops.serving` is what the parity test and the load client
+            # both import.
+            from ..monitoring.client_counters import record_refusal
+
+            record_refusal(url=args.push_metrics)
         return 2
 
     minutes = minutes_of(response)

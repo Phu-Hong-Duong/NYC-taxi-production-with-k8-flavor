@@ -58,9 +58,17 @@ from dataclasses import dataclass, field
 SERVICE_NAME = "prometheus-prometheus-pushgateway"
 DEFAULT_IN_CLUSTER_URL = f"http://{SERVICE_NAME}.monitoring.svc.cluster.local:9091"
 
-#: The metric a freshness guard reads. Named here rather than typed at the call
-#: site so the rule file, the pusher and the tests all point at one string.
+#: The drift job's freshness stamp, named here rather than typed at the call site
+#: so the rule file, the pusher and the tests all point at one string.
 FRESHNESS_METRIC = "taxi_drift_last_run_timestamp_seconds"
+
+#: The SUFFIX that makes a metric a freshness stamp. `push_metrics` requires at
+#: least one metric whose name ends with it — a convention rather than a fixed
+#: name, because there are three pushers here (drift, the quote client, the
+#: served-version reader) and each needs its OWN stamp: one shared timestamp
+#: would mean a live drift job vouching for a dead version reader. Every rule
+#: that reads a pushed value pairs it with the stamp from its own job.
+FRESHNESS_SUFFIX = "_last_run_timestamp_seconds"
 
 
 class PushError(RuntimeError):
@@ -146,11 +154,12 @@ def push_metrics(
     """
     if not metrics:
         raise PushError("refusing to push an empty metric set — that is a delete in disguise.")
-    if not any(m.name == FRESHNESS_METRIC for m in metrics):
+    if not any(m.name.endswith(FRESHNESS_SUFFIX) for m in metrics):
         raise PushError(
-            f"refusing to push without {FRESHNESS_METRIC}. A pushed metric persists "
-            "after its producer dies, so a drift value with no freshness stamp is "
-            "indistinguishable from a drift job that stopped running months ago."
+            f"refusing to push without a metric named *{FRESHNESS_SUFFIX}. A pushed "
+            "metric persists after its producer dies, so a value with no freshness "
+            "stamp beside it is indistinguishable from a job that stopped running "
+            "months ago — and it looks like health rather than like an empty panel."
         )
 
     target = url.rstrip("/") + _grouping_path(job, grouping or {})
