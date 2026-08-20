@@ -1446,3 +1446,26 @@ the seed line are earned by THIS project.
     and is not true. Note the near-miss that makes this worse than it looks: an
     uncaught Python exception exits **1**, which in this vocabulary means
     *REFUSED* — a crash would have been read as a verdict (M7-S4).
+
+97. **`make` collapses every failing recipe to exit 2, so an exit-code
+    vocabulary does not survive being detached as a make TARGET.** The retrain
+    was given 0/1/2/3/4 — *passed · refused · could not be built · no verdict ·
+    crashed* — and #96 had just added the 4 so a crash could not wear a verdict's
+    clothes. The repaired re-run then refused correctly (CLI exit **1**) and
+    `automation/runs/m7-s4-retrain-rerun.status` read **`FAILED 2`**: the third
+    session in a row misinformed by an exit code, and the first where nothing in
+    the repository was at fault. **GNU make exits 2 for ANY failed recipe** —
+    measured against a throwaway makefile, a recipe exiting 1 comes back 2 and a
+    recipe exiting 3 comes back 2 — and `make detach` runs `make TARGET`, so the
+    vocabulary collapses to {0, 2} at the launcher and 2 is a word already in
+    use. **The fix is not a bigger vocabulary; it is to stop reading verdicts out
+    of exit codes.** A refusal writes a RECORD and a crash writes nothing, so the
+    record's presence and its `verdict` field are the discriminator, and it is a
+    positive artifact rather than a decoded number (#59). Two cheap mitigations
+    beside it: have the recipe echo the CLI's own `$?` into the log *and re-exit
+    with it* (swallowing the code to make the line printable turns every refusal
+    into a green make), and refuse the tempting `CMD=` escape hatch on the
+    launcher — retyping the recipe at the launch site preserves the exit code by
+    creating a twin. Argparse also exits 2 on a usage error, which happens to
+    collide with the same word: **a vocabulary built on small integers shares
+    them with every tool it passes through** (M7-S4 completion leg).

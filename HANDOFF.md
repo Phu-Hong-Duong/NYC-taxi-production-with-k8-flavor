@@ -1,5 +1,123 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bq) — M7-S4 completion leg, part 2: the record landed, and the exit code lied a third time
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block MLE (Accountable),
+MLOps (R)** (charter refusals in play: M7 law 2 — the 2019 trees untouched; law 3
+— the alias moves only through the gate; law 4 — no threshold set from a number
+just measured; F-008; the cluster never goes down).
+Boot reads: CLAUDE.md · HANDOFF (bp) · M7 KICKOFF · AWAITING_PO.
+**Staleness check found the handoff's Next half-true, and reconciling it is most
+of this session.** (bp) said to read `automation/runs/m7-retrain/latest.json`
+first and to expect `FAILED 1`. The record **exists and is correct**; the status
+file says **`FAILED 2`**, which (bp)'s own decoding key renders as *the challenger
+could not be built* — about a challenger that was built, fitted for 27 minutes,
+judged and correctly refused. Nothing in this repository was at fault this time
+(F-049 / gotcha #97). No `automation/STOP`, tree clean at `b2ef46c`, 3 nodes Ready
+v1.36.1, `@champion` **2**.
+**One story: M7-S4's completion leg, part 2** — the kickoff's accept-when names
+*"the detached run's verdict JSON (tracked)"*, and this session tracks it, proves
+it against the prediction, and closes the reporting defect it exposed.
+PR **__PR__**. End state: `@champion` **2** (read, never written) ·
+`features.version` **v2** · champion serving · `make verify-m5` **GREEN** ·
+**M7-S4 is DONE**; nothing is detached and nothing is pending.
+
+### Done
+- **The verdict record is tracked, and it reproduced the prediction exactly.**
+  `automation/runs/m7-retrain/latest.json` + `retrain_2026-08-20T06-43-37Z.json`
+  (committed first, before anything else). The re-run of **06:43:37Z → 07:10:36Z,
+  1,618.4 s**: **REFUSE**, KPI-09 **3.2412** / KPI-10 **81.568%** on 5,950,708
+  holdout rows, val **3.3811** / 80.570%, `ended_by: early_stopping` at **779 of
+  a 2400-round cap**, both floor conditions passed (+3.30% vs a 2.00% bar), both
+  F-011 incumbent conditions failed.
+- **"It matched" is a command now, not a sentence.** `make
+  retrain-prediction-check` (`scripts/retrain_prediction_check.py`, a READER over
+  two files) resolves every `predicted_exactly` field against the record **at the
+  precision the prediction was written at** (#42) under a **one-decimal floor**
+  (#90) → **`REPRODUCED — all 20 exact claims and 3 path properties hold.`**
+  Red-teamed in unit form four ways, including a 0.0001 move in the challenger's
+  MAE and a REFUSE relabelled PROMOTE.
+- **F-049 / gotcha #97 found and CLOSED**: `make` exits **2** for any failed
+  recipe, so the retrain's 0/1/2/3/4 vocabulary — including the **4** the previous
+  leg added so a crash could not wear a verdict's clothes — collapses to {0, 2}
+  at `make detach`, and 2 was already spoken for. Measured against a throwaway
+  makefile, not remembered.
+- **Registry read live after the run: `@champion -> 2 | run 92b73bd4… |
+  feature_set v2`, `VERSIONS: ['1','2']`.** No version 3 exists — the strong form
+  of "nothing was promoted", since a promotion must create a version.
+- Docs: `docs/retrain_m7_transcripts.md` **§5.2 filled** with the full check
+  output · `docs/retrain_m7.md` **§4** (the third lie and the three things done
+  about it) and **§7** (the record is machine-written; two runs agreeing to the
+  last kept digit is this program's second determinism observation) · gotcha
+  **#97** · CLAUDE.md rows + known traps (#95/#96/#97 as one lesson) · F-049 ·
+  field note · the watchdog's park entry **RESOLVED** in AWAITING_PO.
+- **906 unit tests** (7 new), ruff clean, `make verify-m5` **GREEN 49/49**.
+
+### Decisions
+- **F-049 is closed by a RULE, not by a mechanism, and the mechanism is refused
+  in writing.** The obvious fix is a `CMD=` escape hatch on `make detach` so an
+  exit-code-carrying job is detached as the command instead of the target. It
+  works — and it retypes the recipe at the launch site, which is the twin this
+  repo spends its time eliminating. So: **the record is the authority and its
+  ABSENCE is the crash signal** (a refusal writes `latest.json`, a crash writes
+  nothing — gotcha #59's positive artifact), plus two cheap mitigations: the
+  recipe echoes its CLI's `$?` and **re-exits with it**, and the help text stops
+  promising codes make cannot deliver. The refusal is pinned by a test so the
+  next session does not re-litigate it. Verified both directions live:
+  `--plan-only` → `CLI exit code: 0`, make 0; `--no-such-flag` → `CLI exit code:
+  2`, make 2.
+- **The prediction file was not edited and never could be.** All twenty exact
+  fields held; the one loose field that did not (the exit code) is reported by the
+  checker as `DIFFERS` with its cause, because a checker that drops what it cannot
+  judge degrades toward "they agree" (#94's direction).
+- **F-016 was not touched**, again. The refusal is −0.03% against a condition with
+  no margin — precisely the open fork — and the second observation was already
+  recorded on the entry last session.
+- **The chain was restarted by hand** because the watchdog had parked it on the
+  crashed run; the park was correct behaviour and is recorded as resolved rather
+  than deleted.
+
+### Defects/Surprises
+- **Three sessions, three exit codes that lied, and only the first two were ours.**
+  #95 (a crash in the last 5% of a long job), #96 (the crash exiting into a word
+  the vocabulary already owned), and now #97 (the vocabulary not surviving the
+  launcher at all). The generalisable line is the third one's: **a vocabulary
+  built on small integers shares them with every tool it passes through** —
+  argparse's usage-error 2 collides from the other side.
+- **The checker went RED for its own reason before it went red for mine.** Three
+  of its four red-team tests failed on `Path.relative_to`: the tampered copies live
+  in a pytest tmpdir, outside the repo, and the header formatter assumed otherwise.
+  Gotcha #55's family, inside the artifact written to avoid that class of thing.
+- **`make retrain RETRAIN_ARGS="--plan-only"` writes a record**, so exercising the
+  echoed exit code produced a new tracked plan JSON. Committed rather than
+  discarded — it is a real run of a real command.
+- **Wall count**: none.
+
+### Next
+- **M7-S5** is the whole of what remains in M7, and it is the milestone's last
+  story. The kickoff allows legs: **leg 1 = the DA drift memo + the predictions &
+  drift board**, **leg 2 = `make verify-m7` + its red team**. Its named reader is
+  `docs/error_memo_m2.md` §7 row 2; M7-S3's per-bin detail is the memo's material,
+  and M7-S2's `marts.scoring_daily` (91 rows, daily grain) is what the board draws.
+  **M7 is ◆-marked**, so when S5 lands the successor is **rev**, not executor.
+- **Material `verify-m7` will want, all tracked and all green today**: the drift
+  drill's prediction + records (`automation/runs/m7-drift/`), the retrain record
+  and **`make retrain-prediction-check`** (a seconds-long reader that already
+  proves the fit's numbers against a prior claim), the two triggers read off the
+  control plane, and the F-020 provenance chain.
+- **`retrain-schedule-proof` is ACTIVE and fires every 20 minutes** — deliberate,
+  not residue. **Do not delete it before `verify-m7` reads it**: a schedule that
+  fired once and was removed is indistinguishable from one that never fired.
+- **Two OPEN findings routed to ARCH at the M7 boundary, both deliberately not
+  acted on**: **F-048** (the scheduled retrain cannot see `automation/runs/`, so
+  every proof-trigger firing reports `rescale_factor: null` — a legitimate-looking
+  no-op) and **F-047** (`make image-smoke` RED since M5-S5 for the same
+  `.dockerignore` reason). They share a lever and should be decided together.
+- Standing with the PO, all non-blocking: **2026-08-18-1 (F-016)**, 2026-08-17-1,
+  2026-08-16-2.
+
+
 ## Session 2026-08-20 (bp) — M7-S4 completion leg: the verdict was reached, and the code that writes verdicts down had never run
 
 ### State

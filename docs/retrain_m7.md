@@ -227,6 +227,40 @@ able to wear a verdict's clothes. **4 is outside the vocabulary on purpose**, an
 its message says what is and is not true: any verdict reached before the crash is
 in the log and in MLflow, and NOT in a record.
 
+**And then the re-run refused correctly and its status file said `FAILED 2`
+again** — the third session in a row to be told the wrong thing by an exit code,
+and the first one where nothing in this repository was at fault. **GNU make exits
+2 for ANY failed recipe.** Measured, not remembered
+(`tests/unit/test_detach_exit_codes.py` builds a throwaway makefile and runs it):
+a recipe exiting 1 comes back 2, a recipe exiting 3 comes back 2, and only 0
+survives. `make detach` runs `make TARGET`, so **the vocabulary collapses to
+{0, 2} at the make boundary the moment the job is detached — and 2 is a word
+already in use.** Exit **4**, added the session before precisely so a crash could
+not wear a verdict's clothes, is unreachable through the only launcher this
+program uses for long jobs.
+
+Three things were done about it, and the first is the one that matters:
+
+* **The record is the authority and its ABSENCE is the crash signal.** A
+  refusal writes `automation/runs/m7-retrain/latest.json` with `verdict:
+  REFUSE` in it; a crash writes nothing. That is a positive artifact rather
+  than a decoded number (gotcha #59), it survives the collapse, and it was
+  already true — it just had not been said. **Do not read a verdict out of a
+  `.status` file.**
+* **The recipe echoes the CLI's own exit code into the log and re-exits with
+  it.** The log is what a booting session reads next anyway, and re-exiting
+  matters as much as the echo: a recipe that swallowed the code to make the
+  line printable would turn every refusal into a green `make`.
+* **No `CMD=` escape hatch was added to `make detach`.** Retyping the recipe at
+  the launch site would preserve the exit code and put the command in two
+  places, and this program's rule about twins outranks that convenience. The
+  decision is pinned by a test so the next session does not re-litigate it.
+
+One smaller collision, noted because it is the same disease: argparse also exits
+**2** on a usage error, so `make retrain RETRAIN_ARGS="--no-such-flag"` reports
+*could not be built* — true here by luck rather than by design. A vocabulary
+built on small integers shares them with every tool it passes through.
+
 ---
 
 ## §5 — The schedule
@@ -305,12 +339,22 @@ list.
 ## §7 — The numbers
 
 Measured **2026-08-20T05:59Z**, full data, 43,987,422 train rows, judged on the
-untouched 2019-08 holdout by the gate as it exists on disk. The table below is
-recovered from the run's own output (`docs/retrain_m7_transcripts.md` §5.1) —
-attempt 1 reached this verdict and then crashed writing it down (§7.1), so the
-machine-written record lands with the re-run, and
-`automation/runs/m7-retrain/rerun-prediction.json` says what that re-run must
-reproduce before it reproduced it.
+untouched 2019-08 holdout by the gate as it exists on disk. The table below was
+first recovered from attempt 1's own output (`docs/retrain_m7_transcripts.md`
+§5.1), which reached this verdict and then crashed writing it down (§7.1).
+
+**The re-run of 2026-08-20T06:43:37Z reproduced every one of these numbers
+exactly, and the record is now machine-written**
+(`automation/runs/m7-retrain/latest.json`, tracked). What it had to produce was
+committed *before* it was launched, which is the only thing that makes a repeat
+of a 27-minute fit evidence rather than a do-over: `make
+retrain-prediction-check` resolves all twenty `predicted_exactly` fields against
+the record and returns `REPRODUCED` (§5.2). The single loose field that did not
+hold is the exit code, and that is §4's finding about `make`, not a finding
+about the fit. Two independent MLflow runs of the same configuration
+(`d2f69f90…`, `8fcc7b98…`) agreeing to the last kept digit is also this
+program's second determinism observation, after M3-S3's v1 at
+`3.47603843547682` twice, 71 minutes apart.
 
 | contender | split | KPI-09 | KPI-10 |
 |---|---|---|---|
@@ -355,7 +399,9 @@ here (law 4, and the constitution reserves gate changes for the PO).
 **The alias did not move and could not have.** `promote=False` is unconditional
 and there is no parameter that changes it; `@champion` is version 2 before and
 after; nothing was registered — a refused challenger leaves the registry exactly
-as it found it.
+as it found it. Read live after the re-run: `@champion -> 2 | run 92b73bd4… |
+feature_set v2`, `VERSIONS: ['1', '2']`. There is no version 3, which is the
+strong form of the claim: a promotion cannot hide from the version list.
 
 ### §7.1 — The verdict that could not be written down
 

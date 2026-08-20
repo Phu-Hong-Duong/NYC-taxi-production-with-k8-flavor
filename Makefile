@@ -12,6 +12,19 @@ MONTH ?= 2019-09
 #   make detach NAME=m3s4-automation-track ROLE=executor TARGET=automation-track
 # ROLE is the successor the JOB schedules on completion — the launching session
 # must then schedule nothing itself (next_session.sh refuses the double anyway).
+#
+# WHAT A DETACHED .status CAN AND CANNOT TELL YOU (gotcha #97, measured
+# 2026-08-20): the detached wrapper records the exit code of the command it
+# ran, and here that command is `make`. **GNU make exits 2 for ANY failed
+# recipe** — a recipe exiting 1 and a recipe exiting 3 both come back as 2,
+# proved by `tests/unit/test_detach_exit_codes.py` against a throwaway
+# makefile. So a target whose exit codes carry MEANING (`retrain`: 0 passed ·
+# 1 refused · 2 could not build · 3 no verdict · 4 crashed) has that meaning
+# collapsed to {0, 2} the moment it is detached this way, and 2 collides with
+# a real word. Do not read a verdict out of a .status file: read the RECORD
+# the run exists to produce, and treat its ABSENCE as the crash signal
+# (gotcha #59 — assert positively on the artifact). The recipes that carry a
+# vocabulary echo their own CLI code into the log as well.
 .PHONY: detach
 detach: ## run a make TARGET detached so it survives this session; the JOB schedules ROLE after (gotcha #45)
 	@test -n "$(NAME)"   || { echo "make detach needs NAME=<slug>" >&2; exit 2; }
@@ -238,11 +251,16 @@ verify-m6-redteam: ## prove verify-m6 goes RED: rewrite ONE recorded field, watc
 	@bash scripts/verify_m6_redteam.sh
 
 # ---- M7 drift & retrain loop (role:SRE + role:MLE + role:DA) ----
-.PHONY: predictions-scoring retrain retrain-schedule drift-report verify-m7
+.PHONY: predictions-scoring retrain retrain-prediction-check retrain-schedule drift-report verify-m7
 predictions-scoring: ## score the REGISTERED champion on the SCORING months and publish the rows (M7-S2; then make duckdb, make marts). SCORING_ARGS="--months YYYY-MM" narrows; monitoring ids KPI-14..17, never KPI-09/10
 	uv run python -m taxi_mlops.training score-scoring $(SCORING_ARGS)
-retrain: ## M7-S4: fit the CHAMPION's configuration re-derived at the scale it is fitted at (F-020) and let the gate decide. Promotes NOTHING (exit 0 promote-worthy · 1 refused · 3 no verdict). RETRAIN_ARGS="--plan-only" is the seconds-long provenance check
-	uv run python -m taxi_mlops.training retrain $(RETRAIN_ARGS)
+retrain: ## M7-S4: fit the CHAMPION's configuration re-derived at the scale it is fitted at (F-020) and let the gate decide. Promotes NOTHING (CLI exit 0 promote-worthy · 1 refused · 2 could not build · 3 no verdict · 4 crashed — and see the `detach` header: make collapses every one of those to 2). RETRAIN_ARGS="--plan-only" is the seconds-long provenance check
+	@uv run python -m taxi_mlops.training retrain $(RETRAIN_ARGS); rc=$$?; \
+	 echo "[retrain] CLI exit code: $$rc  (0 passed · 1 refused · 2 could not build · 3 no verdict · 4 crashed;"; \
+	 echo "[retrain] make reports 2 for any non-zero recipe, so THIS line is the vocabulary — gotcha #97)"; \
+	 exit $$rc
+retrain-prediction-check: ## M7-S4: judge the retrain RECORD against the prediction written before the fit ran; exit 1 on any exact mismatch. A READER — two files, no live system, no fit
+	@uv run python scripts/retrain_prediction_check.py $(PREDICTION_CHECK_ARGS)
 retrain-schedule: ## M7-S4: deploy the retrain task and its two triggers, then read them back off the SERVER (never off the file that was submitted)
 	@bash scripts/retrain_schedule.sh $(SCHEDULE_ARGS)
 drift-report: ## Evidently reference-vs-MONTH -> pushgateway + MLflow artifact
