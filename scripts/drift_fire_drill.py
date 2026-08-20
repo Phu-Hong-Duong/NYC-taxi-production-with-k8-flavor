@@ -55,7 +55,11 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from taxi_mlops.monitoring.__main__ import PUSH_JOB, build_metrics  # noqa: E402
 from taxi_mlops.monitoring.drift import compute_drift  # noqa: E402
-from taxi_mlops.monitoring.pushgateway import SERVICE_NAME, push_metrics  # noqa: E402
+from taxi_mlops.monitoring.pushgateway import (  # noqa: E402
+    SERVICE_NAME,
+    delete_group,
+    push_metrics,
+)
 
 RECORD_DIR = REPO_ROOT / "automation" / "runs" / "m7-drift"
 ROUTE = "http://localhost:8081"
@@ -217,6 +221,29 @@ def prom_rules() -> dict[str, dict[str, Any]]:
     return out
 
 
+def firing_months(rules: dict[str, dict[str, Any]], alert: str) -> set[str]:
+    """Which MONTHS this alert is firing for — not merely whether it is firing.
+
+    THIS IS THE CHECK, AND THE FIRST VERSION OF THIS DRILL GOT IT WRONG. A-9 is
+    predicted to fire for 2020-03 and to stay quiet for 2020-01 and 2020-02 —
+    three predictions about ONE rule name. A judge keyed on the name alone
+    cannot express that, and mine reported `A-9 fired and was predicted
+    INACTIVE` while the system was behaving exactly as predicted (gotcha #67's
+    family: a checker whose unit of judgement is coarser than the fact it is
+    judging).
+
+    Reading the per-series `alerts` array is also strictly the STRONGER claim: a
+    rule that fired for all three months — i.e. a bar so low that an ordinary
+    January trips it — would pass a name-level check and fails this one.
+    """
+    rule = rules.get(alert) or {}
+    return {
+        instance.get("labels", {}).get("month", "")
+        for instance in rule.get("alerts") or []
+        if instance.get("state") == "firing"
+    }
+
+
 def prom_query(expr: str) -> list[dict[str, Any]]:
     url = f"{ROUTE}/api/v1/query?query={urllib.parse.quote(expr)}"
     status, body = http_get(PROM_HOST, url)
@@ -317,6 +344,27 @@ def main(argv: list[str] | None = None) -> int:
         )
         gateway = f"http://localhost:{PUSHGATEWAY_LOCAL_PORT}"
 
+        # --- phase 0: reset the board ----------------------------------------
+        # THE GATEWAY HAS NO EXPIRY. Everything a previous run pushed is still
+        # on it, so a second run of this drill would start with A-9 already
+        # firing and could never observe a transition. Deleting the groups first
+        # is what makes the drill re-runnable — and the wait for the alerts to
+        # go inactive is itself evidence that the rules track the data rather
+        # than latching.
+        for month in MONTHS:
+            try:
+                delete_group(url=gateway, job=PUSH_JOB, grouping={"month": month})
+            except Exception as error:  # noqa: BLE001 — an absent group is fine
+                say(f"    (reset: {month} not present: {error})")
+        say("reset: the gateway's drift groups are cleared; waiting for the rules to settle …")
+        for _ in range(24):
+            time.sleep(10)
+            if all(
+                prom_rules().get(name, {}).get("state") == "inactive" for name in DRIFT_ALERTS
+            ):
+                break
+        say("    the board is clean")
+
         # --- phase 1: the rules are loaded before anything is pushed ----------
         rules = prom_rules()
         missing = sorted(DRIFT_ALERTS - set(rules))
@@ -365,7 +413,8 @@ def main(argv: list[str] | None = None) -> int:
                 break
         if len(seen) < len(MONTHS):
             failures.append(
-                f"Prometheus sees {len(seen)} taxi_drift_volume_ratio series, expected {len(MONTHS)}"
+                f"Prometheus sees {len(seen)} taxi_drift_volume_ratio series, "
+                f"expected {len(MONTHS)}"
             )
         else:
             say(f"ok  Prometheus scraped the gateway: {len(seen)} month series visible")
@@ -377,22 +426,27 @@ def main(argv: list[str] | None = None) -> int:
         # --- phase 4: watch the rules decide ----------------------------------
         say(f"observing the rules for {args.observe_seconds}s …")
         timeline: list[dict[str, Any]] = []
+        #: keyed by (alert, month) — see `firing_months`. `month` is "" for a
+        #: rule that carries no month label, which is every non-drift rule.
         fired_at: dict[str, float] = {}
         deadline = time.time() + args.observe_seconds
         last: dict[str, str] = {}
         while time.time() < deadline:
             rules = prom_rules()
             states = {name: rules[name]["state"] for name in DRIFT_ALERTS if name in rules}
+            elapsed = time.time() - pushed_at
+            for name in DRIFT_ALERTS:
+                for month in firing_months(rules, name):
+                    key = f"{name}@{month}"
+                    if key not in fired_at:
+                        fired_at[key] = elapsed
+                        say(f"    T+{elapsed:7.1f}s  {name} FIRING for month={month!r}")
             if states != last:
-                elapsed = time.time() - pushed_at
                 timeline.append({"t_plus_seconds": round(elapsed, 1), "states": dict(states)})
                 say(f"    T+{elapsed:7.1f}s  {states}")
-                for name, state in states.items():
-                    if state == "firing" and name not in fired_at:
-                        fired_at[name] = elapsed
                 last = states
             if all(
-                rules.get(entry["alert"], {}).get("state") == "firing"
+                f"{entry['alert']}@{entry.get('month', '')}" in fired_at
                 for entry in PREDICTION["must_fire"]
             ) and time.time() - pushed_at > 400:
                 break
@@ -408,29 +462,42 @@ def main(argv: list[str] | None = None) -> int:
         say(f"    Alertmanager holds: {am_names}")
 
         # --- phase 6: judge against the prediction ----------------------------
+        # Judged per (alert, month), because that is the grain the prediction is
+        # written at: A-9 is predicted to fire for 2020-03 AND to stay quiet for
+        # 2020-01/02, which is three statements about one rule name.
         for entry in PREDICTION["must_fire"]:
-            name = entry["alert"]
-            if name in fired_at:
-                say(f"ok  {entry['signal']} {name} FIRED at T+{fired_at[name]:.1f}s — as predicted")
+            name, month = entry["alert"], entry.get("month", "")
+            key = f"{name}@{month}"
+            if key in fired_at:
+                say(
+                    f"ok  {entry['signal']} {name} FIRED for month={month!r} at "
+                    f"T+{fired_at[key]:.1f}s — as predicted"
+                )
             else:
-                failures.append(f"{entry['signal']} {name} was predicted to fire and did not")
+                failures.append(
+                    f"{entry['signal']} {name} was predicted to fire for {month} and did not"
+                )
             if name not in am_names:
                 failures.append(f"{name} fired in Prometheus but never reached Alertmanager")
             else:
                 say(f"ok  {name} reached Alertmanager")
         for entry in PREDICTION["must_not_fire"]:
-            name = entry["alert"]
-            state = last.get(name, rules.get(name, {}).get("state", "absent"))
-            if name in fired_at:
-                failures.append(f"{entry['signal']} {name} fired and was predicted INACTIVE")
+            name, month = entry["alert"], entry.get("month", "")
+            key = f"{name}@{month}"
+            if key in fired_at:
+                failures.append(
+                    f"{entry['signal']} {name} fired for {month or '(no month)'} and was "
+                    "predicted INACTIVE"
+                )
             else:
-                say(f"ok  {entry['signal']} {name} stayed {state} — as predicted")
+                where = f" for month={month!r}" if month else ""
+                say(f"ok  {entry['signal']} {name} did not fire{where} — as predicted")
 
         # The open question is REPORTED, never judged: a prediction with
         # "confidence: low" attached is a question, and failing a drill on the
         # answer to a question is how a drill teaches people not to ask any.
         a8_state = last.get("ModelInputDrift", "unknown")
-        a8_fired = "ModelInputDrift" in fired_at
+        a8_fired = any(k.startswith("ModelInputDrift@") for k in fired_at)
         record["open_question_outcome"] = {
             "alert": "ModelInputDrift",
             "predicted": open_q["predicted"],
@@ -443,11 +510,52 @@ def main(argv: list[str] | None = None) -> int:
             f"{'CORRECT' if not a8_fired else 'WRONG (investigate — see the write-up)'}"
         )
 
+        # --- phase 7: prove it CLEARS, then restore the true state ------------
+        # "Then cleared" is the M6 drill's last phase, and here it needs an
+        # argument rather than a copy. M6 cleared by STOPPING an injection; this
+        # drill injected nothing — March 2020 really did lose 61% of its trips,
+        # and an alert saying so is correct. Latching it off to make a
+        # transcript tidy would be publishing a false board.
+        #
+        # So the clearing is demonstrated on the MECHANISM and then undone: the
+        # month's group is deleted, A-9 is watched going inactive (proving the
+        # rule follows the data and is not stuck), and the real numbers are
+        # pushed straight back. The board ends carrying the truth.
+        clear_seconds: float | None = None
+        cleared_at = time.time()
+        delete_group(url=gateway, job=PUSH_JOB, grouping={"month": "2020-03"})
+        say("clearing: deleted the 2020-03 group; watching A-9 …")
+        for _ in range(30):
+            time.sleep(10)
+            if prom_rules().get("ScoringVolumeCollapse", {}).get("state") == "inactive":
+                clear_seconds = time.time() - cleared_at
+                break
+        if clear_seconds is None:
+            failures.append("A-9 did not clear when its metric was removed — it may be latched")
+        else:
+            say(f"ok  A-9 cleared {clear_seconds:.1f}s after its metric was removed")
+        record["cleared_after_seconds"] = clear_seconds
+
+        report = compute_drift("2020-03")
+        push_metrics(
+            build_metrics(report), url=gateway, job=PUSH_JOB, grouping={"month": "2020-03"}
+        )
+        say(
+            "ok  2020-03's real numbers pushed back — the board ends carrying the truth "
+            "about March 2020, not a tidied transcript"
+        )
+        record["final_state"] = (
+            "2020-01..03 drift metrics on the gateway; A-9 will re-fire for 2020-03 "
+            "after its 5m sustain, which is the correct standing state: the volume "
+            "collapse is real and the decision it asks for is M7-S4's retrain."
+        )
+
         champion_after = champion_version()
         record["champion_after"] = champion_after
         if champion_after != champion_before:
             failures.append(
-                f"@champion moved {champion_before} -> {champion_after}; this drill must not write it"
+                f"@champion moved {champion_before} -> {champion_after}; "
+                "this drill must not write it"
             )
         else:
             say(f"ok  @champion is {champion_after} — read before and after, never written")

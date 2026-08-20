@@ -1,0 +1,128 @@
+{
+  "2020-01": {
+    "agree_on_input_drift_verdict": true,
+    "agree_on_largest_mover": true,
+    "evidently": {
+      "dataset_drift_share": 0.16666666666666666,
+      "drifted": {
+        "DOLocationID": false,
+        "PULocationID": false,
+        "dayofweek": false,
+        "hour": false,
+        "passenger_count": false,
+        "trip_duration_minutes": true
+      },
+      "evidently_version": "0.7.21",
+      "methods": {
+        "DOLocationID": "Jensen-Shannon distance",
+        "PULocationID": "Jensen-Shannon distance",
+        "dayofweek": "Jensen-Shannon distance",
+        "hour": "Jensen-Shannon distance",
+        "passenger_count": "Jensen-Shannon distance",
+        "trip_duration_minutes": "Wasserstein distance (normed)"
+      },
+      "month": "2020-01",
+      "sample_rows": 200000,
+      "sample_seed": 20200301,
+      "scores": {
+        "DOLocationID": 0.03984954982893107,
+        "PULocationID": 0.04028371046555903,
+        "dayofweek": 0.03628654323474946,
+        "hour": 0.019127344186179413,
+        "passenger_count": 0.018544089051837145,
+        "trip_duration_minutes": 0.10143680536068529
+      }
+    },
+    "evidently_flagged": [
+      "trip_duration_minutes"
+    ],
+    "evidently_ranking": [
+      "trip_duration_minutes",
+      "PULocationID",
+      "DOLocationID",
+      "dayofweek",
+      "hour",
+      "passenger_count"
+    ],
+    "our_psi": {
+      "DOLocationID": 0.008248580520447102,
+      "PULocationID": 0.008195303016543592,
+      "dayofweek": 0.010266357363217994,
+      "hour": 0.0024163786870274144,
+      "passenger_count": 0.006860559511183405,
+      "trip_duration_minutes": 0.01266904126046244
+    },
+    "our_ranking": [
+      "trip_duration_minutes",
+      "dayofweek",
+      "DOLocationID",
+      "PULocationID",
+      "passenger_count",
+      "hour"
+    ],
+    "ours_flagged": []
+  },
+  "2020-03": {
+    "agree_on_input_drift_verdict": true,
+    "agree_on_largest_mover": false,
+    "evidently": {
+      "dataset_drift_share": 0.16666666666666666,
+      "drifted": {
+        "DOLocationID": false,
+        "PULocationID": false,
+        "dayofweek": false,
+        "hour": false,
+        "passenger_count": false,
+        "trip_duration_minutes": true
+      },
+      "evidently_version": "0.7.21",
+      "methods": {
+        "DOLocationID": "Jensen-Shannon distance",
+        "PULocationID": "Jensen-Shannon distance",
+        "dayofweek": "Jensen-Shannon distance",
+        "hour": "Jensen-Shannon distance",
+        "passenger_count": "Jensen-Shannon distance",
+        "trip_duration_minutes": "Wasserstein distance (normed)"
+      },
+      "month": "2020-03",
+      "sample_rows": 200000,
+      "sample_seed": 20200301,
+      "scores": {
+        "DOLocationID": 0.05536319252064249,
+        "PULocationID": 0.05348468739214578,
+        "dayofweek": 0.05117602781944375,
+        "hour": 0.034498916995843454,
+        "passenger_count": 0.032442587777519065,
+        "trip_duration_minutes": 0.10080333396851285
+      }
+    },
+    "evidently_flagged": [
+      "trip_duration_minutes"
+    ],
+    "evidently_ranking": [
+      "trip_duration_minutes",
+      "DOLocationID",
+      "PULocationID",
+      "dayofweek",
+      "hour",
+      "passenger_count"
+    ],
+    "our_psi": {
+      "DOLocationID": 0.015114526743265327,
+      "PULocationID": 0.014301722476400923,
+      "dayofweek": 0.021666901450341558,
+      "hour": 0.009790060767708813,
+      "passenger_count": 0.017085618281808157,
+      "trip_duration_minutes": 0.012484979364000852
+    },
+    "our_ranking": [
+      "dayofweek",
+      "passenger_count",
+      "DOLocationID",
+      "PULocationID",
+      "trip_duration_minutes",
+      "hour"
+    ],
+    "ours_flagged": []
+  }
+}

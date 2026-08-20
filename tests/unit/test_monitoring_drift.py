@@ -191,9 +191,12 @@ def test_no_threshold_lives_anywhere_under_the_monitoring_package() -> None:
     for path in MONITORING_DIR.glob("*.py"):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
-            if isinstance(node, ast.Constant) and isinstance(node.value, float):
-                if node.value in bar_shaped:
-                    offenders.append(f"{path.name}:{node.lineno} -> {node.value}")
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, float)
+                and node.value in bar_shaped
+            ):
+                offenders.append(f"{path.name}:{node.lineno} -> {node.value}")
     assert not offenders, (
         "a bar-shaped constant appeared in the drift job: "
         + ", ".join(offenders)

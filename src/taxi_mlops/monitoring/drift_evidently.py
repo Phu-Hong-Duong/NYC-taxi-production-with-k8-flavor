@@ -63,7 +63,12 @@ class EvidentlyVerdict:
     evidently_version: str
     #: column -> Evidently's own drift score (statistic depends on column type)
     scores: dict[str, float]
-    #: column -> Evidently's boolean verdict at ITS OWN defaults
+    #: column -> the statistic Evidently CHOSE. Recorded because it is the
+    #: reason the numbers must not be compared with ours: it picks Wasserstein
+    #: for a numeric column and Jensen-Shannon for a categorical one, and
+    #: neither is PSI.
+    methods: dict[str, str]
+    #: column -> Evidently's boolean verdict at ITS OWN default threshold
     drifted: dict[str, bool]
     dataset_drift_share: float
 
@@ -74,6 +79,7 @@ class EvidentlyVerdict:
             "sample_seed": self.sample_seed,
             "evidently_version": self.evidently_version,
             "scores": self.scores,
+            "methods": self.methods,
             "drifted": self.drifted,
             "dataset_drift_share": self.dataset_drift_share,
         }
@@ -115,25 +121,34 @@ def run(
     )
     payload = snapshot.dict()
 
+    # THE PAYLOAD SHAPE WAS READ OFF A REAL SNAPSHOT, NOT ASSUMED. The first
+    # draft of this parser looked for `metric_id` and a `status` field; neither
+    # exists. Every metric carries `metric_name` (a rendered signature),
+    # `config` (the structured version of it) and `value` — so the column, the
+    # statistic Evidently CHOSE for that column's type, and its own threshold
+    # all come out of `config` rather than out of string-slicing a label.
+    #
+    # It cost one run that printed "the two instruments DISAGREE" for every
+    # column, with an empty ranking on one side — a parser failure wearing a
+    # finding's clothes. Worth naming: a second witness that cannot be read
+    # reports maximum disagreement, which is the most alarming thing it could
+    # possibly say and the least true.
     scores: dict[str, float] = {}
     drifted: dict[str, bool] = {}
+    methods: dict[str, str] = {}
     share = 0.0
     for metric in payload.get("metrics", []):
-        metric_id = str(metric.get("metric_id", ""))
+        config = metric.get("config") or {}
+        kind = str(config.get("type", ""))
         value = metric.get("value")
-        if metric_id.startswith("ValueDrift") and isinstance(value, (int, float)):
-            # `ValueDrift(column=hour)` — the column is inside the id.
-            inner = metric_id[metric_id.find("=") + 1 : metric_id.rfind(")")]
-            scores[inner] = float(value)
-        elif metric_id.startswith("DriftedColumnsCount") and isinstance(value, dict):
+        if kind.endswith("ValueDrift") and isinstance(value, (int, float)):
+            column = str(config.get("column"))
+            threshold = float(config.get("threshold", 0.1))
+            scores[column] = float(value)
+            methods[column] = str(config.get("method", "unknown"))
+            drifted[column] = float(value) >= threshold
+        elif kind.endswith("DriftedColumnsCount") and isinstance(value, dict):
             share = float(value.get("share", 0.0))
-
-    for metric in payload.get("metrics", []):
-        metric_id = str(metric.get("metric_id", ""))
-        if metric_id.startswith("ValueDrift"):
-            inner = metric_id[metric_id.find("=") + 1 : metric_id.rfind(")")]
-            status = metric.get("status")
-            drifted[inner] = str(status).upper().endswith("FAIL") if status else False
 
     return EvidentlyVerdict(
         month=month,
@@ -141,6 +156,7 @@ def run(
         sample_seed=SAMPLE_SEED,
         evidently_version=getattr(evidently, "__version__", "unknown"),
         scores=scores,
+        methods=methods,
         drifted=drifted,
         dataset_drift_share=share,
     )

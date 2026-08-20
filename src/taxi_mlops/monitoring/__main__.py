@@ -31,7 +31,6 @@ import json
 import sys
 import time
 import urllib.request
-from pathlib import Path
 
 from ..data.config import repo_root
 from .drift import DriftReport, compute_drift, compute_split_drift, write_report
@@ -236,7 +235,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    headroom = sub.add_parser("headroom", help="drift of the held-out 2019 months (the bar's input)")
+    headroom = sub.add_parser(
+        "headroom", help="drift of the held-out 2019 months (the bar's input)"
+    )
     headroom.set_defaults(func=_cmd_headroom)
 
     drift = sub.add_parser("drift", help="drift of one or more scoring months")
