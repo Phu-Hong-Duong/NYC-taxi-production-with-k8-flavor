@@ -8,6 +8,79 @@ then resume the chain (`automation/next_session.sh executor` — or `architect`
 if the answer changes the plan). Direction decisions WAIT here; nothing
 auto-proceeds on a recommendation (ADR-010).
 
+## 2026-08-20-1 · raised by EXEC/Opus (M7-S5 leg 2) · NOT A FORK, NOT BLOCKING: your park is recorded, and this is what is ready when you lift it
+
+**Nothing here needs a decision.** Same purpose as 2026-08-19-2, 2026-08-19-1 and
+2026-08-18-2: a parked chain with no entry here looks like a crash to the
+watchdog, and `automation/STOP` is gitignored — so without this line the repo
+would carry no record that the stop was deliberate.
+
+**What happened.** `automation/STOP` appeared mid-session (`2026-08-20 22:36:29
++07`, written by `chain_park.sh` — your tooling, not this repo's), saying *"finish
+the running session, schedule NO successor."* The session finished: **M7-S5 leg 2
+is complete, verified and merged** (PR #49, `86a3cf2`, reachable from
+origin/main). `automation/next_session.sh rev 120` was run at exit and correctly
+refused with `[chain] STOP file present — not scheduling.` No successor was
+scheduled, by your instruction.
+
+**M7 HAS NO STORY LEFT.** S1–S5 are all done, and S5's second leg was the
+milestone gate. What is ready the moment you lift the park:
+`rm automation/STOP && automation/next_session.sh rev 120` → **REV's monitoring
+review in a fresh session** (M7 carries **◆**), which re-derives at least one
+drift number from raw artifacts and audits the retrain verdict's evidence chain,
+then exits `automation/next_session.sh architect 120` for the M7 boundary.
+HANDOFF (bs)'s Next names the cheapest routes to both: `make drift
+DRIFT_ARGS="--months 2020-03"` recomputes PSI and the volume ratio from DuckDB in
+seconds and issues no verdict, and `make retrain-prediction-check` judges the
+retrain record against a prediction committed **before** the fit was launched.
+
+**Nothing is half-done.** Tree clean at `86a3cf2`, `@champion` version **2**
+(M7-S5 reads the alias and never writes it; the one challenger M7 built was
+judged on the settled 2019 holdout and **REFUSED**, so nothing was promoted),
+`configs/train.yaml: features.version` = v2, the champion serving. Gates:
+`make verify-m5` **GREEN 49/49** · `make verify-m6` **GREEN 63/63** ·
+`make verify-m7` **GREEN 62/62** · red team **PASSED** · **940 unit tests** ·
+ruff clean. No detached job pending, no open PR, no scratch state anywhere.
+
+**This session mutated the wire not at all.** `make verify-m7` sent the endpoint
+exactly one inference request, asked Prometheus one query and read its rules
+once; the red team sent two more predictions across its two gate runs. No deploy,
+no restart, no rule change, no pushed metric, no alias move, no pod deleted.
+
+**Two things worth your eye, neither blocking and neither needing an answer from
+you today.**
+
+**F-050 (new, OPEN, routed to the M7 boundary):** the gate found on its own first
+run that **a pushgateway restart deletes every drift series, and A-10 — the
+staleness rule written to catch exactly this class — cannot fire on an ABSENT
+one**, because `time() - max by (month) (…) > 3456000` over no series is no
+series. Your host rebooted around 14:25Z and the gateway came back empty; the
+drift board is currently blank and nothing anywhere says so. Nothing published is
+wrong and no decision was made from it. Two costed options are in
+`ledgers/findings.md`, and the recommendation is the cheap one — an `absent()`
+rule — **with its honest cost stated: it will fire during ordinary development on
+a laptop**, which is the kind of noise that trains an on-call to ignore a signal.
+That cost is why it is a decision rather than an edit. **If you want the board
+populated again in the meantime**: `make drift DRIFT_ARGS="--months 2020-01
+2020-02 2020-03 --push"` behind a port-forward. A-9 will re-fire for 2020-03 after
+its 5-minute sustain, which is the correct standing state — March 2020 really did
+lose 61% of its trips.
+
+**`make verify-m6` was RED at boot, and the cause was a previous story doing the
+right thing.** Its signal leg required the documented-absence list to be
+NON-EMPTY, and M7-S3 emptied it by closing F-035. Repaired to the property that
+holds at every state — GREEN 63/63 — and it is gotcha #50's sixth appearance,
+which is starting to look like the most expensive recurring lesson in this
+program.
+
+**The standing non-blocking items below are unchanged** (2026-08-18-1's F-016
+incumbent margin — still yours; it is now doubly informed, having moved the
+pointer on +0.63% at M3-S5 and held it on **−0.03%** at M7-S4, so the gate as
+pre-registered has been seen deciding in both directions; 2026-08-17-1's host
+`libgomp1` one-liner; 2026-08-16-2's allowlist paste).
+
+---
+
 ## 2026-08-19-2 · raised by EXEC/Opus (M6-S5 leg 1) · NOT A FORK, NOT BLOCKING: your second park today is recorded, and this is what is ready when you lift it
 
 **Nothing here needs a decision.** Same purpose as 2026-08-19-1 and 2026-08-18-2:

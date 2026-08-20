@@ -131,9 +131,15 @@ clean · nothing detached, nothing pending.
 - **Wall count**: none.
 
 ### Next
-- **M7 has no story left. The exit is `automation/next_session.sh rev 120` —
-  M7 is ◆**, so REV's monitoring review runs in a fresh session and then exits
-  to the architect for the boundary.
+- **THE CHAIN IS PARKED, deliberately.** `automation/STOP` appeared mid-session
+  (`2026-08-20 22:36:29 +07`, `chain_park.sh` — the PO's tooling). The exit
+  ritual was run: `automation/next_session.sh rev 120` printed `[chain] STOP
+  file present — not scheduling.` **No successor is scheduled**, and the park is
+  recorded at **AWAITING_PO 2026-08-20-1** so the watchdog reads a decision
+  rather than a crash.
+- **M7 has no story left. When the park lifts the exit is
+  `automation/next_session.sh rev 120` — M7 is ◆**, so REV's monitoring review
+  runs in a fresh session and then exits to the architect for the boundary.
 - **What REV should re-derive, and the cheapest routes to it**: at least one
   drift number from raw artifacts — `make drift DRIFT_ARGS="--months 2020-03"`
   recomputes PSI and the volume ratio from DuckDB in seconds and issues no
