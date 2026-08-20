@@ -3387,3 +3387,43 @@ the only version of that question that ever gets a truthful answer. Then run
 `uv run pytest tests/unit -q` with `.python-version` temporarily set to 3.14
 and watch what changes (and what doesn't) — the skew you can't see is the
 whole reason the pin exists.
+
+## M7-S4 — a number that was true where it was written, applied where it is not
+
+Two findings landed this story and they turned out to be the same shape.
+
+**F-022.** A bake-off row resolved the champion **by alias** — deliberately, so
+the table judges what is actually serving — and *also* pre-registered
+`feature_set="v1"`. Both true the day they were written. The bake-off's own
+promotion then moved the alias to a v2 model, and every invocation since has died
+at a refusal that was correct one layer too late.
+
+**F-020.** A tuned `min_data_in_leaf: 1293` was chosen on 15% of train and applied
+at 100%. Same integer, and it means *1 row in 5,103* where it was chosen and *1 in
+34,020* where it was used — 6.7× less regularising, silently.
+
+The generalisable lesson is the distinction that fixes both: **pre-registration is
+right for a thing declared before its number existed, and exactly wrong for a
+pointer designed to move.** A Spec that names an arm's identity should be frozen;
+a Spec that names "whatever is serving" must resolve from the artifact. And a
+hyperparameter is not a number — it is a number *plus the scale it means it at* —
+so transferring one between scales is an operation, not a copy.
+
+Three smaller things worth keeping:
+
+* **A guard that fires on your own commit is the guard working.** `make
+  retrain-schedule` refused to deploy because a script I had just committed was
+  not in the task image. The instinct is to narrow `IMAGE_PATHS`; the correct move
+  is six minutes of `make image-load`. A guard you narrow to pass your own change
+  is a guard you have deleted.
+
+* **"Every task in this file declares X" breaks the first time the file gains a
+  task that is not one of them.** Three wiring guards went red for a correct
+  addition (gotcha #50, sixth time). The repair was not a longer allow-list: the
+  pipeline's task set is now *what `main` awaits*, asked of the AST — derived, so
+  it stays true for additions nobody has thought of.
+
+* **A cheap arm can be a better proof than an expensive one.** The scheduled-run
+  proof plans only: it exercises the trigger, the pod, the image, the wiring, the
+  registry read and the record write, and stops before the hour of CPU. A proof
+  that fitted would have been measuring the fit.
