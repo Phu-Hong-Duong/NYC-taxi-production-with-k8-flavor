@@ -13,7 +13,8 @@ no detached job pending, 3 nodes Ready v1.36.1, one isvc, `@champion` **v2**
 (run `92b73bd4…`, `feature_set: v2`) — exactly as (bn) described.
 **M7-S4 landed as a LEG.** PR **__PR__**. End state: `@champion` **2** (read,
 never written) · `features.version` **v2** · champion serving · the retrain task
-and its two triggers deployed · **the full-data retrain running DETACHED**, and
+and its two triggers deployed and **one firing observed** · **the full-data
+retrain running DETACHED**, and
 its verdict is the next session's first act (see Next).
 
 ### Done
@@ -103,6 +104,25 @@ its verdict is the next session's first act (see Next).
   unchanged leaf floor is "1 in 5,105" where the tracked records give **5,103.7**
   (the ledger rounded oddly); and an exit-code test asserted on a string shape the
   CLI does not use. Both fixed against the records rather than against memory.
+- **F-048 (new, OPEN, medium-HIGH, routed to ARCH — the trigger's own first
+  firing found it).** The proof run (`r5d5ce577470fc2ce`, fired **05:51:54Z**,
+  SUCCEEDED in 4.5 s) returned `rescale_factor: null, round_cap: 500` where the
+  host resolves `6.6667` and `2400` **for the same champion in the same minute**,
+  and its log says why: `no sampled search behind this champion — no scale
+  transfer to make`. `.dockerignore` excludes `automation/runs/`, so inside a task
+  pod F-020's provenance chain is absent for a reason that has nothing to do with
+  the champion. **The sentence is honest about what the code could see and false
+  about the world** — gotcha #94's shape with the direction reversed: the
+  reported-no-op design is right, and it lets a MISSING FILE wear a legitimate
+  absence's clothes. No number is wrong yet (the scheduled path has only ever
+  planned, the measurement was made on the host, `retrain-monthly` is inactive).
+  **Not fixed here, and the reason is stated rather than convenient**: the guard
+  that must land under any option — *"no refit record names this run" and "I
+  cannot see any records" must not produce the same sentence"* — needs an image
+  rebuild and a redeploy, after which the deployed proof trigger goes RED until
+  the design question (put the scale ON the champion, vs ship the records into
+  the image) is answered, and that question is ARCH's. So the story would have
+  ended leaving a red schedule behind. Three options costed in the ledger.
 - **F-047 (new, OPEN, routed to ARCH at the M7 boundary — deliberately NOT
   fixed).** `make image-smoke` has been **RED since M5-S5** and this is the first
   run since: **9 ok · 1 FAIL**, the FAIL being the in-image unit suite at
@@ -143,8 +163,11 @@ its verdict is the next session's first act (see Next).
   points, zone 138 losing a third of its share, the 30–45 min band losing 1.28
   points) is the memo's material.
 - **`retrain-schedule-proof` is ACTIVE and fires every 20 minutes**, running a
-  plan-only retrain that writes a record and costs seconds. It is deliberate, not
-  residue. If it becomes noise, `flyte delete trigger` or a redeploy with
+  plan-only retrain that writes a record and costs seconds — **observed firing at
+  05:51:54Z, SUCCEEDED in 4.5 s** (run `r5d5ce577470fc2ce`, `triggerName:
+  retrain-schedule-proof`). It is deliberate, not residue. **Every firing from
+  now until F-048 lands will report `rescale_factor: null`** — that is the
+  finding, not a new fault. If it becomes noise, `flyte delete trigger` or a redeploy with
   `auto_activate=False`; **do not delete it silently before `verify-m7` reads
   it** — a schedule that fired once and was removed is not distinguishable from
   one that never fired.

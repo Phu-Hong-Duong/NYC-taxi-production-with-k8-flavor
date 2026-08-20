@@ -143,9 +143,58 @@ visible in the control plane's own answer rather than only in the source.
 
 ---
 
-## §4 — The proof trigger firing
+## §4 — The proof trigger firing, and the defect it found
 
-*(Filled by the observation; see `automation/runs/m7-retrain/schedule_proof.json`.)*
+Registered 05:31:54Z. **Fired 05:51:54Z**, twenty minutes later, exactly as
+`FixedRate(20)` says — read off the control plane's own record of the run, never
+off the trigger's configuration (gotcha #81 one cadence up: a registered trigger
+and a firing trigger look identical in a `get trigger` table).
+
+```
+'name': 'taxi-pipeline-train.retrain',
+'triggerName': 'retrain-schedule-proof',
+'phase': 'ACTION_PHASE_SUCCEEDED',
+'startTime': '2026-08-20T05:51:54Z',
+'endTime':   '2026-08-20T05:51:58.502156Z',
+'podName':   'r5d5ce577470fc2ce-a0-0'
+```
+
+Four and a half seconds, one pod, run `r5d5ce577470fc2ce`. The schedule
+mechanism is proven: **registered, reconciled by the server, and observed firing
+once**, which is what M7 owes.
+
+**And its output is F-048.** The returned record:
+
+```
+ActionOutputs(o0="{"challenger": "retrain-rescaled-v2", "champion_version": "2",
+"target_rows": 43987422, "rescale_factor": null, "round_cap": 500,
+"plan_only": true, "sampled": false, "decision": "PLAN_ONLY", "promoted": false, …}")
+```
+
+`rescale_factor: null` and `round_cap: 500`, against the host's `6.6667` and
+`2400` **for the same champion in the same minute**. The pod's own log says why:
+
+```
+[retrain] F-020 (1)  : no sampled search behind this champion — no scale transfer to make
+[retrain]              min_data_in_leaf: 1293 (unchanged)
+[retrain] F-020 (2)  : rounds 500 configured / None inherited -> 500
+[retrain]              no inherited search cap: the configured budget of 500 rounds stands.
+                       There is nothing to re-derive.
+```
+
+That sentence is **honest about what the code could see and false about the
+world**: `.dockerignore` excludes `automation/runs/`, so inside a task pod the
+provenance chain is absent for a reason that has nothing to do with the champion.
+The reported-no-op design is right — F-020 *is* the finding that assuming a
+sample fraction produces a plausible configuration nobody can check — and it
+turns out the same design lets a **missing file** wear a legitimate absence's
+clothes. Gotcha #94's shape with the direction reversed.
+
+No number is wrong yet: the scheduled path has only ever planned, the full-data
+measurement was made on the host where the chain resolves, and `retrain-monthly`
+is registered inactive. Filed with three options and routed to ARCH; the guard
+that must land under any of them is that **"no refit record names this run" and
+"I cannot see any records at all" must not produce the same sentence.**
 
 ---
 
