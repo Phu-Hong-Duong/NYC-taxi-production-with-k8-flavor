@@ -1327,3 +1327,40 @@ the seed line are earned by THIS project.
     side of the failing process (A-6 reads the kubelet's cAdvisor and fired
     regardless), and note that an idle second instance of the same exporter is
     the cheapest control there is (F-043).
+
+90. **A prose-vs-record check with no precision FLOOR passes against a number
+    the record does not hold — and it is gotcha #76 arriving through rounding
+    instead of through tokenisation.** `verify-m6` §7 compares every headline
+    number `docs/gameday_m6.md` quotes against the record it cites, rendering
+    the record's value at each precision it can legitimately be written to
+    (a document sensibly writes `13.75 s` for 13.75 and `844.3` for 844.3 —
+    #42). Its first draft started that range at **zero** decimals, so 13.75 also
+    rendered as **`14`** — and `14` appears in almost any document of any
+    length. The check therefore passed while the red team's planted 13.501 sat
+    in the record, because *that* rendered as `14` too. **A comparison whose
+    loosest accepted form is one a document is almost certain to contain is not
+    a comparison.** The floor is one decimal; an integer-valued record still
+    matches as `55`, because the trailing zero is stripped. Two properties, both
+    load-bearing and neither obvious: #76's anchors stop `13` matching inside
+    `13.75`, and this floor stops `13.75` becoming `14`. Both were found by a
+    red team planting a value close enough to be plausible — a drill that had
+    planted `999` would have gone green on both legs and taught nobody anything.
+
+91. **The label an artifact PRINTS is a different artifact from the label it
+    carries in its header, and only the printed one is read during an
+    incident.** M6-S5 leg 1 moved the platform restore's honest label one notch
+    — "NOT REHEARSED" -> "scratch-rehearsed 2026-08-19; a full restore over a
+    dead platform still not" — in `scripts/platform_backup.sh`'s header, in the
+    `MANIFEST.txt` it writes, in the gameday write-up and in CLAUDE.md, whose
+    backup row then asserted that *every* artifact said so. Two did not: the
+    script's own `echo` on line 85 still told every future operator `restore NOT
+    rehearsed (M6 gameday candidate)`, and `ledgers/deployments.md` still
+    carried the M4-S2 row's unqualified claim. Nothing was wrong with the
+    system; a *claim about the system* was stale in exactly the two places a
+    reviewer does not look and an operator does. **When a status label moves,
+    enumerate the artifacts that carry it — including the RUNTIME output — and
+    make a check assert the compound claim** (`verify-m6` §7 now requires both
+    halves in every artifact and refuses an `echo` that mentions rehearsal
+    without saying "scratch"). Historical ledger rows are corrected with a dated
+    note BESIDE the original, never rewritten: decisions were made from what
+    they said (the `error_memo_m2.md` §9 precedent).
