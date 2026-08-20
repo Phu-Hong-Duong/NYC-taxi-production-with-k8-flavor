@@ -2369,6 +2369,68 @@ can never disagree (the port-family twins lesson, applied before it bit).
   wired into `verify-m1`, because widening a gate's behaviour late in a session
   is how a guard goes red for a correct system (gotcha #50).
 
+## The M7 gate (M7-S5 leg 2) — the difference it asserts, and the hole it found
+- **`make verify-m7` is 62 sub-checks in 7 sections, 5.328 s, and it RE-RUNS
+  NOTHING** — seventh inheritance of M1's no-skip-flag rule. M7's evidence is
+  15.7M raw rows ingested, 15.4M scored, a ~12 minute drift drill and a 1,618.4 s
+  fit, but the stronger reason is new: **the ORDER OF WORK is part of the
+  evidence.** The drift bars are legitimate because they were argued from 2019
+  headroom BEFORE any 2020 month was compared, and a gate that recomputed the
+  drift numbers would destroy the one property that makes them honest. It asks
+  the live system exactly three questions — **one prediction, one PromQL query,
+  one rules read** — pinned by test, and it may not push a metric (a gateway has
+  no expiry, so anything the gate wrote would be read by a rule as a real job).
+- **§2 is the §9/M7 "Show" leg and it is a DIFFERENCE, not a sentence.** The two
+  failure signatures are built from their own records — statistical from the
+  drift + ingest records, schema from the fixture records — and must differ in
+  **all four** discriminating fields (exit code · rows written · report present ·
+  drift metric present). The last is an absence, which a record cannot honestly
+  claim about itself, so it is counted **where a landed month would have to
+  appear** (`ingest_months ∪ scoring_months`). `rows_validated: 200000` in a
+  refusal record means *rows read*, not *rows that passed* — the first draft
+  believed the field name.
+- **The order of work is checked on three clocks and one of them is git.**
+  Headroom computed 04:14:49Z, first 2020 comparison 04:38:31Z; the prediction's
+  ADD commit precedes the first 2020 drift record's by **640 s**; and the drill's
+  embedded prediction is field-by-field equal to the committed file (a prediction
+  can be written first and quietly edited into the record that judges it — the
+  M6 gameday idiom, transplanted).
+- **F-050, raised by the gate on its own first run: a pushgateway restart
+  deletes every drift series, and A-10 cannot fire on an ABSENT one.** The live
+  query returned **zero** series against three records saying three. Nothing had
+  drifted — the gateway pod restarted after a host reboot. `time() - max by
+  (month) (taxi_drift_last_run_timestamp_seconds) > 3456000` over no series **is
+  no series**, so the staleness rule sits inactive and the board renders empty:
+  gotcha **#78** one layer up, and the SLO doc's own "a pushed metric persists"
+  argument blind to the board going away. **The gate asks the PAIR** — either the
+  series are present, or the gateway restarted since the drill pushed them,
+  checked on two clocks — so an absence nothing accounts for is still a FAIL,
+  while a laptop reboot does not turn the milestone red (gotcha #50). Two costed
+  options in the ledger; the recommendation is an `absent()` rule, whose honest
+  cost is that it fires during ordinary development.
+- **`verify-m6` had gone RED, and the cause was M7-S3 doing the right thing.**
+  Its signal leg required the documented-absence list to be **non-empty** — true
+  the day it was written, false the moment F-035 closed. Same leg read the
+  renderer's sets with `ast.literal_eval` and silently got nothing once they
+  became comprehensions: **a guard degrading into a guard about its own parser.**
+  Both repaired to the property that holds at every state — import the sets,
+  assert the AGREEMENT — **GREEN 63/63**. Gotcha #50, sixth time.
+- **The red team plants F-045 itself.** One `volume_ratio` rewritten from a ratio
+  of RATES to a ratio of TOTALS (`current_rows` over `reference_rows / 6` =
+  0.4021 against 0.3913), derived from the record's own fields, wrong by one
+  percentage point, and **still under the 0.50 bar** — so the alert still fires
+  and nothing reads differently to a skim. **RED with 3 FAILs from THREE
+  artifacts**: the anchor arithmetic, the drill record that watched the live
+  gateway, and the memo a human reads. **59 sub-check lines still passed**, and
+  the drill asserts the bar-daylight leg **must stay GREEN** — which is what
+  separates a gate that fails on a WRONG number from one that fails on any edit.
+- **Three needles in the gate's own test file matched WORDS, and all three were
+  the gate quoting itself** (gotcha #99): `--push` in the advice line it PRINTS,
+  `ingest_month` as a prefix of the `ingest_months` VIEW it reads, `retrain(`
+  inside the sentence reporting what `ast` found. For the third no anchor helps —
+  the sentence is legitimate — so the property changed: **the gate must never
+  IMPORT the callable it inspects.**
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2532,7 +2594,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Reprint every number in the drift memo (M7-S5) | `uv run python scripts/drift_memo_numbers.py [section…]` | VERIFIED 2026-08-20 (M7-S5 leg 1): the M2-S4 twin-script precedent applied to `docs/drift_memo_m7.md` — 19 queries across 7 sections, each printing the SQL it ran, over three sources whose difference IS the meaning: `analyst.*` (facts about the WORLD), `main_marts.scoring_daily` (facts about the CHAMPION's error, under **monitoring** ids), and `automation/runs/m7-drift/*.json` **read back as data** rather than retyped (`read_json_auto` / `json_keys`, so the record's own month keys are DERIVED, not typed). The March cut is declared ONCE as `PERIOD_SQL` so no two sections can disagree about it. Read-only, writes nothing, seconds. Transcript: `docs/drift_memo_m7_transcripts.md` §1 |
 | The predictions & drift board (M7-S5) | `make boards` (`--verify` is the read-only twin) | VERIFIED 2026-08-20 (M7-S5 leg 1): **`Predictions & drift (M7)` created, id 5, 8 cards**, over `marts.scoring_daily`; the three existing boards reported `card updated` and kept their ids (idempotent BY NAME, M1-S5). `--verify` GREEN across all four dashboards — `card 'KPI-17 · trips scored per day' RAN and returned 91 row(s)` and `no card claims KPI-09/KPI-10` on every board. Six board laws added as unit tests, five of them M7-specific (monitoring ids only · KPI-16 present AND a series · ≥3 daily-grain cards, none rolled up to the month · the tolerance read off the mart · the model version visible) |
 | Execute EVERY board card; an empty panel is a FAILURE (M7-S5) | `make board-cards` (`BOARD="…"` scopes it to one board) | VERIFIED 2026-08-20 (M7-S5 leg 1): **36 cards across all 4 boards, 0 failures.** It exists because `--verify` runs ONE card per dashboard, which proves the connection and the credentials and not the board — and an empty panel is indistinguishable from a quiet system (**gotcha #78**, learned expensively on the Grafana boards at M6-S1). It runs the SQL a reviewer reads in the checked-in JSON straight at the one Postgres over the `make marts` transport, so what is under test is the reviewed artifact. **Deliberately NOT wired into `verify-m1`**: widening a gate's behaviour late in a session is how a guard goes red for a correct system (gotcha #50) |
-| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6 live |
+| Gate check M7 | `make verify-m7` | VERIFIED 2026-08-20 (M7-S5 leg 2): **GREEN 62/62 sub-checks in 7 sections, 5.328 s, exit 0** — the scoring months (`trips_clean` still exactly `{train,val,test}` asked of the ROWS · the config loader REFUSES a month in both lists · the 2019 pins unmodified in git while the scoring trees carry their own · the 2025 probe VALIDATED and having acquired nothing · three refusal shapes, exit 1 each, and their month in NO ingest or scoring table) · **the two failure signatures differing in all 4 discriminating fields**, built from record shapes rather than from a doc table, with the drift metric's ABSENCE counted where a landed month would have to appear · the predictions table reconciling **15,413,352 rows across three systems** with the ingest report as the AUTHORITY, the self-check matching the registry's own `gate_challenger_mae`, `model_versions_seen = 1` per month, a row per calendar day, and NO floor/margin/KPI-09/10 column · the drift judgement (5 M7 rules LOADED and `health=ok`, **every threshold parsed out and found in §6/§8 specifically** — a bar argued in the latency section is not an argument for a drift bar — the absence list EMPTY, A-8 excluding the target BY NAME, no bar-shaped constant under `src/taxi_mlops/monitoring/`, `honor_labels: true`, and `push_metrics` REFUSING a payload with no freshness stamp) · **the order of work on three clocks including git** · the retrain's REFUSE with F-020's rescale re-derived and **not one of its 8 runs a registry version** · the memo's 14 instrument numbers against the records at the precision the document wrote them. **RE-RUNS NOTHING** and asks the live system exactly three questions (one prediction, one PromQL query, one rules read), pinned by `tests/unit/test_verify_m7.py`. No skip flag, no fast mode (M1's rule, **seventh** inheritance). Transcript: `docs/verify_m7_transcripts.md` §1 |
+| Prove the M7 gate can go RED | `make verify-m7-redteam` (`bash scripts/verify_m7_redteam.sh`) | VERIFIED 2026-08-20 (M7-S5 leg 2): rewrites ONE number in `automation/runs/m7-drift/drift-2020-03.json` — `volume_ratio` **0.3913 → 0.4021**, a ratio of TOTALS where a ratio of RATES belongs, derived from the record's OWN fields (`current_rows` over `reference_rows / 6`) and **still under the 0.50 bar so the alert still fires** → **RED exit 1 with 3 FAILs from THREE DIFFERENT ARTIFACTS**: the anchor arithmetic (trips/DAY over trips/DAY), `drift_fire_drill.json` (what the live gateway held while the alert was judged), and `docs/drift_memo_m7.md` §7 (the only witness a human reads). **59 sub-check lines still ran and passed**, and the **bar-daylight leg stayed GREEN by design** — the planted value keeps the argument intact, which is what separates a gate that fails on a WRONG number from one that fails on any edit. Restored under an EXIT trap, sha256-verified byte-identical, `git status` clean → **GREEN 62/62**. Touches no pod, no rule, no pushed metric, no MLflow run, no registry version, no alias. It is **F-045 itself** — *a month is not a unit of demand; a day is* — planted against the milestone that found it |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |

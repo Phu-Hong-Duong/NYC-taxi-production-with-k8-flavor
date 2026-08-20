@@ -217,8 +217,8 @@ def test_the_gate_cannot_inject_kill_shift_or_deploy():
     Postgres that publishes no port. That exception is asserted to be read-only
     rather than waved through."""
     body = without_comments(VERIFY_M7)
-    verbs = re.findall(r'"kubectl",\s*"--context",\s*"[^"]+",\s*(?:"-n",\s*"[^"]+",\s*)?"(\w[\w-]*)"',
-                       body)
+    verb_call = r'"kubectl",\s*"--context",\s*"[^"]+",\s*(?:"-n",\s*"[^"]+",\s*)?"(\w[\w-]*)"'
+    verbs = re.findall(verb_call, body)
     assert verbs, "no kubectl invocation found — the test is not looking where the gate looks"
     allowed = {"get", "describe", "version", "config", "exec"}
     offenders = sorted({v for v in verbs if v not in allowed})
