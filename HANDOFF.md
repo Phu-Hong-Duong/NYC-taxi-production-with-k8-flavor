@@ -103,6 +103,19 @@ its verdict is the next session's first act (see Next).
   unchanged leaf floor is "1 in 5,105" where the tracked records give **5,103.7**
   (the ledger rounded oddly); and an exit-code test asserted on a string shape the
   CLI does not use. Both fixed against the records rather than against memory.
+- **F-047 (new, OPEN, routed to ARCH at the M7 boundary — deliberately NOT
+  fixed).** `make image-smoke` has been **RED since M5-S5** and this is the first
+  run since: **9 ok · 1 FAIL**, the FAIL being the in-image unit suite at
+  **12 failed, 862 passed**, every failure a `FileNotFoundError` under
+  `/app/automation/runs/`. `.dockerignore` excludes `automation/runs/` —
+  correctly, those are host RECORDS — and from M5-S1 they became TRACKED, after
+  which a growing family of tests reads them as files that must exist. Nothing
+  downstream is wrong and no claim made about the image elsewhere is false. What
+  makes it worth a row: **the one command whose job is "prove this artifact runs
+  OUR code" is a command no gate runs**, which is the exact shape of the finding
+  it exists to prevent. Three options costed in the ledger; (a) a
+  `needs_records` marker is the recommendation and it touches ~12 tests across 6
+  files, which is why it is not being done beside a retrain.
 - **Wall count**: none. The schedule probe succeeded on attempt 1 of 3.
 
 ### Next
