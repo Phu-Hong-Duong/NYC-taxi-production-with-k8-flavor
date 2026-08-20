@@ -3487,3 +3487,49 @@ own docstring, which quotes the guard it forbids. Gotcha #53/#68 for the seventh
 time, inside the test written about the lesson. Prose is load-bearing in this
 repo; a check about code structure has to parse code, and knowing that is not the
 same as remembering it while typing.
+
+---
+
+## M7-S4 completion leg (2026-08-20) — the prediction paid off, and the vocabulary died at the launcher
+
+**The five minutes spent on the prediction file returned the whole session's
+confidence in one command.** The re-run reproduced all twenty predicted fields:
+3.2412 and 81.568% on the holdout, 3.3811 on val, best iteration 779 of a 2400
+cap, `early_stopping`, REFUSE on exactly the two incumbent conditions. Because
+that claim was committed *before* the fit was launched, "it matched" is not a
+sentence I am asking anyone to trust — `make retrain-prediction-check` resolves
+each field against the machine-written record and returns 1 if any of them
+disagree. Two MLflow runs of one configuration, half an hour apart, agreeing to
+the last kept digit is also the second determinism observation this program
+holds. **Writing down what an expensive thing must produce is how you get two
+results out of running it once.**
+
+**Then the status file lied for the third session in a row, and this time nothing
+in the repository was at fault.** The previous leg added exit **4** so a crash
+could not wear a verdict's clothes. The re-run refused correctly — CLI exit
+**1** — and its `.status` read `FAILED 2`, which in this vocabulary means *the
+challenger could not be built*. The cause is `make`: **GNU make exits 2 for any
+failed recipe**, so 1, 3 and 4 all arrive as 2, and 2 was already spoken for.
+Every code the last session carefully designed is unreachable through the only
+launcher this program uses for long jobs.
+
+**The interesting part is what NOT to do about it.** The obvious fix is a `CMD=`
+escape hatch on `make detach`, so an exit-code-carrying job is detached as the
+command rather than as the target. It works, and it puts the recipe in two
+places — the Makefile and the launch site — which is the twin this repo spends
+its time eliminating. So the fix is a rule instead of a mechanism: **stop reading
+verdicts out of exit codes.** A refusal writes a record; a crash writes nothing;
+the record's presence and its `verdict` field survive every collapse, and that is
+gotcha #59's *assert positively on the artifact* arriving in a place I did not
+expect it. The two cheap mitigations beside it are the recipe echoing its own
+`$?` into the log and re-exiting with it — and re-exiting matters as much as the
+echo, because a recipe that swallowed the code to make the line printable would
+turn every refusal into a green `make`.
+
+**And the checker went red for its own reason before it went red for mine.**
+Three of the four red-team tests failed on `Path.relative_to` — the tampered
+copies live in a pytest tmpdir, outside the repo, and the header formatter
+assumed otherwise. Gotcha #55's family, in the artifact I was writing to avoid
+exactly that class of thing. A verifier that dies formatting its own header
+reports a defect in whatever it was pointed at.
+

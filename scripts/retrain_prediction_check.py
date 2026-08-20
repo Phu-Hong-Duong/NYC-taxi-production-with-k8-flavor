@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         resolver = EXACT_RESOLVERS.get(key)
         if resolver is None:
             failures.append(f"{key}: the prediction claims it and this check cannot resolve it")
-            print(f"  FAIL {key:<24} UNRESOLVED — the prediction claims a field this check cannot read")
+            print(f"  FAIL {key:<24} UNRESOLVED — a claimed field this check cannot read")
             continue
 
         actual = resolver(record)
@@ -184,8 +184,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             places = _decimals(claimed)
             if places < MIN_DECIMALS:
-                failures.append(f"{key}: predicted to {places} decimals — below the floor of {MIN_DECIMALS}")
-                print(f"  FAIL {key:<24} predicted to {places} decimals; the floor is {MIN_DECIMALS} (gotcha #90)")
+                failures.append(
+                    f"{key}: predicted to {places} decimals — below the floor of {MIN_DECIMALS}"
+                )
+                print(
+                    f"  FAIL {key:<24} predicted to {places} decimals; "
+                    f"the floor is {MIN_DECIMALS} (gotcha #90)"
+                )
                 continue
             ok = round(float(actual), places) == round(float(claimed), places)
             shown = f"{float(actual):.{places + 6}f} -> {round(float(actual), places)}"

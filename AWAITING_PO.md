@@ -459,3 +459,29 @@ automation/next_session.sh executor 60
 pull` there to see the chain's work; the chain itself only ever runs in the
 WSL clone. The untracked `_to_delete/git-locks/` files in the Windows copy
 are yours to delete at leisure; the chain will not touch them.
+
+## 2026-08-20 06:50 UTC — watchdog: Chain: detached run FAILED
+'m7-retrain-fulldata' exited 2. The chain is parked because its result never arrived. See automation/runs/m7-retrain-fulldata.log
+
+Watchdog log: automation/logs/watchdog.log
+
+### RESOLVED 2026-08-20 (M7-S4 completion leg) — no decision was needed, and the park was correct anyway
+
+**Nothing is awaiting the PO here.** The watchdog did exactly its job: a detached
+run reported a non-zero exit and it refused to guess. Two separate runs were
+involved and both are now closed:
+
+* `m7-retrain-fulldata` (05:59Z) genuinely crashed after reaching a correct
+  REFUSE — that is F-020's verdict, gotchas #95/#96, fixed in commit `6972618`.
+* `m7-s4-retrain-rerun` (06:43Z) **succeeded**: it refused correctly, wrote the
+  record, and its `FAILED 2` is `make` collapsing the CLI's exit **1** — the
+  vocabulary does not survive the launcher. That is **F-049 / gotcha #97**,
+  closed in this session with the rule that a verdict is read out of the RECORD
+  and never out of a `.status` file.
+
+`@champion` is version **2**, `VERSIONS: ['1','2']` — no version 3 exists, so
+nothing was promoted by either run. The chain was restarted by hand this session
+and continues normally; no PO action is required for this entry.
+
+The three standing entries below/above are unchanged and still non-blocking:
+**2026-08-18-1 (F-016)**, **2026-08-17-1**, **2026-08-16-2**.
