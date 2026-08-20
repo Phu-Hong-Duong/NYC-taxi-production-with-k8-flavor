@@ -1,5 +1,137 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bl) — M7-S1: the scoring months, and the difference between a wrong file and a different world
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block DE (Accountable),
+MLE (R)** (charter read at entry; refusals in play: nothing promotes, no
+registry version minted, no alias moved, the cluster never goes down, and the
+2019 training data may not move by a single byte).
+Boot reads: CLAUDE.md · HANDOFF (bk) · M7 KICKOFF · AWAITING_PO.
+**Staleness check passed** — `automation/STOP` ABSENT, tree clean at `536901e`,
+no detached job pending, 3 nodes Ready v1.36.1, `@champion` version 2, both
+isvcs (champion + the M6-S3 v1 shadow) Ready, exactly as (bk) described.
+**M7-S1 COMPLETE.** PR **#40**, merged, reachable from origin/main.
+End state: `@champion` **2** (read, never written) · `features.version` **v2** ·
+`make verify-m5` GREEN · `make verify-m1` GREEN · `make verify-m2` GREEN ·
+all four DVC pins `up to date` · tree clean.
+
+### Done
+- **The v1 shadow is torn down** (the M6 boundary's decision, this story's
+  declared first move). `make shadow TEARDOWN=1` removed exactly its own three
+  objects; the champion's isvc/Deployment/Service/Ingress read back at **21 h and
+  23 h old**, i.e. untouched and unrestarted. `make verify-m5` **GREEN 49/49**
+  after. Deployments-ledger row written. **This is M7-S1's ONLY wire mutation.**
+- **2020-01, 02, 03 ingested into a scoring tree**: `make ingest-scoring` →
+  **15,712,062 → 15,413,352 rows, 1.901% rejected**, per-rule tables per month,
+  one schema event each (`airport_fee` ahead of its `from_year` — gotcha #6
+  working). `data/scoring/<month>/` + `data/scoring_rejected/<month>/`, own DVC
+  pins, pushed (15 files).
+- **`make duckdb` now runs FIVE reconciliations over 16 views.** New: scoring
+  rows vs their reports (**15,413,352 == 15,413,352**) and the scoring sidecar
+  per (month, rule) (**298,710 == 298,710, 30 pairs, 0 disagreements**). Settled
+  numbers unmoved: 56,127,878 · 914,459 · 12,140,456.
+- **M7 law 2 held and is checkable three ways**: `dvc status data/processed.dvc
+  data/rejected.dvc` → `up to date`; neither `.dvc` modified in git;
+  `data/raw_manifest.json` **+18/−0 with zero diff lines mentioning 2019**. And
+  **`make verify-m1` was re-run GREEN afterwards** — its leg 1 wipes and
+  re-derives the settled trees through the ingest code this story edited, and
+  came back byte-identical with the tree clean.
+- **The 2025 leg came back VALIDATED — a SURPASS, recorded as one.** The real
+  `yellow_tripdata_2025-01.parquet` (59,158,238 bytes, 3,475,226 rows, 20
+  columns) passes the shipped contract with ONE event, `alias applied:
+  'Airport_fee' -> 'airport_fee'`. `make contract-probe` acquires nothing
+  (`data/probe/`, own manifest, `--raw-dir data/raw` refused, AST-tested).
+- **`make contract-probe-fixtures` — PASSED, 3 refusal shapes, exit 1 each,
+  nothing written**, derived from the real file. It found a real defect in the
+  refusal message (see Defects).
+- **F-045 raised and ROUTED to M7-S3, deliberately not acted on** (see Decisions).
+- `docs/scoring_months_m7.md` (accept-when answered clause by clause; §8 is the
+  two signatures side by side that §9/M7 asks for) · `docs/
+  scoring_months_m7_transcripts.md` (pasted, not remembered) · CLAUDE.md section
+  + **4** command rows · findings + deployments ledgers · field note.
+- **820 unit tests** (14 new), ruff clean, CI green.
+
+### Decisions
+- **A scoring month is NOT a fourth split, and the trees are the enforcement.**
+  `data/processed` is globbed by the rebuild proof, `trips_clean`, the dbt
+  sources and through them the training matrix, the marts and every card — all
+  written when that directory meant "the settled 2019 months". A 2020 row inside
+  it raises nothing and quietly makes every number a number about a different
+  world. So: separate trees, separate pins, `trips_clean` NOT unioned (a test
+  asserts its splits are still exactly `{train,val,test}`), and the old
+  `processed_path`/`rejected_path`/`rejections_path` left REFUSING scoring months
+  so no future caller reaches the new data by accident.
+- **The months are named in `configs/data.yaml`, not `train.yaml`** — split
+  months are a modelling fact, a scoring month is the opposite. Splitting a list
+  across two files creates exactly one new failure (the same month in both), so
+  `load_config` raises on it rather than trusting nobody will do it.
+- **`make data` was not touched; `make data-scoring` is a separate command.** One
+  command doing both would make every scoring ingest a rewrite of the trees the
+  program's numbers rest on.
+- **F-045 is routed, not solved.** A drift metric over a whole MONTH may not fire
+  on 2020-03: its mean trip duration is **13.1645** against 2020-01's **13.2123**
+  (a **0.36%** move, *smaller than the ordinary Jan→Feb wobble of +2.71%*), while
+  its daily series runs **240,520 trips at 14.878 min on the 5th** to **5,361 at
+  9.715 min on the 29th**. Volume is the one marginal that cannot be averaged
+  away. Three readings are costed in the ledger and **none is chosen here**: the
+  window, the reference and the bar are S3's to argue BEFORE the job runs (M7 law
+  4), and picking one from a number just measured is the same error one level up.
+- **The 2025 probe writes nothing and acquires nothing.** A probe that leaves
+  data behind is an ingest wearing a smaller name — so its own directory, its own
+  manifest, `--raw-dir data/raw` refused, and an AST test (not a grep — #53/#68)
+  that it calls no writer and no ingest.
+
+### Defects/Surprises
+- **The rename fixture found a real defect in the contract's refusal message.**
+  A renamed column is both an absence and an arrival, and `check_columns` raises
+  in the missing-required branch *before* the unknown-column branch can run — so
+  `VendorID -> VendorID_v2` reported `['VendorID']` as vanished and said nothing
+  about `VendorID_v2` sitting in the same frame. An operator would have gone
+  looking for a deletion when the field had merely moved. Both are named now,
+  with `aliases:` offered as the fix. **Each branch was individually correct;
+  only running the fixture showed it.** Regression-pinned.
+- **The pre-routed 2020-03 risk did not materialise, and the way it did not is
+  the finding.** The kickoff warned 2020-03 might refuse at
+  `max_rejected_fraction: 0.10`. It rejects **1.977%** — indistinguishable from
+  2020-01's 1.955%. March 2020 is **structurally impeccable and statistically
+  alien**: nothing about the file is wrong, there is simply half as much world in
+  it (3,007,687 raw rows against 6,405,008). No threshold was touched.
+- **The scoring tree inherited byte-identity for free.** A full second
+  `make ingest-scoring` left `data/scoring.dvc` `up to date` — 15.4M rows
+  re-derived identically, because it writes through the same `write_processed`
+  under the same pinned writer options. Nobody arranged it.
+- **Two small self-inflicted reds, both caught by existing tests doing their
+  job.** (1) A success message printed a repo-relative path and raised
+  `ValueError` under the unit suite's `/tmp` config — fixed with a helper that
+  falls back to absolute. (2) `data/.gitignore` gained two entries and M4-S3's
+  `.dockerignore` test went red demanding they be excluded from the build
+  context. Both are the M4-S3/M1-S2 guards working as designed.
+- **Wall count**: none.
+
+### Next
+- **M7-S2** — batch inference as a product: score 2020-03 (and 01/02 if cheap)
+  with the champion resolved from the alias (F-009's two hops, never `source`),
+  features through the ONE `features/` path, the version stamped on every row;
+  parquet + DuckDB view + a published mart; counts reconciling end to end; error
+  series as **MONITORING** numbers under NEW KPI ids (never KPI-09/10).
+  **What it inherits, precisely**: `trips_scoring` (15,413,352 rows,
+  `split='scoring'`, `month` a config literal) carries the contract's 19 columns
+  **plus `trip_duration_minutes`**, so ground truth exists for every scoring
+  month. `cfg.scoring_path(month)` is the parquet; `cfg.scoring_months` is the
+  list. `data/predictions/`'s gitignored-not-DVC-tracked argument (M2-S4) applies
+  unchanged to a scoring-predictions tree.
+- **Carry into M7-S3**: **F-045** (above) is a design input, not a defect to fix;
+  read the ledger row's three costed readings before choosing a drift window.
+  §8 of `docs/scoring_months_m7.md` is the two-signatures table S3 must keep
+  distinguishable, already measured.
+- **gotcha #66 note**: this story commits under `src/` and `scripts/`, so the
+  next on-cluster run rebuilds its image and colds every cached stage. Priced in
+  the M7 risk table; nothing on-cluster ran here.
+- Standing with the PO, all non-blocking: 2026-08-18-1 (F-016 — M7 runs the gate
+  as pre-registered until answered), 2026-08-17-1, 2026-08-16-2.
+
+
 ## Session 2026-08-20 (bk) — ARCH boundary: M6 CLOSED, M7 kickoff authored (drift, batch inference, the retrain loop)
 
 ### State
