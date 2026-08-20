@@ -837,7 +837,10 @@ can never disagree (the port-family twins lesson, applied before it bit).
   1 MB dump having worked on a 1.2 GB one.
 - **RESTORE IS SCRATCH-REHEARSED (2026-08-19, M6-S5) AND NO FURTHER, and every
   artifact says exactly that** (script header, the `MANIFEST.txt` text, the
-  ledger row, this row). The three small irreplaceable dumps load into SCRATCH
+  **line the script PRINTS at runtime**, the ledger rows, this row) — and that
+  sentence was FALSE for a day: the runtime `echo` and the deployments ledger
+  were still on the old label when `make verify-m6` §7 asked (**F-044**, gotcha
+  **#91**). The check is what makes the claim falsifiable now. The three small irreplaceable dumps load into SCRATCH
   databases and check out; a full restore over a DEAD platform has still never
   been performed and needs a PO-sanctioned rebuild. Same-disk limit as the DVC
   remote. The label moved one notch — it did not go green.
@@ -1882,6 +1885,71 @@ can never disagree (the port-family twins lesson, applied before it bit).
   `make verify-m5` **GREEN 49/49**, `make parity` **0.000e+00** over 16 hazard
   rows, endpoint answering. The v1 shadow is still up.
 
+## The M6 gate (M6-S5 leg 2) — what it asks, what it refuses to ask, and the labels it found stale
+- **`make verify-m6` is 63 sub-checks in 7 sections, 2.147 s, and it RE-RUNS
+  NOTHING** — the strongest form yet of a clause M3 started, because M6's
+  evidence cost ~55 minutes of staged failures **including a deliberate ~5
+  minute total outage of the only predictor**, two alias moves and two weight
+  shifts. A gate that re-provoked any of it would cost an outage per
+  verification AND would move the pointer M6 law 3 forbids moving. No skip flag,
+  no fast mode (M1's rule, **sixth** inheritance). It reads: the tracked records,
+  the live cluster, the live Prometheus, the registry, the committed docs — and
+  it asks the live system exactly three questions: one PromQL query, one
+  rules-API read, one prediction.
+- **The live question no predecessor gate could ask is F-043's.** The gameday
+  found the predictor's own exporter starving under saturation (4 ms → 4.613 s,
+  one scrape failing outright) so the latency alert cleared itself mid-event. §1
+  asks whether that exporter is healthy RIGHT NOW — one query, scoped to the
+  champion's InferenceService **by name read off the manifest**, never "the
+  first result" (the gameday's own storage record picked up the SHADOW's series
+  that way), and bounded by the scrape interval **read from the values file**
+  rather than by a typed number.
+- **No threshold is typed, and that is what makes §2 a review surface.** Every
+  number on the right-hand side of a comparison in
+  `infra/monitoring/alerting_rules.yml` is parsed out and looked for in
+  `docs/slo_serving.md`; a gate carrying its own `0.05` would stay green after
+  the rule was loosened to `0.5`, which is exactly the change the constitution
+  reserves for a PO fork. The `for:` sustains are compared file-vs-server too,
+  because **F-041 made the sustain the load-bearing half**: what stops a
+  self-heal paging is the sustain, not the threshold.
+- **"Shadow before canary" is an ORDERING, and it is checked on clocks.** The
+  disagreement record says 14:49:23Z and the canary run says 15:23:48Z — two
+  records, their own stamps, not the order the write-ups are arranged in. It is
+  the only check that could catch that clause backwards.
+- **"90/10 observed" means a counter, and it means two of them.** ingress
+  9.76% against the two predictors' own 9.33%, 0.43 points apart — different
+  processes counting the same requests, which is what makes a claimed split
+  checkable (gotcha #81: a canary that is linked, logged clean and moving zero
+  traffic looks exactly like a canary at 0%). The gate also asserts the record
+  keeps its own **honest cost** — the canary carried the champion's bytes, so
+  the version stamp proves nothing about the split.
+- **The gameday's predictions are checked TWICE and both are necessary.** They
+  were written before the first injection **by clock** (16:03:35Z vs 16:15:07Z,
+  the records' own stamps, never the file's claim about itself), AND each
+  scenario record's prediction is **field-by-field equal** to the committed
+  file — because a prediction can be written first and then quietly edited into
+  the record it is judged against.
+- **The kill's outage is re-derived from its own arrivals** (gotcha #75, the
+  `verify-m5` §5 idiom transplanted): an outage closes on the first SUCCESS
+  after the last failure, so it is strictly LONGER than the error span and
+  inside one arrival gap of it — a bound computed from the run's own rate. That
+  is the check `verify-m6-redteam` plants against.
+- **Two stale labels, found by the gate on its first run — F-044.** The restore
+  label had moved one notch everywhere except the `echo`
+  `scripts/platform_backup.sh` PRINTS (the only version an operator sees) and
+  `ledgers/deployments.md`, while CLAUDE.md asserted every artifact said it.
+  **The header is for review; the runtime line is for 3am** (gotcha #91). The
+  historical M4-S2 ledger row keeps its original sentence with a DATED note
+  beside it — decisions were made from what it said.
+- **The red team's own first run went RED on the gate, not on the record**
+  (gotcha #90). It plants `observed.outage_seconds` 13.75 → **13.501**, the
+  record's OWN error-window span; §7's prose leg rendered 13.75 at ZERO decimals
+  as `14`, which appears in almost any document, so the planted value matched
+  too and only ONE witness spoke. The precision floor is one decimal now. This
+  is gotcha #76 a second time, arriving through rounding instead of
+  tokenisation — and both were only ever found because the planted value was
+  close enough to be plausible.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2012,7 +2080,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The alias rollback, REHEARSED (M6-S4) | `make rollback` (`ROLLBACK_ARGS=--dry-run` previews; `--rejudge` re-derives the verdict from the record and moves nothing) | VERIFIED 2026-08-19 (M6-S4): **PASS 10/10**, the runbook's §4 three moves run for real BOTH ways. **v2→v1 = 35.35 s of moves and 27.93 s of failing requests (55 of 85 probes, `HTTP 500` at the logged signature); v1→v2 = 34.38 s and 0.501 s (one 502)** — F-040, gotcha #86. `verify-m5` at the half-way state: **RED, 3 FAILs, §2's coherence check GREEN at `v1`**; at the end state GREEN. `configs/train.yaml` byte-identical by `git hash-object`, `@champion` back to 2, the final answer reproducing the parity row at **39.001937**. It REFUSES to start from a half-rolled-back state, and moves the alias with a RAW `set_registered_model_alias` — never `registry.promote`, whose refusal (F-011) is the point |
 | Gameday 1 — four staged failures, predictions FIRST (M6-S5) | `make gameday` (`GAMEDAY_ARGS="--scenario predict\|control\|kill\|storage\|saturation\|report"`; ~55 min end to end, **scenario 2 is a deliberate ~5 min outage**) | VERIFIED 2026-08-19 (M6-S5): **accept bar MET with TWO wrong predictions, neither engineered.** Control (delegated to `alert_fire_drill.py`) **GREEN 11/11** — A-3 T+170.5 s, A-2 T+335.6 s, both at Alertmanager, cleared 330.1 s after the stop. Kill: **13.75 s**, 55 of 1,200 requests, different pod uid, **nothing fired** — and the edge 5xx share **peaked at 0.5000** with A-2/A-5 flickering `pending` (**F-041**). Storage: **8/8**, `403 HeadBucket`, **A-5 T+150.2 s then A-7 T+210.2 s** (**F-042** — the opposite of A-7's own annotation), A-2 silent through a total outage, undo staged first and `make serve` exit 0. Saturation: **A-6 at T+844.3 s = 244.1 + 600.2**, throttled 0 → **0.9996**, client p50 **94,553 ms** vs service p50 **1,084 ms**, **125 × HTTP 502** (the second wrong prediction), and **F-043** — A-1 cleared itself mid-event because the loaded predictor's exporter hit `scrape_duration` 4.613 s with `up == 0` against the idle shadow's 0.004 s. `@champion` **2** read and asserted in every scenario |
 | Rehearse the restore (M6-S5) | `make restore-drill` (`RESTORE_ARGS="--backup <dir> --keep"`) | VERIFIED 2026-08-19 — see the backup row above for the numbers. The **live** databases and buckets are only counted, never written, and no scratch survives the run |
-| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5 live; **`verify-m6` is M6-S5 leg 2 and is NOT built** — the gameday and the restore rehearsal are leg 1 |
+| Gate check M6 | `make verify-m6` | VERIFIED 2026-08-20 (M6-S5 leg 2): **GREEN 63/63 sub-checks in 7 sections, 2.147 s, exit 0** — the eyes (Prometheus + Grafana on the EXISTING 8081 route, four workloads ready, one live PromQL query, and **F-043's live question: is the CHAMPION's exporter healthy right now**, scoped by isvc name and bounded by the configured scrape interval) · the judgement (all 7 rules LOADED and `health=ok`, every `for:` matching, **every threshold parsed out of the rules file and found in `docs/slo_serving.md`**, every rule carrying a `signal` and a `why`, F-035's absences agreeing with `render_alert_rules.py`, A-1 counting a bucket edge and never a quantile) · shadow BEFORE canary, the ordering checked on the two records' own clocks · 90/10 from COUNTERS with the two witnesses 0.43 points apart · the rollback's three moves at 35.347 s under load with the asymmetry and the half-way coherence line · the gameday (predictions written first BY CLOCK, each scenario's prediction field-equal to the committed file, control first and green, ≥1 wrong, the kill's outage re-derived from its own anchors) · the restore's compound label and the prose checked against the records · the alias law live. **RE-RUNS NOTHING** (no gameday, no injection, no traffic shift, no alias move, no restore, no deploy — pinned by `tests/unit/test_verify_m6.py`), no skip flag, no fast mode (M1's rule, **sixth** inheritance). Transcript: `docs/verify_m6_transcripts.md` §1 |
+| Prove the M6 gate can go RED | `make verify-m6-redteam` (`bash scripts/verify_m6_redteam.sh`) | VERIFIED 2026-08-20 (M6-S5 leg 2): rewrites ONE number in `automation/runs/m6-gameday/kill.json` — `observed.outage_seconds` **13.75 → 13.501**, taken from the record's OWN `load.error_window.span_s`, i.e. gotcha #75's wrong anchor re-made and wrong by 0.249 s — leaving the anchors, the pod uids, the alias, the prediction and all 7 recorded checks untouched → **RED exit 1 with 2 FAILs from TWO DIFFERENT ARTIFACTS**: the record stops reconciling with its own arrivals, AND `docs/gameday_m6.md` quotes a number no record holds. **61 sub-check lines still ran and passed**; restored under an EXIT trap and verified by sha256 (`f73324ffa333…` before and after) with `git status` clean → **GREEN 63/63**. Touches no pod, no rule, no traffic, no MLflow run, no registry version, no alias. **Its FIRST run found a defect in the GATE**: the prose leg rendered 13.75 at zero decimals as `14`, matched, and stayed green — gotcha **#90** |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
@@ -2308,3 +2378,22 @@ report its absence" is the loud version; this is the quiet one, and the tell is 
 firing alert going inactive while the symptom persists. An idle second instance
 of the same exporter, scraped by the same job, is the cheapest possible control
 (#89, F-043)**.
+Newest (M6-S5 leg 2), and both were found by the M6 gate on its own first runs:
+**a prose-vs-record check with no precision FLOOR passes against a number the
+record does not hold — `verify-m6` rendered a recorded 13.75 at ZERO decimals as
+`14`, which appears in almost any document of any length, so the red team's
+planted 13.501 rendered as `14` too and matched. #76 arriving through ROUNDING
+instead of through tokenisation, and the two properties are independent: #76's
+anchors stop `13` matching inside `13.75`, this floor stops `13.75` becoming
+`14`. Both were only ever visible because the plant was close enough to be
+plausible — a drill planting `999` goes green and teaches nobody anything
+(#90)**; and **the label an artifact PRINTS is a different artifact from the
+label in its header, and only the printed one is read during an incident — the
+restore's "scratch-rehearsed" label moved in the script header, the MANIFEST
+text, the write-up and CLAUDE.md (which then asserted every artifact said so),
+while `scripts/platform_backup.sh`'s own `echo` still told every future operator
+`restore NOT rehearsed` and the deployments ledger still carried the old claim.
+When a status label moves, enumerate the artifacts that carry it INCLUDING the
+runtime output, make a check assert the COMPOUND claim, and correct a historical
+ledger row with a dated note BESIDE the original rather than by rewriting it
+(#91, F-044)**.
