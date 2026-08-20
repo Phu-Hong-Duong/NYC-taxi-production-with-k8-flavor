@@ -1410,3 +1410,39 @@ the seed line are earned by THIS project.
     screams — and both are wrong, so what the code must do is distinguish "no
     verdict" from "a verdict of disagreement". A quiet `nan` in the output column
     was the only honest signal in that run, and it was easy to read past (M7-S3).
+
+95. **A `hasattr` guard on the CONTAINER makes an unchecked access to the ELEMENT
+    look checked — and the code that runs *after* the expensive part is the code
+    no test has ever executed.** The first full-data retrain fitted for 28
+    minutes, cleared the floor at +3.30%, was correctly refused by the incumbent
+    condition, and then died writing the verdict down on `c.text`; `gate.Check`
+    carries `name`/`passed`/`detail` and never had a `text`. The line was
+    *guarded*: `[... for c in decision.checks] if hasattr(decision, "checks")
+    else None`. `Decision.checks` is a dataclass field and is therefore always
+    present, so the guard protected nothing — what it did was put the word
+    `hasattr` one token to the left of the unchecked access and make the whole
+    expression read as defensive. **Why it survived review is the general
+    lesson**: every test of that module asserted on its SOURCE (`'"ended_by"' in
+    RUN_SOURCE`, an `ast` walk for a forbidden verb), which is the right
+    instrument for a law with no runtime symptom and the wrong one here — **a
+    string test sees a field being written and cannot see that the field does not
+    exist.** Nothing had executed the line because executing it cost the fit. The
+    repair is not a `try`: make the post-expensive step a FUNCTION that can be
+    called in microseconds, and test it on a real object built by the real
+    producer. Ask of any long job: *if the last 5% of this raises, what did I
+    spend and what do I keep?* (M7-S4).
+
+96. **An unhandled crash exits with a status your program may already have given
+    a meaning, and the status file is what the next session reads.** The same run
+    exited through a traceback, which landed on **2** — and this repo's retrain
+    CLI defines 0/1/2/3 as *passed · refused · the challenger could not be built ·
+    no verdict was issued*. So `automation/runs/m7-retrain-fulldata.status` read
+    `FAILED 2`, the handoff's decoding key rendered that as *the challenger could
+    not be built*, and the next session was told the exact opposite of what had
+    happened: the challenger had been built, fitted and judged. The log was the
+    only witness, and logs are gitignored here. **If you design an exit-code
+    vocabulary, handle the case you did not enumerate** — catch it, print the
+    frame, and exit OUTSIDE the vocabulary (4 here) with a message saying what is
+    and is not true. Note the near-miss that makes this worse than it looks: an
+    uncaught Python exception exits **1**, which in this vocabulary means
+    *REFUSED* — a crash would have been read as a verdict (M7-S4).

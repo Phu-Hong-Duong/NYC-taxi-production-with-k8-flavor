@@ -200,4 +200,82 @@ that must land under any of them is that **"no refit record names this run" and
 
 ## §5 — The full-data retrain and its verdict
 
-*(Filled by the detached run; see `automation/runs/m7-retrain/latest.json`.)*
+### §5.1 — Attempt 1: the verdict was reached and could not be written down
+
+The detached run of 2026-08-20T05:59Z fitted for 28 minutes, was correctly
+REFUSED, and then died serialising the verdict. `automation/runs/*.log` is
+gitignored (transcripts, not records), so the run's own output is pasted here —
+this section IS the evidence, and it is kept because a refusal nobody can read is
+the same as no refusal.
+
+```
+[evaluate] every number below came from taxi_mlops.training.evaluate
+[evaluate] (gotcha #15: nothing else in this program may report one)
+
+  contender                          split       rows      KPI-09      KPI-10     RMSE   medAE   p90AE
+  ---------------------------------  -----  -----------  ----------  ----------  ------  ------  ------
+  baseline-constant-median           val      6,189,748      7.8866     47.505%  12.201   5.283  17.850
+  baseline-constant-median           test     5,950,708      7.6667     48.372%  11.844   5.183  17.133
+  baseline-group-median              val      6,189,748      3.7170     78.693%   6.222   2.342   7.933
+  baseline-group-median              test     5,950,708      3.5090     80.322%   5.811   2.292   7.317
+  baseline-group-median-od-fallback  val      6,189,748      3.5515     79.111%   5.644   2.333   7.700
+  baseline-group-median-od-fallback  test     5,950,708      3.3518     80.733%   5.245   2.283   7.117
+  retrain-rescaled-v2                val      6,189,748      3.3811     80.570%   5.347   2.257   7.244
+  retrain-rescaled-v2                test     5,950,708      3.2412     81.568%   5.006   2.247   6.852
+
+[evaluate] retrain-rescaled-v2 BEATS the honest floor on val: 3.3811 vs 3.5515 min (+4.80%)
+[evaluate] val is the REPORT. The gate below judges on test, and only test.
+
+==============================================================================
+[gate] PROMOTION GATE — configs/train.yaml: gate (loosening it is a PO fork)
+[gate] holdout   : test — 5,950,708 rows, untouched by training and by selection
+[gate] challenger: retrain-rescaled-v2          KPI-09 3.2412 min  ·  KPI-10 81.568%
+[gate] floor     : baseline-group-median-od-fallback KPI-09 3.3518 min  ·  KPI-10 80.733%
+[gate] incumbent : version 2                    KPI-09 3.2403 min  ·  KPI-10 81.577%   [version tags]
+[gate] required  : KPI-09 at least 2.00% below the floor
+[gate] observed  : KPI-09 +3.30% vs the floor
+[gate]   ok   KPI-09 margin over the honest floor: 3.2412 vs 3.3518 min = +3.30% (required >= 2.00%)
+[gate]   ok   KPI-10 (within 5 min) does not regress: 81.568% vs 80.733% = +0.835 points
+[gate]   FAIL KPI-09 does not regress against the serving champion (v2): 3.2412 vs 3.2403 min (-0.03% vs incumbent)
+[gate]   FAIL KPI-10 does not regress against the serving champion (v2): 81.568% vs 81.577% = -0.009 points
+[gate] VERDICT   : REFUSE
+[gate] Nothing was registered and no alias moved. A refused challenger leaves the registry exactly as it found it.
+[gate] context   : the FLATTERING floor (baseline-constant-median) is 7.6667 min on test and is NOT the bar — against it this would read as +57.72%.
+==============================================================================
+
+[mlflow] retrain-rescaled-v2: model logged with signature + input example
+[mlflow] retrain-rescaled-v2: run d2f69f90a5a84e00b02e670b6a409990
+
+[promote] SKIPPED — the gate refused. Nothing registered, no alias moved.
+
+[retrain] the fit ended by EARLY_STOPPING: best_iteration 779 of a 2400-round cap, 1,682.5s
+Traceback (most recent call last):
+  File "/home/longt/.../src/taxi_mlops/training/retrain_run.py", line 184, in retrain
+    {"passed": c.passed, "text": c.text} for c in decision.checks
+                                 ^^^^^^
+AttributeError: 'Check' object has no attribute 'text'
+make[1]: *** [Makefile:245: retrain] Error 1
+----------------------------------------------------------------
+[detached] exit 2 at 2026-08-20T06:27:56Z
+```
+
+**Read the last three lines together, because they are the second defect.**
+`gate.Check` carries `name`/`passed`/`detail` and never had a `text`; the record
+writer asked for one. The traceback then exited with a status this program had
+*already given a meaning*, so `automation/runs/m7-retrain-fulldata.status` read
+`FAILED 2` and HANDOFF (bo)'s decoding key turns 2 into **"the challenger could
+not be built"** — about a challenger that had been built, fitted for 28 minutes
+and judged. The boot ritual of the next session was told the opposite of what had
+happened, and only the log disagreed.
+
+Both are fixed in `6972618`: the serialiser is a function that can be executed
+without spending the fit, and a crash exits **4**, outside the 0/1/2/3 verdict
+vocabulary. The full argument — including why the `hasattr` guard that was on the
+line made it *look* checked, and why every test of this module had asserted on its
+source text — is in `docs/retrain_m7.md` §7.1.
+
+### §5.2 — Attempt 2: the same fit, through the repaired writer
+
+*(Filled by the re-run; the record is `automation/runs/m7-retrain/latest.json` and
+what it must reproduce was written down first, in
+`automation/runs/m7-retrain/rerun-prediction.json`.)*

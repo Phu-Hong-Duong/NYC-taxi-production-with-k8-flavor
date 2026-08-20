@@ -304,8 +304,91 @@ list.
 
 ## §7 — The numbers
 
-Filled by the detached full-data run; see `automation/runs/m7-retrain/latest.json`
-and §2 of `docs/retrain_m7_transcripts.md`.
+Measured **2026-08-20T05:59Z**, full data, 43,987,422 train rows, judged on the
+untouched 2019-08 holdout by the gate as it exists on disk. The table below is
+recovered from the run's own output (`docs/retrain_m7_transcripts.md` §5.1) —
+attempt 1 reached this verdict and then crashed writing it down (§7.1), so the
+machine-written record lands with the re-run, and
+`automation/runs/m7-retrain/rerun-prediction.json` says what that re-run must
+reproduce before it reproduced it.
+
+| contender | split | KPI-09 | KPI-10 |
+|---|---|---|---|
+| baseline-group-median-od-fallback (the bar) | test | 3.3518 | 80.733% |
+| **`retrain-rescaled-v2`** | test | **3.2412** | **81.568%** |
+| `auto-lgbm-v2` @champion v2 (incumbent) | test | 3.2403 | 81.577% |
+| `retrain-rescaled-v2` | val | 3.3811 | 80.570% |
+
+**VERDICT: REFUSE.** Floor conditions **passed** — +3.30% against a 2.00% bar,
+KPI-10 +0.835 points. Incumbent conditions (F-011) **failed** on both halves:
+−0.03% KPI-09 and −0.009 KPI-10 points against the serving champion.
+
+**The headline is that F-020's correction changed almost nothing, and that is the
+result rather than a disappointment.** The rescale was real — `min_data_in_leaf`
+1293 meant *1 row in 5,103* where it was chosen and *1 in 34,020* where it was
+being used, and 8620 restores the fraction. Applying it moved the holdout by
+**0.0009 minutes: 54 milliseconds of mean error over 5,950,708 rows.** F-020 was
+a finding about REASONING — a number applied at a scale it did not mean anything
+at — and the honest reading of this measurement is that the champion was not
+materially harmed by the defect. Saying so is the point; a story that had gone
+looking for a win here would have found 54 milliseconds and called it something.
+
+**F-020's second half is DISCHARGED by this fit, in the direction that could not
+be arranged.** `ended_by: early_stopping`, best iteration **779 of a re-derived
+2400-round cap** — 1,621 rounds unspent. The champion's own refit ended 791 of
+800, a number that cannot distinguish a converged fit from a truncated one, which
+is the entire reason `ended_by` is a first-class field. The re-derived budget's
+job was to make truncation visible; it made this fit's *absence* of truncation
+visible, which is the stronger of the two things it could have shown.
+
+**The gate refused on a condition with no margin, and that is the open fork's
+number arriving.** AWAITING_PO **2026-08-18-1** (F-016) asks whether the serving
+pointer should move on deltas this size; at M3-S5 the alias moved on **+0.63%**,
+and here a monthly-retrain-shaped run landed at **−0.03%**. Both are the same
+no-dead-band condition, and the second one is the case the entry predicted: a
+retrain of an unchanged configuration produces a model within 54 ms of the
+incumbent. **Had the sign been positive by the same magnitude, the pre-registered
+gate would have moved the serving pointer on 54 milliseconds** and spent the whole
+transition tail for it. That evidence is recorded on the entry; it is not acted on
+here (law 4, and the constitution reserves gate changes for the PO).
+
+**The alias did not move and could not have.** `promote=False` is unconditional
+and there is no parameter that changes it; `@champion` is version 2 before and
+after; nothing was registered — a refused challenger leaves the registry exactly
+as it found it.
+
+### §7.1 — The verdict that could not be written down
+
+Attempt 1 fitted for 28 minutes, reached the REFUSE above, and died on
+`AttributeError: 'Check' object has no attribute 'text'`. `gate.Check` carries
+`name`/`passed`/`detail`. Two things had to be true for that to survive to a
+28-minute run, and both are worth more than the typo:
+
+**The access was guarded, and the guard was on the wrong object.** The line read
+`... if hasattr(decision, "checks") else None`. `Decision.checks` is a dataclass
+field and is therefore always present, so the guard never protected anything —
+what it did was make an unchecked access to `c.text`, one token to its left, look
+checked. A guard on the container says nothing about the elements.
+
+**Every test this module had asserted on its SOURCE.** `test_whether_the_cap_bound_
+the_fit_is_reported_not_inferred` asserts `'"ended_by"' in RUN_SOURCE`; the
+promotion law is an `ast` walk; the row-count law is `"43_987_422" not in
+RUN_SOURCE`. Those are the right instrument for what they check — laws with no
+runtime symptom — and the wrong one here: **a string test sees a field being
+written and cannot see that the field does not exist.** Nothing had ever executed
+the line, because executing it cost the fit. The serialiser is
+`retrain_run.verdict_payload` now, a function that runs in microseconds on a
+`Decision` the real gate built from attempt 1's real numbers.
+
+**And the crash exited with a word that meant something else.** See §4's exit-code
+paragraph: the traceback landed on 2, which this program had already defined as
+*the challenger could not be built*, so the detached job's `.status` told the next
+session the opposite of what happened. Crashes now exit **4**.
+
+The one thing that went right by design: **the fit is the expensive half and it is
+in MLflow** (run `d2f69f90a5a84e00b02e670b6a409990`, model logged with signature
+and input example), so nothing irreplaceable was lost — only the record, which is
+the artifact this program judges by.
 
 ---
 
