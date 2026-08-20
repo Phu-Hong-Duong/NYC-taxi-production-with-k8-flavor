@@ -1,5 +1,132 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bp) — M7-S4 completion leg: the verdict was reached, and the code that writes verdicts down had never run
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block MLE (Accountable),
+MLOps (R)** (charter refusals in play: M7 law 2 — the 2019 trees untouched; law 3
+— the alias moves only through the gate; law 4 — no threshold set from a number
+just measured; F-008; the cluster never goes down).
+Boot reads: CLAUDE.md · HANDOFF (bo) · M7 KICKOFF · AWAITING_PO.
+**Staleness check passed, and it is the reason this session exists.** No
+`automation/STOP`, tree clean at `5dcc6d2`, 3 nodes Ready v1.36.1, `@champion`
+**2**. (bo)'s Next said to read `automation/runs/m7-retrain/latest.json` and NOT
+the status word — the file does not exist, and the status word says `FAILED 2`,
+which (bo)'s own decoding key renders as *the challenger could not be built*.
+**That sentence is false.** The log says the challenger was built, fitted for 28
+minutes, cleared the floor at +3.30% and was correctly REFUSED by F-011's
+incumbent condition; the process then died writing the verdict into a file.
+**One story: M7-S4's completion leg** — the kickoff's accept-when names *"the
+detached run's verdict JSON (tracked)"*, and that JSON is the only thing missing.
+PR **__PR__**. End state: `@champion` **2** (read, never written) ·
+`features.version` **v2** · champion serving · `make verify-m5` **GREEN** ·
+**the repaired retrain re-running DETACHED**, and its record is the successor's
+first act (see Next).
+
+### Done
+- **The record writer is fixed and, for the first time, tested by execution.**
+  `gate.Check` carries `name`/`passed`/`detail`; the writer asked for `c.text`.
+  It is `retrain_run.verdict_payload` now — a function that runs in microseconds
+  on a `Decision` the real gate builds from attempt 1's real numbers, instead of
+  six lines sitting downstream of a 28-minute fit.
+- **A crash can no longer wear a verdict's clothes.** The retrain CLI catches the
+  unenumerated case, prints the frame, and exits **4** — outside the 0/1/2/3
+  vocabulary — saying that any verdict reached before it is in the log and in
+  MLflow and NOT in a record. Documented in `docs/retrain_m7.md` §4.
+- **The measurement is written up** (`docs/retrain_m7.md` §7, transcripts §5.1):
+  `retrain-rescaled-v2` **3.2412 / 81.568%** against the champion's **3.2403 /
+  81.577%** on 5,950,708 holdout rows. **REFUSE** — floor +3.30% over a 2.00%
+  bar, both incumbent conditions failed. `ended_by: early_stopping` at **779 of a
+  re-derived 2400-round cap**.
+- **F-020's ledger row carries its number**, and AWAITING_PO **2026-08-18-1**
+  gains a dated evidence note (no option changed, nothing acted on).
+- gotchas **#95/#96** · field note · **899 unit tests** (4 new), ruff clean ·
+  `make verify-m5` **GREEN**, §2 coherence green at `v2`.
+
+### Decisions
+- **Re-run the fit rather than hand-write the record.** The numbers exist in a
+  log and in MLflow run `d2f69f90a5a84e00b02e670b6a409990`; transcribing them
+  into `latest.json` would produce a record indistinguishable from a machine's
+  and checkable by nobody, which is the one thing this program does not do. The
+  fit costs ~28 minutes of unattended host CPU, and the re-run also proves the
+  repair on the real path.
+- **The prediction was written first** (`automation/runs/m7-retrain/rerun-prediction.json`,
+  committed before launch). That is what makes a repeat of a 28-minute fit
+  EVIDENCE rather than a do-over: it must reproduce 3.2412 / 81.568% / 779
+  exactly, and if it does not, the discrepancy is the result and not an
+  inconvenience. M3-S3 measured this program's fits reproducing to 14 significant
+  figures, so anything else is a finding about determinism.
+- **The crashed run's output is pasted into the transcripts doc**, because
+  `automation/runs/*.log` is gitignored by policy (transcripts, not records) and
+  a refusal nobody can read is the same as no refusal. Attempt 1 is kept whole,
+  the M4-S5/M5-S4/M6-S4 `attempt1-*` precedent in the medium the evidence is in.
+- **F-016 was not touched.** The refusal is −0.03% against a condition with no
+  margin — precisely the open fork. Recording the second observation is in scope;
+  changing the condition after seeing the number it would have changed is not.
+
+### Defects/Surprises
+- **The lesson is not the typo, it is that the last 5% of a long job is the code
+  no test has run.** Every test of this module asserted on its SOURCE
+  (`'"ended_by"' in RUN_SOURCE`, `ast` walks) — the right instrument for laws with
+  no runtime symptom, and the wrong one here: **a string test sees a field being
+  written and cannot see that the field does not exist.** Nothing executed the
+  line because executing it cost the fit (gotcha #95).
+- **The access was guarded and the guard was on the wrong object.**
+  `... if hasattr(decision, "checks") else None` — `Decision.checks` is a
+  dataclass field and always present, so it protected nothing; it put the word
+  `hasattr` one token left of the unchecked access and made the line read as
+  careful. Removed, not repaired.
+- **The exit code lied to my own boot ritual** (gotcha #96). And the near-miss is
+  worse than the hit: an uncaught Python exception exits **1**, which in this
+  vocabulary means REFUSED — a crash would have been read as a verdict.
+- **The test forbidding `hasattr` went RED against the repaired function, on its
+  own docstring**, which quotes the guard it forbids. Gotcha **#53/#68, seventh
+  time**, inside the test written about the lesson. It parses now.
+- **The result is 54 milliseconds and that is reported as 54 milliseconds.**
+  F-020's correction was real reasoning-wise and is worth −0.0009 min of mean
+  error over 5.95M rows. The honest reading is that the champion was not
+  materially harmed by the defect.
+- **Wall count**: none.
+
+### Next
+- **FIRST ACT: read `automation/runs/m7-retrain/latest.json`** — the record this
+  leg exists to produce — **and diff it against
+  `automation/runs/m7-retrain/rerun-prediction.json`, which was written before
+  the run.** The status file is `automation/runs/m7-s4-retrain-rerun.status` and
+  (bo)'s decoding key still applies, now with one more word: **`DONE 0` = the
+  gate PASSED · `FAILED 1` = REFUSED, which is the gate working and is what this
+  run is predicted to say · `FAILED 2` = could not be built · `FAILED 3` = no
+  verdict · `FAILED 4` = it CRASHED and any verdict is in the log only** (new
+  this session — 4 is why the last one misreported itself).
+  - **`FAILED 1` with the numbers matching the prediction** (the expected case):
+    fill `docs/retrain_m7_transcripts.md` §5.2 with the pasted run, add one
+    confirming line to `docs/retrain_m7.md` §7 ("re-run 2026-08-20T… reproduced
+    this exactly"), and **M7-S4 is DONE, green, alias unmoved**. Then M7-S5.
+  - **Numbers that do NOT match**: do not edit the prediction. Record both, and
+    treat it as a determinism finding — the file says so itself.
+  - **`DONE 0`** (a PROMOTE) would contradict a measurement taken 30 minutes
+    earlier on the same data and is itself the finding; the alias still must not
+    move without the M3-S5 transition chain, which is a second leg by size.
+  - **`FAILED 4` or `KILLED`**: the log says how far it got; `make retrain` is
+    re-runnable and mints an MLflow run and nothing else.
+- Then **M7-S5**: the DA drift memo, the predictions & drift board, and
+  `make verify-m7` + its red team. Legs are allowed (the kickoff names leg 1 =
+  memo+board, leg 2 = gate). Its named reader is `docs/error_memo_m2.md` §7
+  row 2, and M7-S3's per-bin detail is the memo's material.
+- **Two OPEN findings routed to ARCH at the M7 boundary, both deliberately not
+  acted on here**: **F-048** (the scheduled retrain cannot see
+  `automation/runs/`, so it reports a legitimate-looking no-op instead of
+  F-020's transfer — every proof-trigger firing until it lands says
+  `rescale_factor: null`, and that is the finding, not a new fault) and **F-047**
+  (`make image-smoke` RED since M5-S5 for the same `.dockerignore` reason). They
+  share a lever, which is why they should be decided together.
+- **`retrain-schedule-proof` is ACTIVE and fires every 20 minutes** — deliberate,
+  not residue. **Do not delete it before `verify-m7` reads it**: a schedule that
+  fired once and was removed is indistinguishable from one that never fired.
+- Standing with the PO, all non-blocking: **2026-08-18-1 (F-016 — now carrying
+  a second observation from this session; M7 runs the gate as pre-registered
+  until answered)**, 2026-08-17-1, 2026-08-16-2.
+
 ## Session 2026-08-20 (bo) — M7-S4: the loop closed, and two numbers that were true where they were written
 
 ### State
