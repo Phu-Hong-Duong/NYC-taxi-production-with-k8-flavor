@@ -1,5 +1,87 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bk) — ARCH boundary: M6 CLOSED, M7 kickoff authored (drift, batch inference, the retrain loop)
+
+### State
+**ARCH, `claude-fable-5` (stated first line — an architect session on any other
+model is void).** Boot reads: CLAUDE.md · HANDOFF (bj) · BLUEPRINT §9 · all four
+ledgers · AWAITING_PO · M6 kickoff. Staleness check: STOP absent, tree clean at
+`b76d832`, 3 nodes Ready, `@champion` version 2, both isvcs still up (the v1
+shadow's teardown is now a decided M7-S1 first move).
+**M6 IS CLOSED — tagged `m6-closed`; M7 kickoff committed
+(`docs/milestones/M7_KICKOFF.md`); README Status row flipped in the same
+commit; chain continues (executor scheduled +120 s).**
+
+### Done (the three boundary jobs, in order)
+- **Triage.** `make verify-m6` re-run by the approver: **GREEN, 63 sub-checks,
+  7 sections** (counted live: 63 `ok` lines), closing line verbatim
+  `[verify-m6] GREEN — every M6 sub-check passed.` Lineage spot-check (gotcha
+  #20): PR #39's merge `9a514a5` is an ancestor of origin/main; M6 = story PRs
+  #33, #35–#39. **Every open item dispositioned in the kickoff's §0 table** —
+  the load-bearing ones: **F-043 direction DECIDED (option c)** — document the
+  ~90%-CPU in-pod instrument limit in `docs/slo_serving.md` + A-1's `why`
+  caveat, intaken → M7-S3 (not a PO fork: no threshold moves) · **F-042's
+  routed recommendation DECLINED** (shortening A-7's sustain on one drill's
+  authority is #63 in bar-form; the corrected annotation already carries the
+  measured order) · **F-020 and F-022 are DUE at M7 and intaken → M7-S4**
+  (their quoted landing: §9/M7 "scheduled Flyte retrain landing a challenger")
+  · **F-035's pushgateway landing → M7-S3** · **F-040's remedy stays
+  named-and-unproven DELIBERATELY** (M7's alias law reserves moves for the
+  gate; the runbook's do-not-substitute label is the guard; next PO-sanctioned
+  rollback drill is the landing) · **the v1 shadow → torn down at M7-S1
+  entry** · **F-016 now ACTIVE**: unanswered at the boundary, so M7 proceeds
+  with the gate AS PRE-REGISTERED (the M6 kickoff's standing rule, quoted in
+  M7 law 3). Debt register fully closed, nothing due. Sign-off row added
+  (producer EXEC, approver ARCH — producer ≠ approver holds); dated boundary
+  notes appended to F-042/F-043 ledger rows.
+- **Authored `docs/milestones/M7_KICKOFF.md`** — 5 stories: S1 scoring months
+  (2020-01..03 through the ONE contract as a NEW tree; 2019 bytes are law;
+  the 2025 schema leg is a MEASUREMENT — the year-aware contract may validate
+  it, and that would be a SURPASS to record, with the refusal then shown on a
+  fixture) · S2 batch inference as a product (predictions parquet + DuckDB
+  view + published mart for 2020-03, champion resolved from the alias, error
+  series labelled MONITORING numbers with new KPI ids — never KPI-09/10) ·
+  S3 drift detection (backup first; Pushgateway in-cluster, NO hostPort;
+  Evidently with a pandas-3 wall + scipy-PSI/KS fallback; threshold argued
+  BEFORE the 2020-03 run, prediction first; the two failure signatures shown
+  distinguishable; F-035 counters; F-043's sentence) · S4 the scheduled
+  retrain (F-022 repair + smoke; F-020 closed by the rescaled refit folded
+  into the retrain itself; schedule proven with a cheap sampled run, the real
+  fit DETACHED per ritual e; the gate as pre-registered decides — a REFUSE
+  ends the story green, a PROMOTE obliges the transition chain or a clean
+  stop at the recorded verdict with the alias unmoved) · S5 the DA drift
+  memo + predictions & drift board + `verify-m7`/redteam (legs allowed).
+  **M7 is ◆**: S5 exits to REV (`next_session.sh rev 120`), REV exits to the
+  architect. Live preconditions pasted, including: TLC 2020-03 reachable at
+  **44,442,590 bytes against 2019-01's 110,439,634** — the COVID collapse
+  visible in the file size before a row is read — and 2025-01 reachable.
+- **README row flipped** (M6 closed + evidence; M7 in progress) in the same
+  commit as the kickoff; tag `m6-closed` on that commit; pushed.
+
+### Decisions
+- **F-043 = option (c) at this boundary, not a PO fork.** No target loosens
+  and no threshold moves; an instrument's measured limitation gets documented
+  where the thresholds live. Option (a) (raise the CPU limit) stays available
+  at a real capacity conversation — the ledger row's own recommendation,
+  adopted as written.
+- **The retrain's training window defaults to the SETTLED 2019 window.** The
+  first scheduled retrain proves the LOOP and F-020's scale-transfer, and the
+  holdout keeps its meaning. A window that swallows 2020 changes what the
+  holdout measures — routed as an ARCH/PO question if anyone wants it, never
+  an edit (M7 kickoff, S4 + out-of-scope).
+- **Two potential forks pre-routed as risks, not decisions**: 2020-03
+  refusing at `max_rejected_fraction` 0.10 (record + route; loosening is a PO
+  fork) and the drift threshold not firing on 2020-03 (a wrong prediction to
+  investigate — F-041's precedent — never a knob to walk).
+
+### Next
+- Executor session scheduled (+120 s): **M7-S1** — shadow teardown, then
+  2020-01..03 through the contract into a scoring tree, the 2025 measurement,
+  the refusal transcript. Everything it needs is in the kickoff; the 2019
+  trees' byte-identity (`dvc status`) is the story-exit invariant.
+- Standing with the PO, all non-blocking: 2026-08-18-1 (F-016 — M7 runs the
+  gate as pre-registered until answered), 2026-08-17-1, 2026-08-16-2.
+
 ## Session 2026-08-20 (bj) — M6-S5 leg 2: the M6 gate, and the two stale claims it found in our own prose
 
 ### State

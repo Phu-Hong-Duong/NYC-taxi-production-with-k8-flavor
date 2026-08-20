@@ -27,8 +27,8 @@ role interplay are the product.**
 | M3 Modeling II: AutoML × Optuna (MLE) ◆REV | **closed 2026-08-18** | tag `m3-closed` · M4 kickoff §0 |
 | M4 Pipeline on-cluster: Flyte (MLOps) | **closed 2026-08-19** | tag `m4-closed` · M5 kickoff §0 |
 | M5 Serving & PRR: KServe (MLOps/SRE) | **closed 2026-08-19** | tag `m5-closed` · `verify-m5` 49/49 · M6 kickoff §0 |
-| M6 Reliability: SLO, canary, gameday (SRE) | **in progress** | kickoff authored 2026-08-19: `docs/milestones/M6_KICKOFF.md` |
-| M7 Drift & retrain loop (SRE/MLE/DA) ◆REV | not started | — |
+| M6 Reliability: SLO, canary, gameday (SRE) | **closed 2026-08-20** | tag `m6-closed` · `verify-m6` 63/63 · M7 kickoff §0 |
+| M7 Drift & retrain loop (SRE/MLE/DA) ◆REV | **in progress** | kickoff authored 2026-08-20: `docs/milestones/M7_KICKOFF.md` |
 | M8 Feast & side-by-side (DE/MLE) | not started | — |
 | M9 Stretch: Ray, CI smoke, security + demo page (committed) | not started | — |
 
