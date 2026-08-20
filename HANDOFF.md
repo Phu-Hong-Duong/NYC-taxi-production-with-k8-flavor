@@ -97,6 +97,12 @@ origin/main. End state: `@champion` **2** (read once, never written) ·
 - The throwaway memo-vs-script cross-check was **deleted rather than committed**,
   with its finding recorded in transcripts §5 — leg 2 needs the real, per-claim
   version, and a half-check in the repo would look like the real one.
+- **Process deviation, recorded rather than hidden: this handoff entry was
+  committed directly to `main`, not through the story PR.** #48 was already
+  merged when the entry was written; previous sessions wrote theirs onto the
+  branch before merging, which is the better order and the one leg 2 should
+  follow. Nothing else in this session bypassed a PR — every code, board, test,
+  doc and ledger change is in #48 (`cdce389`).
 
 ### Defects/Surprises
 - **The first cross-check reported 15 false misses, all trailing zeros.**
