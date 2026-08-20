@@ -225,7 +225,9 @@ verify-m6-redteam: ## prove verify-m6 goes RED: rewrite ONE recorded field, watc
 	@bash scripts/verify_m6_redteam.sh
 
 # ---- M7 drift & retrain loop (role:SRE + role:MLE + role:DA) ----
-.PHONY: drift-report verify-m7
+.PHONY: predictions-scoring drift-report verify-m7
+predictions-scoring: ## score the REGISTERED champion on the SCORING months and publish the rows (M7-S2; then make duckdb, make marts). SCORING_ARGS="--months YYYY-MM" narrows; monitoring ids KPI-14..17, never KPI-09/10
+	uv run python -m taxi_mlops.training score-scoring $(SCORING_ARGS)
 drift-report: ## Evidently reference-vs-MONTH -> pushgateway + MLflow artifact
 	@echo "TODO(M7): MONTH=$(MONTH)"
 verify-m7: ; @echo "TODO(M7): 2020-03 drift alarm + 2025-01 schema refusal (distinct signatures) + DA memo"

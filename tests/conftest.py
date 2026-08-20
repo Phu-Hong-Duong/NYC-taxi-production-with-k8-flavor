@@ -110,5 +110,9 @@ def data_cfg(tmp_path) -> DataConfig:
         # otherwise pick up the REAL published predictions and reconcile them
         # against three seeded months.
         predictions_dir=str(tmp_path / "predictions"),
+        # And one further along again (M7-S2): the champion's rows on the
+        # scoring months. Same failure, same redirect — a green test run must
+        # not be able to write into a tree a real command published.
+        scoring_predictions_dir=str(tmp_path / "scoring_predictions"),
         splits=Splits(train=("2019-01",), val=("2019-02",), test=("2019-03",)),
     )

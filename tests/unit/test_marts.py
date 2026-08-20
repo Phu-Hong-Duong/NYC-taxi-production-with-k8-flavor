@@ -117,15 +117,29 @@ def test_dbt_sources_are_analyst_views_that_exist():
     read_parquet(), which is exactly how two row counts start disagreeing.
     """
     # OPTIONAL_VIEWS counts: `predictions` and `prediction_runs` exist only after
-    # a champion has been scored (M2-S4), and `error_segments` sources them. What
+    # a champion has been scored (M2-S4), and `error_segments` sources them. The
+    # two scoring tuples count for the same reason one tree along — `scoring_months`
+    # after `make ingest-scoring` (M7-S1), `scoring_predictions` after
+    # `make predictions-scoring` (M7-S2), and `scoring_daily` sources them. What
     # this test is actually protecting is that every name in sources.yml is a view
     # the analyst layer KNOWS ABOUT — a typo'd or deleted view still fails.
-    from taxi_mlops.data.analyst import OPTIONAL_VIEWS, VIEWS
+    from taxi_mlops.data.analyst import (
+        OPTIONAL_VIEWS,
+        SCORING_PREDICTION_VIEWS,
+        SCORING_VIEWS,
+        VIEWS,
+    )
 
     sources = yaml.safe_load(read(MODELS.parent / "sources.yml"))["sources"]
     (analyst,) = [s for s in sources if s["name"] == "analyst"]
     named = {t["name"] for t in analyst["tables"]}
-    missing = named - set(VIEWS) - set(OPTIONAL_VIEWS)
+    missing = (
+        named
+        - set(VIEWS)
+        - set(OPTIONAL_VIEWS)
+        - set(SCORING_VIEWS)
+        - set(SCORING_PREDICTION_VIEWS)
+    )
     assert not missing, f"sources.yml names views the analyst layer does not build: {missing}"
 
     for model in MODELS.glob("*.sql"):

@@ -16,6 +16,13 @@ data/analyst.duckdb.wal
 # that is stale by design is worse than no pin, because it looks like provenance.
 # The real provenance is data/predictions/predictions.json plus the registry.
 data/predictions/
+# The champion's rows on the SCORING months (M7-S2), on identical terms and for
+# identical reasons: model output, regenerable by `make predictions-scoring`
+# from a DVC-pinned scoring tree plus a registry version, provenance in
+# data/scoring_predictions/scoring_predictions.json plus the registry. A fourth
+# tree and not a subdirectory of the third — see configs/train.yaml for why a
+# 2020 file under data/predictions/ would reach the error_segments mart.
+data/scoring_predictions/
 # `make contract-probe`'s throwaway acquisition directory (M7-S1). The probe
 # downloads a REAL TLC file to measure what the contract says about it, then
 # writes nothing else — so these bytes are not data this program owns, and they
