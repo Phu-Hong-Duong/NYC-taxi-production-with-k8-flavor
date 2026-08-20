@@ -1950,6 +1950,85 @@ can never disagree (the port-family twins lesson, applied before it bit).
   tokenisation — and both were only ever found because the planted value was
   close enough to be plausible.
 
+## The scoring months (M7-S1) — the same pipeline pointed somewhere else
+- **A scoring month is not a fourth split, and the trees are how that is
+  enforced.** `configs/data.yaml: scoring` names 2020-01..03,
+  `data/scoring/<month>/` and `data/scoring_rejected/<month>/`, each with its own
+  DVC pin. One 2020 row inside `data/processed/` would reach the training matrix,
+  the dbt marts and every board through globs written when that directory meant
+  "the settled 2019 months" — with no error anywhere. `trips_clean` is
+  deliberately NOT unioned with the new rows and a test asserts
+  `SELECT DISTINCT split FROM trips_clean` is still exactly `{train,val,test}`;
+  four new views (`trips_scoring`, `trips_scoring_rejected`, `scoring_months`,
+  `scoring_rejections`) carry the 2020 data and a consumer must ask for them.
+- **The months are named in data.yaml, not train.yaml, and the one mistake that
+  makes possible is REFUSED.** Split months are a MODELLING fact (what a model is
+  fitted to and judged on); a scoring month is the opposite. `load_config` raises
+  if a month appears in both lists — a month cannot be both trained on and
+  scored for drift, because then its drift reference would contain itself.
+- **ONE code path, and the tree comes from config membership.** `ingest_month`
+  writes through `cfg.output_path`/`report_path`/`sidecar_path`. The old
+  `processed_path`/`rejected_path`/`rejections_path` are UNCHANGED and still
+  raise for a scoring month, pinned by a test: every existing caller means "the
+  settled months", and a dispatcher hiding inside them would put a 2020 month
+  wherever any of them is called. `make data` is untouched too — `make
+  data-scoring` is a separate command, because one command doing both would make
+  every scoring ingest a rewrite of the trees the program's numbers rest on.
+- **Observed: 15,712,062 → 15,413,352 rows (1.901% rejected).** `make duckdb`
+  now runs **five** reconciliations (16 views): the scoring views' rows against
+  the reports that wrote them (15,413,352 == 15,413,352) and the scoring sidecar
+  per (month, rule) (**298,710 == 298,710, 30 pairs, 0 disagreements**). Both
+  red-teamed in unit form. The settled numbers are unchanged: 56,127,878 clean,
+  914,459 sidecar, 12,140,456 predictions.
+- **M7 law 2 held and is checkable**: `dvc status data/processed.dvc
+  data/rejected.dvc` → `up to date`, neither `.dvc` modified in git,
+  `data/raw_manifest.json` **+18/−0 with zero diff lines mentioning 2019**. And
+  the new tree inherited the old one's best property for free — a full second
+  `make ingest-scoring` left `data/scoring.dvc` up to date, i.e. 15.4M rows
+  re-derived byte-identically, because it writes through the same
+  `write_processed` under the same pinned writer options.
+- **The pre-routed risk did not materialise, and the way it did not is the
+  point.** 2020-03 rejects **1.977%** against a `max_rejected_fraction` of 0.10
+  — indistinguishable from 2020-01's 1.955%. **March 2020 is structurally
+  impeccable and statistically alien**: nothing about the file is wrong, there is
+  simply half as much world in it (3,007,687 raw rows against 6,405,008). No
+  threshold was touched because none needed to be.
+- **The 2025 leg was a MEASUREMENT and it came back VALIDATED — a SURPASS.** The
+  real `yellow_tripdata_2025-01.parquet` (59,158,238 bytes, 3,475,226 rows, 20
+  columns) passes the shipped contract with ONE schema event, `alias applied:
+  'Airport_fee' -> 'airport_fee'`. Three M1-S1 mechanisms carried it untouched:
+  the alias entry, `from_year: 2025` making `cbd_congestion_fee` required and
+  present, and THE cast absorbing 2025's int32/int64 spread. It does NOT claim
+  2025 could be ingested and used — validation is a structural verdict, and the
+  cleaning profile and a 2019-fitted champion's meaning on 2025 data are unasked.
+- **So the refusal was watched on fixtures instead, and the exit code is the
+  assertion.** `make contract-probe-fixtures` breaks the REAL file three ways —
+  `drop-required`, `rename-required`, `unknown-column` — and requires **exit 1**
+  from each plus four empty data trees afterwards. A refusal that exits 0 is a
+  refusal a pipeline cannot hear. **The rename fixture found a real defect**: a
+  renamed column is both an absence and an arrival, and `check_columns` raises in
+  the missing branch before the unknown branch can run, so the message named
+  `['VendorID']` as vanished and said nothing about `VendorID_v2` sitting right
+  there. Both are named now, with `aliases:` offered as the fix. Each branch was
+  individually correct — only running the fixture showed it.
+- **The two signatures M7-S3 must keep apart, now on the record** (§8 of the
+  write-up): statistical drift = contract passes, exit 0, 2,948,237 rows written,
+  a distribution that moved; schema drift = `SchemaEventError`, exit 1, **no
+  output, no sidecar, no report — and therefore NO DRIFT METRIC AT ALL**. The
+  second is the dangerous one: a drift dashboard showing "no alert" looks
+  identical to a healthy month, which is gotcha #78's empty-panel disease with
+  the panel removed entirely.
+- **F-045 (open, routed to M7-S3) is the most useful thing this story measured.**
+  A drift metric over a WHOLE MONTH may not fire on the most drifted month this
+  program will ever hold: 2020-03's mean trip duration is **13.1645** against
+  2020-01's **13.2123** — a **0.36%** move, *smaller than the ordinary Jan→Feb
+  wobble* (+2.71%) — while its daily series runs **240,520 trips at 14.878 min on
+  2020-03-05** to **5,361 at 9.715 min on 2020-03-29**. The monthly aggregate is
+  dominated by the ten ordinary days at its head. **Volume is the one marginal
+  that cannot be averaged away.** Three readings are costed in the ledger and
+  NONE is chosen here: the window, the reference and the bar are S3's to argue
+  before the job runs (M7 law 4).
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2015,6 +2094,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | BI seat, whole (M1-S5) | `make deploy-metabase` (namespace → secrets → app-db via D-002 → Deployment → host-route check → boards; `SKIP_BOARDS=1` deploys only) | VERIFIED 2026-08-17 (M1-S5) — see the commands' Done rows in HANDOFF (u) |
 | Boards only (M1-S5) | `make boards` (`python scripts/metabase_boards.py`; `--verify` is the read-only twin `verify-m1` uses) | VERIFIED 2026-08-17 (M1-S5): converges 17 cards + 2 dashboards from `analytics/metabase/boards/*.json`; idempotent BY NAME (second run updates in place, ids unchanged) |
 | Gate check M1 | `make verify-m1` | RE-VERIFIED 2026-08-17 (M2-S1, after the ingest change): **37 `ok` sub-checks, 0 FAIL, exit 0** — leg 1 now reports `16 output(s) byte-identical`, and that number is finally the number the proof HASHED (it used to `grep -c` every line ending in `yes` across the whole log, so it printed 16 for 8 files; pinned by a test). VERIFIED 2026-08-17 (M1-S5): 9 sections, **30 sub-checks GREEN, exit 0, measured 98s**; RED-TEAMED by `kubectl -n metabase scale --replicas=0` → exit 2 naming exactly the 2 BI checks, other 28 still green, then restored → GREEN again. **No fast mode, no skip flag** — leg 1 deletes and rebuilds ~1 GB of processed parquet, because byte-identity checked against data that was never re-derived is not a check |
+| Scoring months, whole (M7-S1) | `make data-scoring` (ingest --scoring → duckdb → dvc add data/raw + the two scoring trees + push; `SKIP_DVC=1` stops before the pin) · `make ingest-scoring` is the ingest alone | VERIFIED 2026-08-20 (M7-S1): **15,712,062 → 15,413,352 rows, 1.901% rejected** across 2020-01..03, per-rule tables printed, one schema event per month (`airport_fee` present ahead of its `from_year` — gotcha #6 working). **2020-03 rejects 1.977% against a 0.10 ceiling**: structurally impeccable, statistically alien (3,007,687 raw rows against 2020-01's 6,405,008). It writes ONLY into `data/scoring/` and `data/scoring_rejected/` — `dvc status data/processed.dvc data/rejected.dvc` reads `up to date`, neither `.dvc` is modified in git, and `data/raw_manifest.json` is **+18/−0 with zero diff lines mentioning 2019**. A full second run left `data/scoring.dvc` up to date, i.e. **15.4M rows re-derived byte-identically**. Transcript: `docs/scoring_months_m7_transcripts.md` §1 |
+| Analyst layer, now five reconciliations (M7-S1) | `make duckdb` | RE-VERIFIED 2026-08-20 (M7-S1): **16 views** (four added) and **five** reconciliations, exit 1 on any. New: scoring rows vs their reports (**15,413,352 == 15,413,352**) and the scoring sidecar per (month, rule) (**298,710 == 298,710, 30 pairs, 0 disagreements**). The settled numbers unmoved — 56,127,878 · 914,459 · 12,140,456. Both new legs RED-TEAMED in unit form: a truncated scoring month, and a report whose per-rule counts were shuffled **with its monthly total left correct** (the shape a per-month check cannot see). `trips_clean` still returns exactly `{train,val,test}`, by test |
+| Ask a month what the contract says, writing nothing (M7-S1) | `make contract-probe PROBE_ARGS="--month YYYY-MM"` (**exit 0 = VALIDATED · 1 = REFUSED · 2 = the probe itself failed**; `--fixture`, `--rows`, `--out` for a tracked record) | VERIFIED 2026-08-20 (M7-S1): the REAL `yellow_tripdata_2025-01.parquet` (59,158,238 bytes, sha256 `9af277e4c0d3…`, 3,475,226 rows, 20 columns) came back **VALIDATED** with one schema event, `alias applied: 'Airport_fee' -> 'airport_fee'` — the year-aware contract's first encounter with real 2025 bytes, and a **SURPASS** over the blueprint's premise. It **acquires nothing**: the file lands in `data/probe/` (gitignored, not DVC-tracked) under its own manifest, `data/raw` and `data/raw_manifest.json` are untouched, and `--raw-dir data/raw` is refused outright. An AST test forbids it calling any writer or the ingest |
+| Watch the contract REFUSE (M7-S1) | `make contract-probe-fixtures` (`PROBE_MONTH=`/`PROBE_ROWS=` are the levers) | VERIFIED 2026-08-20 (M7-S1): **PASSED — 3 refusal shapes, exit 1 each, nothing written.** `drop-required` (a field disappears) · `rename-required` (a field moves) · `unknown-column` (a field arrives) — all derived from the REAL 2025-01 file, all `SchemaEventError`, and all four data trees checked empty for the probed month afterwards. **The exit code is the assertion**: a refusal that exits 0 is a refusal a pipeline cannot hear. `rename-required` found a real defect — the message named the absent column and said nothing about the unknown one that had replaced it, because the missing branch raises before the unknown branch can run. Both are named now, with `aliases:` offered as the fix |
 | Ask the analyst layer | `python -m taxi_mlops.data query "<SQL>"` (read-only) | VERIFIED 2026-08-16 (M1-S2): every figure in the Data Contract Review minutes came from this path; no raw parquet was read |
 | Byte-identical rebuild (M1 gate leg) | `make rebuild-proof` (`DRY_RUN=1` previews) | VERIFIED 2026-08-16 (M1-S2): wiped `data/processed/`, rebuilt by ONE command from DVC-pinned raw, **8/8 outputs byte-identical**, confirmed twice — our sha256 table and `dvc status data/processed.dvc`. RED-TEAMED twice: tampered raw → refused at step 2 **without deleting anything** (`data/processed` still 8 files); tampered output → table prints `NO` naming `val/yellow_tripdata_2019-07.parquet`, exit 1. **WIDENED + RE-VERIFIED 2026-08-17 (M2-S1): 16/16** — it now wipes and re-derives `data/rejected/` too and asks DVC about BOTH `.dvc` files (`data/processed.dvc: up to date` · `data/rejected.dvc: up to date`). A proof that re-derives half a command's output proves half a command |
 | Baselines + LightGBM v1 (M2-S2) | `python -m taxi_mlops.training train` (`--ablation` adds the log1p variant; `--train-months` is the sample-first override; `--no-mlflow` is a smoke test, never a result) | VERIFIED 2026-08-17 (M2-S2): 43,987,422 train rows, 4 MLflow runs in `m2-modeling`, `lightgbm-v1` logged WITH signature + input example (7 artifacts in MinIO). The two floors came back **7.8866** and **3.7170** val MAE — the EDA's SQL numbers to four decimals, from different code. Registry left EMPTY on purpose (S3's) |
