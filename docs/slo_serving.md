@@ -92,6 +92,49 @@ source) are exact and A-3 depends on them; only its *quantiles* are unusable at
 this bucket resolution. Re-bucketing mlserver is not a knob this program has
 (the buckets are compiled into the runtime), so the workaround is the design.
 
+### 2.2 Above ~90% CPU, no IN-POD instrument may be trusted — including I-2 (F-043)
+
+**A component under stress is an unreliable reporter of its own stress.** This is
+not a caution, it is a measurement. During M6-S5's saturation gameday
+(`automation/runs/m6-gameday/saturation.json`, `docs/gameday_m6.md` §4.2), with
+the predictor pinned at a CFS-throttled fraction of **0.9996**:
+
+```
+the LOADED predictor's /metrics :   scrape_duration 4.613 s, and one scrape had up == 0
+the IDLE v1 shadow's /metrics   :   scrape_duration 0.004 s, up == 1   (same job, every 15 s)
+```
+
+Two instances of the same exporter, scraped by the same Prometheus job, 1,150×
+apart. A failed scrape makes the series **stale**, and a stale series makes an
+expression evaluate over nothing — which is why **A-1 fired at T+349.3 s and then
+cleared itself at T+514.3 s while the load was still running.** The alert did not
+decide the latency was fine; it lost the ability to see.
+
+The idle shadow was an accident — an M6-S3 leftover — and it is the only reason
+this is a measurement rather than a theory. It is worth saying plainly: **the
+cheapest possible control for "is this exporter lying?" is a second, idle
+instance of it scraped by the same job.**
+
+**What holds under saturation, and what the on-call should read instead:**
+
+| Instrument | Where the process runs | Survives predictor saturation? |
+|---|---|---|
+| I-2 mlserver histogram/counters | **inside the predictor** | **No** — this section |
+| I-5 cAdvisor (A-6, throttling) | the kubelet, on the node | **Yes** — it is what reported the 0.9996 |
+| I-3 ingress-nginx (A-2, edge 5xx) | a different pod, a different node | **Yes** |
+| I-4 kube-state-metrics (A-5, A-7) | the API server's view | **Yes** |
+
+So **A-6 is the alert a saturated service produces**, A-2 and A-5 are the
+availability witnesses, and A-1's silence during a saturation event carries no
+information. A-1's `why` annotation says so at the rule.
+
+*Disposition (ARCH, M6→M7 boundary, option (c)): accept and document.* No target
+loosens and no threshold moves — an instrument limitation is documented, not a
+bar changed. Raising the CPU limit (option (a)) stays available at a future
+capacity conversation argued from real traffic. **Drift metrics are structurally
+outside this failure mode**: they are pushed by a batch job to a gateway on
+another node, so the producer and the scrape are decoupled by design.
+
 ---
 
 ## 3. The targets
@@ -289,7 +332,38 @@ belongs only to the mutations that destroy the pod first.
 
 ---
 
-## 6. Two of the PRR's seven signals have no metric source in this stack (F-035)
+## 6. The two signals that had no metric source — CLOSED at M7-S3 (F-035)
+
+> **DATED UPDATE, 2026-08-20 (M7-S3). Both absences are now sources, and the
+> sections below are kept unedited as the record of why they were absences.**
+> The reason both were impossible was the same one, stated at M6-S2: *the fact
+> lives in a CLIENT, and no client here is scraped.* M7-S3 installs the
+> pushgateway for drift, which makes a client able to speak. So:
+>
+> * **A-3's client half** — `taxi_quote_refusals_total`, pushed by the quote
+>   client itself when `UncoveredDateError` refuses a request. Its rule is
+>   `increase(...[1h]) > 0` and that shape is deliberate: this is **not** a rate
+>   problem needing a fleet. One refusal means the holiday table's horizon has
+>   expired, which is a fact about the repository, not about traffic volume — so
+>   a single event is the event. Option (a) of the three costed below, landed at
+>   the milestone it was costed for. Option (c) (`verify-m6`'s coverage check)
+>   stays in place: it catches the expiry *before* a rider meets it, and this
+>   catches the rider who already did.
+> * **A-4** — `taxi_serving_model_version` and `taxi_registry_champion_version`,
+>   pushed by `scripts/push_serving_version.py`, which asks the live endpoint for
+>   one prediction and the registry for the alias and pushes both. There are two
+>   series now, so the comparison exists. **Its rule requires freshness as well
+>   as agreement** (§8.5's argument applied a second time): a stale pushed pair
+>   agrees with itself forever.
+>   **Honest cut, stated because it is real:** the *cadence* is not installed
+>   here. The pusher is a script proven to push, and what runs it on a schedule
+>   lands with M7-S4's scheduler — the story that installs one. Until then A-4's
+>   freshness half is what stops the version half from lying, and `verify-m5` §2
+>   remains the check that actually runs at every gate.
+>
+> `scripts/render_alert_rules.py`'s absence-agreement check moved with them:
+> `IMPLEMENTED_SIGNALS` now holds all ten ids and the documented-absence set is
+> empty, so this closure could not have been claimed without the rules existing.
 
 The M5 PRR named A-1…A-7 as a **plan**. Implementing it found that two of them
 cannot be Prometheus rules here. They are named absences, not omissions, and
@@ -390,3 +464,167 @@ this program's rule is that the flattering floor is the one you name and refuse
 240 requests beyond 250 ms before and 0 of 240 after, against a 5% budget. A-1
 would not have fired in either run. The scheduler now sees the truth about this
 pod, which was the entire point, and nothing a rider experiences moved.
+
+---
+
+## 8. The drift targets (M7-S3) — argued before the drift job saw a 2020 month
+
+**Read §0 first: the rule that no bar is set equal to a number just measured
+applies here with a sharper edge than anywhere else in this document.** Every
+other threshold here was argued against a service whose behaviour nobody was
+trying to prove. A drift bar is argued against a month — March 2020 — that this
+program went and fetched *because* it expects it to be extreme. So the order of
+work is recorded, and it is checkable from the records' own timestamps:
+
+1. the **headroom leg ran first** and read only 2019 data
+   (`automation/runs/m7-drift/headroom.json`);
+2. the bars below were written from it;
+3. the **prediction** was written to
+   `automation/runs/m7-drift/prediction.json`;
+4. *then* 2020-01..03 were compared.
+
+A bar chosen after step 4 would be a bar chosen to make an alert agree, which is
+the thing M7 law 4 exists to forbid.
+
+### 8.1 The instrument, and what it deliberately cannot see
+
+`taxi_mlops.monitoring.drift` compares one month's **input distribution** with
+the champion's **training distribution** (`trips_train`, 2019-01..06, 43,987,422
+rows — the rows the champion was actually fitted on, not a rolling window; the
+module's docstring argues why a moving reference cannot see a slow move). Six
+columns are monitored: five inputs and, separately, the target.
+
+The statistic is **PSI over bin shares**, computed exactly from DuckDB value
+counts — no sampling, so the number does not move when nothing moved. Evidently
+0.7.21 runs beside it on a seeded sample as a second witness and is *not* the
+alerting instrument (`drift_evidently.py` says why).
+
+**What PSI structurally cannot see: volume.** PSI is a distance between *shares*.
+Halve every count and PSI is exactly zero. A city that stops moving but keeps the
+same mix of trips is invisible to it — which is precisely the F-045 shape M7-S1
+measured from the other side. That is why SLO-D2 exists and is not a refinement
+of SLO-D1: it is the marginal the first instrument is blind to.
+
+### 8.2 The headroom, measured on months whose verdict already exists
+
+The two held-out 2019 months are the only data in this repository that is
+*known* not to have warranted action: the champion was measured on them and
+**PROMOTED**. Whatever distance they sit at from the reference is, by
+construction, a distance the program has already decided to live with.
+
+| Column | PSI, val 2019-07 | PSI, test 2019-08 |
+|---|---|---|
+| `hour` | 0.0006 | 0.0009 |
+| `dayofweek` | **0.0323** | 0.0077 |
+| `PULocationID` | 0.0091 | 0.0137 |
+| `DOLocationID` | 0.0085 | 0.0126 |
+| `passenger_count` | 0.0010 | 0.0013 |
+| `trip_duration_minutes` *(target)* | 0.0011 | 0.0008 |
+| **trips/day vs reference** | **0.8216** | **0.7899** |
+
+The largest of them, 0.0323, is `dayofweek` in July — and reading *what* it is
+matters as much as its size: July 2019 held five Mondays against the reference
+months' average, so it is **calendar arithmetic**, the least model-meaningful
+move a month can make. The largest genuinely-behavioural number is
+`PULocationID` at **0.0137**.
+
+### 8.2a The rules these targets are implemented by
+
+| Signal | Alert | Target | `for:` |
+|---|---|---|---|
+| **A-8** | `ModelInputDrift` | SLO-D1 | 5m |
+| **A-9** | `ScoringVolumeCollapse` | SLO-D2 | 5m |
+| **A-10** | `DriftMetricsStale` | SLO-D3 | — |
+
+and the two F-035 landings that ride the same gateway (§6's dated update):
+**A-3**'s client half as `QuoteHorizonRefusals`, and **A-4** as
+`ServedVersionNotChampion`.
+
+### 8.3 SLO-D1 · input drift — *fewer than two of the five monitored input columns at PSI ≥ 0.10*
+
+**The per-column bar is 0.10.** Two independent arguments have to agree before a
+number goes in this document, and here they do:
+
+* **Headroom.** 0.10 is **3.1× the highest distance a PROMOTED month sits at**,
+  and **7.3× the largest behavioural one**. Ordinary seasonality — a different
+  count of Mondays, a summer zone mix — does not get near it. There is real
+  daylight between the bar and everything this program has observed and accepted.
+* **It is not a number we invented.** PSI's 0.10 / 0.25 "investigate /
+  significant" convention is decades old and published everywhere. That matters
+  for exactly one reason: an on-call who did not write this document has a prior
+  for what 0.10 means, and a house-special bar of 0.037 would be a number only
+  its author could interpret at 3am.
+
+**The alert requires TWO columns, and the cost of that is stated rather than
+hidden.** A single column crossing 0.10 is more consistent with a data-side
+artefact than with a moved world — `passenger_count` is in the monitored set for
+exactly that purpose — and the champion's inputs are strongly correlated
+(hour↔dayofweek, PU↔DO), so a real world event moves several at once. Requiring
+two makes the page mean *the world moved*.
+
+*The blind spot this buys, named:* **one column going catastrophically wrong does
+not page.** A vendor that starts sending `passenger_count = 0` for every trip
+moves one column to a huge PSI and A-8 stays silent. That is a deliberate trade —
+it is visible on the board and in the monthly memo, and the complement is SLO-D2,
+which needs no column to move at all. If a single-column catastrophe ever
+happens here, this is the paragraph that was wrong and the split should be
+re-argued, not the bar walked.
+
+**Sustain: `for: 5m`.** F-041's mechanism — a `rate()` window that is empty when
+an event starts — **does not apply to these rules**, because they read last-value
+gauges from a bulletin board rather than a window of samples. The sustain's only
+job here is to outlive a failed scrape of the gateway or a half-written push, and
+5 minutes is 20 evaluations at the 15 s interval.
+
+### 8.4 SLO-D2 · volume — *the scoring month holds at least half the reference's trips per day*
+
+**The bar is 0.50.** The lowest ordinary observation in this repository is
+**0.7899** (August 2019 against the reference), so 0.50 sits **29 percentage
+points below the quietest month a promoted champion was judged on**. A summer dip
+is ~20%; halving is not a dip. The harm side is what makes it worth a page rather
+than a chart: a model quoting confidently into a market that has lost half its
+trips is quoting into a *different* market, and volume is the marginal SLO-D1 is
+structurally blind to (§8.1).
+
+### 8.5 SLO-D3 · freshness — *a drift number older than 40 days is not a drift number*
+
+The gateway is a **bulletin board, not a store of events**: a pushed metric
+persists until it is overwritten or deleted. So "the drift metric is present and
+below the bar" is equally consistent with *the drift job died in March and
+January's reassuring number is still pinned to the wall*. This is gotcha #78's
+empty-panel disease inverted — not a blank rectangle that looks like calm, but a
+stale number that looks like health.
+
+**40 days — `3456000` seconds, which is the literal the rule contains** — because
+the cadence is monthly: a month plus a week plus a weekend. One late run does not
+page; a stopped job does. Every push carries
+`taxi_drift_last_run_timestamp_seconds` and
+`taxi_mlops.monitoring.pushgateway.push_metrics` **refuses a payload without a
+metric named `*_last_run_timestamp_seconds`** — a guard in a type rather than in
+a habit.
+
+The seconds are written here, and not just "40 days", on purpose: a check that
+compares a rule against the document arguing it has to compare the number the
+rule actually holds. Rendering `3456000` as "40 days" in the doc and leaving the
+check to do the arithmetic is how a threshold ends up argued nowhere (the first
+run of `test_every_rule_threshold_appears_in_the_document_that_argues_it` failed
+on exactly this, and passed A-4's `1800` **by accident** — `"1800".rstrip("0")`
+is `"18"`, which matches `18.24 s` in §7.1. Gotcha #76, found by the test on
+itself.)
+
+**A-4's freshness window is 30 minutes — `1800` seconds** (§6's dated update).
+
+### 8.6 What these targets deliberately do not cover
+
+* **Performance decay.** M7-S2's KPI-14/15/16 are the champion's error series on
+  the scoring months, and they are *not* what A-8 fires on. An ETA's labels
+  arrive when the trip ends and in a real deployment far later; an alert that can
+  only fire once the labels have landed reports history. Drift is the signal that
+  works on the day of. The error series is the memo's (M7-S5) and the gate's.
+* **What to do about it.** A drift alert is a request for a decision — retrain,
+  re-scope, or accept — not a fault report. Nothing here auto-retrains, and M7
+  law 3 means nothing here can move `@champion`.
+* **A moving reference.** Stated as a cost in the module: the reference does not
+  follow the world, so a legitimately-changed world keeps alerting until someone
+  retrains and re-declares it. That is intended. An alert that silences itself by
+  redefining normal is the drift-monitoring failure mode.

@@ -110,9 +110,32 @@ def test_every_watched_alert_is_a_rule_that_exists():
     exercise to become a formality.
     """
     watched = ast.literal_eval(_assign(GAMEDAY, "WATCHED"))
-    assert set(watched) == set(_rules()), (
-        "scripts/gameday_m6.py's WATCHED and infra/monitoring/alerting_rules.yml "
-        "disagree about which alerts exist"
+
+    # NO PHANTOMS: everything watched must actually ship.
+    assert set(watched) <= set(_rules()), (
+        "scripts/gameday_m6.py watches "
+        f"{sorted(set(watched) - set(_rules()))}, which the rules file does not ship — "
+        "a watch list naming an alert nobody ships reports 'it did not fire' forever"
+    )
+
+    # NO GAPS, scoped to what this gameday can actually provoke. M7-S3 added a
+    # `crosstown-drift` group whose signals come from a BATCH job pushing to a
+    # gateway; the gameday's four scenarios (control, kill, storage, saturation)
+    # touch the wire and cannot move a drift metric, so demanding it watch them
+    # would force a session to pad a watch list with entries nobody reasoned
+    # about. The group name is what separates them, DERIVED from the file rather
+    # than typed here (F-017's both-sides rule).
+    payload = yaml.safe_load(RULES.read_text())
+    serving = {
+        rule["alert"]
+        for group in payload["groups"]
+        if group["name"] == "crosstown-serving"
+        for rule in group["rules"]
+    }
+    assert serving <= set(watched), (
+        f"the gameday stopped watching {sorted(serving - set(watched))}, which are serving "
+        "rules its scenarios can provoke. Drift rules are exercised by "
+        "scripts/drift_fire_drill.py instead."
     )
 
 

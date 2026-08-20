@@ -86,6 +86,17 @@ groups:
           sustain: >-
             for 5m, because a single slow scrape window is what a cold model load
             or one host hiccup looks like, and neither is a user-visible outage.
+          instrument_limit: >-
+            F-043, measured at M6-S5 and argued in docs/slo_serving.md §2.2:
+            THIS RULE READS AN IN-POD EXPORTER, AND ABOVE ~90% CPU THE POD
+            CANNOT RELIABLY REPORT ON ITSELF. Under a throttled fraction of
+            0.9996 the predictor's /metrics went from 4 ms to 4.613 s with one
+            scrape failing outright (the idle shadow, same job, stayed at
+            0.004 s) — which made this alert FIRE at T+349.3 s and then CLEAR
+            ITSELF at T+514.3 s while the load was still running. A-1 going
+            inactive during a saturation event carries no information. The
+            instruments that hold are node-side (A-6, the kubelet's cAdvisor —
+            it is what measured the 0.9996) and edge-side (A-2, ingress-nginx).
 
       # --- A-2 · 5xx at the edge --------------------------------------------
       # SLO-A1: 99.9% of requests to the quote route are answered non-5xx.
@@ -258,3 +269,227 @@ groups:
             threshold change argued from a number just measured; it is written
             up in docs/gameday_m6.md §3.1 as a recommendation and deliberately
             NOT taken here.
+
+  # ==========================================================================
+  # M7-S3 · THE DRIFT AND CLIENT-SIDE SIGNALS
+  #
+  # Everything below reads the PUSHGATEWAY, not a scraped service, and that
+  # changes one thing about how the rules are written: a pushed metric is a
+  # LAST VALUE ON A BULLETIN BOARD, not a sample in a window. It persists after
+  # its producer dies. So there is no `rate()` on a drift value anywhere here,
+  # F-041's empty-window mechanism does not apply to these sustains, and every
+  # value-reading rule in this block is paired with a freshness condition or a
+  # freshness rule — because "the number is present and fine" and "nobody has
+  # produced a number since March" are otherwise the same picture. That is
+  # gotcha #78's empty-panel disease inverted: not a blank rectangle that looks
+  # like calm, but a stale number that looks like health.
+  #
+  # Every threshold below is argued in docs/slo_serving.md §8, which was written
+  # from the HEADROOM LEG (the two held-out 2019 months, whose verdict is
+  # already PROMOTE) BEFORE any 2020 month was compared — M7 law 4, with the
+  # order of work checkable from the records' own timestamps.
+  # ==========================================================================
+
+  - name: crosstown-drift
+    interval: 15s
+    rules:
+      # --- A-8 · input drift -------------------------------------------------
+      # SLO-D1: fewer than two of the five monitored INPUT columns at PSI >= 0.10.
+      #
+      # THE `count(...)` SHAPE IS THE RULE, NOT AN OPTIMISATION. The bar 0.10
+      # appears exactly once, inside the selector, and the alert counts how many
+      # columns are past it. The alternative — having the drift job compute a
+      # "drifted share" and push that — would put the threshold in TWO places
+      # (the job and the doc, F-013's twin problem) and would make the pushed
+      # number un-reinterpretable after the fact. The job pushes raw PSI per
+      # column and does not judge; a test asserts that no bar-shaped constant
+      # exists anywhere under src/taxi_mlops/monitoring/.
+      #
+      # THE TARGET IS EXCLUDED BY NAME. trip_duration_minutes is monitored and
+      # pushed, but it is not an input: inputs steady + target moved means the
+      # RELATIONSHIP changed under the model, both moved means the world did,
+      # and averaging the two into one share would destroy exactly the
+      # distinction that makes the alert actionable.
+      - alert: ModelInputDrift
+        expr: |
+          count by (month) (
+            taxi_drift_psi{job="taxi-drift", column!="trip_duration_minutes"} >= 0.10
+          ) >= 2
+        for: 5m
+        labels:
+          severity: warning
+          signal: A-8
+          slo: SLO-D1
+        annotations:
+          summary: "{{ $value }} monitored input columns are past PSI 0.10 for month {{ $labels.month }}"
+          why: >-
+            docs/slo_serving.md §8.3. The per-column bar 0.10 is 3.1x the
+            highest distance a PROMOTED month sits at (0.0323 — dayofweek in
+            July 2019, which is calendar arithmetic: five Mondays) and 7.3x the
+            largest behavioural one (0.0137, PULocationID in August 2019). It is
+            also the published PSI "investigate" convention, which matters for
+            one reason: an on-call who did not write this document already has a
+            prior for what 0.10 means, and a house-special 0.037 would be a
+            number only its author could interpret. TWO columns rather than one
+            because the champion's inputs are strongly correlated
+            (hour<->dayofweek, PU<->DO) so a real world event moves several at
+            once, while a single column moving alone is more consistent with a
+            data-side artefact.
+          blind_spot: >-
+            One column going catastrophically wrong does NOT page — a vendor
+            sending passenger_count=0 for every trip moves one column to a huge
+            PSI and this stays silent. Deliberate: it is visible on the board
+            and in the monthly memo, and A-9 needs no column to move at all. If
+            a single-column catastrophe ever happens here, §8.3's paragraph was
+            wrong and the split gets re-argued rather than the bar walked.
+          sustain: >-
+            for 5m, and it is NOT F-041's mechanism. These are last-value gauges
+            from a bulletin board, not a rate over a window that is empty at
+            t=0, so the sustain's only job is to outlive a failed scrape of the
+            gateway or a half-written push. 5m is 20 evaluations at 15s.
+          runbook: >-
+            A drift alert is a request for a DECISION (retrain, re-scope, or
+            accept), not a fault report. Read the per-column PSI and
+            taxi_drift_unseen_share first: an unseen-category spike is a
+            data-side event, a re-weighting is a world-side one. Nothing
+            auto-retrains and nothing here can move @champion (M7 law 3).
+
+      # --- A-9 · volume collapse ---------------------------------------------
+      # SLO-D2: the scoring month holds at least half the reference's trips/day.
+      #
+      # THIS IS NOT A REFINEMENT OF A-8, IT IS THE MARGINAL A-8 CANNOT SEE.
+      # PSI is a distance between SHARES. Halve every count and PSI is exactly
+      # zero. A city that stops moving while keeping the same mix of trips is
+      # invisible to A-8 and obvious here — F-045 (M7-S1) from the monitoring
+      # side.
+      - alert: ScoringVolumeCollapse
+        expr: |
+          taxi_drift_volume_ratio{job="taxi-drift"} < 0.50
+        for: 5m
+        labels:
+          severity: warning
+          signal: A-9
+          slo: SLO-D2
+        annotations:
+          summary: "Month {{ $labels.month }} holds {{ $value | humanizePercentage }} of the reference's trips per day"
+          why: >-
+            docs/slo_serving.md §8.4. The lowest ordinary observation in this
+            repository is 0.7899 (August 2019 against the train reference), so
+            0.50 sits 29 percentage points below the quietest month a promoted
+            champion was ever judged on. A summer dip is ~20%; halving is not a
+            dip. A model quoting confidently into a market that has lost half
+            its trips is quoting into a different market.
+          sustain: >-
+            for 5m, for A-8's reason: a last-value gauge, not a rate.
+
+      # --- A-10 · the drift job stopped running ------------------------------
+      # SLO-D3: a drift number older than 40 days is not a drift number.
+      - alert: DriftMetricsStale
+        expr: |
+          (time() - max by (month) (taxi_drift_last_run_timestamp_seconds{job="taxi-drift"})) > 3456000
+        labels:
+          severity: warning
+          signal: A-10
+          slo: SLO-D3
+        annotations:
+          summary: "The drift job has not reported for month {{ $labels.month }} in over 40 days"
+          why: >-
+            docs/slo_serving.md §8.5. 3456000 seconds is 40 days: the cadence is
+            monthly, so a month plus a week plus a weekend. One late run does
+            not page; a stopped job does. The gateway has no expiry — a pushed
+            metric persists until it is overwritten — so without this rule
+            "drift is fine" and "the drift job died in March" render
+            identically. The producer cannot be trusted to notice its own
+            absence, which is why the guard is here AND in a type:
+            push_metrics() REFUSES a payload with no
+            taxi_drift_last_run_timestamp_seconds.
+          sustain: >-
+            none, deliberately. The condition already contains a 40-day
+            duration; adding a `for:` would mean 40 days plus five minutes,
+            which reads like care and is noise.
+
+      # --- A-3 (client half) · the horizon expired ---------------------------
+      # F-035's first landing. See docs/slo_serving.md §6's dated update.
+      #
+      # WHY `increase(...) > 0` AND NOT A RATE OR A SHARE. This is not a volume
+      # problem needing a fleet of clients. One UncoveredDateError means the
+      # holiday table's horizon has expired — a fact about the REPOSITORY, not
+      # about traffic — and its fix is one command
+      # (`make holidays HOLIDAYS_TO=YYYY`). So a single event IS the event, and
+      # a threshold above zero would be a decision to serve some refusals
+      # quietly.
+      - alert: QuoteHorizonRefusals
+        expr: |
+          increase(taxi_quote_refusals_total{job="taxi-quote-client", reason="uncovered_date"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          signal: A-3
+          slo: SLO-R1
+        annotations:
+          summary: "A quote was refused as past the holiday-table horizon in the last hour"
+          why: >-
+            docs/slo_serving.md §6. F-019 chose to REFUSE rather than degrade —
+            a wrong quote nobody can see is wrong is worse than a countable
+            failure with its fix in the error text — and the cost was that the
+            refusal happens in the CLIENT, before a request exists, so no server
+            counter moves. Measured at M6-S2: a past-horizon `make quote` left
+            the infer counter at 22 -> 22. The client now pushes its own count,
+            which is the metric source that did not exist until M7's pushgateway.
+          sustain: >-
+            for 1m, only to require the value to survive one re-scrape of the
+            gateway. The condition itself is already "any refusal in an hour".
+          complement: >-
+            `verify-m6` still asserts the holiday table's coverage. That catches
+            the expiry BEFORE a rider meets it; this catches the rider who
+            already did. Neither replaces the other.
+
+      # --- A-4 · served version != registry @champion ------------------------
+      # F-035's second landing. The reason it was impossible until now is F-034:
+      # NO mlserver metric carries the model version (version="None"), and
+      # MLflow exports no Prometheus metrics at all — there were not two series
+      # to compare. scripts/push_serving_version.py makes two, by asking the
+      # endpoint for one real prediction (the version is on the ANSWER, M5-S2)
+      # and the registry for the alias, then pushing both.
+      - alert: ServedVersionNotChampion
+        expr: |
+          (
+            taxi_serving_model_version{job="taxi-serving-version"}
+            != on() group_left()
+            taxi_registry_champion_version{job="taxi-serving-version"}
+          )
+          and on()
+          (time() - taxi_serving_version_last_run_timestamp_seconds{job="taxi-serving-version"} < 1800)
+        for: 2m
+        labels:
+          severity: critical
+          signal: A-4
+          slo: SLO-A1
+        annotations:
+          summary: "The endpoint is serving version {{ $value }}, which is not the registry's @champion"
+          why: >-
+            docs/slo_serving.md §6. F-032's shape: a rollback is THREE moves
+            (alias, config line, re-deploy) and nothing enforced the middle one,
+            so a half-finished rollback leaves the pointer and the wire
+            disagreeing while every InferenceService condition still reads
+            Ready — no restart, no event, no probe. Critical because the failure
+            is silent by construction.
+          sustain: >-
+            for 2m, shorter than the ADOPTed 5m default and deliberately so.
+            The other rules sustain to avoid paging for a transient — a slow
+            scrape window, a self-heal in progress. This condition has no
+            transient form: the wire and the registry either agree or they do
+            not, and the state they are in is the state somebody left them in.
+            The 2m is there only to let a re-deploy's own brief window close
+            (M6-S4 measured a rollback's second move at 27.93 s, and a
+            re-deploy at 0.5 s), not to wait out noise.
+          freshness: >-
+            The `and on() (time() - ..._last_run_timestamp_seconds < 1800)` is
+            not decoration. A pushed pair persists after its pusher dies and
+            agrees with itself forever, so without this clause a dead pusher
+            reads as a healthy service. 30 minutes.
+          honest_cut: >-
+            M7-S3 landed the metric SOURCE, which is what F-035 said was
+            missing. What runs the pusher on a cadence lands with M7-S4's
+            scheduler. Until then `verify-m5` §2 remains the check that actually
+            runs, at every gate, and asks the endpoint directly.

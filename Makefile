@@ -209,6 +209,19 @@ alert-fire-drill: ## fire A-3 then A-2 for real against the live stack, predicti
 	@uv run python scripts/alert_fire_drill.py $(DRILL_ARGS)
 probe-mlserver-metrics: ## ask the live predictor where its /metrics really is (never the docs — gotcha #70)
 	@uv run python scripts/probe_mlserver_metrics.py
+
+# ---- M7-S3 drift detection (role:SRE) ----
+.PHONY: drift-headroom drift drift-drill drift-witness push-serving-version
+drift-headroom: ## the held-out 2019 months against the train reference — the input to §8's bar, 2019 data ONLY (M7-S3)
+	@uv run python -m taxi_mlops.monitoring headroom
+drift: ## compute drift for scoring months; add --push to send it to the gateway (M7-S3). Issues NO verdict
+	@uv run python -m taxi_mlops.monitoring $(DRIFT_GATEWAY) drift $(DRIFT_ARGS)
+drift-drill: ## push 2020-01..03 and watch the rules decide, prediction written FIRST (M7-S3; ~12 min, no outage, no injection)
+	@uv run python scripts/drift_fire_drill.py $(DRILL_ARGS)
+drift-witness: ## Evidently beside our SQL PSI — a second instrument on the same question (M7-S3; a READER)
+	@uv run python scripts/drift_second_witness.py $(WITNESS_ARGS)
+push-serving-version: ## A-4's two series: what the wire serves vs what @champion resolves to (M7-S3, F-035)
+	@uv run python scripts/push_serving_version.py $(A4_ARGS)
 canary-deploy: ## the challenger PATH carrying the champion's own bytes; proves ADR-011 condition 2 (M6-S4; DRY_RUN=1 previews, TEARDOWN=1 removes)
 	@bash scripts/deploy_canary.sh
 canary: ## shift 10% -> 100% -> revert under sustained load, split observed from COUNTERS (M6-S4; DRILL_ARGS=--dry-run)

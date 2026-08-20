@@ -9,6 +9,67 @@ months from now.
 
 ## M7
 
+### M7-S3 — the alert that correctly did not fire (2026-08-20, role:SRE)
+
+**What was built.** A drift monitor: exact PSI from DuckDB value counts, one
+scoring month against the champion's training distribution; a pushgateway
+in-cluster; three new alert rules (A-8 input drift, A-9 volume, A-10 staleness);
+Evidently 0.7.21 as a second witness; and the two client-side pushers that
+finally give F-035's absences a metric source. Plus a drill that wrote its
+prediction to disk before computing anything.
+
+**Why this way.** Three choices carry the story. (1) **The reference is the
+train months and never moves** — drift is the distance between what the model
+LEARNED and what it is being asked, and a rolling reference makes a world that
+drifts 3% a month invisible forever. (2) **The job pushes raw numbers and issues
+no verdict**; the bar lives in the selector of one Prometheus rule, so the
+pushed values stay re-interpretable after the fact and there is exactly one
+place to review when someone wants the bar loosened. (3) **The bar was argued
+from the two 2019 months whose verdict already exists** — the champion was
+measured on them and promoted, so the distance they sit at is one the program
+already decided to live with. That is the only honest way to set a drift
+threshold without setting it from the number the thing under test just produced.
+
+**The concept underneath: an instrument's blind spot is a design input, not a
+caveat.** PSI is a distance between *shares*. Halve every count and PSI is
+exactly zero. That sentence was written into `docs/slo_serving.md` §8.1 before
+the job ran, and it is why A-9 exists as a separate signal rather than as a
+refinement of A-8. Then March 2020 arrived: **max input PSI 0.0217 — lower than
+an ordinary July 2019 — and a volume ratio of 0.3913.** The shape alert stayed
+silent through the largest demand shock in the city's history, and the volume
+alert caught it. Had the blind spot been treated as a caveat in a doc instead of
+as a second rule, this stack would have watched COVID happen with every drift
+panel green.
+
+The general lesson is worth more than the taxi data: **before you ship a
+detector, write down what it is structurally incapable of seeing, and then go
+build the thing that sees that.** "Structurally incapable" is stronger than
+"might miss" — it means there exists a real-world change the statistic maps to
+exactly zero. Most monitoring gaps are of that kind, and they are all findable
+on paper, in advance, for free.
+
+**What to look at.** `docs/slo_serving.md` §8 (the bar, argued, with the order
+of work recorded and checkable from git) · `src/taxi_mlops/monitoring/drift.py`'s
+docstring (why the reference does not move, and what the share floor is for) ·
+`infra/monitoring/alerting_rules.yml`'s `crosstown-drift` group — read A-8's
+`blind_spot` annotation, which names what it will not catch and says what should
+happen if that ever bites · `docs/drift_detection_m7.md` §4 · and
+`infra/helm/monitoring/prometheus-values.yaml`'s `honor_labels: true`, which is
+one flag standing between working rules and rules that sit inactive forever
+looking exactly like a healthy system.
+
+**What to try yourself.** Two experiments, in order. First: delete
+`honor_labels: true`, redeploy, re-run `make drift-drill`, and watch nothing
+fire — no error, no red target, no complaint, just silence. Sit with how
+completely that failure hides. Second, the more interesting one: `make drift`
+already computes per-month, and M7-S2's `scoring_daily` mart already holds the
+daily series. Compute PSI for **22–31 March 2020 alone** against the same
+reference and see whether A-8's bar would have been crossed. If it would, you
+have just measured the price of a monthly window — and you will also understand
+why this story deliberately did *not* change the window after seeing A-8 stay
+quiet: the window is part of the bar, and re-choosing it to make an alert agree
+is the exact move the milestone's fourth law forbids.
+
 ### M7-S2 — the check a monitoring table cannot make for itself (2026-08-20, role:MLE)
 
 **The one-sentence version.** The champion scored 15.4M rows it was never judged

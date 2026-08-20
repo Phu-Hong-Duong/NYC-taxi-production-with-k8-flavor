@@ -10,6 +10,7 @@ dependencies = [
     "dbt-duckdb>=1.11.0",
     "duckdb>=1.5.5",
     "dvc>=3.67.1",
+    "evidently>=0.7.21,<0.8",
     "flaml>=2",
     "flyte>=2.6,<3",
     "lightgbm>=4.7.0",
