@@ -4,7 +4,7 @@
       "column": "hour",
       "current_bins": 24,
       "kind": "categorical",
-      "psi": 0.002416378687027414,
+      "psi": 0.0024163786870274144,
       "reference_bins": 24,
       "top_moves": [
         {
@@ -84,7 +84,7 @@
       "column": "PULocationID",
       "current_bins": 258,
       "kind": "categorical",
-      "psi": 0.008195303016543594,
+      "psi": 0.00819530301654359,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -124,7 +124,7 @@
       "column": "DOLocationID",
       "current_bins": 262,
       "kind": "categorical",
-      "psi": 0.008248580520447102,
+      "psi": 0.008248580520447095,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -164,7 +164,7 @@
       "column": "passenger_count",
       "current_bins": 11,
       "kind": "categorical",
-      "psi": 0.006860559511183405,
+      "psi": 0.006860559511183406,
       "reference_bins": 11,
       "top_moves": [
         {
@@ -241,7 +241,7 @@
       "unseen_share": 0
     }
   ],
-  "computed_at": "2026-08-20T04:28:29+00:00",
+  "computed_at": "2026-08-20T04:38:31+00:00",
   "current_rows": 6279806,
   "current_trips_per_day": 202574.38709677418,
   "max_input_psi": 0.010266357363217994,

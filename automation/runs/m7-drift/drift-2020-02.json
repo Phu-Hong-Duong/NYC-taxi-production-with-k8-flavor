@@ -44,7 +44,7 @@
       "column": "dayofweek",
       "current_bins": 7,
       "kind": "categorical",
-      "psi": 0.0061078707357144655,
+      "psi": 0.006107870735714465,
       "reference_bins": 7,
       "top_moves": [
         {
@@ -84,7 +84,7 @@
       "column": "PULocationID",
       "current_bins": 259,
       "kind": "categorical",
-      "psi": 0.008724857791745635,
+      "psi": 0.00872485779174562,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -124,7 +124,7 @@
       "column": "DOLocationID",
       "current_bins": 261,
       "kind": "categorical",
-      "psi": 0.00858309932573421,
+      "psi": 0.008583099325734216,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -241,10 +241,10 @@
       "unseen_share": 0
     }
   ],
-  "computed_at": "2026-08-20T04:28:31+00:00",
+  "computed_at": "2026-08-20T04:38:33+00:00",
   "current_rows": 6185309,
   "current_trips_per_day": 213286.5172413793,
-  "max_input_psi": 0.008724857791745635,
+  "max_input_psi": 0.00872485779174562,
   "month": "2020-02",
   "reference": "train-2019",
   "reference_months": [

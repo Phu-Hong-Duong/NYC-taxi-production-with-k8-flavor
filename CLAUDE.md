@@ -2095,6 +2095,120 @@ can never disagree (the port-family twins lesson, applied before it bit).
   story commits under `src/`, `scripts/` and `analytics/`, so the next
   on-cluster run rebuilds its image regardless.
 
+## Drift detection (M7-S3) — the shape alert that correctly did not fire, and the volume alert that did
+- **COVID March's most-moved INPUT column sits at PSI 0.0217 — lower than an
+  ordinary July 2019 does (0.0323).** That one number is the story. By the shape
+  of its requests March 2020 is not a strange month: the city did not start
+  taking different taxi trips, it stopped taking taxi trips. Volume ratio
+  **0.3913** against the reference's trips/day. So **A-8 (input drift) correctly
+  stayed inactive and A-9 (volume) FIRED at T+341.5 s** — and had A-9 not existed
+  as a separate signal this stack would have watched the collapse in silence with
+  every drift panel green. `docs/slo_serving.md` §8.1 argued *before the run* that
+  **PSI is a distance between SHARES, so halve every count and PSI is exactly
+  zero** — A-9 is the marginal A-8 is structurally blind to, not a refinement of
+  it. Written first, then demonstrated.
+- **F-045 is now measured from THREE sides and they agree.** M7-S1 in the raw
+  data (monthly mean duration moves 0.36%, less than an ordinary Jan→Feb wobble)
+  · M7-S2 on the output side (whole-month KPI-14 3.3227 hiding a last-ten-days
+  5.3128) · M7-S3 on the INPUT side (monthly PSI 0.0217). Three independent
+  instruments, one conclusion: **a monthly aggregate cannot describe this event,
+  and only volume survives the averaging.**
+- **The order of work IS the argument, and it is checkable from git.** M7 law 4
+  bites hardest here because a drift bar is argued against a month this program
+  fetched *because* it expects it to be extreme. So: the **headroom leg ran
+  first** reading 2019 ONLY (`headroom.json`) → the bars were written from it →
+  the **prediction was written** → *then* 2020 was compared. Steps 2–3 are in
+  commit `d113f26`, which lands before any 2020 drift record exists in the repo.
+- **The bar is argued from months whose verdict already exists.** The two
+  held-out 2019 months are the only data here *known* not to have warranted
+  action — the champion was measured on them and PROMOTED. Highest input PSI
+  across both: **0.0323**, and *what* it is matters as much as its size —
+  `dayofweek` in July 2019, i.e. five Mondays, **calendar arithmetic**. Largest
+  behavioural: 0.0137. So **0.10 is 3.1× the noisiest accepted month and 7.3× the
+  largest behavioural one**, and it independently coincides with the published PSI
+  convention — which matters because an on-call who did not write the doc already
+  has a prior for what 0.10 means. A house-special 0.037 would not.
+- **The job pushes raw quantities and issues NO verdict.** No threshold exists
+  anywhere under `src/taxi_mlops/monitoring/` — the bar lives in the SELECTOR of
+  one rule (`count(taxi_drift_psi{column!="trip_duration_minutes"} >= 0.10) >= 2`),
+  so the pushed numbers stay re-interpretable after the fact. Pinned by an **AST**
+  test, never a grep (these modules argue their own design at length — #53/#68).
+  M5-S4's load-drill precedent: *a READER that does not judge*.
+- **`honor_labels: true` is the one flag the whole thing rests on.** Prometheus
+  overwrites a scraped sample's `job` with the target's — correct for a service
+  reporting on itself, exactly wrong for a gateway reporting on somebody else.
+  Without it every drift series arrives as `job="pushgateway"`, every rule selects
+  `job="taxi-drift"` and matches nothing, and **the rules do not error — they sit
+  inactive forever**, indistinguishable from a healthy system. Also why the
+  gateway is deliberately NOT annotated for the generic endpoints job.
+- **The gateway is a bulletin board, not a store of events**, and two guards in
+  two layers say so: `push_metrics()` **refuses** a payload with no
+  `*_last_run_timestamp_seconds` (a type), and **A-10** fires on a stamp older
+  than 40 days (a rule). A pushed metric persists after its producer dies, so
+  "drift is fine" and "the drift job died in March" render identically otherwise
+  — gotcha #78's empty-panel disease inverted: not a blank rectangle that looks
+  like calm, but a stale number that looks like health.
+- **"Then cleared" needed an argument, not a copy.** M6's drill cleared by
+  STOPPING an injection; this drill injected nothing — March 2020 really did lose
+  61% of its trips and an alert saying so is correct. So the clearing is
+  demonstrated on the MECHANISM (delete the group, watch A-9 go inactive, proving
+  the rule follows the data and is not latched) and then **undone**: the real
+  numbers go straight back and the board ends carrying the truth. The decision
+  that alert asks for is M7-S4's retrain, not a silence.
+- **Evidently is ADOPTED (0.7.21), and it is the SECOND witness by argument.**
+  Probed FIRST in an isolated venv pinning the four numeric cores — the risk
+  table's headline risk did not materialise: 27 packages installed, 1 uninstalled
+  (the project, rebuilt), **pandas 3.0.5 · numpy 2.5.2 · scipy 1.18.0 ·
+  scikit-learn 1.9.0 · lightgbm 4.7.0 · mlflow-skinny 3.15.1 all unchanged**. It
+  is not the alerting instrument because five of six monitored columns are
+  categorical, so DuckDB computes their distributions EXACTLY over 43,987,422
+  reference rows — and a sampled estimate of an exactly-computable quantity is a
+  worse number **that also moves between runs**. On the question the alert asks —
+  *did any INPUT column drift?* — **the two instruments AGREE for both months:
+  none did.** And read sceptically: Evidently flags the TARGET at 0.1014 in
+  January and 0.1008 in March, essentially the same value in an ordinary month and
+  in the collapse, so it does not distinguish them either.
+- **F-035 CLOSED by landing, and the closure is ENFORCED rather than asserted.**
+  Both absences had one cause — *the fact lives in a client and no client is
+  scraped* — and the gateway fixes it. A-3's client half is
+  `taxi_quote_refusals_total` with `increase(...[1h]) > 0`, and that shape is the
+  argument: **one refusal means the holiday horizon expired, a fact about the
+  REPOSITORY not about traffic**, so a single event is the event. A-4 is
+  `scripts/push_serving_version.py`, which makes the two series F-034 said did not
+  exist. `IMPLEMENTED_SIGNALS` now holds all ten ids, `DOCUMENTED_ABSENCES` is
+  empty, and `validate()` fails in BOTH directions — the closure could not have
+  been written in prose without the rules existing. **Honest cut: the metric
+  SOURCE lands here; the CADENCE lands with M7-S4's scheduler**, which is why
+  A-4's rule carries a freshness clause and `verify-m5` §2 stays the check that
+  actually runs.
+- **F-043 CLOSED as `docs/slo_serving.md` §2.2** — option (c), the boundary's
+  decision. The measurement rather than a caution (4 ms → **4.613 s with one
+  scrape at `up == 0`**, against the idle shadow's 0.004 s on the same job), a
+  table of which instruments survive saturation, and **A-1 carries an
+  `instrument_limit` annotation AT THE RULE** where an on-call reads it. No target
+  loosened, no threshold moved. The generalisable line: **the cheapest control for
+  "is this exporter lying?" is a second, idle instance of it scraped by the same
+  job** — here that control was an accident, and it is the only reason F-043 is a
+  measurement rather than a theory.
+- **Two checker defects, both found by running the thing.** The drill judged
+  per ALERT NAME while its prediction is per **(alert, month)** — A-9 is predicted
+  to fire for 2020-03 *and* stay quiet for 2020-01/02, three statements about one
+  rule — so it reported `A-9 fired and was predicted INACTIVE` over a system
+  behaving exactly as predicted (#67's family). Reading the per-series `alerts`
+  array is also the STRONGER claim: a bar so low that an ordinary January trips it
+  passes a name-level check and fails this one. And the prose-vs-rule threshold
+  test **passed `1800` by accident** (`"1800".rstrip("0")` is `"18"`, which
+  matches `18.24 s` in §7.1) while failing `3456000` honestly — gotcha #76 found by
+  the test on itself; exact match only now, and the doc carries the raw seconds.
+- **Monthly grain is a known limitation, not a defended choice.** The kickoff
+  specifies "current = one scoring month" and that shipped. §4 shows the cost: at
+  this grain the input signal is flat through a catastrophe. A daily window would
+  very likely fire A-8 on 22–31 March, and the daily series already exists
+  (M7-S2's `scoring_daily`). **Deliberately not done here** — changing the window
+  after seeing that A-8 stayed quiet is exactly the threshold-walking law 4
+  forbids, because the window is part of the bar. Routed to ARCH at the boundary
+  with the evidence.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
