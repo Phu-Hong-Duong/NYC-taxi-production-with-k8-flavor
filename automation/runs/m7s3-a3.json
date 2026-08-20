@@ -1,1 +1,0 @@
-{"status":"success","data":{"resultType":"vector","result":[{"metric":{"instance":"make-quote","job":"taxi-quote-client","reason":"uncovered_date"},"value":[1787201513.594,"1.2141051861458905"]}]}}

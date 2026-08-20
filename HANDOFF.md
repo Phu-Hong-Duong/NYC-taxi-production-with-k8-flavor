@@ -1,5 +1,146 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bn) — M7-S3: the shape alert that correctly did not fire, and the volume alert that did
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE (Accountable),
+DA (R)** (charter read at entry; refusals in play: **no hostPort** (law 1), the
+2019 trees stay byte-identical (law 2), the alias is READ and never written
+(law 3), **no threshold set equal to a number just measured** (law 4), the
+cluster never goes down).
+Boot reads: CLAUDE.md · HANDOFF (bm) · M7 KICKOFF · AWAITING_PO.
+**Staleness check passed** — `automation/STOP` ABSENT, tree clean at `d197d33`,
+no detached job pending, 3 nodes Ready v1.36.1, exactly ONE isvc, `@champion`
+version 2, all four DVC pins `up to date` — exactly as (bm) described.
+**M7-S3 COMPLETE.** PR **#42**, merged (`45d8949`), reachable from origin/main.
+End state: `@champion` **2** (read, never written) · `features.version` **v2** ·
+champion serving · **12 alert rules across 10 signals** · 18 `taxi_drift_psi`
+series on the board · tree clean.
+
+### Done
+- **`make backup` FIRST** (the standing precedent — a new tenant lands beside
+  state with no other copy): `2026-08-20T04-07-22Z`, **6 databases, 1.6 GiB**,
+  every dump gzip-CRC clean with pg_dump's own completion marker.
+- **The drift job** (`taxi_mlops.monitoring.drift`): exact PSI from DuckDB value
+  counts over six columns — five inputs and, separately, the target — against
+  `trips_train` (43,987,422 rows, the rows the champion was actually fitted on).
+  **No sampling, so the number does not move when nothing moved.**
+- **The pushgateway on-cluster**, subchart flipped on, **no hostPort** (law 1;
+  9091 stays a reserved NAME, reached by port-forward — the M4-S2 flyte-console
+  precedent), with its own scrape job carrying **`honor_labels: true`**.
+- **Three new rules** (A-8 input drift · A-9 volume · A-10 staleness) plus
+  **F-035's two landings** — 7 rules/6 signals → **12 rules/10 signals**, and
+  the documented-absence list is now **empty**.
+- **`make drift-drill` PASSED**, prediction on disk before anything was
+  computed: **A-9 pending T+31.5 s → FIRING T+331.5 s for `month='2020-03'`
+  only**, at Alertmanager; A-9 for 2020-01/02 and all seven other watched rules
+  inactive as predicted; A-9 **cleared 40.0 s** after its metric was removed and
+  the real numbers pushed straight back.
+- **A-3's client half FIRED end to end** — the alert M6-S2 measured as
+  impossible on this stack (`22 → 22` on the infer counter).
+- **Evidently 0.7.21 ADOPTED**: probed FIRST in an isolated venv; 27 packages
+  installed, 1 uninstalled (the project, rebuilt), **no numeric core moved**.
+- **F-043 CLOSED** (`docs/slo_serving.md` §2.2 + A-1's `instrument_limit`
+  annotation) · **F-035 CLOSED by landing** · **F-046 opened and routed**.
+- `docs/drift_detection_m7.md` · `..._transcripts.md` · CLAUDE.md section + **6**
+  command rows + port-family note · field note · gotchas **92–94** · ledger rows.
+- **862 unit tests** (22 new, six inherited guards widened), ruff clean, CI green.
+
+### Decisions
+- **The reference is the train months and never moves.** Drift is the distance
+  between what the model LEARNED and what it is being asked; a rolling reference
+  makes a world that drifts 3% a month invisible forever. Cost stated in the
+  module: a legitimately-changed world keeps alerting until someone retrains and
+  re-declares it. That is intended — an alert that silences itself by redefining
+  normal is the drift-monitoring failure mode.
+- **The job pushes raw quantities and issues NO verdict.** No threshold exists
+  anywhere under `src/taxi_mlops/monitoring/`; the bar lives in the SELECTOR of
+  one rule, so the pushed numbers stay re-interpretable after the fact. Pinned by
+  an **AST** test, never a grep (#53/#68) — and that test caught a real one: a
+  `0.1` default I had left when reading Evidently's own threshold. Removed, so
+  their verdict can never be silently replaced by our guess.
+- **A-8 requires TWO columns, and the blind spot is written at the rule.** The
+  champion's inputs are strongly correlated, so a real world event moves several
+  at once while a single column moving alone is more consistent with a data-side
+  artefact. Cost, named in the annotation: one column going catastrophically
+  wrong does not page.
+- **"Then cleared" needed an argument, not a copy.** M6 cleared by stopping an
+  injection; this drill injected nothing. So the clearing is demonstrated on the
+  MECHANISM and then undone — **the board deliberately ends with A-9 firing**,
+  because March 2020 really did lose 61% of its trips.
+- **Monthly grain shipped as the kickoff specifies, and its cost is recorded
+  rather than fixed** — see F-046 below.
+
+### Defects/Surprises
+- **The headline is a negative result and it is the story's substance.** COVID
+  March's most-moved INPUT column is PSI **0.0217** — *lower than an ordinary
+  July 2019* (0.0323) — with a volume ratio of **0.3913**. A-8 correctly stayed
+  silent; A-9 caught it. **F-045 is now measured from three sides** (M7-S1 raw,
+  M7-S2 output, M7-S3 input) and they agree: a monthly aggregate cannot describe
+  this event, and only volume survives the averaging. The per-BIN detail is not
+  flat at all — Saturday −3.724 points, LaGuardia's zone 138 losing a third of
+  its share, the 30–45 min band losing 1.28 points to the 5–7.5 min band — so
+  **the signal was never absent, it was averaged**. That is M7-S5's memo material.
+- **`honor_labels: true` is the whole thing.** Without it every drift series
+  arrives as `job="pushgateway"`, every rule matches nothing, and the rules stay
+  `health=ok` and `inactive` — indistinguishable from a healthy system. The
+  near-miss is worse: an annotation would have got the gateway scraped a SECOND
+  time by a label-mangling job (gotcha #92).
+- **The gateway's Service name doubles the word `prometheus`** (the subchart's
+  fullname prefixes the release name). My guess left the scrape target `down` —
+  which is the *good* outcome of that mistake.
+- **Two checker defects, both mine, both found by running the thing.** The drill
+  judged per alert NAME while its prediction is per **(alert, month)**, so it
+  reported `FAIL A-9 fired and was predicted INACTIVE` over a perfect result
+  (#93); the repair reads the per-series `alerts` array, which is strictly
+  stronger, and the PREDICTION object was untouched. And the prose-vs-rule
+  threshold test **passed `1800` by accident** (`"1800".rstrip("0")` → `"18"`,
+  matching `18.24 s`) while failing `3456000` honestly — gotcha #76 found by the
+  test on itself.
+- **The second witness reported total disagreement and nothing had disagreed** —
+  a parser looking for fields Evidently's payload does not have. **A second
+  witness that cannot be READ reports maximum disagreement**, the most alarming
+  thing it could say and the least true (gotcha #94).
+- **Six inherited guards went red for the program doing the right thing** and
+  were widened, not weakened — the sharpest being `assert "A-4" in absent`, an
+  M6-era FACT encoded as a literal that fired the moment F-035 was legitimately
+  closed (gotcha #50, fifth time). Replaced by the coherence property that holds
+  at every state.
+- **Wall count**: none.
+
+### Next
+- **M7-S4** — the scheduled retrain. **Two mandatory intakes** (kickoff §0):
+  **F-022** (bake-off's incumbent cell reads the LOADED model, + one
+  `--smoke-rows` run past contender resolution) and **F-020** (rescale the
+  count-scaled knobs to the refit's row count, re-derive the round budget,
+  report through the ONE evaluator beside the **3.2403** that stands).
+  **What it inherits from here**: `scripts/push_serving_version.py` needs a
+  CADENCE and S4 is the story that installs a scheduler — that is A-4's stated
+  honest cut, and until it lands A-4's freshness clause is what stops the version
+  half lying. Also: the drift job is a plain callable importing no orchestrator,
+  so wrapping it as a Flyte stage is available if S4 wants the loop closed on
+  cluster. Mind gotcha #66 — this story commits under `src/`/`scripts/`, so the
+  next on-cluster run pays a cold cache regardless.
+- **F-046 (new, open, routed to ARCH at the M7 boundary — NOT acted on).** At
+  monthly grain the input signal is flat through a catastrophe. A daily window
+  would very likely fire A-8 on 22–31 March, and the daily series already exists
+  in both engines (M7-S2's `scoring_daily`). **Deliberately not changed here:
+  the window is part of the bar**, so re-choosing it after seeing A-8 stay quiet
+  is exactly the threshold-walking law 4 forbids. Three options costed in
+  `ledgers/findings.md`; the one command that would settle it is named and left
+  undone, with a warning about the order in which it must be read.
+- **Two alerts are firing at hand-off and both are CORRECT, not residue.**
+  `ScoringVolumeCollapse` for 2020-03 — the true standing state, and the decision
+  it asks for is S4's retrain. `QuoteHorizonRefusals` — the drill's two
+  past-horizon refusals; the counter GROUP was deleted (0 live series) but
+  `increase([1h])` still sees them in its range window, so it **self-clears
+  around 05:15Z**. That is the rule working; nothing to undo.
+- **Deployments-ledger row written** (the pushgateway is a sixth tenant and three
+  rules went live). No pod was restarted to change a rule or a scrape config —
+  the configmap-reload sidecar makes both free, as M6-S1 measured.
+- Standing with the PO, all non-blocking: 2026-08-18-1 (F-016 — M7 runs the gate
+  as pre-registered until answered), 2026-08-17-1, 2026-08-16-2.
+
 ## Session 2026-08-20 (bm) — M7-S2: batch inference as a product, and the check a monitoring table cannot make for itself
 
 ### State
