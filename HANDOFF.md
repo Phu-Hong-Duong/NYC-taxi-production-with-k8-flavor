@@ -1,5 +1,122 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bm) — M7-S2: batch inference as a product, and the check a monitoring table cannot make for itself
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block MLE (Accountable),
+DA (R)** (charter read at entry; refusals in play: the alias is READ and never
+written, no registry version minted, no model re-fitted, the 2019 trees stay
+byte-identical, the cluster never goes down).
+Boot reads: CLAUDE.md · HANDOFF (bl) · M7 KICKOFF · AWAITING_PO.
+**Staleness check passed** — `automation/STOP` ABSENT, tree clean at `fbf707d`,
+no detached job pending, 3 nodes Ready v1.36.1, `@champion` version 2, exactly
+ONE isvc (the v1 shadow really is gone), `data/scoring/` holding 2020-01..03 and
+all four DVC pins `up to date` — exactly as (bl) described.
+**M7-S2 COMPLETE.** PR **#41**, merged (`3922747`), reachable from origin/main.
+End state: `@champion` **2** (read, never written) · `versions: ['1','2']` ·
+`features.version` **v2** · four DVC pins up to date · `make duckdb` GREEN over
+six reconciliations · tree clean.
+
+### Done
+- **`make predictions-scoring` scored 15,413,352 rows** across 2020-01..03 with
+  the champion resolved from the alias through F-009's two hops, features
+  through the ONE `features/` path, the registry version stamped on every row.
+  Parquet under `data/scoring_predictions/<month>/` (a FOURTH tree, gitignored
+  and not DVC-tracked on M2-S4's terms) + `scoring_predictions.json`.
+- **The self-check, which is the story's centre.** These rows can be checked
+  against nothing — no tag says what the champion scores on 2020-03 — so the
+  path re-scores the HOLDOUT first and refuses to write unless the champion's
+  own `gate_challenger_mae` comes back. **Measured 3.2403 against a recorded
+  3.2403, MATCH**, live. ~2 min of the run, deliberately not optional.
+- **Four new ids, defined before anything published them**: KPI-14 (MAE),
+  KPI-15 (within-tolerance), KPI-16 (signed bias), KPI-17 (volume) in
+  `docs/kpi_definitions.md` with formula/window/owner, and a test fails if a
+  mart column has no definition. Same instrument (`evaluate`), new window, new
+  ids; the manifest spells them in its keys.
+- **`make duckdb` now runs SIX reconciliations over 17 views** — the new one
+  against the INGEST REPORT, not the predictions file: **15,413,352 ==
+  15,413,352**, per month. Red-teamed in unit form three ways (partly scored →
+  RED, unscored → `pending` and still GREEN, mislabelled month → surfaces).
+- **`marts.scoring_daily` published**: `dbt build` **PASS=80** (was 57),
+  `COPY 91`, read back OUT OF POSTGRES with `model_version` 2 and
+  `versions_seen = 1` on every month, summing to 15,413,352.
+- `docs/batch_inference_m7.md` (accept-when clause by clause) ·
+  `docs/batch_inference_m7_transcripts.md` (pasted) · CLAUDE.md section + **3**
+  command rows · F-045 dated note · field note.
+- **840 unit tests** (20 new), ruff clean, CI green.
+
+### Decisions
+- **A fourth output tree, not a subdirectory of `data/predictions/`.** That
+  directory is globbed by `predicted_months`, read by the `predictions` view and
+  aggregated by `error_segments`, whose `overall` row is asserted EQUAL to the
+  evaluator's KPI-09/KPI-10 by a dbt test. A 2020 file inside it either turns
+  that test red for a correct batch run or lets a board render a monitoring
+  number under a promotion KPI's id. M7-S1's argument, one layer downstream.
+- **No floor column and therefore no margin.** The honest floor is fitted on the
+  2019 train months; a 2020 margin against it would publish a comparison no gate
+  ever made against a bar chosen for a different world. *Is the model rotting or
+  is the world different?* is real and is **S3's**, with its own declared
+  reference — not a column smuggled in here.
+- **The mart is DAILY.** F-045's mechanism: monthly numbers are a `GROUP BY
+  month` away from daily rows and the reverse is not true. `model_versions_seen`
+  must be 1 per day (M7's alias may move; a spliced series would be averaged
+  into invisibility).
+- **No threshold was set, and that was the hardest discipline of the story.**
+  Every number in §4 is a reason to pick a drift bar. M7 law 4 reserves the
+  window, the reference and the bar for S3, argued before the job runs.
+- **Host-rehearsed, not on-cluster, and said out loud.** The entry point is a
+  plain callable in `src/` importing no orchestrator; S4 wires the Flyte stage
+  and pays gotcha #66's cold cache once (this story commits under `src/`,
+  `scripts/` and `analytics/` anyway).
+
+### Defects/Surprises
+- **The monthly aggregate hides March 2020 on the OUTPUT side too, and that is
+  the story's most useful measurement.** Whole-month KPI-14 is **3.3227** —
+  ordinary beside January's 3.0295. Split at the collapse: **Mar 01–10 is 68.23%
+  of the month's rows at 3.0463** (January, to two decimals) · Mar 11–21 28.45%
+  at 3.7534 · **Mar 22–31 is 3.32% of the rows at 5.3128, KPI-15 62.118%,
+  KPI-16 +4.1412**. Worst day **6.3693** (2020-03-26) against January's worst of
+  3.5757. A row-weighted average is weighted by exactly the rows that vanished —
+  which kills the tempting reading that "the error metric will catch it anyway".
+  Appended as a DATED NOTE to F-045; no reading chosen, no bar set.
+- **KPI-16 earned its place immediately.** Mean actual duration in the last ten
+  days is 9.69 min while the champion quotes 13.83: bias goes from ≈0 to
+  **+4.14**. An absolute error cannot tell over-quoting from under-quoting, and
+  in a month where the traffic vanished those are opposite diagnoses. The
+  diagnosis here is unambiguous and it is not *the model got worse*.
+- **One existing guard went red for the right reason** and was widened, not
+  weakened: `test_dbt_sources_are_analyst_views_that_exist` did not know about
+  `SCORING_VIEWS`/`SCORING_PREDICTION_VIEWS`, so naming the new views in
+  `sources.yml` failed it. The M1-S4 guard working as designed.
+- **Wall count**: none.
+
+### Next
+- **M7-S3** — drift detection: `make backup` FIRST, then Pushgateway in-cluster
+  (NO hostPort, law 1), then Evidently with the **pandas-3 probe before any
+  design** (scipy PSI/KS is the recorded fallback). The threshold argued in the
+  SLO-doc pattern BEFORE the job runs, prediction written first.
+  **What it inherits, precisely**: the daily series already exists in both
+  engines — `scoring_predictions` (DuckDB, 15,413,352 rows with
+  `abs_error_minutes`/`signed_error_minutes` derived in SQL) and
+  `marts.scoring_daily` (Postgres, 91 rows, so Metabase can reach it). The drift
+  job does not have to re-derive either. `docs/batch_inference_m7.md` §4 and
+  F-045's dated note are DESIGN INPUT about the *shape* of the event, not a
+  proposed bar: a monthly window can average this event away, a daily one
+  cannot, and volume (KPI-17) moves first and largest. Also due here: **F-035's
+  pushgateway counters** and **F-043 option (c)**'s SLO-doc sentence + A-1
+  caveat (both quoted in the kickoff §0).
+- **Carry into M7-S4**: the batch entry point is
+  `taxi_mlops.training.batch.score_scoring_months(months=..., write=...)` —
+  wrap it as a Flyte stage there. Its self-check costs ~2 min per run (it loads
+  the holdout month); that is a deliberate, non-optional cost. F-020 and F-022
+  are the mandatory intakes.
+- **Nothing on-cluster ran this story except the routine `make marts` publish**,
+  so no deployments-ledger row is owed (the M1-S4/M2-S4 precedent: the ledger
+  holds serves, canary shifts and rollbacks).
+- Standing with the PO, all non-blocking: 2026-08-18-1 (F-016 — M7 runs the gate
+  as pre-registered until answered), 2026-08-17-1, 2026-08-16-2.
+
+
 ## Session 2026-08-20 (bl) — M7-S1: the scoring months, and the difference between a wrong file and a different world
 
 ### State
