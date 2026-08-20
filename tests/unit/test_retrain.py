@@ -294,3 +294,121 @@ def test_the_count_scaled_list_names_only_real_lightgbm_parameters(knob):
     known = {"min_data_in_leaf", "min_child_samples", "min_data_in_bin",
              "min_sum_hessian_in_leaf", "min_child_weight"}
     assert knob in known
+
+
+# ------------------------------- the record the verdict is written into (2026-08-20) ----
+#
+# Every test above this line reads SOURCE — `ast.parse`, or `"x" in RUN_SOURCE`.
+# That is the right instrument for the properties they check (a law with no
+# runtime symptom: "this module never calls a promoting verb") and the wrong one
+# for the code that writes the record down. On 2026-08-20 the first full-data
+# retrain fitted for 28 minutes, reached a correct REFUSE, and died serialising
+# it on `c.text` — `Check` carries `name`/`passed`/`detail`. A string test sees
+# the field being written. It cannot see that the field does not exist, and no
+# test here had ever EXECUTED the line, because executing it cost the fit.
+#
+# So these build a real `Decision` through the real `gate.decide` and run the
+# real serialiser. The fixture is not invented: it is the crashed run's own
+# measurement, recovered from `automation/runs/m7-retrain-fulldata.log`.
+
+
+def _crashed_run_decision():
+    """The 2026-08-20 full-data verdict, rebuilt from the run's own gate lines.
+
+    challenger 3.2412 / 81.568% · floor 3.3518 / 80.733% · incumbent v2 3.2403 /
+    81.577% on 5,950,708 test rows -> REFUSE (+3.30% over the floor, -0.03% vs
+    the champion). Rebuilt rather than asserted as a verdict: `decide` is what
+    turns those six numbers into that word, and if it ever stops doing so, this
+    fixture is how we find out.
+    """
+    from taxi_mlops.training import gate as G
+
+    def metrics(name, mae, within):
+        return G.Metrics(contender=name, split="test", n=5_950_708, mae=mae,
+                         within_tolerance_rate=within, tolerance_minutes=5.0,
+                         rmse=0.0, median_ae=0.0, p90_ae=0.0)
+
+    cfg = yaml.safe_load((REPO / "configs/train.yaml").read_text())["gate"]
+    return G.decide(
+        challenger=metrics("retrain-rescaled-v2", 3.2412, 81.568),
+        floor=metrics(cfg["floor"], 3.3518, 80.733),
+        cfg=cfg,
+        incumbent=G.Incumbent(version="2", mae=3.2403, within_tolerance_rate=81.577,
+                              split="test", source="version tags"),
+    )
+
+
+def test_the_verdict_payload_serialises_a_real_decision():
+    """Prevents the 2026-08-20 crash: a field written into the record that the
+    object it is read from does not have. Executes the serialiser, on a Decision
+    built by the gate rather than by this test."""
+    import json
+
+    from taxi_mlops.training import retrain_run as RR
+
+    decision = _crashed_run_decision()
+    payload = RR.verdict_payload(decision, floor_name="baseline-group-median-od-fallback")
+
+    # It survives the trip to disk — `_write` is the next thing that happens.
+    assert json.loads(json.dumps(payload, default=str))["verdict"] == "REFUSE"
+    assert payload["challenger_mae"] == 3.2412
+    assert payload["incumbent_version"] == "2" and payload["incumbent_mae"] == 3.2403
+    assert payload["split"] == "test" and payload["n"] == 5_950_708
+
+    # The four conditions, each by NAME — which is what a replay selects on.
+    assert len(payload["reasons"]) == 4
+    assert all(set(r) == {"check", "passed", "detail"} for r in payload["reasons"])
+    passed = {r["check"]: r["passed"] for r in payload["reasons"]}
+    assert sum(passed.values()) == 2, passed
+    failed = [name for name, ok in passed.items() if not ok]
+    assert all("serving champion" in name for name in failed), failed
+
+
+def test_a_none_decision_is_no_verdict_and_not_an_empty_one():
+    """F-008's shape at the record layer: a sampled run has no verdict, and an
+    empty dict would read as a verdict with nothing in it."""
+    from taxi_mlops.training import retrain_run as RR
+
+    assert RR.verdict_payload(None, floor_name="anything") is None
+
+
+def test_the_verdict_payload_reads_every_field_off_the_object_unguarded():
+    """Prevents the SHAPE of the 2026-08-20 crash, not just its instance.
+
+    The line that died was guarded — `... if hasattr(decision, "checks") else None`
+    — and the guard was on the CONTAINER while the missing attribute was on the
+    ELEMENT, one token to its left. `Decision.checks` is a dataclass field and is
+    always present, so the guard never protected anything; what it did was make an
+    unchecked access look checked. A `hasattr` here is either dead or hiding a
+    field this program cannot name.
+
+    It parses, and the first draft of this test is why: written as
+    `"hasattr(" not in src`, it went RED against the repaired function — because
+    the docstring EXPLAINS the guard it removed and therefore quotes it. Gotcha
+    #53/#68 for the seventh time, inside the test written about the lesson."""
+    fn = next(n for n in ast.walk(ast.parse(RUN_SOURCE))
+              if isinstance(n, ast.FunctionDef) and n.name == "verdict_payload")
+    called = [n.func.id for n in ast.walk(fn)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+    assert "hasattr" not in called
+    # `getattr(..., None)` survives in exactly one place and it is legitimate:
+    # `decision.incumbent` is `Incumbent | None` by declaration (the first
+    # promotion has no incumbent), so that default is a MODELLED absence.
+    assert called.count("getattr") == 3
+    assert all(isinstance(n.args[0], ast.Attribute) and n.args[0].attr == "incumbent"
+               for n in ast.walk(fn)
+               if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "getattr")
+
+
+def test_a_crash_after_the_run_begins_exits_outside_the_verdict_vocabulary():
+    """Prevents 2026-08-20's second half: the traceback exited with a status this
+    program had already given a meaning, so `.status` read `FAILED 2` = 'the
+    challenger could not be built' about a challenger that had been built, fitted
+    and judged. 0/1/2/3 are verdict words; a crash is not a verdict."""
+    cli = (REPO / "src/taxi_mlops/training/__main__.py").read_text()
+    block = cli.split('if args.command == "retrain":')[1]
+    assert "return 4" in block
+    assert "except Exception" in block
+    assert "is NOT a verdict" in block
+    assert "traceback" in block, "an operator needs the frame, not a summary"
+    assert "4" in (REPO / "docs/retrain_m7.md").read_text().split("exit codes say")[1][:1400]

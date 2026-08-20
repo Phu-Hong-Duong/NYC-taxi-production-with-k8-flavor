@@ -211,7 +211,21 @@ rule.
 
 **The exit codes say which kind of silence this was**, in `make train`'s own
 language, because a scheduler reads exit codes: **0** a verdict that passed · **1**
-refused · **2** the challenger could not be built · **3** no verdict was issued.
+refused · **2** the challenger could not be built · **3** no verdict was issued ·
+**4** the run CRASHED after it began.
+
+**4 was added on 2026-08-20 and the reason is the only thing that could have
+taught it.** The first full-data run fitted for 28 minutes, reached a correct
+REFUSE, and then died writing the record down (§7.1). Its traceback exited with a
+status this program had *already given a meaning* — "the challenger could not be
+built" — so `automation/runs/m7-retrain-fulldata.status` read `FAILED 2`, and the
+handoff's decoding key turned that into *the challenger could not be built* for
+the next session, which is the opposite of what happened: the challenger was
+built, fitted and judged. A vocabulary of exit codes is only as good as its
+handling of the case it did not enumerate, and an unhandled crash must not be
+able to wear a verdict's clothes. **4 is outside the vocabulary on purpose**, and
+its message says what is and is not true: any verdict reached before the crash is
+in the log and in MLflow, and NOT in a record.
 
 ---
 

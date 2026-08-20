@@ -39,6 +39,7 @@ from typing import Any
 import pyarrow.parquet as pq
 
 from ..data.config import load_config, load_yaml, repo_root
+from . import gate
 from . import retrain as retrain_mod
 from .run import load_train_config, run
 
@@ -167,23 +168,7 @@ def retrain(
               "re-derived budget exists to make visible, not one it promises to avoid.")
 
     decision = result.decision
-    record["verdict"] = None if decision is None else {
-        "verdict": decision.verdict,
-        "passed": decision.passed,
-        "challenger_mae": decision.challenger_mae,
-        "challenger_within_rate": decision.challenger_within,
-        "floor": cfg["gate"]["floor"],
-        "floor_mae": decision.floor_mae,
-        "floor_within_rate": decision.floor_within,
-        "observed_pct_vs_floor": decision.observed_pct,
-        "required_pct_vs_floor": decision.required_pct,
-        "incumbent_version": getattr(decision.incumbent, "version", None),
-        "incumbent_mae": getattr(decision.incumbent, "mae", None),
-        "incumbent_within_rate": getattr(decision.incumbent, "within_tolerance_rate", None),
-        "reasons": [
-            {"passed": c.passed, "text": c.text} for c in decision.checks
-        ] if hasattr(decision, "checks") else None,
-    }
+    record["verdict"] = verdict_payload(decision, floor_name=cfg["gate"]["floor"])
     record["metrics"] = [
         {"contender": m.contender, "split": m.split, "n": m.n, "mae": m.mae,
          "within_tolerance_rate": m.within_tolerance_rate}
@@ -196,6 +181,50 @@ def retrain(
     _write(out / f"retrain_{stamp}.json", record)
     _write(out / "latest.json", record)
     return record
+
+
+def verdict_payload(decision: gate.Decision | None, *, floor_name: str) -> dict[str, Any] | None:
+    """The gate's verdict as the record carries it — a FUNCTION, deliberately.
+
+    This was six lines inline until 2026-08-20, and being inline is what made it
+    unrunnable: it sits downstream of a 28-minute fit, so the only way to execute
+    it was to spend the fit, and every test this module had asserted on its SOURCE
+    (`'"ended_by"' in RUN_SOURCE`) rather than on its behaviour. A string test sees
+    a field being written; it cannot see that the field does not exist. The first
+    full-data run reached a correct REFUSE and then died writing it down, on
+    `c.text` — `Check` carries `name`/`passed`/`detail` and never had a `text`.
+
+    The guard that was there — `... if hasattr(decision, "checks") else None` —
+    is deliberately NOT reproduced. `Decision.checks` is a dataclass field and is
+    always present, so it never protected anything; what it did was make an
+    unchecked access to `c.text` LOOK checked, one token to its left. A guard on
+    the container tells you nothing about the elements.
+
+    `checks` is recorded by NAME as well as text because a name is what a replay
+    selects on: `verify-m7` re-applying this verdict needs to say *which* condition
+    refused, and "the third string in the list" is not a handle.
+    """
+    if decision is None:
+        return None
+    return {
+        "verdict": decision.verdict,
+        "passed": decision.passed,
+        "challenger_mae": decision.challenger_mae,
+        "challenger_within_rate": decision.challenger_within,
+        "floor": floor_name,
+        "floor_mae": decision.floor_mae,
+        "floor_within_rate": decision.floor_within,
+        "observed_pct_vs_floor": decision.observed_pct,
+        "required_pct_vs_floor": decision.required_pct,
+        "split": decision.split,
+        "n": decision.n,
+        "incumbent_version": getattr(decision.incumbent, "version", None),
+        "incumbent_mae": getattr(decision.incumbent, "mae", None),
+        "incumbent_within_rate": getattr(decision.incumbent, "within_tolerance_rate", None),
+        "reasons": [
+            {"check": c.name, "passed": c.passed, "detail": c.detail} for c in decision.checks
+        ],
+    }
 
 
 def _rows_of(months: tuple[str, ...], train_config: str) -> int:
