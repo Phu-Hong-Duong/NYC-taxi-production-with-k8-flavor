@@ -253,8 +253,11 @@ That row has been open since M2-S4 and reads, after M3: *the champion is ~1.9×
 worse on airport trips, and v2's OD geometry — the feature set that was supposed
 to "identify them instantly" — did not close it. Either the straight-line
 distance already carries what an airport flag would add, or the penalty is about
-traffic and terminal dwell rather than distance.* M6-S3's shadow run measured it
-a second time, on the wire, and agreed.
+traffic and terminal dwell rather than distance.* M6-S3's shadow run added a second, wire-side
+measurement pointing the same way, from the other end: dual-sending 250 airport
+rows to the 24-feature champion and to the 5-feature v1 shadow gave **MAE 5.97
+against 5.99**, a tie — so on airport trips v2's geometry is worth approximately
+nothing (`docs/shadow_analysis_m6.md`).
 
 Here is the third measurement, on months the memo never saw
 (`analyst.scoring_predictions`):
