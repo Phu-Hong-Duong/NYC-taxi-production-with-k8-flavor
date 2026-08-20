@@ -113,6 +113,36 @@ rejected:
   # sidecar is for rows that were COUNTED, never for months that were refused.
   dir: "data/rejected"
 
+scoring:
+  # The SCORING months (M7-S1). Months the champion is scored on and drift is
+  # measured against — never fitted on, never judged on.
+  #
+  # WHY THEY ARE NAMED HERE AND NOT IN configs/train.yaml. Split months live in
+  # train.yaml because they are a MODELLING fact: which month a model is fitted
+  # to, tuned on and judged on. A scoring month is the opposite — it is a month
+  # the model has nothing to do with until it is asked for a quote. Naming them
+  # in train.yaml would put months a model must never see inside the file that
+  # decides what it sees. They are still named in exactly ONE place, which is
+  # the property the port-family lesson actually asks for, and `load_config`
+  # REFUSES a month that appears in both (a scoring month that is also a split
+  # month is the one mistake this separation makes possible, so it is checked).
+  #
+  # SEPARATE TREES, NOT A FOURTH SPLIT (M7 law 2: the 2019 data is settled).
+  # These months land under their own directories with their own DVC pins, so
+  # `dvc status data/processed.dvc` and `data/rejected.dvc` stay `up to date`
+  # for the whole of M7. A 2020 row inside data/processed/ would reach the
+  # training matrix, the marts and every board through globs that were written
+  # when data/processed meant "the settled 2019 months" — and it would arrive
+  # with no error anywhere.
+  #
+  # 2020-01..03 and not just 2020-03: 2020-01 and 2020-02 are near-normal, so
+  # the drift memo can show the CLIFF rather than only the crater. Observed at
+  # the M7 kickoff, before a row was read: 2020-03 is 44,442,590 bytes against
+  # 2019-01's 110,439,634.
+  dir: "data/scoring"
+  rejected_dir: "data/scoring_rejected"
+  months: ["2020-01", "2020-02", "2020-03"]
+
 analyst:
   # The DuckDB analyst layer (M1-S2). PATHS are knobs; the VIEW DEFINITIONS are
   # code (taxi_mlops.data.analyst) -- a view name is a contract cited by the EDA
