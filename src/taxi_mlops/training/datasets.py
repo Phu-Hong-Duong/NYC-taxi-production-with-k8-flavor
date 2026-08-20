@@ -120,3 +120,68 @@ def load_split(
     # reached here rather than in LightGBM.
     del frame
     return Split(name=split, months=wanted, features=features, y=y)
+
+
+@dataclass(frozen=True)
+class ScoringMonth:
+    """One scoring month's matrix, target and pickup dates (M7-S2).
+
+    A sibling of `Split` rather than a `Split` with `name='scoring'`, because the
+    two are not the same kind of thing and every consumer must be made to notice:
+    a `Split` is data a model was fitted on or judged on, and a `ScoringMonth` is
+    data the model has nothing to do with until it is asked for a quote. The
+    difference shows up immediately in what may be said about the numbers — a
+    metric on a `Split` can be KPI-09; the same arithmetic here is a monitoring
+    series under its own id (`docs/kpi_definitions.md`'s id law).
+
+    `pickup_date` rides alongside because the drift story needs a DAILY series
+    and the feature matrix cannot supply one: `hour` and `dayofweek` are cyclical
+    and the calendar date is deliberately not a feature (the EDA's finding that
+    `month` is a reporting dimension, never a feature). F-045 is the reason this
+    is not an afterthought — 2020-03's monthly mean moved 0.36% while its daily
+    series ran 240,520 trips to 5,361.
+    """
+
+    month: str
+    features: pd.DataFrame
+    y: pd.Series
+    pickup_date: pd.Series
+
+    def __len__(self) -> int:
+        return len(self.y)
+
+
+def load_scoring_month(
+    month: str,
+    data_cfg: DataConfig,
+    features_cfg: dict,
+    target: str,
+    *,
+    fitted: Any = None,
+) -> ScoringMonth:
+    """Read ONE scoring month, build features through the same path training used.
+
+    The read is the same narrow read (`required_columns`) and the matrix is built
+    by the same `quote_time.build_features` — which is the property that makes an
+    error number on this month comparable with anything at all. A second feature
+    path for monitoring would produce numbers that drift from the model's own
+    view of the world and blame the world for it.
+
+    The month must be a CONFIGURED scoring month: `scoring_predictions_path`
+    refuses anything else, and the refusal is worth more here than a helpful
+    default, because the only way to reach this function with a split month is a
+    caller that has confused the two.
+    """
+    path = data_cfg.scoring_path(month)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} is missing — run `make data-scoring` before scoring "
+            f"{month} (the model never reads data/raw, only what the contract blessed)"
+        )
+    columns = required_columns(features_cfg, target)
+    frame = pq.read_table(path, columns=columns).to_pandas()
+    features = quote_time.build_features(frame, features_cfg, fitted=fitted)
+    y = frame[target].astype("float64")
+    pickup = pd.to_datetime(frame[quote_time.PICKUP_TIMESTAMP]).dt.date
+    del frame
+    return ScoringMonth(month=month, features=features, y=y, pickup_date=pickup)

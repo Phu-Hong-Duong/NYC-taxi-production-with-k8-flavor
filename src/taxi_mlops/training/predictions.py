@@ -114,18 +114,29 @@ def build_frame(
     return frame[list(PREDICTION_COLUMNS)]
 
 
-def write(frame: pd.DataFrame, path: Path, data_cfg: DataConfig) -> Path:
+def write(
+    frame: pd.DataFrame,
+    path: Path,
+    data_cfg: DataConfig,
+    *,
+    columns: tuple[str, ...] = PREDICTION_COLUMNS,
+) -> Path:
     """Write one split's predictions with the SAME writer pins the data path uses.
 
     `configs/data.yaml: write` is reused rather than re-declared: two parquet
     writer configurations in one repo is how a "byte-identical rebuild" proof
     starts applying to only half the files it names.
+
+    `columns` is a parameter and not a constant read from module scope so that
+    M7-S2's scoring-month rows — a different contract, a different tree, a
+    different set of ids — go through THIS writer rather than a second one. The
+    column contract varies; the writer options may not.
     """
-    missing = [c for c in PREDICTION_COLUMNS if c not in frame.columns]
+    missing = [c for c in columns if c not in frame.columns]
     if missing:
         raise ValueError(f"refusing to write predictions missing {missing}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    frame[list(PREDICTION_COLUMNS)].to_parquet(
+    frame[list(columns)].to_parquet(
         path,
         engine="pyarrow",
         index=False,
@@ -133,6 +144,44 @@ def write(frame: pd.DataFrame, path: Path, data_cfg: DataConfig) -> Path:
         row_group_size=data_cfg.write["row_group_size"],
     )
     return path
+
+
+#: The scoring-month row contract (M7-S2). A SEPARATE tuple from
+#: `PREDICTION_COLUMNS`, not a superset and not a subset — the two files answer
+#: different questions and share only the writer.
+#:
+#: What is here that is not there: `pickup_date`, because the drift story is a
+#: daily one (F-045) and no feature carries a calendar date. What is NOT here
+#: that is there: `split` (a scoring month has none — that is what makes it one),
+#: and BOTH floor columns. The floor is the gate's other half: it exists so the
+#: promotion argument can be checked, it is fitted on the 2019 train months, and
+#: re-fitting it to sit beside 2020 rows would publish a comparison no gate ever
+#: made, against a bar chosen for a different world. If a later story wants "is
+#: the model rotting or is the world different?", that is a drift question with
+#: its own reference (M7-S3), not a column smuggled in here.
+SCORING_PREDICTION_COLUMNS: tuple[str, ...] = (
+    "month",
+    "pickup_date",
+    # --- the feature matrix's identity columns, exactly as the model was handed
+    #     them. Not all 24 features: the nine geometry features are a pure
+    #     function of (PU, DO) and the calendar features of the timestamp, so
+    #     storing them would be storing a derivation of two columns twelve
+    #     columns wide, and the first thing that would rot is the copy.
+    "hour",
+    "dayofweek",
+    "PULocationID",
+    "DOLocationID",
+    "passenger_count",
+    # --- the answer and the model's quote. NO error column: `DERIVED_IN_SQL`.
+    "actual_minutes",
+    "predicted_minutes",
+    # --- which model said it. M2-S4's discipline, and it matters more here: the
+    #     champion may legitimately move during M7 (law 3), so a monitoring
+    #     series that did not carry its version would silently splice two models
+    #     into one line on a board.
+    "model_name",
+    "model_version",
+)
 
 
 def manifest(

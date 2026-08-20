@@ -59,6 +59,25 @@ evaluate:
   # Row-level predictions for the DA error memo land here at M2-S4. Declared now
   # so the path has one owner; S2 writes no predictions.
   predictions_dir: "data/predictions"
+  # Row-level predictions for the SCORING months (M7-S2), in their own tree.
+  #
+  # WHY IT IS NOT `predictions_dir/scoring/`. `data/predictions/` is globbed by
+  # `predicted_months`, read by the `predictions` DuckDB view and aggregated by
+  # the `error_segments` mart — all written when that directory meant "the
+  # champion's rows on the held-out 2019 months". A 2020 file inside it would be
+  # swept into `error_segments`, whose `overall` row is asserted equal to the
+  # evaluator's KPI-09/KPI-10 on the holdout: the reconciliation test would go
+  # red for a correct batch run, or — worse, if the shapes happened to line up —
+  # a board would render monitoring rows under a gate KPI's id. Separate tree,
+  # separate view, separate mart, separate ids. This is `data/scoring/`'s
+  # argument (M7-S1, law 2) applied one layer downstream, to model output.
+  #
+  # GITIGNORED AND NOT DVC-TRACKED, exactly like `data/predictions/` (M2-S4's
+  # argument, unchanged): these rows are regenerable in one command from a
+  # DVC-pinned scoring tree plus a registry version, and a pin that must be
+  # refreshed every time the champion moves is a pin that lives stale. The
+  # provenance is `scoring_predictions.json` beside them plus the registry.
+  scoring_predictions_dir: "data/scoring_predictions"
 
 # ------------------------------------------------------------------- model ---
 model:
