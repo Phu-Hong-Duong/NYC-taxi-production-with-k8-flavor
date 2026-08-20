@@ -263,6 +263,27 @@ def main(argv: list[str] | None = None) -> int:
         except RetrainError as exc:
             print(f"[retrain] FAIL: {exc}", file=sys.stderr)
             return 2
+        except Exception as exc:  # noqa: BLE001 — see the comment; the code IS the point
+            # 4 = the run CRASHED, and it is deliberately outside the 0/1/2/3
+            # vocabulary below. On 2026-08-20 the full-data retrain fitted for 28
+            # minutes, reached a correct REFUSE, and then died writing the record
+            # down; the traceback exited with a status that this program had
+            # already given a meaning — "the challenger could not be built" — so
+            # the detached job's `.status` file told the next session the exact
+            # opposite of what had happened, and the log was the only witness.
+            # An unhandled crash must not be able to wear a verdict's clothes.
+            # Re-raised for the traceback: an operator needs the frame, and a
+            # crash this code did not anticipate is not a thing to summarise.
+            import traceback
+            traceback.print_exc()
+            print(
+                f"[retrain] CRASHED after the run began: {type(exc).__name__}: {exc}\n"
+                "[retrain] exit 4 — this is NOT a verdict. Any gate verdict reached "
+                "before the crash is in the log above and in the MLflow run, and NOT "
+                "in a record. Nothing was promoted (this path cannot promote).",
+                file=sys.stderr,
+            )
+            return 4
 
         # The SAME exit-code language `make train` speaks, because a scheduler
         # reads exit codes and "refused" and "not judged" must never be the same

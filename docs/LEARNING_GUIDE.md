@@ -3427,3 +3427,63 @@ Three smaller things worth keeping:
   proof plans only: it exercises the trigger, the pod, the image, the wiring, the
   registry read and the record write, and stops before the hour of CPU. A proof
   that fitted would have been measuring the fit.
+
+## M7-S4 (completion leg) — the last 5% of a long job is the part no test has run
+
+The retrain fitted for twenty-eight minutes, cleared the honest floor at +3.30%,
+was correctly refused by the incumbent condition — and then crashed writing the
+verdict into a file, on `c.text`. The `Check` dataclass carries
+`name`/`passed`/`detail`. It never had a `text`.
+
+**The typo is not the lesson. Two things had to be true for it to reach a
+28-minute run, and both generalise.**
+
+The access was *guarded*, and the guard was on the wrong object:
+`[... for c in decision.checks] if hasattr(decision, "checks") else None`.
+`Decision.checks` is a dataclass field, so it is always present and the guard
+never protected anything — what it did was put the word `hasattr` one token to the
+left of an unchecked access and make the line read as careful. **A guard on the
+container tells you nothing about the elements**, and a defensive-looking line is
+harder to see past than a bare one.
+
+And every test of that module asserted on its **source text** — `'"ended_by"' in
+RUN_SOURCE`, an `ast` walk for a forbidden verb, `"43_987_422" not in
+RUN_SOURCE`. Those are the right instrument for the properties they check: laws
+with no runtime symptom. They are the wrong instrument here, and the sentence
+worth carrying is **a string test sees a field being written; it cannot see that
+the field does not exist.** Nothing had ever executed the line, for a reason that
+felt like good judgement at the time: executing it cost the fit.
+
+So the repair is structural rather than a `try`. The serialiser is a function now,
+callable in microseconds, and its tests build a real `Decision` through the real
+gate from the crashed run's own numbers. The question to ask of any long job:
+**if the last five percent raises, what did I spend and what do I keep?** Here the
+answer was tolerable only by luck — the model was already in MLflow with its
+signature, so what was lost was the record, which is the artifact this program
+actually judges by.
+
+**The second defect is the one I would not have predicted.** The traceback exited
+with a status that this program had already given a meaning. `0/1/2/3` are
+*passed · refused · could not be built · no verdict*, so the detached job's
+`.status` file said `FAILED 2` and the handoff's decoding key turned that into
+"the challenger could not be built" — about a challenger that had been built,
+fitted and judged. My boot ritual read that sentence and believed it for about
+ninety seconds, until the log disagreed. **If you design an exit-code vocabulary,
+you have to handle the case you did not enumerate**, outside the vocabulary, with
+a message saying what is and is not true. And note the near-miss: an uncaught
+Python exception exits **1**, which here means REFUSED. A crash would have been
+read as a verdict.
+
+**One thing went right and it is worth naming.** The prediction file. Before
+re-running I wrote down what the re-run had to reproduce — every metric, the
+verdict, the best iteration — so that a repeat of a 28-minute fit is a
+determinism check rather than a do-over, and a discrepancy would be a finding
+instead of an inconvenience. It costs five minutes and it converts spent compute
+into evidence.
+
+**And the smallest one, which happened live.** The test I wrote to forbid
+`hasattr` in the repaired function went RED against the repaired function — on its
+own docstring, which quotes the guard it forbids. Gotcha #53/#68 for the seventh
+time, inside the test written about the lesson. Prose is load-bearing in this
+repo; a check about code structure has to parse code, and knowing that is not the
+same as remembering it while typing.

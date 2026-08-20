@@ -171,6 +171,28 @@ it saves costs more than 0.7 s buys. And B cannot be pre-registered anymore:
 any number chosen now is chosen AFTER seeing +0.63%, which is exactly why it
 is your call and not ours.
 
+**EVIDENCE ADDED 2026-08-20 by EXEC/Opus (M7-S4) — no option changed, no
+recommendation changed, nothing acted on.** The first scheduled-shape retrain has
+now run against this gate, and it produced the case this entry predicted rather
+than the one it was argued from. `retrain-rescaled-v2` — the champion's own
+configuration with F-020's count-scaled knobs corrected — measured **3.2412** on
+the untouched holdout against the champion's **3.2403**: **−0.03%, or 54
+milliseconds of mean error over 5,950,708 rows**, and it was **REFUSED** on both
+incumbent conditions while clearing the floor at +3.30%. So the no-margin
+condition has now been observed in both directions: it moved the pointer on
+**+0.63%** at M3-S5 and held it on **−0.03%** here.
+
+What that adds for you, in one sentence: **had this month's arithmetic landed
+54 milliseconds the other way, Option A would have moved the serving pointer —
+re-scored 12M predictions, republished the marts, refreshed the boards, cut the
+endpoint over and re-armed a rollback — on a delta smaller than the rounding this
+program records incumbents at.** That is no longer a hypothesis about monthly
+retrains; it is what a monthly retrain of an unchanged configuration measurably
+produces. It does not distinguish A from B (both refuse this run) and it is not a
+reason to prefer either; it is the missing half of the picture, and it is here so
+the decision is made against two observations instead of one. Detail:
+`docs/retrain_m7.md` §7.
+
 **Option C — full symmetry: the incumbent margin equals the floor's 2.00%.**
 Honest cost: the pointer nearly never moves again — 2.00% over a
 well-tuned incumbent is a bar M3's entire two-track, 12,447-second campaign
