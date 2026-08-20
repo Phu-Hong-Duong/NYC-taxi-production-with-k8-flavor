@@ -2209,6 +2209,103 @@ can never disagree (the port-family twins lesson, applied before it bit).
   forbids, because the window is part of the bar. Routed to ARCH at the boundary
   with the evidence.
 
+## The scheduled retrain (M7-S4) — the transfer nobody had made, and a pointer that was pre-registered
+- **Two findings, one shape: a number that was true where it was written, applied
+  where it is not.** F-022: a bake-off row resolved the champion BY ALIAS (so the
+  table judges what is serving) *and* pre-registered `feature_set="v1"` — both
+  true the day they were written, and the bake-off's own `--promote-winner` then
+  moved the alias to a v2 model, so every invocation since died at a refusal that
+  was correct one layer too late. F-020: `min_data_in_leaf: 1293` was chosen on
+  15% of train and applied at 100% — the same integer means **1 row in 5,103**
+  where it was chosen and **1 in 34,020** where it was used. The distinction that
+  fixes both: **pre-registration is right for a thing declared before its number
+  existed and exactly wrong for a pointer designed to move**, and a
+  hyperparameter is a number PLUS the scale it means it at.
+- **F-022 CLOSED, both halves.** `Spec.feature_set` is `None` for the alias row;
+  `_feature_set_of` derives the concrete set from the loaded booster's ORDERED
+  feature names against `configs/features.yaml` and requires exactly one match;
+  everything downstream reads `Loaded.feature_set` (AST-pinned — the file argues
+  the change in prose that quotes the old label, #53/#68). The four
+  pre-registered arms keep their Specs. Execution: `make bakeoff
+  BAKEOFF_ARGS="--smoke-rows 20000"` -> **exit 0**, `champion (alias)
+  auto-lgbm-v2 … features=v2 (24) (DERIVED from the artifact)`. **Honest cost,
+  recorded**: the 2x2's origin cell (v1 features, hand params) was held by the
+  incumbent row only by coincidence, so with the alias on a tuned v2 model the
+  square would print `auto-on-v2 +0.00%` — correct arithmetic answering a
+  different question. `SQUARE_BASE` describes the cell and the square is NOT
+  printed when nothing occupies it. **Side finding**: `v1_g5` and
+  `redteam_g5_leaky` declare identical ordered columns, so a model fitted on
+  either is unidentifiable from its artifact — the derivation refuses rather than
+  picks (neither is promotable, so refusing is the safe direction).
+- **F-020 CLOSED by option (a) with option (b)'s rule landed as CODE.**
+  `COUNT_SCALED` names the knobs whose LightGBM meaning is literally a row count
+  (`min_data_in_leaf`, `min_data_in_bin`, `min_sum_hessian_in_leaf`), each with
+  its reason and a test that refuses an entry whose reason does not argue it;
+  everything else is passed through **and recorded as passed through**, because
+  "considered and it does not scale" and "never looked" are different statements.
+  `round_budget` re-derives the cap (the sniper's per-trial **800 x 3 = 2400**,
+  floored at the configured 500) and the fit reports **`ended_by`** —
+  `early_stopping` or `round_cap` — as a first-class field, which is the half a
+  metrics table cannot show: the champion's own refit ended **791/800**.
+- **The provenance is a chain of three TRACKED artifacts and an absent chain is a
+  REPORTED no-op.** alias -> version -> RUN for the params (a config records what
+  was configured; a run records what happened), then refit record -> study ->
+  sniper record for the scale. A champion with no sampled search behind it has no
+  transfer to make, and saying so is the whole point — F-020 IS the finding that
+  assuming a sample fraction produces a plausible configuration nobody can check.
+- **The generated training config is not a second home.** Every block except
+  `model` is copied from `configs/train.yaml` verbatim (`COPIED_VERBATIM`:
+  data/target/features/baselines/evaluate/**gate**/registry/mlflow) and a test
+  asserts equality block by block; the tuned params sit ON TOP of the configured
+  base, never instead of it (a tuned dict as the whole param set silently drops
+  `objective: l1` — the loss KPI-09 is defined as). It is written under
+  `automation/runs/m7-retrain/`, not under `configs/`, because `configs/` is
+  where a human legislates.
+- **It cannot promote, and that is structural.** `run(promote=False)` is passed
+  unconditionally and `retrain()` has NO `promote` parameter — a law with a
+  keyword argument is a default. An unattended job that can move `@champion` can
+  put an unreviewed model in front of riders at 04:00; **a PROMOTE verdict is
+  recorded and the alias stays where it is**, because promotion deferred is a
+  state the registry expresses honestly and half a transition is not. Exit codes
+  are `make train`'s own language: **0 passed · 1 refused · 2 could not build ·
+  3 no verdict issued** (F-008).
+- **Flyte 2.6.1 / chart v2.0.42 carries triggers NATIVELY — the kickoff's cron
+  fallback was NOT executed and stays armed**, one attempt of a three-attempt
+  wall. Asked of the tooling, not read off a version table (gotcha #70's family).
+  **Declared in CODE with their inputs**: `flyte create trigger` cannot pass task
+  inputs, so a CLI-created trigger would fire the retrain with its DEFAULTS and
+  the cadence would live in somebody's shell history. Two triggers on one task:
+  **`retrain-monthly`** (`Cron("0 3 1 * *")`, full-data, judged, **`auto_activate:
+  False`**) and **`retrain-schedule-proof`** (`FixedRate(20)`, `plan_only=True`).
+  The monthly one is registered and inactive ON PURPOSE — this cluster is a
+  laptop and the full-data fit is hours of CPU under a 6-core task limit; turning
+  it on is one field and a PO's call about compute.
+- **The proof trigger PLANS ONLY, and that is what makes it a proof of the
+  schedule.** It exercises the trigger firing, a pod on the pinned image, the
+  PodTemplate's MLflow/MinIO wiring, the registry read, F-020's transfer and the
+  record write — and stops exactly before the hour of CPU. A proof that fitted
+  would be measuring the fit.
+- **`make retrain-schedule` reads the triggers back OFF THE CONTROL PLANE**, never
+  off the file it submitted (`deploy_serving.sh`'s ConfigMap precedent; gotcha
+  #81 one layer up — a registered trigger and a firing trigger look identical in
+  a configuration table). It also **refuses a stale image**, with `pipelines/` in
+  its guarded paths where `run_pipeline.sh` deliberately leaves it out: there
+  `pipelines/` is the per-run code BUNDLE, so guarding it would refuse the drill
+  that edits it — but a trigger has no per-run bundle, the image is the only
+  carrier of both halves, and a schedule fires forever. **The guard fired on this
+  story's own commit and the image was rebuilt rather than the guard narrowed.**
+- **The retrain is ONE stage, not seven, and it is outside `main`.** The monthly
+  pipeline's upstream stages turn a NEW month into a matrix; a retrain reads the
+  SETTLED window and changes nothing about the data, so inside `main` its cache
+  key would depend on a month it never reads. Uncached for `register`'s reason
+  (a cached answer to "what is serving right now?" is wrong precisely when the
+  alias has moved) and `retries=0` (the fit is the whole stage and hours long; a
+  retry budget is a slower way to hide a systematic fault).
+- **Three inherited wiring guards went red for a correct addition and were
+  RE-DERIVED rather than widened** (gotcha #50, sixth time): the pipeline's task
+  set is now *what `main` awaits*, asked of the AST, so it stays true for
+  additions nobody has thought of.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2365,6 +2462,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Evidently beside our SQL PSI — a second instrument on the same question (M7-S3) | `make drift-witness WITNESS_ARGS="--months 2020-01 2020-03"` (a READER: deploys nothing, pushes nothing, touches no alert) | VERIFIED 2026-08-20 (M7-S3): Evidently **0.7.21** on a **seeded** 200,000-row sample per side (seed recorded, because an unreproducible number in a record is a number nobody can check twice). **On the question the alert asks — did any INPUT column drift? — the two instruments AGREE for both months: none did**, ours by PSI < 0.10 and theirs by Wasserstein-normed/Jensen-Shannon at their own defaults (the statistic each column got is recorded in `methods`, because that is exactly why the NUMBERS must not be compared). Read sceptically, which is what a second witness is for: Evidently flags the TARGET at **0.1014 in January and 0.1008 in March** — the same value in an ordinary month and in the collapse, both barely over its 0.1 default — so it does not distinguish them either, and "Evidently detected drift in March" would be true and misleading. **Its first run reported total disagreement and nothing had disagreed**: the parser looked for `metric_id` and `status`, and the payload carries `metric_name`, a structured `config` and `value`. **A second witness that cannot be read reports maximum disagreement** — the most alarming thing it could say and the least true |
 | A-4's two series: the wire vs the registry (M7-S3, F-035) | `make push-serving-version A4_ARGS="--no-push"` reads both and prints; without it, pushes | VERIFIED 2026-08-20 (M7-S3): `served: 2` read off a **real prediction** (the version is stamped on the ANSWER — `GET /v2/models/nyc-taxi-eta` reports `versions: []` on this runtime, M5-S2) and `registry: 2` through F-009's one resolver → `agree`, so A-4 correctly stays inactive. F-034 said there were not two series to compare; there are now. **It REFUSES to push when either side is unreadable** rather than pushing a placeholder zero — a gauge of 0 against a registry gauge of 2 is a MISMATCH, so a placeholder would page an on-call for an unreadable endpoint, with the alert right about its own arithmetic and wrong about the world. **Honest cut: the metric SOURCE lands here, the CADENCE lands with M7-S4's scheduler**, which is why A-4's rule carries a freshness clause (`< 1800`) — a stale pushed pair agrees with itself forever |
 | Count a client-side refusal (M7-S3, F-035) | `make quote QUOTE_ARGS="--at 2031-07-04T09:15:00 --pu 132 --do 48 --push-metrics <gateway>"` | VERIFIED 2026-08-20 (M7-S3): the refusal exits 2 as always AND increments `taxi_quote_refusals_total`; after two past-horizon quotes `increase(...[1h])` read **1.2141** and **A-3's client half FIRED** (`QuoteHorizonRefusals`, pending → firing in 60 s) — the alert M6-S2 measured as impossible on this stack (`22 → 22` on the infer counter, because F-019 refuses in the CLIENT before a request exists). **Off by default**, because the gateway has no hostPort and a quote must not fail its metrics leg on a laptop with no port-forward; `record_refusal` never raises, so a rider cannot lose a quote to a down gateway. **Honest limitation recorded**: `increase()` needs the counter to move *while Prometheus is watching*, so the guarantee is "a horizon expiry produces a stream of refusals and will page", not "every single refusal will" — which is why `verify-m6`'s coverage check stays as the complement that catches the expiry BEFORE the first rider meets it |
+| The retrain challenger, re-derived at its own scale (M7-S4, F-020) | `make retrain` (`RETRAIN_ARGS="--plan-only"` is the seconds-long provenance check that fits nothing; `--train-months YYYY-MM` is the SAMPLED, gate-disqualified path). **Exit 0 = a verdict that passed · 1 = refused · 2 = the challenger could not be built · 3 = no verdict was issued** | VERIFIED 2026-08-20 (M7-S4), plan half: `models:/nyc-taxi-eta@champion -> version 2 (auto-lgbm-v2)`, feature set `v2` read off the version's own tag, and the transfer resolved from three TRACKED artifacts — **`min_data_in_leaf` 1293 -> 8620**, *1 row in 5,103 where it was chosen · 1 in **34,020** unchanged at the refit's scale (F-020's own number, recomputed from the records) · 1 in 5,103 after* — with `bagging_fraction, cat_smooth, feature_fraction, lambda_l1, lambda_l2, learning_rate, max_cat_threshold, num_leaves` **passed through and RECORDED as passed through**. Round budget **500 configured / 800 inherited -> 2400**, and the fit reports `ended_by` (`early_stopping` | `round_cap`) because the champion's own refit ended 791/800 and a metrics table cannot show that. It **cannot promote**: `promote=False` unconditional, no parameter to change it (AST-tested). Transcript: `docs/retrain_m7_transcripts.md` §2 |
+| Register the retrain's SCHEDULE and read it back off the server (M7-S4) | `make retrain-schedule` (`DRY_RUN=1` resolves and deploys nothing) | VERIFIED 2026-08-20 (M7-S4): **Flyte 2.6.1 / chart v2.0.42 carries triggers natively** — asked of the tooling, not read off a version table (gotcha #70's family) — so the kickoff's recorded cron fallback is **NOT executed and stays armed**. Deployed `taxi-pipeline-train.retrain` (version `6d5b536b975b…`, image `taxi-mlops-pipeline:72a4013`) with two triggers **declared in code with their inputs** (the CLI form cannot pass inputs, so a CLI-created trigger fires the DEFAULTS), then read them back **off the control plane**: `retrain-schedule-proof … every 20 minutes starting at now … True` and `retrain-monthly … cron: 0 3 1 * * (UTC) … **False**`. The monthly one is registered and inactive ON PURPOSE — hours of CPU under a 6-core limit on a laptop nobody watches; one field and a PO's call. **Its F-026 guard fired on this story's own commit** (`scripts/retrain_schedule.sh` not in the image) and the image was rebuilt rather than the guard narrowed |
+| Prove the bake-off can be RUN again (M7-S4, F-022) | `make bakeoff BAKEOFF_ARGS="--smoke-rows 20000"` | VERIFIED 2026-08-20 (M7-S4): **exit 0**, past contender resolution for the first time since M3-S5's own promotion moved the alias. `[resolve] champion (alias) auto-lgbm-v2 family=lgbm features=v2 (24) **(DERIVED from the artifact — F-022)** trees=791` — the row that used to declare `v1` now reads its set off the loaded booster's ordered feature names. Five verdicts printed, **no JSON written, nothing promoted**, and the 2x2 **declines to print** because no contender occupies its origin cell (v1 features, hand params) — computing it against the alias would report `auto-on-v2 +0.00%`, correct arithmetic answering a different question. Transcript: `docs/retrain_m7_transcripts.md` §1 |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
