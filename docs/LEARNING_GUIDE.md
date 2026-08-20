@@ -9,6 +9,101 @@ months from now.
 
 ## M6
 
+### M6-S5 (leg 2) — the gate that graded a milestone, and the two things it caught in our own prose (2026-08-20, role:SRE)
+
+**The one-sentence version.** `make verify-m6` reads sixty-three properties out
+of eight tracked records, the live cluster, the live Prometheus, the registry
+and five committed documents in **2.147 seconds** — evidence that cost about
+fifty-five minutes of deliberate failure to produce — and the first two things
+it found were not in the system at all: they were stale claims we had written
+about the system.
+
+**Why a gate re-runs nothing, stated at its strongest yet.** Every milestone
+gate before this one said "re-fits nothing" or "re-runs nothing". M6's version
+has a sharper reason. The gameday held a **~5 minute total outage of the only
+predictor** on purpose so that a `for: 3m` rule could fire; the rollback drill
+moved the alias twice; the canary drill shifted rider traffic. A gate that
+re-provoked any of that would (a) cost a real outage every time somebody asked
+whether the milestone happened and (b) move the pointer M6's own law 3 forbids
+moving. So the design is: read the record, and ask the LIVE system only the
+questions a record cannot answer. There are exactly three — one Prometheus
+query, one rules-API read, one prediction — and each earns its place.
+
+**The live question worth copying.** M6-S5 leg 1 found F-043: under saturation
+the predictor's own `/metrics` went from 4 ms to 4.613 s with one scrape failing
+outright, so the latency alert *cleared itself in the middle of the event it was
+firing about*. That is a signal going dark exactly when it matters, and no
+record can tell you whether it is dark right now. So §1 asks: is the champion's
+exporter up, and does its scrape finish inside the configured interval? One
+query. Two details that are the actual lesson: it is **scoped to the champion's
+InferenceService by a name read off the manifest** — the gameday's own storage
+record accidentally reported the SHADOW's series by taking the first result —
+and the bar is the **scrape interval read from the values file**, not a number
+typed into the gate.
+
+**"No literals" grew a new edge this time: no THRESHOLDS.** Previous gates
+learned not to type a champion version (gotchas #49/#50). M6's equivalent is
+that a gate must not carry its own copy of `0.05`, because then it stays green
+after the rule it is checking is loosened to `0.5` — and loosening a threshold
+is precisely what the constitution reserves for a PO fork. So every number on
+the right-hand side of a comparison is *parsed out of the rules file* and looked
+for in the SLO document. The gate cannot tell you the threshold is right; it can
+tell you the threshold has an argument written beside it, in the document that
+owns it, which is the only thing a reviewer can act on.
+
+**Two checks about TIME that read like pedantry and are not.** (1) "Shadow
+before canary" is an ordering, so it is checked on the two records' own clocks
+(14:49:23Z vs 15:23:48Z) rather than on the order the write-ups are arranged in.
+(2) The gameday's predictions were checked twice: written before the first
+injection *by clock*, **and** field-by-field equal to the copy inside each
+scenario record. Either alone is defeatable — a prediction can be written first
+and then quietly edited into the record it is judged against.
+
+**What it caught in our own prose — F-044.** Leg 1 moved the restore's honest
+label one notch ("NOT REHEARSED" → "scratch-rehearsed 2026-08-19; a full restore
+over a dead platform still not") in the backup script's header, in the
+`MANIFEST.txt` it writes, in the gameday write-up and in CLAUDE.md — whose
+backup row then asserted that *every* artifact said so. Two did not: the `echo`
+the script PRINTS on every run, and the deployments ledger. **The header is for
+review; the printed line is for 3am.** Nothing about the system was wrong; a
+claim about the system was stale in exactly the two places a reviewer does not
+look and an operator does (gotcha #91).
+
+**And what the RED TEAM caught in the gate — the better story.** The drill plants
+gotcha #75's wrong anchor: the kill's outage rewritten to the record's own
+`error_window.span_s`, 13.75 → 13.501. Two witnesses were supposed to speak. Only
+one did. The prose leg — "every number the write-up quotes must be in the record
+it cites" — rendered 13.75 at **zero** decimals as `14`, and `14` appears in
+almost any document of any length, so it matched; and the planted 13.501
+rendered as `14` too. The floor is one decimal now (gotcha #90). Two things to
+take from it: a comparison whose loosest accepted form is one the document is
+almost certain to contain is not a comparison; and this was only ever visible
+because the plant was **close enough to be plausible** — a red team that had
+written `999` into that field would have gone green on both legs and taught
+nobody anything.
+
+**One test lesson, free of charge.** `test_the_gate_re_runs_nothing_expensive`
+went red twice for matching WORDS rather than INVOCATIONS: the gate legitimately
+*reads* `scripts/platform_backup.sh` as a file (to check the label it prints),
+and then the launcher pattern's `sh` alternative matched inside the filename
+`platform_backup.sh` itself. Gotcha #68, twice in one function. The needle has
+to sit where a shell would START a command.
+
+**What to look at.** `docs/verify_m6_transcripts.md` — §0 answers §9/M6's
+accept-when clause by clause with the observed number beside each, which is the
+form a boundary review can actually check; §2.1 is the red team failing usefully.
+`scripts/verify_m6.sh` §2 for the threshold-derivation idiom and §6 for the
+outage-anchor re-derivation. `tests/unit/test_verify_m6.py` for what a gate is
+forbidden to do.
+
+**What to try yourself.** Open `infra/monitoring/alerting_rules.yml`, change one
+threshold (say A-3's `0.01` to `0.5`), and run `make verify-m6`. Watch §2 name it
+— then put it back and notice that the SLO document, not the gate, is where the
+argument would have had to change. Then run `make verify-m6-redteam` and read
+what it does NOT break: the pod uids, the alias, the prediction, the seven
+recorded checks. A red team that breaks everything proves nothing about the one
+thing it meant to test.
+
 ### M6-S5 (leg 1) — Gameday 1: every alert behaved, and two of our written arguments did not (2026-08-19, role:SRE/MLOps)
 
 **What was built.** `make gameday` — four staged failures against the live
