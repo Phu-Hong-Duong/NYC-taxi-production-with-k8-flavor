@@ -206,6 +206,31 @@ def _tasks() -> dict[str, ast.Call]:
     return found
 
 
+def _pipeline_tasks() -> dict[str, ast.Call]:
+    """The MONTHLY PIPELINE's tasks: `main` plus exactly what `main` awaits.
+
+    DERIVED and not listed (F-017, gotcha #50 — the fifth time this file has had
+    to learn it). M7-S4 added `retrain`, a scheduled task that is not a stage of
+    this graph: it reads the settled training window, runs on a trigger and has
+    its own cache and retry arguments. Three guards below were written as "every
+    task in workflows.py" and went red for a correct addition. Asking `main` what
+    it calls keeps them about the pipeline forever, and it fails LOUDLY if a stage
+    is ever added to the graph without a decorator."""
+    tasks = _tasks()
+    tree = _workflow_tree()
+    main = next(n for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "main")
+    awaited = {
+        node.value.func.id
+        for node in ast.walk(main)
+        if isinstance(node, ast.Await) and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+    }
+    missing = awaited - set(tasks)
+    assert not missing, f"main awaits {missing}, which are not decorated tasks"
+    return {name: call for name, call in tasks.items() if name in awaited | {"main"}}
+
+
 def _cache_arg(call: ast.Call | None) -> str | None:
     """What a task decorator says about caching: a literal, a name, or None."""
     if call is None:
@@ -247,7 +272,7 @@ def test_the_uncached_stages_are_exactly_register_main_and_the_marts_tail():
     The docstring requirement is asserted, not just described: a stage that loses
     its cache silently is exactly the change this test exists to make loud.
     """
-    disabled = {n for n, c in _tasks().items() if _cache_arg(c) == "disable"}
+    disabled = {n for n, c in _pipeline_tasks().items() if _cache_arg(c) == "disable"}
     assert disabled == {"register", "main", "publish_marts"}, (
         f"the set of uncached stages moved to {disabled}; if that is intended, the "
         f"docstring arguing it must move too, and so must the drill's own list"
@@ -284,7 +309,7 @@ def test_the_drill_and_the_workflow_agree_on_which_stages_are_uncached():
     match = re.search(r"UNCACHED = \{([^}]*)\}", text)
     assert match, "the drill no longer names an UNCACHED set"
     listed = {piece.strip().strip('"\'') for piece in match.group(1).split(",") if piece.strip()}
-    disabled = {n for n, c in _tasks().items() if _cache_arg(c) == "disable"}
+    disabled = {n for n, c in _pipeline_tasks().items() if _cache_arg(c) == "disable"}
     assert listed == disabled, f"drill says {listed}, workflows.py says {disabled}"
 
 
@@ -440,7 +465,7 @@ def test_the_retry_budget_is_one_number_shared_by_every_stage_except_the_parent(
     re-run the child that just exhausted its own budget, for the same answer at
     three times the cost, while printing three failures for one fault.
     """
-    budgets = {name: _retries_arg(call) for name, call in _tasks().items()}
+    budgets = {name: _retries_arg(call) for name, call in _pipeline_tasks().items()}
     assert budgets.pop("main") == "0", (
         f"the parent declares retries={budgets.get('main')}; a retried graph "
         f"multiplies one fault into several reports of it"
@@ -588,3 +613,35 @@ def test_the_runner_streams_the_follow_transcript_instead_of_buffering_it():
     assert re.search(r"--train_months[^\n]*\n[^\n]*FOLLOW_LOG", text), (
         "the flyte run invocation no longer redirects to the follow log"
     )
+
+
+# --- M7-S4: the scheduled retrain is NOT a stage of this graph ----------------
+
+
+def test_the_retrain_is_outside_the_monthly_pipeline_and_says_so():
+    """Prevents: the retrain being wired into the monthly graph by accident.
+
+    A retrain reads the SETTLED training window; it does not consume the month the
+    pipeline just ingested. Inside `main` its cache key would depend on a month it
+    never reads, and every monthly run would spend an hour re-fitting a champion
+    nothing asked about."""
+    tasks = _tasks()
+    assert "retrain" in tasks, "the scheduled retrain is a task in this file"
+    assert "retrain" not in _pipeline_tasks(), (
+        "the retrain must not be one of `main`'s stages"
+    )
+
+
+def test_the_retrain_declares_its_own_cache_and_retry_budget_with_reasons():
+    """The same two rules every task here obeys, applied to the one that runs
+    unattended: nothing INHERITS a cache policy or a retry budget, and a stage that
+    refuses either must argue it where a reader will find it."""
+    call = _tasks()["retrain"]
+    assert _cache_arg(call) == "disable"
+    assert _retries_arg(call) == "0", (
+        "the fit is the whole stage and it is hours long; a retry budget here is a "
+        "slower way to hide a systematic fault"
+    )
+    body = WORKFLOWS.read_text().split("async def retrain(", 1)[1]
+    docstring = body.split('"""')[1]
+    assert "cach" in docstring.lower() and "retries" in docstring.lower()

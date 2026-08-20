@@ -471,6 +471,85 @@ async def publish_marts(month: str, verdict: str) -> str:
     )
 
 
+# ---------------------------------------------------------------- M7-S4: the schedule ----
+#
+# THE TWO TRIGGERS, AND WHY THEY ARE TWO. Flyte 2.x carries triggers natively
+# (`flyte create trigger`, or — as here — `flyte.Trigger` declared in code and
+# deployed with the task), so the M7 kickoff's recorded cron fallback is NOT
+# executed and stays armed: this is the native path, probed by asking the server
+# rather than by reading a version table (gotcha #70's family).
+#
+# Declared in CODE and not created from the CLI, for the reason every other
+# checked-in artifact in this program is: `flyte create trigger <task> <name>
+# --schedule "..."` cannot pass task inputs, so the schedule would fire the
+# retrain with its DEFAULTS and the cadence would live in somebody's shell
+# history. Here the cadence, the inputs and the reasoning are one reviewable
+# object that `flyte deploy` reconciles.
+
+RETRAIN_MONTHLY = flyte.Trigger(
+    name="retrain-monthly",
+    description="M7's loop: refit the champion's configuration, re-derived at full scale",
+    automation=flyte.Cron("0 3 1 * *"),
+    # ACTIVATION IS OFF, and that is a decision rather than an oversight. This
+    # cluster is a laptop; the full-data fit is hours of CPU under a 6-core task
+    # limit, and a retrain that fires unattended every month on a machine nobody
+    # is watching would spend that budget to produce a verdict nobody reads. The
+    # mechanism is what M7 owes: registered, reconciled by the server, and
+    # firing — which the proof trigger below demonstrates, cheaply and on the
+    # same task. Turning this on is one field and a PO's call about compute.
+    auto_activate=False,
+    inputs={"train_months": "", "plan_only": False},
+)
+
+RETRAIN_SCHEDULE_PROOF = flyte.Trigger(
+    name="retrain-schedule-proof",
+    description="proves the schedule FIRES: the retrain task, planning only, every 20 min",
+    automation=flyte.FixedRate(20),
+    # `plan_only` is the whole point of the cheap arm. It exercises everything
+    # the schedule is responsible for — the trigger firing, a pod on the image,
+    # the PodTemplate's MLflow and MinIO wiring, the registry read, F-020's
+    # transfer and the record write — and stops exactly before the hour of CPU.
+    # A proof that fitted would be measuring the fit, not the schedule.
+    inputs={"train_months": "", "plan_only": True},
+)
+
+
+@train_env.task(cache="disable", retries=0, triggers=[RETRAIN_MONTHLY, RETRAIN_SCHEDULE_PROOF])
+async def retrain(train_months: str = "", plan_only: bool = False) -> str:
+    """M7's retrain, on a schedule. One stage, no promotion, verdict as data.
+
+    **UNCACHED, and the argument is `register`'s rather than `publish_marts`'.**
+    A retrain reads the LIVE registry to learn what it is a retrain OF — a cached
+    answer to "what is serving right now?" is wrong precisely when the alias has
+    moved, which is the only occasion on which anybody asks. It also mints an
+    MLflow run, and a cache hit that returned a verdict without minting one would
+    make the experiment's run count stop being the second witness `verify-m4`
+    leans on.
+
+    **`retries=0`.** The fit is the whole stage and it is hours long; a retry
+    budget here is a slower way to hide a systematic fault, and there is nothing
+    partial to resume — the honest failure of a scheduled retrain is one loud
+    failed run at the cadence, not three.
+
+    Returns the record as JSON text, on the seam convention this file already
+    uses: the rich `RetrainResult` is logged on the pod that produced it and the
+    verdict travels as content, never as a path (`/app/automation/runs/...` on
+    this pod is not a path any other pod has).
+    """
+    import dataclasses
+    import json as _json
+
+    from pipelines import tasks
+
+    result = tasks.retrain(
+        train_months=tuple(m for m in train_months.split(",") if m) or None,
+        plan_only=plan_only,
+        story="M7-S4",
+    )
+    print(f"[retrain] {result}")
+    return _json.dumps(dataclasses.asdict(result), default=str)
+
+
 @light_env.task(cache="disable", retries=0)
 async def main(month: str = "2019-01", train_months: str = "", judge: bool = True,
                publish: bool = True) -> str:

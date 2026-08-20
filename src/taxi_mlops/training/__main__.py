@@ -128,6 +128,36 @@ def main(argv: list[str] | None = None) -> int:
         help="print the numbers, publish nothing — for checking the champion resolves",
     )
 
+    retrain_p = sub.add_parser(
+        "retrain",
+        help="M7-S4: fit the CHAMPION's configuration re-derived at the scale it is "
+        "being fitted at (F-020 — count-scaled knobs rescaled, round budget "
+        "re-derived) and submit it to the gate. Promotes NOTHING, ever",
+    )
+    retrain_p.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="resolve the champion, print the transfer and write the resolved config "
+        "and the plan record — then stop. Fits nothing, mints no run, issues no "
+        "verdict. This is the cheap check that the provenance chain is intact",
+    )
+    retrain_p.add_argument(
+        "--train-months",
+        nargs="+",
+        default=None,
+        metavar="YYYY-MM",
+        help="SAMPLED, and therefore GATE-DISQUALIFIED (F-008). Exists so the "
+        "scheduled-run mechanism can be proven with a cheap fit that cannot mint a "
+        "verdict; a sampled run degrades the FLOOR faster than the challenger",
+    )
+    retrain_p.add_argument("--experiment", default=None)
+    retrain_p.add_argument("--story", default="M7-S4")
+    retrain_p.add_argument(
+        "--run-dir",
+        default=None,
+        help="where the resolved config and the record land",
+    )
+
     # A training run redirected to a log file is block-buffered by default, so a
     # 40-minute fit prints nothing until it ends and reads exactly like a hang.
     # Observed on this story's first full run.
@@ -211,6 +241,39 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[batch] FAIL: {exc}", file=sys.stderr)
             return 2
         return 0
+
+    if args.command == "retrain":
+        # Same reason as every sibling above: the OpenMP shim may re-exec this
+        # process, and re-execing after loading 44M rows would do that work twice.
+        from .openmp import ensure_openmp
+
+        print(f"[openmp] {ensure_openmp()}")
+
+        from .retrain import RetrainError
+        from .retrain_run import DEFAULT_EXPERIMENT, DEFAULT_RUN_DIR, retrain
+
+        try:
+            record = retrain(
+                run_dir=args.run_dir or DEFAULT_RUN_DIR,
+                experiment=args.experiment or DEFAULT_EXPERIMENT,
+                story=args.story,
+                plan_only=args.plan_only,
+                train_months=tuple(args.train_months) if args.train_months else None,
+            )
+        except RetrainError as exc:
+            print(f"[retrain] FAIL: {exc}", file=sys.stderr)
+            return 2
+
+        # The SAME exit-code language `make train` speaks, because a scheduler
+        # reads exit codes and "refused" and "not judged" must never be the same
+        # number (M3-S1's F-008 landing, `RegisterResult.exit_code`'s one home).
+        verdict = record.get("verdict")
+        if record.get("plan_only") or args.plan_only:
+            return 0
+        if verdict is None:
+            print("[retrain] NO VERDICT was issued (sampled run, F-008) — exit 3")
+            return 3
+        return 0 if verdict["passed"] else 1
     return 2
 
 

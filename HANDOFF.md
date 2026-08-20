@@ -1,5 +1,182 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bo) — M7-S4: the loop closed, and two numbers that were true where they were written
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block MLE (Accountable),
+MLOps (R)** (charter refusals in play: law 2 — the 2019 trees untouched; law 3 —
+the alias moves only through the gate; law 4 — no threshold set from a number
+just measured; F-008; DR-05 full-data train-only; the cluster never goes down).
+Boot reads: CLAUDE.md · HANDOFF (bn) · M7 KICKOFF · AWAITING_PO.
+**Staleness check passed** — `automation/STOP` absent, tree clean at `043dc7f`,
+no detached job pending, 3 nodes Ready v1.36.1, one isvc, `@champion` **v2**
+(run `92b73bd4…`, `feature_set: v2`) — exactly as (bn) described.
+**M7-S4 landed as a LEG.** PR **__PR__**. End state: `@champion` **2** (read,
+never written) · `features.version` **v2** · champion serving · the retrain task
+and its two triggers deployed and **one firing observed** · **the full-data
+retrain running DETACHED**, and
+its verdict is the next session's first act (see Next).
+
+### Done
+- **F-022 CLOSED, both halves** (option (a), ARCH's M4-boundary decision). The
+  bake-off's incumbent row declares no feature set; `_feature_set_of` derives it
+  from the loaded booster's ORDERED feature names against `configs/features.yaml`
+  and requires exactly one match; everything downstream reads `Loaded.feature_set`
+  (AST-pinned). Execution: `make bakeoff BAKEOFF_ARGS="--smoke-rows 20000"` →
+  **exit 0**, past contender resolution for the first time since M3-S5's own
+  promotion moved the alias, nothing written, nothing promoted.
+- **F-020 CLOSED by option (a) with option (b)'s rule landed as CODE.**
+  `min_data_in_leaf` **1293 → 8620** — 1 row in 5,103 where it was chosen, 1 in
+  **34,020** unchanged at the refit's scale, 1 in 5,103 after — and the round
+  budget re-derived **800 → 2400** with `ended_by` (`early_stopping` |
+  `round_cap`) reported as a first-class field. The measurement itself is the
+  detached run.
+- **The schedule exists and is native.** Flyte 2.6.1 / chart v2.0.42 carries
+  triggers; **the kickoff's recorded cron fallback was NOT executed and stays
+  armed**, one attempt of a three-attempt wall. Two triggers declared in CODE
+  with their inputs (the CLI form cannot pass inputs), deployed and **read back
+  off the control plane**: `retrain-schedule-proof` (`FixedRate(20)`,
+  `plan_only=True`, active) and `retrain-monthly` (`Cron("0 3 1 * *")`,
+  full-data, **`auto_activate: False`**).
+- `make retrain` · `make retrain-schedule` · `scripts/retrain_schedule.sh` ·
+  `src/taxi_mlops/training/retrain.py` + `retrain_run.py` ·
+  `pipelines.tasks.retrain` + the Flyte task · `docs/retrain_m7.md` +
+  `..._transcripts.md` · CLAUDE.md section + 3 command rows · field note ·
+  findings + deployments ledger rows.
+- **891 unit tests** (23 new), ruff clean. Task image rebuilt twice and loaded to
+  all 3 nodes (`820adbd`, then `72a4013`).
+
+### Decisions
+- **The retrain cannot promote, structurally.** `run(promote=False)` unconditional
+  and `retrain()` has NO `promote` parameter — a law with a keyword argument is a
+  default. This is the one job designed to run unattended; a PROMOTE verdict is
+  recorded and the alias stays put, because promotion deferred is a state the
+  registry expresses honestly and half a transition is not (M3-S5's chain).
+- **`retrain-monthly` is registered and NOT activated.** This cluster is a laptop
+  and the full-data fit is hours of CPU under a 6-core task limit; a retrain
+  firing unattended every month on a machine nobody watches spends that budget to
+  produce a verdict nobody reads. The mechanism is what M7 owes — registered,
+  reconciled, and firing (the proof trigger). Turning it on is one field and a
+  PO's call about compute.
+- **The proof trigger PLANS ONLY.** It exercises the trigger firing, the pod, the
+  image, the PodTemplate wiring, the registry read, F-020's transfer and the
+  record write — and stops before the hour of CPU. A proof that fitted would be
+  measuring the fit, not the schedule.
+- **The full-data retrain runs on the HOST, detached**, and the reason is
+  measured rather than asserted: M3's full-data refit of this configuration took
+  **981.5 s for 800 rounds** on 20 host cores, while M4-S4's on-cluster full-data
+  fit took **1874.7 s for 500 rounds** under the train env's 6-core limit. At a
+  2400-round cap that is ~45 min on the host and several hours in a pod. Same
+  code, same entry point; where each execution ran is recorded with it.
+- **The training window did not move** (settled 2019, copied verbatim). A window
+  that swallows 2020 changes what the holdout measures — an ARCH/PO question,
+  routed and not edited.
+- **The generated config is not a second home**: every block but `model` copied
+  from `configs/train.yaml` verbatim, asserted block by block, and written under
+  `automation/runs/` rather than `configs/`.
+
+### Defects/Surprises
+- **The two mandatory intakes turned out to be the same shape**, and that is the
+  story's substance: *a number that was true where it was written, applied where
+  it is not*. The distinction that fixes both — **pre-registration is right for a
+  thing declared before its number existed and exactly wrong for a pointer
+  designed to move** — is now the argument in both files.
+- **`make retrain-schedule`'s F-026 guard fired on my own commit** (a host-only
+  deploy script not yet in the task image). The instinct is to narrow
+  `IMAGE_PATHS`; the image was rebuilt instead. A guard narrowed to pass your own
+  change is a guard you have deleted.
+- **Three inherited wiring guards went red for a correct addition** — "every task
+  in workflows.py declares X" — gotcha **#50, sixth time**. Re-derived rather than
+  widened: the pipeline's task set is now *what `main` awaits*, asked of the AST.
+- **F-022's fix broke the 2×2, and that is the honest consequence of the
+  decision.** The square's origin cell (v1 features, hand params) was held by the
+  incumbent row only because the alias happened to hold `lightgbm-v1`. Computing
+  it against a tuned v2 alias would print `auto-on-v2 +0.00%` — correct arithmetic
+  answering a different question — so the square is NOT printed when nothing
+  occupies its origin cell, and says why.
+- **Side finding, measured while testing the derivation**: `v1_g5` and
+  `redteam_g5_leaky` declare **identical ordered column lists**; they differ only
+  in how their aggregates were FITTED, which no artifact can report. A model
+  fitted on either is unidentifiable from its own feature names, so the
+  derivation refuses rather than picks. Neither is promotable, so refusing is the
+  safe direction — but it is worth knowing before a future set collides.
+- **My own two test slips**, both caught by running them: F-020's ledger says the
+  unchanged leaf floor is "1 in 5,105" where the tracked records give **5,103.7**
+  (the ledger rounded oddly); and an exit-code test asserted on a string shape the
+  CLI does not use. Both fixed against the records rather than against memory.
+- **F-048 (new, OPEN, medium-HIGH, routed to ARCH — the trigger's own first
+  firing found it).** The proof run (`r5d5ce577470fc2ce`, fired **05:51:54Z**,
+  SUCCEEDED in 4.5 s) returned `rescale_factor: null, round_cap: 500` where the
+  host resolves `6.6667` and `2400` **for the same champion in the same minute**,
+  and its log says why: `no sampled search behind this champion — no scale
+  transfer to make`. `.dockerignore` excludes `automation/runs/`, so inside a task
+  pod F-020's provenance chain is absent for a reason that has nothing to do with
+  the champion. **The sentence is honest about what the code could see and false
+  about the world** — gotcha #94's shape with the direction reversed: the
+  reported-no-op design is right, and it lets a MISSING FILE wear a legitimate
+  absence's clothes. No number is wrong yet (the scheduled path has only ever
+  planned, the measurement was made on the host, `retrain-monthly` is inactive).
+  **Not fixed here, and the reason is stated rather than convenient**: the guard
+  that must land under any option — *"no refit record names this run" and "I
+  cannot see any records" must not produce the same sentence"* — needs an image
+  rebuild and a redeploy, after which the deployed proof trigger goes RED until
+  the design question (put the scale ON the champion, vs ship the records into
+  the image) is answered, and that question is ARCH's. So the story would have
+  ended leaving a red schedule behind. Three options costed in the ledger.
+- **F-047 (new, OPEN, routed to ARCH at the M7 boundary — deliberately NOT
+  fixed).** `make image-smoke` has been **RED since M5-S5** and this is the first
+  run since: **9 ok · 1 FAIL**, the FAIL being the in-image unit suite at
+  **12 failed, 862 passed**, every failure a `FileNotFoundError` under
+  `/app/automation/runs/`. `.dockerignore` excludes `automation/runs/` —
+  correctly, those are host RECORDS — and from M5-S1 they became TRACKED, after
+  which a growing family of tests reads them as files that must exist. Nothing
+  downstream is wrong and no claim made about the image elsewhere is false. What
+  makes it worth a row: **the one command whose job is "prove this artifact runs
+  OUR code" is a command no gate runs**, which is the exact shape of the finding
+  it exists to prevent. Three options costed in the ledger; (a) a
+  `needs_records` marker is the recommendation and it touches ~12 tests across 6
+  files, which is why it is not being done beside a retrain.
+- **Wall count**: none. The schedule probe succeeded on attempt 1 of 3.
+
+### Next
+- **FIRST ACT: read `automation/runs/m7-retrain-fulldata.status`.**
+  **DONE** → the verdict is in `automation/runs/m7-retrain/latest.json` and the
+  log. Then: (a) fill `docs/retrain_m7.md` §7 and
+  `docs/retrain_m7_transcripts.md` §5 with the pasted numbers, (b) update F-020's
+  ledger row with the measured KPI-09 **beside the 3.2403 that stands**, (c)
+  record `ended_by` — if it says `round_cap` the number is a FLOOR for this
+  configuration and carries F-015's caveat, and saying so is the point of the
+  field. **A REFUSE ends M7-S4 green** (record the verdict, the challenger stays
+  a tagged registry version, `@champion` unmoved). **A PROMOTE obliges M3-S5's
+  transition chain** — promote → predictions → duckdb → marts → boards → serve
+  cutover → parity — which is a **second leg by size**; the kickoff sanctions
+  stopping at the recorded verdict with the alias unmoved, and the detached job
+  promotes nothing by construction, so that state is already coherent.
+  **FAILED or KILLED** → the log says how far it got; the story is not done and
+  the fit is re-runnable with `make retrain` (nothing it wrote is a partial
+  registry state — it mints an MLflow run and nothing else).
+- Then `make verify-m5` (§2's coherence check is the story's own accept
+  condition and nothing here touched serving) and merge the PR.
+- **M7-S5 is next**: the DA drift memo, the predictions & drift board, and
+  `make verify-m7` + its red team. Its §0-named reader is
+  `docs/error_memo_m2.md` §7 row 2, and M7-S3's per-BIN detail (Saturday −3.724
+  points, zone 138 losing a third of its share, the 30–45 min band losing 1.28
+  points) is the memo's material.
+- **`retrain-schedule-proof` is ACTIVE and fires every 20 minutes**, running a
+  plan-only retrain that writes a record and costs seconds — **observed firing at
+  05:51:54Z, SUCCEEDED in 4.5 s** (run `r5d5ce577470fc2ce`, `triggerName:
+  retrain-schedule-proof`). It is deliberate, not residue. **Every firing from
+  now until F-048 lands will report `rescale_factor: null`** — that is the
+  finding, not a new fault. If it becomes noise, `flyte delete trigger` or a redeploy with
+  `auto_activate=False`; **do not delete it silently before `verify-m7` reads
+  it** — a schedule that fired once and was removed is not distinguishable from
+  one that never fired.
+- Two alerts standing from (bn) are unchanged and still correct:
+  `ScoringVolumeCollapse` for 2020-03 (the true state; the decision it asks for
+  is exactly this retrain) and `QuoteHorizonRefusals` (self-clearing).
+- Standing with the PO, all non-blocking: 2026-08-18-1 (F-016 — M7 runs the gate
+  as pre-registered until answered), 2026-08-17-1, 2026-08-16-2.
+
 ## Session 2026-08-20 (bn) — M7-S3: the shape alert that correctly did not fire, and the volume alert that did
 
 ### State
