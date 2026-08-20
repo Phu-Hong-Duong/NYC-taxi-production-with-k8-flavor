@@ -49,7 +49,14 @@ from dataclasses import dataclass, field
 #: kind publishes host ports at cluster-CREATE only and this cluster is not
 #: rebuilding), so a host-side caller reaches it through a port-forward and an
 #: in-cluster caller uses this name. Overridden by `--pushgateway`.
-DEFAULT_IN_CLUSTER_URL = "http://prometheus-pushgateway.monitoring.svc.cluster.local:9091"
+#:
+#: The DOUBLED `prometheus-` is not a typo: the chart's fullname template
+#: prefixes the helm RELEASE name (`prometheus`) to the subchart's own name
+#: (`prometheus-pushgateway`). Read off the live Service, not guessed — the
+#: guess cost one down scrape target, which is written up beside the scrape job
+#: in `infra/helm/monitoring/prometheus-values.yaml`.
+SERVICE_NAME = "prometheus-prometheus-pushgateway"
+DEFAULT_IN_CLUSTER_URL = f"http://{SERVICE_NAME}.monitoring.svc.cluster.local:9091"
 
 #: The metric a freshness guard reads. Named here rather than typed at the call
 #: site so the rule file, the pusher and the tests all point at one string.

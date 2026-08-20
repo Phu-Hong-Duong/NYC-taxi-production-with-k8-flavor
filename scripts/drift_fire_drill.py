@@ -55,7 +55,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from taxi_mlops.monitoring.__main__ import PUSH_JOB, build_metrics  # noqa: E402
 from taxi_mlops.monitoring.drift import compute_drift  # noqa: E402
-from taxi_mlops.monitoring.pushgateway import push_metrics  # noqa: E402
+from taxi_mlops.monitoring.pushgateway import SERVICE_NAME, push_metrics  # noqa: E402
 
 RECORD_DIR = REPO_ROOT / "automation" / "runs" / "m7-drift"
 ROUTE = "http://localhost:8081"
@@ -307,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         forwards.append(
             port_forward(
-                "svc/prometheus-pushgateway", "monitoring", PUSHGATEWAY_LOCAL_PORT, 9091
+                f"svc/{SERVICE_NAME}", "monitoring", PUSHGATEWAY_LOCAL_PORT, 9091
             )
         )
         forwards.append(

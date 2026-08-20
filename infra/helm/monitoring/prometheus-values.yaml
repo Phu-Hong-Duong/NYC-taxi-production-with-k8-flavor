@@ -111,6 +111,43 @@ extraScrapeConfigs: |
     metrics_path: /metrics
     scrape_interval: 15s
 
+  # ---------------------------------------------------------------------------
+  # The pushgateway (M7-S3). ONE FLAG IN HERE IS LOAD-BEARING AND IT IS
+  # `honor_labels: true`.
+  #
+  # Prometheus normally OVERWRITES a scraped sample's `job` and `instance`
+  # labels with the ones belonging to the target it scraped — which is correct
+  # for a service reporting on itself and exactly wrong for a gateway reporting
+  # on somebody else. Without this flag every drift series arrives labelled
+  # `job="pushgateway"` instead of the `job="taxi-drift"` the pushing job set,
+  # `exported_job` appears as a consolation prize, and EVERY RULE IN
+  # `crosstown-drift` SELECTS ON A LABEL THAT NO LONGER EXISTS. The alerts do
+  # not error — they match nothing, evaluate over nothing, and sit `inactive`
+  # forever. That is gotcha #78's family: a rule that cannot fire looks
+  # identical to a system with nothing wrong with it, and the only tell is that
+  # a deliberately-drifted month produced silence.
+  #
+  # This is also why the gateway is NOT annotated for the generic
+  # service-endpoints job (see `prometheus-pushgateway` below): two scrapes of
+  # one gateway, one of them label-mangling, would produce two contradictory
+  # copies of every drift number.
+  # THE SERVICE NAME IS `prometheus-prometheus-pushgateway` AND IT WAS READ OFF
+  # THE CLUSTER, NOT GUESSED. The subchart's fullname template prefixes the
+  # RELEASE name (`prometheus`, `scripts/deploy_monitoring.sh:73`) to its own
+  # chart name (`prometheus-pushgateway`), so the obvious address — the one
+  # written here first — resolves to nothing. The tell was one line in
+  # `/api/v1/targets`: `health: down`. Worth naming because a DOWN target is the
+  # good outcome of this mistake; had the gateway also been annotated for the
+  # generic endpoints job, it would have been scraped anyway, with its labels
+  # mangled, and every drift rule would have sat quietly inactive instead
+  # (gotcha #70's family: ask the server what its name is).
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["prometheus-prometheus-pushgateway.monitoring.svc.cluster.local:9091"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+
 server:
   global:
     # 15s, not the chart's 1m, AND IT WAS A DEFECT BEFORE IT WAS A PREFERENCE.
@@ -183,4 +220,43 @@ prometheus-node-exporter:
   enabled: false
 
 prometheus-pushgateway:
-  enabled: false
+  # ON from M7-S3, and this is the one value M6-S1's note said would flip.
+  #
+  # WHY A BATCH JOB NEEDS ONE AT ALL. Everything scraped in this file is a
+  # long-lived process with an HTTP endpoint. The drift job is neither: it runs
+  # for a few minutes once a month and is gone long before any 15-second scrape
+  # interval could find it. Pushgateway inverts the direction for exactly that
+  # case — the job PUSHES, the gateway HOLDS, Prometheus scrapes the gateway.
+  #
+  # NO hostPort, and that is M7 law 1, not a preference. kind publishes host
+  # ports at cluster-CREATE only and this cluster is stateful and not
+  # rebuilding, so 9091 stays a RESERVED NAME in CLAUDE.md's port family exactly
+  # as 3000 did through M6. In-cluster callers use the Service name; a human
+  # reaches it with `kubectl port-forward`, which is the M4-S2 flyte-console
+  # precedent for an honest deviation from the declared-route doctrine.
+  #
+  # THE SEMANTIC THAT SURPRISES PEOPLE, WRITTEN WHERE IT IS INSTALLED: a pushed
+  # metric PERSISTS after its producer dies. The gateway is a bulletin board,
+  # not a store of events. So "the drift metric is present and below the bar" is
+  # equally consistent with "the drift job died in March and January's
+  # reassuring number is still pinned to the wall". Two guards, deliberately in
+  # two different layers: `push_metrics()` REFUSES a payload with no freshness
+  # stamp (a type), and A-10 fires on a stamp older than 40 days (a rule).
+  #
+  # Persistence is OFF: the gateway's contents are re-derivable by re-running
+  # the drift job over DVC-pinned data, so what a lost PVC costs is one command.
+  # Every other PVC decision in this repo is argued the same way (M0-S4).
+  enabled: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+  persistentVolume:
+    enabled: false
+  # NO `prometheus.io/scrape` ANNOTATION, DELIBERATELY — see the
+  # `pushgateway` job in `extraScrapeConfigs` below. The annotation would get
+  # the gateway scraped by the chart's generic `kubernetes-service-endpoints`
+  # job, which does NOT set `honor_labels`, and that single missing flag would
+  # silently break every drift rule in this repo.
