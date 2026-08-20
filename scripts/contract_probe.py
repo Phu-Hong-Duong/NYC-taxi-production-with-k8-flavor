@@ -27,6 +27,7 @@ refusal has never been watched is a claim, not a check.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -94,11 +95,30 @@ def main(argv: list[str] | None = None) -> int:
         help="break the real frame's structure in this named way before validating",
     )
     parser.add_argument("--rows", type=int, default=0, help="validate only the first N rows")
+    parser.add_argument(
+        "--out",
+        help="write the measurement as tracked JSON (F-029: what a gate replays, review must see)",
+    )
     args = parser.parse_args(argv)
+    record: dict = {
+        "month": args.month,
+        "fixture": args.fixture,
+        "rows_validated": args.rows or None,
+    }
+
+    def finish(code: int) -> int:
+        if args.out:
+            record["exit_code"] = code
+            out = Path(args.out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+            print(f"[probe] record: {args.out}")
+        return code
 
     if Path(args.raw_dir).resolve() == (repo_root() / "data" / "raw").resolve():
         print("[probe] REFUSED: --raw-dir may not be data/raw. A probe acquires nothing.")
-        return 2
+        record["outcome"] = "PROBE_REFUSED_ARGUMENTS"
+        return finish(2)
 
     cfg = _probe_config(args.raw_dir)
     month = args.month
@@ -113,15 +133,21 @@ def main(argv: list[str] | None = None) -> int:
         raw = cfg.raw_path(month)
         print(f"[probe] raw: {raw.name} [{action}] {raw.stat().st_size:,} bytes")
         print(f"[probe] sha256: {manifest[month]['sha256']}")
+        record["raw_bytes"] = raw.stat().st_size
+        record["raw_sha256"] = manifest[month]["sha256"]
         df = read_raw(raw)
     except Exception as exc:  # acquisition/readability is the PROBE failing, not the contract
         print(f"[probe] PROBE FAILED — {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 2
+        record["outcome"] = "PROBE_FAILED"
+        record["error"] = f"{type(exc).__name__}: {exc}"
+        return finish(2)
 
     if args.rows:
         df = df.head(args.rows)
     print(f"[probe] {len(df):,} row(s), {len(df.columns)} column(s) as delivered:")
     print(f"        {list(df.columns)}")
+    record["rows_read"] = int(len(df))
+    record["columns_as_delivered"] = [str(c) for c in df.columns]
 
     if args.fixture:
         df, described = _apply_fixture(df, args.fixture, cfg, month)
@@ -133,7 +159,10 @@ def main(argv: list[str] | None = None) -> int:
     except IngestError as exc:
         print(f"\n[probe] REFUSED — {type(exc).__name__}: {exc}")
         print("[probe] nothing was written: no processed output, no sidecar, no report.")
-        return 1
+        record["outcome"] = "REFUSED"
+        record["error_type"] = type(exc).__name__
+        record["error"] = str(exc)
+        return finish(1)
 
     for event in events:
         print(f"[probe] SCHEMA EVENT: {event}")
@@ -143,7 +172,10 @@ def main(argv: list[str] | None = None) -> int:
         f"\n[probe] VALIDATED — {month} passed the input contract for {year_of(month)} "
         f"with {len(events)} schema event(s). Nothing was written."
     )
-    return 0
+    record["outcome"] = "VALIDATED"
+    record["schema_events"] = list(events)
+    record["columns_after_cast"] = [str(c) for c in validated.columns]
+    return finish(0)
 
 
 if __name__ == "__main__":

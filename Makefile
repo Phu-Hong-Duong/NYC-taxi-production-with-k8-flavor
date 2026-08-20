@@ -53,6 +53,8 @@ data-scoring: ## ingest-scoring + duckdb + dvc pin of the scoring trees; the 201
 	@bash scripts/data_pipeline_scoring.sh
 contract-probe: ## run any month's REAL file through the contract and report validate-or-refuse; writes nothing (M7-S1)
 	uv run python scripts/contract_probe.py $(PROBE_ARGS)
+contract-probe-fixtures: ## watch the contract REFUSE three schema-break shapes, exit 1 each, nothing written (M7-S1)
+	@bash scripts/contract_probe_fixtures.sh
 rebuild-proof: ## wipe data/processed, rebuild from DVC-pinned raw, diff every sha256 (M1-S2 gate leg)
 	@bash scripts/rebuild_proof.sh
 marts: ## dbt build (models+tests) + publish gold marts to Postgres (SKIP_PUBLISH=1 stops at DuckDB)

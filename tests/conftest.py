@@ -93,10 +93,18 @@ def data_cfg(tmp_path) -> DataConfig:
     # worst kind of green.
     rejected = dict(cfg.rejected)
     rejected["dir"] = str(tmp_path / "rejected")
+    # The SCORING trees (M7-S1), redirected for exactly the reason above and
+    # one tree further along again: a test that ingests a scoring month would
+    # otherwise write into the real data/scoring/, and the DVC pin that
+    # describes it would go stale from a green test run.
+    scoring = dict(cfg.scoring)
+    scoring["dir"] = str(tmp_path / "scoring")
+    scoring["rejected_dir"] = str(tmp_path / "scoring_rejected")
     return dataclasses.replace(
         cfg,
         source=source,
         rejected=rejected,
+        scoring=scoring,
         # Same reason as `rejected` above, one tree further along: with the real
         # `data/predictions` in place a test that builds the analyst layer would
         # otherwise pick up the REAL published predictions and reconcile them

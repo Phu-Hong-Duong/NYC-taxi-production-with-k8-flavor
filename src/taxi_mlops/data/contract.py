@@ -85,15 +85,25 @@ def check_columns(
     """
     events: list[str] = []
     missing = [n for n, s in specs.items() if s["required"] and n not in df.columns]
+    unknown = [c for c in df.columns if c not in specs]
     if missing:
+        # The unknown columns are named HERE too, and that is not decoration.
+        # A RENAMED column is both an absence and an arrival, and this branch
+        # raises before the unknown-column branch below can ever be reached —
+        # so a refusal that named only the absence sent the reader looking for a
+        # deletion when the field had merely moved. Measured at M7-S1 against a
+        # real 2025 file: `VendorID -> VendorID_v2` reported `['VendorID']`
+        # absent and said nothing about what had arrived in its place.
+        arrived = f" Unknown column(s) in the same file: {unknown}." if unknown else ""
         raise SchemaEventError(
-            f"{month}: required column(s) absent from the source file: {missing}. "
-            "A column that vanished is an EVENT -- update the contract deliberately."
+            f"{month}: required column(s) absent from the source file: {missing}."
+            f"{arrived} "
+            "A column that vanished is an EVENT -- update the contract deliberately "
+            "(if it was RENAMED, an `aliases:` entry in configs/data.yaml is the fix)."
         )
     for name in (n for n, s in specs.items() if not s["required"] and n in df.columns):
         events.append(f"column {name!r} present ahead of its from_year -- accepted, typed, unused")
 
-    unknown = [c for c in df.columns if c not in specs]
     if unknown:
         message = (
             f"{month}: unknown column(s) in the source file: {unknown}. "
