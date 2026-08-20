@@ -1,5 +1,167 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-20 (bs) — M7-S5 leg 2: the M7 gate, the difference it asserts, and the hole it found
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line), role block SRE (Accountable)**
+(charter refusals in play: M7 law 1 — no hostPort, the cluster never goes down;
+law 2 — the 2019 trees untouched; law 3 — the alias moves only through the gate;
+law 4 — no threshold set from a number just measured; M1's rule a seventh time —
+no skip flag, no fast mode; gotcha #15 — reported numbers come from `evaluate`
+only). Boot reads: CLAUDE.md · HANDOFF (br) · M7 KICKOFF · AWAITING_PO.
+**Staleness check: (br)'s Next was accurate, with one thing it could not have
+known.** No `automation/STOP`, tree clean at `8ecaeba`, 3 nodes Ready v1.36.1,
+the champion the only isvc, `@champion` **2**, `marts.scoring_daily` 91 rows.
+**What had moved: the host had rebooted, so every monitoring pod restarted ~44
+min before boot — and the pushgateway lost every pushed drift series with it.**
+That is F-050 below, and the gate found it rather than tripping over it.
+**One story, one leg: M7-S5 leg 2** — `make verify-m7` + `make verify-m7-redteam`.
+**M7-S5 is now complete and M7 has no story left.** End state: `@champion` **2**
+(read, never written) · `features.version` **v2** · champion serving ·
+`make verify-m5` **GREEN 49/49** · `make verify-m6` **GREEN 63/63** (repaired,
+see below) · `make verify-m7` **GREEN 62/62** · **939 unit tests green** · ruff
+clean · nothing detached, nothing pending.
+
+### Done
+- **`make verify-m7` — 62 sub-checks in 7 sections, 5.328 s, exit 0, and it
+  re-runs nothing.** M7's evidence is 15.7M raw rows ingested, 15.4M scored, a
+  ~12 minute drill and a 1,618.4 s fit — but the stronger reason for reading
+  records is new to this milestone: **the ORDER OF WORK is part of the
+  evidence.** The drift bars are legitimate because they were argued from 2019
+  headroom before any 2020 month was compared, and a gate that recomputed the
+  drift numbers would destroy the property that makes them honest. Three live
+  questions only — **one prediction, one PromQL query, one rules read** — and
+  **it may not push a metric**, because a gateway has no expiry and anything the
+  gate wrote would be read by a rule as a real job. All pinned by
+  `tests/unit/test_verify_m7.py` (27 tests).
+- **§2 is §9/M7's "Show" leg and it is a DIFFERENCE, not a sentence.** The two
+  failure signatures are built from their own records and must differ in **all
+  four** discriminating fields — exit code · rows written · report present ·
+  drift metric present. The last is an ABSENCE, which a record cannot honestly
+  claim about itself, so it is counted where a landed month would have to appear
+  (`ingest_months ∪ scoring_months`). The first draft trusted a field name:
+  `rows_validated: 200000` in a refusal record means *rows read*, not *rows that
+  passed*.
+- **The order of work is checked on three clocks and one of them is git.**
+  Headroom 04:14:49Z before the first 2020 comparison 04:38:31Z · the
+  prediction's ADD commit **640 s** before the first 2020 drift record's · and
+  the drill's embedded prediction field-by-field equal to the committed file
+  (the M6 gameday idiom: a prediction can be written first and quietly edited
+  into the record that judges it).
+- **§4 is strictly stronger than `verify-m6`'s threshold leg**: every M7
+  threshold is parsed out of the rules and looked for in **§6 and §8
+  specifically** (13,834 characters, not the whole document) — a bar argued in
+  the latency section is not an argument for a drift bar. Plus: the absence list
+  EMPTY (F-035 closed, read by IMPORTING the renderer's computed sets), A-8
+  excluding the target BY NAME, A-9 and A-8 sharing no series, no bar-shaped
+  constant under `src/taxi_mlops/monitoring/`, `honor_labels: true`, and
+  `push_metrics` REFUSING a payload with no freshness stamp (behavioural,
+  against a dead port).
+- **`make verify-m7-redteam` — PASSED, and the plant is F-045 itself.** One
+  `volume_ratio` rewritten from a ratio of RATES to a ratio of TOTALS
+  (**0.3913 → 0.4021**, `current_rows` over `reference_rows / 6`), derived from
+  the record's own fields, wrong by one percentage point, **still under the 0.50
+  bar so the alert still fires and nothing reads differently to a skim**. →
+  **RED exit 1, 3 FAILs from THREE artifacts** (the anchor arithmetic, the drill
+  record that watched the live gateway, the memo a human reads), **59 sub-check
+  lines still passing**, sha256-verified byte-identical restore, GREEN 62/62,
+  clean tree.
+- **The drill asserts a leg that must NOT fire.** The bar-daylight check has no
+  reason to complain about the planted value, so it stays GREEN — which is what
+  separates a gate that fails on a WRONG number from one that fails on any edit.
+- Docs/ledgers: `docs/verify_m7_transcripts.md` (§1 the green run, §2 the red
+  team, §3 what the two prove together, §4 **§9/M7's accept-when quoted and
+  answered line by line**, §5 F-050) · findings row · deployments row · field
+  note · gotchas **#98/#99** · CLAUDE.md story section + two command rows.
+
+### Decisions
+- **F-050's live question is asked as a PAIR rather than as a FAIL, and that is
+  a decision with a cost.** Requiring the drift series to be present would turn
+  the M7 gate red for a laptop reboot with no defect behind it (gotcha #50);
+  passing regardless would hide a real hole. So §5 asks: either the series are
+  there, or the gateway restarted since the drill pushed them, checked on two
+  clocks — an absence nothing accounts for is still a FAIL. **The honest cost is
+  that the gate is now GREEN over a monitoring surface that is genuinely
+  empty**, and it says so in the passing line and prints the command that fixes
+  it. The fix itself is a boundary decision, not an executor's (see Next).
+- **`verify-m6`'s repair changed the ASSERTION, not the bar.** Its signal leg
+  required the documented-absence list to be non-empty, which M7-S3 falsified by
+  closing F-035. Repaired to the agreement property (rules == renderer, absences
+  ⊆ documented), true before the closure and after it. No threshold moved; no M6
+  evidence was re-derived.
+- **No signoff row was written.** A producer does not sign their own gate; the
+  M7 boundary's approver owns that row, as at M6.
+- The `drift-report` Makefile stub — a `TODO(M7)` target superseded by
+  `make drift` — was deleted, with a unit test pinning that no M7 target still
+  echoes TODO. A promise nobody kept reads as work outstanding.
+
+### Defects/Surprises
+- **The gate's first run was RED with 12 sub-checks failing and not one of them
+  was a defect in M7's work.** Two were the gate guessing at an API
+  (`load_config`'s signature, `push_metrics`'s signature); one was the
+  `rows_validated` field name; one was a doc writing `202,574.4` where the check
+  compared `202574.4`; one was a board's own PROSE saying the daily series was
+  "flat at its floor", matched by a scan for a forbidden column named `floor`;
+  one was the sentence `KPI-09/KPI-10 belong to the held-out split` reading as a
+  published value because `KPI-10` contains `10`. **Writing the checks is how
+  you find out what your records actually say**, and the yield is highest on the
+  first run and near zero by the third.
+- **`verify-m6` was RED at boot and the cause was M7-S3 doing the right thing**
+  (gotcha #50, sixth time): the leg demanded a NON-EMPTY documented-absence list,
+  and F-035's closure emptied it. The same leg read the renderer's sets with
+  `ast.literal_eval` and had been silently getting nothing since those sets
+  became comprehensions — **a guard degrading into a guard about its own
+  parser.** Both repaired; GREEN 63/63.
+- **F-050 (new, OPEN, routed to the boundary): a pushgateway restart deletes
+  every drift series, and A-10 cannot fire on an ABSENT one.**
+  `time() - max by (month) (taxi_drift_last_run_timestamp_seconds) > 3456000`
+  over no series **is no series**, so the staleness rule sits inactive, the drift
+  board renders empty, and both look exactly like a healthy month. Gotcha #78 one
+  layer up, and the SLO doc's own correct "a pushed metric persists" argument
+  blind to the board itself going away. Generalises: **any rule of the form
+  "this value is too old" is silent about the value not existing.** Two costed
+  options in the ledger; the recommendation is an `absent()` rule and it states
+  its own cost (it fires during ordinary development on a laptop).
+- **Three needles in the gate's own test file matched WORDS, and all three were
+  the gate quoting itself** (gotcha #99): `--push` in the advice line it PRINTS,
+  `ingest_month` as a prefix of the `ingest_months` VIEW it reads, `retrain(`
+  inside the sentence reporting what `ast` found about `retrain`'s signature. For
+  the third no anchor helps — the sentence is legitimate — so the property
+  changed: the gate must never IMPORT the callable it inspects.
+- **Wall count**: none.
+
+### Next
+- **M7 has no story left. The exit is `automation/next_session.sh rev 120` —
+  M7 is ◆**, so REV's monitoring review runs in a fresh session and then exits
+  to the architect for the boundary.
+- **What REV should re-derive, and the cheapest routes to it**: at least one
+  drift number from raw artifacts — `make drift DRIFT_ARGS="--months 2020-03"`
+  recomputes PSI and the volume ratio from DuckDB in seconds and issues no
+  verdict, and `automation/runs/m7-drift/drift-2020-03.json` is the tracked
+  claim to compare it against (its `volume_ratio` must equal
+  `current_trips_per_day / reference_trips_per_day`, which is exactly what the
+  red team breaks). The retrain verdict's evidence chain is
+  `automation/runs/m7-retrain/{rerun-prediction.json,latest.json}` plus
+  `make retrain-prediction-check`, a seconds-long reader that judges the record
+  against a prediction committed **before** the fit was launched.
+- **Four findings are OPEN and all are the boundary's**: **F-046** (the monthly
+  drift window's blind spot — the window is part of the bar, so re-choosing it
+  after seeing A-8 stay quiet is what M7 law 4 forbids); **F-047**; **F-048**
+  (the scheduled retrain cannot see `automation/runs/` inside a task pod, so its
+  provenance chain reports an honest no-op about a champion that has one — no
+  wrong number yet, because the scheduled path has only ever run `plan_only`);
+  **F-050** (above). None blocks the milestone.
+- **One operational note for whoever next wants the drift board populated**: the
+  gateway is empty after the host reboot. `make drift DRIFT_ARGS="--months
+  2020-01 2020-02 2020-03 --push"` behind a port-forward puts the real numbers
+  back; A-9 will re-fire for 2020-03 after its 5m sustain, which is the correct
+  standing state — the volume collapse is real and the decision it asks for is
+  the retrain M7-S4 already ran and the gate already refused.
+- **AWAITING_PO is unchanged**: 2026-08-18-1 (F-016's incumbent margin) is still
+  the live fork and is now doubly informed — that condition moved the pointer on
+  +0.63% at M3-S5 and held it on **−0.03%** at M7-S4. Nothing waits on it.
+
+
 ## Session 2026-08-20 (br) — M7-S5 leg 1: the drift memo, the fourth board, and a ratio that refused to move
 
 ### State
