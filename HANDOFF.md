@@ -1,5 +1,149 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (ca) — M8-S4 leg 1: the online store, and a projection that is lossless
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (bz) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO. Staleness check clean —
+tree at `3d233fa`, 3/3 nodes Ready v1.36.1 (age 4d5h), no `automation/STOP`, no
+`.status` file pointed at, `@champion` version **2** / `feature_set v2`. **Role block:
+MLE (A), SRE (R)** — the kickoff's assignment; charter read; the refusals in play all
+session were *nothing fitted for a model · no alias read or moved · the champion's own
+wire untouched · a mismatch is a finding, never a widened bar · no `uv add feast`* and
+none was broken.
+
+**M8-S4 LEG 1 is DONE.** The transformer (leg 2) is NOT built — that is the kickoff's
+OWN declared safe stopping point ("store + 100-pair parity landed, transformer undone —
+the blueprint's accept artifact already exists"), and HANDOFF (bz) recommended exactly
+this cut. PR **#56**.
+
+### Done
+- **The store: an in-cluster Redis (ADR-012), decided by TWO-SIDED reachability.** The
+  materializer writes it from the HOST inside the quarantine; the leg-2 transformer will
+  read it from a POD. **Feast's default sqlite satisfies neither and fails in the
+  dangerous direction** — `feast materialize` writes a local file, reports success, and
+  every in-cluster lookup returns null. Plain manifest (the Postgres/Metabase
+  precedent), `redis:8.2-alpine@sha256:30abb90e62f1…` TAG AND DIGEST, **no hostPort**,
+  RDB onto a 1Gi PVC, `strategy: Recreate` (F-033 avoided by construction), and
+  **`maxmemory-policy noeviction` as a CORRECTNESS setting** — an evicting feature store
+  answers null and a null reads as a feature with no value. **1 of the 3-attempt wall
+  spent; it worked first time.** `make backup` ran first (law 1): `2026-08-21T07-46-33Z`,
+  6 databases, 1.7 GiB, every dump CRC-verified.
+- **The address is `${FEAST_REDIS_CONNECTION}` with NO default** (Feast applies
+  `os.path.expandvars` to `feature_store.yaml`): an unset variable fails loudly naming
+  itself, where a default would connect to something wrong — F-048's rule. The OFFLINE
+  readers never open a connection, so `make feast-retrieval`, `feast apply` and `feast
+  plan` keep working with it unset.
+- **Materialize: 57,688 keys / 14.32 MiB in 7 s**, window `2019-01-01T00:00:00` ->
+  `2019-07-01T00:00:01` **DERIVED** from the published parquet and never typed. It
+  **REFUSES to report success against a store that is empty afterwards** (F-050's shape).
+- **THE 100-pair parity: `max |online − offline| = 0.000e+00` across 16 columns, bar
+  EXACT, with `one missing` ZERO on every one** — the load-bearing count, because it says
+  the store and the feature path agree about *which rows have no value at all*. The
+  two-sided no-geometry assertion held (13 pu / 19 do rows, the store declined exactly
+  those, **0 disagreements**, zones `264, 265, 999`). Artifact:
+  `docs/feast_online_parity_table.md`, committed.
+- **The bar was RE-ARGUED for the new path and committed BEFORE the comparison ran**
+  (commit `3777e71`, ahead of any record) — protobuf `double` is fixed-width, bool/string
+  have no numeric path, the hop moves bytes, the entity-key serialization is pinned at
+  version 3, `materialize` SELECTS rather than aggregates. Inheriting M8-S3's sentence
+  would have been a hedge: its argument was about parquet.
+- **The anchor stops this being two Feast reads agreeing with each other**: the seven
+  STATIC columns are additionally compared against `taxi_mlops.features.zones`/`.calendar`
+  — the champion's own lookup, and **every stored feature the champion actually eats**.
+  The time-varying columns are anchored by an INHERITED measurement, cited and not re-run.
+- **The red team PASSED**: one OD pair's REAL serialized bytes copied onto another's key
+  → **RED exit 1 at 8.727e+01** naming `od_window.od_median_duration_min`, **26 sub-check
+  lines still passing**, sha256-identical restore, GREEN again, clean tree. Both of its
+  parity runs use `--no-write`, pinned by a test.
+- **Verification at story exit**: `make verify-m5` **GREEN** · `make verify-m7` **GREEN
+  62/62** · host unit suite **1041 passed** (33 new) · `ruff` clean · `@champion` **2**,
+  versions `['1','2']` (no version 3) · `uv.lock` **byte-identical to `m7-closed`** · all
+  four settled DVC pins `up to date`.
+
+### Decisions
+- **The offline half is retrieved at ONE instant, after the last window closed.** An
+  online store keeps the latest row per key and has no history — it is structurally
+  incapable of a point-in-time answer — so comparing against a per-row point-in-time
+  answer would report a correctly-working store as a mismatch (gotcha #50). It costs
+  nothing here because all twelve stored features the champion eats are static; the two
+  time-varying views are `catalog-only`. Written down in `docs/feast_online_m8.md` §1 as
+  the honest limit of the CATEGORY, not of this store.
+- **Postgres was refused as the online store** even though D-002 would have held a fifth
+  time: the ONE Postgres holds five irreplaceable tenants and an online store is the
+  opposite state class. Blast radius beats one-fewer-component.
+- **The state class is recorded in both directions** — REGENERABLE, so ledger row YES and
+  backup obligation NO, and the absence from `make backup` is written down so nobody
+  later reads it as an omission. A PVC anyway, because backup and pod-durability are
+  different questions (F-050 measured the second twice in fourteen hours here).
+- **Redis is NOT added to the port family**, and CLAUDE.md says why: no hostPort, nothing
+  binds on the host, the forward is ephemeral and uses **6380 deliberately off 6379** so
+  a materialization can never write into a developer's own local Redis.
+- **No new PO fork.** The three standing AWAITING_PO items are unchanged and non-blocking.
+
+### Defects/Surprises
+- **F-056 stopped being a curiosity and became the majority case (gotcha #103).** Hold
+  every timestamp constant and `get_historical_features` answers **34 rows of 100** on one
+  view (37/67/73 on the others) while `get_online_features` answers **100 of 100 on every
+  one**. Nothing is wrong — a lookup returns one row per request, a join one row per
+  distinct key — but the aligner was inherited from a story where the collapse hit one row
+  in eighty-eight, and *the property that made it rare was the exact property this story
+  was required to remove*. Aligned on the keys the store actually keyed on; shortfall
+  CLASSIFIED, **UNEXPLAINED 0**, and M8-S3's second cause correctly EMPTY.
+- **A declared hazard row was refused BY THE DATA.** Row 92 was meant to be a key whose
+  newest source row predates the full window; none exists, because the point-in-time
+  windows are **cumulative**. Replaced rather than approximated, by the row that does the
+  same job better: the OD pair whose median moves most across its windows (**169 -> 191,
+  80.15 min**). Both the refusal and the replacement are in the write-up.
+- **A real bug in my own aligner, caught by the first run**: the zone views are keyed on
+  `zone_id` while the entity frame spells it `PULocationID`/`DOLocationID`, and the key
+  map was written as if they matched. It raised a `KeyError` rather than silently
+  mis-joining, which is why `ANSWER_KEYS` is now a `(view key, entity column)` table with
+  a comment saying so.
+- **F-057 (new, OPEN, non-blocking, low): the quarantine's pin file cannot be regenerated
+  byte-identically.** `--rewrite-pins` reads `importlib.metadata`, which reports PUBLISHED
+  distribution names, while the committed file carries the NORMALIZED forms — so adding
+  two lines through the documented regenerator produced **+14/−12**. Not fixed in-story
+  (the fix rewrites twelve lines of an artifact M8-S2 verified reproducible, and re-proving
+  that is not this story's work); the two pins were added **by hand, +2/−0**, and the
+  defect is recorded with its costed fix rather than blessed by silence — the F-054
+  precedent. Gotcha #104.
+
+### Next
+**EXECUTOR, fresh session — `automation/next_session.sh executor 120` runs at this
+session's exit.** Next: **M8-S4 leg 2 — the transformer beside the champion**
+(`docs/milestones/M8_KICKOFF.md` §"M8-S4", second paragraph onward). Everything it needs
+is landed and green:
+* **The store is up, filled and reachable**: `redis.feast.svc.cluster.local:6379` from a
+  pod, `make deploy-feast-store` / `make feast-materialize` to rebuild it from scratch in
+  seconds. Its address must arrive as `FEAST_REDIS_CONNECTION` — there is no default and
+  that is deliberate.
+* **The three candidate shapes are still in the kickoff's order and NONE has been
+  attempted**, so leg 2 inherits an **unspent 3-attempt wall**: (i) Feast's feature server
+  as its own quarantined pod, HTTP from the transformer -> (ii) a thin direct read of the
+  online store with no feast import, a recorded DIFFER naming the serialization risk ->
+  (iii) Feast off the request path, a recorded DIFFER.
+* **The pandas wall crosses the wire there too**: the transformer runs OUR image (pandas
+  3) and must not import the Feast SDK. Note for shape (ii): this story's red team already
+  shows that a non-Feast client CAN address the store correctly, because
+  `infra/feast/online_redteam.py` computes a Redis key with Feast's own
+  `serialize_entity_key` — but it does so INSIDE the quarantine, so shape (ii) still owes
+  an argument about who owns the key encoding on the pod's side of the wall.
+* **What leg 2 must still produce per the kickoff**: THE parity through the new seam (the
+  16 hazards as RAW requests through the transformer isvc vs the same rows host-built
+  through the champion's isvc, **bar argued before**, M5-S3's 1e-6 precedent) · **p95 on
+  the transformer path at M5-S4's shape** (4 req/s / 60 s / concurrency 8, open loop),
+  labelled as the NEW boundary's number beside the old one (M5-S4 priced the moved
+  boundary at ~30 ms cold; a surprise is a finding) · teardown proven (the M6-S3 shadow
+  precedent) or the isvc deliberately left up with the reason stated · `@champion` 2
+  before and after · `make verify-m5` green at exit.
+* **The residual this leg named and did not close**: there is still **no alert on an empty
+  or stale online store**. Leg 2 is the story that creates the exposure, so it is the story
+  that owes the signal — `docs/decisions/ADR-012-feast-online-store.md` §"The residual"
+  says so, and `make feast-materialize`'s own empty-store refusal is what stands in
+  meanwhile.
+
+
 ## Session 2026-08-21 (bz) — M8-S3: point-in-time correctness, measured — an exact seam and the leak in one column
 
 ### State
