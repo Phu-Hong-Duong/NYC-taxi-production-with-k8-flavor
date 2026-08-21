@@ -91,6 +91,90 @@ def test_volume_is_invisible_to_psi_which_is_why_a_9_exists() -> None:
     assert drift._psi(reference, half_the_world_same_mix) == pytest.approx(0.0, abs=1e-12)
 
 
+# --- F-051: the volume denominator, and the property no test used to assert ---
+
+#: One synthetic March, quiet days first — the shape of a collapse, so that
+#: "zero out the k quietest days" is "make the shutdown k days deeper". The
+#: numbers are invented; the SHAPE (a long tail of near-empty days under a head
+#: of ordinary ones) is 2020-03's, which is what the property is about.
+_FIXTURE_MONTH = "2020-03"
+_FIXTURE_DAILY_TRIPS = tuple(
+    sorted([200_000 - 6_000 * i for i in range(21)] + [8_000, 6_500, 6_000, 5_500,
+                                                      5_400, 5_300, 5_200, 5_100,
+                                                      5_000, 4_800])
+)
+_FIXTURE_REFERENCE_PER_DAY = 243_024.43093922653  # the real reference, 43,987,422 / 181
+
+
+def _ratio_with_days(daily: tuple[int, ...], days: int) -> float:
+    return drift.trips_per_day(sum(daily), days) / _FIXTURE_REFERENCE_PER_DAY
+
+
+def test_calendar_days_is_read_off_the_calendar_and_not_off_the_data() -> None:
+    """The denominator of a whole month is a fact about the month, not about trips."""
+    assert drift.calendar_days(["2020-03"]) == 31
+    assert drift.calendar_days(["2020-02"]) == 29  # a leap February, and it matters
+    assert drift.calendar_days(["2019-02"]) == 28
+    # the champion's own reference window: 2019-01..06
+    assert drift.calendar_days([f"2019-0{m}" for m in range(1, 7)]) == 181
+
+
+def test_a_strictly_worse_collapse_produces_a_strictly_lower_volume_ratio() -> None:
+    """F-051, the property. Zero out progressively more of the quietest days —
+    a strictly WORSE shutdown — and the ratio A-9 reads must fall, every step.
+
+    This is the test that did not exist when A-9 shipped. The alert's whole claim
+    is that volume is the marginal PSI is blind to; a volume signal that can rise
+    as the collapse deepens does not make that claim.
+    """
+    days = drift.calendar_days([_FIXTURE_MONTH])
+    ratios = [
+        _ratio_with_days(_FIXTURE_DAILY_TRIPS[zeroed:], days)
+        for zeroed in range(0, 16)
+    ]
+    assert all(
+        later < earlier for earlier, later in zip(ratios, ratios[1:], strict=False)
+    ), f"the ratio did not fall monotonically: {ratios}"
+
+
+def test_the_bar_is_never_re_crossed_upward_as_the_collapse_deepens() -> None:
+    """The consequence a rule reads: once A-9's 0.50 bar is crossed, a deeper
+    collapse may not walk back across it. REV measured the old arithmetic doing
+    exactly that on the real month (8 days zeroed -> 0.5143, SILENT)."""
+    days = drift.calendar_days([_FIXTURE_MONTH])
+    fires = [
+        _ratio_with_days(_FIXTURE_DAILY_TRIPS[zeroed:], days) < 0.50
+        for zeroed in range(0, 16)
+    ]
+    first_firing = fires.index(True)
+    assert all(fires[first_firing:]), f"A-9 went silent again as the collapse deepened: {fires}"
+
+
+def test_the_observed_days_denominator_is_the_defect_and_stays_refuted() -> None:
+    """The negative half: the SAME series against the old `COUNT(DISTINCT date)`
+    denominator is non-monotonic. Pinned so the defect cannot quietly return by a
+    future edit that 'derives the days from the data' for tidiness."""
+    old = [
+        _ratio_with_days(_FIXTURE_DAILY_TRIPS[zeroed:], len(_FIXTURE_DAILY_TRIPS) - zeroed)
+        for zeroed in range(0, 16)
+    ]
+    assert any(later > earlier for earlier, later in zip(old, old[1:], strict=False)), (
+        "the observed-days denominator was expected to RISE somewhere as the collapse "
+        f"deepened — that rise is F-051. Got {old}"
+    )
+
+
+def test_a_truncated_extract_reads_as_a_volume_collapse_not_as_health() -> None:
+    """F-051's second face: 20 days of a 31-day month divided by 20 looks NORMAL.
+    Divided by the calendar it looks like what it is — a third of the month absent."""
+    twenty_days = _FIXTURE_DAILY_TRIPS[11:]
+    assert len(twenty_days) == 20
+    honest = _ratio_with_days(twenty_days, drift.calendar_days([_FIXTURE_MONTH]))
+    flattering = _ratio_with_days(twenty_days, len(twenty_days))
+    assert honest < flattering
+    assert honest == pytest.approx(flattering * 20 / 31)
+
+
 def _fake_report() -> drift.DriftReport:
     columns = [
         drift.ColumnDrift(

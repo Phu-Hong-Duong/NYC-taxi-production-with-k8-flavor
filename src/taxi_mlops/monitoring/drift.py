@@ -72,12 +72,37 @@ never saw" is a different sentence from "the mix shifted" and deserves not to be
 laundered into one number. The numeric column's bin EDGES come from the
 reference and only the reference — edges recomputed per current month would
 compare each month against a ruler that month drew.
+
+THE VOLUME DENOMINATOR IS THE CALENDAR, NOT THE DATA (F-051)
+-------------------------------------------------------------
+`volume_ratio` is trips-per-day over trips-per-day, and *which* days go in the
+denominator decides whether the signal is monotonic in the thing it watches.
+This module used to divide by `COUNT(DISTINCT observed date)`. Under that rule a
+day on which the city took NO trips leaves the numerator and the denominator
+**together**, so the ratio measures "how busy were the days that happened" —
+which RISES as a shutdown deepens. REV measured it at the M7 review by deleting
+2020-03's quietest days outright (a strictly worse shutdown): 0 zeroed -> 0.3913
+FIRES, 6 -> 0.4768 fires, **8 -> 0.5143 SILENT**, 14 -> 0.6641. The same
+arithmetic reads a truncated extract as healthy: a 20-of-31-day file is divided
+by 20.
+
+So the denominator is the **calendar days the window covers** —
+`calendar.monthrange` per month, the same authority `verify-m7` §3 already
+trusts for the mart's grain — and a day with no trips now costs the ratio
+exactly what it should. This is the implementation catching up to the calendar
+language `docs/slo_serving.md` §8.4 and A-9's own annotation already use
+("trips per day"); **the 0.50 bar did not move.** All three shipped scoring
+months hold every one of their calendar days, so their recorded ratios are
+unchanged — and the report now carries `*_observed_days` beside `*_days` so
+that claim is readable off the record instead of taken on trust.
 """
 
 from __future__ import annotations
 
+import calendar
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -223,14 +248,23 @@ class DriftReport:
     reference_months: list[str]
     reference_rows: int
     current_rows: int
-    #: Mean trips per DAY, both sides. Volume is the one marginal that cannot be
-    #: averaged away (F-045): a month can hold its every distribution and simply
-    #: contain half as much world.
+    #: Mean trips per CALENDAR DAY, both sides. Volume is the one marginal that
+    #: cannot be averaged away (F-045): a month can hold its every distribution
+    #: and simply contain half as much world.
     reference_trips_per_day: float
     current_trips_per_day: float
     volume_ratio: float
     columns: list[ColumnDrift]
     computed_at: str
+    #: The denominators, and the days that actually held a trip beside them
+    #: (F-051). `days` is what the ratio divides by — the calendar. `observed_days`
+    #: is a diagnostic: when it is SHORTER than `days`, the window contains days on
+    #: which nothing happened, which is exactly the event the old denominator
+    #: hid. Defaulted so a record written before F-051 still loads.
+    reference_days: int = 0
+    current_days: int = 0
+    reference_observed_days: int = 0
+    current_observed_days: int = 0
 
     # ---- the numbers the alert reads -------------------------------------
     @property
@@ -264,9 +298,19 @@ class DriftReport:
 
 
 def _psi(reference_shares: dict[str, float], current_shares: dict[str, float]) -> float:
-    """PSI over the union of bins, both sides floored so `ln` stays finite."""
+    """PSI over the union of bins, both sides floored so `ln` stays finite.
+
+    The union is walked in SORTED order, and that is not tidiness: float addition
+    is not associative, so an unordered `set` walk makes the last bit of every PSI
+    a function of Python's per-process string hash seed. Observed while re-running
+    this module at M8-S1 — 2020-02's `hour` moved 0.0015194096507573718 ->
+    0.001519409650757372 with nothing else changed. Nothing downstream reads the
+    17th digit, but this module's own docstring argues for exact SQL counts over a
+    sampled estimate on the grounds that a sampled number "changes between runs",
+    and a number that changes between runs is not the shape to defend that with.
+    """
     total = 0.0
-    for key in set(reference_shares) | set(current_shares):
+    for key in sorted(set(reference_shares) | set(current_shares)):
         ref = max(reference_shares.get(key, 0.0), SHARE_FLOOR)
         cur = max(current_shares.get(key, 0.0), SHARE_FLOOR)
         total += (cur - ref) * math.log(cur / ref)
@@ -279,13 +323,14 @@ def _top_moves(
     limit: int = 5,
 ) -> list[dict[str, float | str]]:
     moves = []
-    for key in set(reference_shares) | set(current_shares):
+    for key in sorted(set(reference_shares) | set(current_shares)):
         ref = reference_shares.get(key, 0.0)
         cur = current_shares.get(key, 0.0)
         moves.append(
             {"bin": str(key), "reference_share": ref, "current_share": cur, "delta": cur - ref}
         )
-    moves.sort(key=lambda m: abs(float(m["delta"])), reverse=True)
+    # Sort by size, then by bin name — a stable tie-break, for the same reason.
+    moves.sort(key=lambda m: (-abs(float(m["delta"])), str(m["bin"])))
     return moves[:limit]
 
 
@@ -333,11 +378,31 @@ def _shares(
     return _shares_categorical(connection, view, column, where)
 
 
-def _days(connection: duckdb.DuckDBPyConnection, view: str, where: str) -> int:
+def calendar_days(months: Sequence[str]) -> int:
+    """How many days the window COVERS — the denominator `volume_ratio` divides by.
+
+    F-051. Derived from the calendar (`YYYY-MM` -> `calendar.monthrange`) and never
+    from the data, because the data is the numerator: letting a quiet day leave both
+    sides at once makes the ratio non-monotonic in the collapse it exists to detect.
+    """
+    total = 0
+    for month in months:
+        year, mon = (int(part) for part in str(month).split("-")[:2])
+        total += calendar.monthrange(year, mon)[1]
+    return total
+
+
+def _observed_days(connection: duckdb.DuckDBPyConnection, view: str, where: str) -> int:
+    """Days on which at least one trip happened. A DIAGNOSTIC, never a denominator."""
     (count,) = connection.execute(
         f"SELECT COUNT(DISTINCT CAST(tpep_pickup_datetime AS DATE)) FROM {view} WHERE {where}"  # noqa: S608
     ).fetchone()
     return int(count or 0)
+
+
+def trips_per_day(rows: int, days: int) -> float:
+    """Rows over calendar days. Pure, so the monotonicity property can be tested."""
+    return rows / days if days else 0.0
 
 
 def compute_drift(
@@ -397,10 +462,10 @@ def compute_drift(
                 )
             )
 
-        ref_days = _days(connection, "trips_train", ref_where)
-        cur_days = _days(connection, "trips_scoring", cur_where)
-        ref_per_day = reference_rows / ref_days if ref_days else 0.0
-        cur_per_day = current_rows / cur_days if cur_days else 0.0
+        ref_days = calendar_days(reference_months)
+        cur_days = calendar_days([month])
+        ref_per_day = trips_per_day(reference_rows, ref_days)
+        cur_per_day = trips_per_day(current_rows, cur_days)
 
         return DriftReport(
             month=month,
@@ -413,6 +478,10 @@ def compute_drift(
             volume_ratio=(cur_per_day / ref_per_day) if ref_per_day else 0.0,
             columns=columns,
             computed_at=datetime.now(UTC).isoformat(timespec="seconds"),
+            reference_days=ref_days,
+            current_days=cur_days,
+            reference_observed_days=_observed_days(connection, "trips_train", ref_where),
+            current_observed_days=_observed_days(connection, "trips_scoring", cur_where),
         )
     finally:
         if owned:
@@ -479,10 +548,10 @@ def compute_split_drift(
                 )
             )
 
-        ref_days = _days(connection, "trips_train", "1=1")
-        cur_days = _days(connection, view, "1=1")
-        ref_per_day = reference_rows / ref_days if ref_days else 0.0
-        cur_per_day = current_rows / cur_days if cur_days else 0.0
+        ref_days = calendar_days(reference_months)
+        cur_days = calendar_days(months)
+        ref_per_day = trips_per_day(reference_rows, ref_days)
+        cur_per_day = trips_per_day(current_rows, cur_days)
 
         return DriftReport(
             month="+".join(months),
@@ -495,6 +564,10 @@ def compute_split_drift(
             volume_ratio=(cur_per_day / ref_per_day) if ref_per_day else 0.0,
             columns=columns,
             computed_at=datetime.now(UTC).isoformat(timespec="seconds"),
+            reference_days=ref_days,
+            current_days=cur_days,
+            reference_observed_days=_observed_days(connection, "trips_train", "1=1"),
+            current_observed_days=_observed_days(connection, view, "1=1"),
         )
     finally:
         if owned:
