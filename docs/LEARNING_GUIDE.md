@@ -3665,3 +3665,59 @@ red there too would be a gate that fails on any edit rather than on a wrong
 number. **Assert what must not fire. A drill that only predicts "something goes
 red" cannot be wrong.**
 
+
+---
+
+## M8-S1 leg 1 — the drift surface, made trustworthy (2026-08-21, EXEC/Opus 5)
+
+**The lesson worth carrying: a ratio whose denominator is derived from the data
+it measures is not monotonic in the thing it watches.** A-9 divided trips by
+*days on which trips happened*, so a day with no trips left the numerator and
+the denominator **together** — and the ratio therefore answered "how busy were
+the days that happened", which *rises* as a shutdown deepens. On the real COVID
+month, deleting the eight quietest days — a strictly worse world — walked the
+ratio from 0.3913 to **0.5143 and silence**. The doc and the alert's own
+annotation both said "trips per day", and nobody reading either would have
+guessed "per day on which trips occurred".
+
+Two habits come out of it. **Derive a denominator from something the numerator
+cannot move** — here the calendar, the same authority the milestone gate already
+trusted for the mart's grain. And **assert monotonicity as a property test**: a
+signal whose whole claim is that it sees the marginal another instrument is
+blind to has to be monotonic in that marginal, and no test asserted it because
+every month that had ever shipped happened to hold all of its days. The
+load-bearing test here is the negative one — *the OLD denominator must still be
+non-monotonic* — so the defect cannot come back as a tidy-up.
+
+**The counterfactual had to be re-run through the shipped code, and that is not
+pedantry.** REV's re-derivation deliberately does not import the module under
+review, which is exactly right for a review and exactly useless as proof of a
+fix: re-running it would print the same two columns whatever the code now does.
+The new script drives `drift.calendar_days` and `drift.trips_per_day` and keeps
+the old denominator beside the new one **as a control** — it FAILS if the old
+arithmetic stops reproducing the finding, because a table showing only the new
+series falling is consistent with a month that was never at risk.
+
+**Two halves of one fix, and each is dishonest alone.** F-050's pair: a
+PersistentVolume without an absence rule leaves nothing watching a real
+deletion; an absence rule without the volume pages on every laptop reboot and
+teaches its reader to ignore it. The boundary decided them together *because the
+recurrence had been measured* — three host restarts in 24 hours. That is the
+shape to copy: a frequency measurement turned a taste question into an
+arithmetic one.
+
+**And the drill that proved it earned its negative predictions.** The check that
+matters is not "A-11 fired" — it is that **A-10 stayed inactive through a total
+loss of the drift surface**. If A-10 had fired there, A-11 would be redundant
+and the finding would have been wrong. `time() - max(X)` over zero series is
+zero series, not a large number: any rule of the form *this value is too old* is
+silent about the value not existing.
+
+**The session's free lesson, found by its first command.** `make backup` had
+been running `make restore-drill` on every invocation since 2026-08-19, because
+the manifest's own prose named the target in backticks inside an unquoted
+heredoc. Gotcha #60, second occurrence — and the real finding is not "escape
+backticks", it is that **#60 came back because the lesson had no test**. One
+exists now, repo-wide over every heredoc in `scripts/*.sh` and the Makefile, and
+red-teamed by reintroducing the exact two lines. A gotcha that can only be
+remembered will be forgotten by the session that was not there.

@@ -1501,3 +1501,37 @@ the seed line are earned by THIS project.
     cannot satisfy: the gate must never IMPORT the callable it inspects
     (M7-S5 leg 2).
 
+
+100. **A ratio whose DENOMINATOR is derived from the data it measures is not
+    monotonic in the thing it watches.** A-9 reads trips-per-day this month over
+    trips-per-day in the reference, and the drift job computed the days as
+    `COUNT(DISTINCT observed date)`. A day on which the city took no trips
+    contributes no row, so it left the numerator **and the denominator
+    together** — and the ratio therefore measured *how busy were the days that
+    happened*, which RISES as a shutdown deepens. Measured on the real COVID
+    month by deleting its quietest days outright, a strictly worse world:
+    0.3913 (fires) → 0.4768 (fires) → **0.5143 (SILENT)** → 0.6641. The same
+    arithmetic reads a truncated 20-of-31-day extract as healthy volume. The
+    doc and the alert's own annotation both said "trips per day", and no reader
+    of either would have guessed "per day on which trips occurred". Two rules
+    follow: **derive a denominator from something the numerator cannot move**
+    (here the calendar), and **assert the MONOTONICITY as a property test** — a
+    signal whose whole claim is that it sees a marginal must be monotonic in
+    that marginal, and no test asserted it because every shipped month happened
+    to hold all its days (F-051, raised by REV at the M7 review, fixed M8-S1).
+
+101. **`make backup` was running `make restore-drill`, because the manifest's
+    own prose named it in backticks inside an unquoted heredoc.** This is #60
+    for the SECOND time — and the tell was the same shape both times: somebody
+    else's output spliced into the middle of a generated artifact (there, a pod
+    manifest that failed to parse on an unrelated line; here, five words of
+    `make`'s `Entering directory` chatter sitting mid-sentence in `MANIFEST.txt`,
+    a lifeboat artifact nobody reads until an incident). The blast radius was
+    bounded by luck rather than by design: the substituted drill creates and
+    drops scratch databases in the ONE Postgres and was being launched against a
+    backup directory still being written; it happened to exit early. **The real
+    lesson is not "escape backticks" — it is that #60 came back because the
+    lesson had no test.** One now exists, repo-wide, over every heredoc in
+    `scripts/*.sh` and the Makefile, skipping quoted delimiters and failing on an
+    unescaped backtick in the body: a gotcha that can only be remembered will be
+    forgotten by the session that was not there (F-053, M8-S1).
