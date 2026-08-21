@@ -1,0 +1,47 @@
+{
+  "absence": {
+    "must_fire": {
+      "after_about_seconds": 600,
+      "alert": "DriftMetricsAbsent",
+      "because": "the rule has for: 10m and the wipe removes every series the selector names, so `absent(...)` becomes 1 within a scrape interval and stays.",
+      "confidence": "high",
+      "must_reach_alertmanager": true,
+      "signal": "A-11"
+    },
+    "must_not_fire": [
+      {
+        "alert": "DriftMetricsStale",
+        "because": "THIS IS THE POINT OF A-11. A-10 reads `time() - max by (month)(stamp)`, and over zero series that expression has no value \u2014 so the rule stays inactive through a total loss of the drift surface. If A-10 fires here, A-11 is redundant and the finding was wrong.",
+        "signal": "A-10"
+      },
+      {
+        "alert": "ScoringVolumeCollapse",
+        "because": "no volume series exists during the wipe, so A-9 has nothing to compare. An empty board renders exactly like a calm one \u2014 restated as a prediction because it is the failure this pair exists to end.",
+        "signal": "A-9"
+      }
+    ]
+  },
+  "clearing": {
+    "claim": "re-pushing the real 2020 numbers clears A-11 within a scrape interval, and A-9 returns for 2020-03 only \u2014 the board ends carrying the truth, not a convenient silence.",
+    "confidence": "high",
+    "volume_ratios_about": {
+      "2020-01": 0.83,
+      "2020-02": 0.88,
+      "2020-03": 0.39
+    }
+  },
+  "not_touched": [
+    "@champion (read, never written)",
+    "the InferenceService and the wire",
+    "every threshold in infra/monitoring/alerting_rules.yml",
+    "the settled data pins"
+  ],
+  "pair_decided_at": "the M7->M8 boundary (F-050 (a)+(b) together)",
+  "survival": {
+    "because": "persistentVolume.enabled plus --persistence.file=/data/pushgateway.data, checkpointed every 10s, and pushgateway also writes on a clean SIGTERM. Before this story the same delete emptied the store completely \u2014 that is F-050, measured three times on host restarts.",
+    "claim": "deleting the pushgateway pod destroys the pod and NOT the data: the same number of taxi_drift_* samples is readable from a different pod object.",
+    "confidence": "high",
+    "expected_restart_seconds_below": 180
+  },
+  "written_before": "the gateway's pod is deleted and before any series is wiped"
+}

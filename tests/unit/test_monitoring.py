@@ -136,9 +136,21 @@ def test_the_footprint_choices_are_the_argued_ones(prom_values):
         "the drift job is a batch process that is gone before any scrape interval "
         "elapses — M7-S3's metrics have nowhere to live without the gateway"
     )
-    assert prom_values["prometheus-pushgateway"]["persistentVolume"]["enabled"] is False, (
-        "the gateway's contents are re-derivable by re-running the drift job over "
-        "DVC-pinned data, so a lost PVC costs one command"
+    # ON from M8-S1 (F-050 (a)), and the argument it replaces is kept here because
+    # it was true and was still the wrong call: "the contents are re-derivable by
+    # re-running the drift job over DVC-pinned data, so a lost PVC costs one
+    # command" — which leaves out WHO RUNS THE COMMAND. The pod dies on every host
+    # restart (measured three times in 24h), and between the restart and somebody
+    # noticing, A-10 cannot fire because `time() - max(X)` over zero series is
+    # zero series. A one-command repair nobody is prompted to run is not a repair.
+    gateway = prom_values["prometheus-pushgateway"]
+    assert gateway["persistentVolume"]["enabled"] is True, (
+        "F-050: an emptyDir gateway loses the whole drift surface on every pod restart, "
+        "and the rule that exists to catch a missing drift number cannot see an absent one"
+    )
+    assert any("--persistence.file=" in arg for arg in gateway["extraArgs"]), (
+        "a mounted volume with no --persistence.file is decoration: pushgateway keeps its "
+        "metrics in memory unless one names a file, and the chart mounts the volume either way"
     )
     assert "serviceAnnotations" not in prom_values["prometheus-pushgateway"], (
         "annotating the gateway would get it scraped by the chart's generic "

@@ -2431,6 +2431,93 @@ can never disagree (the port-family twins lesson, applied before it bit).
   the sentence is legitimate — so the property changed: **the gate must never
   IMPORT the callable it inspects.**
 
+## The drift surface, made trustworthy (M8-S1 leg 1) — one denominator, one deleted file, one volume, one new signal
+- **A-9's volume ratio divides by CALENDAR days now, and the bar did not move
+  (F-051).** The old denominator was `COUNT(DISTINCT observed date)`, so a day
+  with no trips left the numerator **and the denominator together** and the ratio
+  measured *how busy were the days that happened* — which RISES as a shutdown
+  deepens. On the real COVID month, deleting the eight quietest days (a strictly
+  worse world) walked it **0.3913 → 0.5143, SILENT**. `drift.calendar_days`
+  (`calendar.monthrange`, the authority `verify-m7` §3 already trusts) is the
+  denominator; `_observed_days` survives as a REPORTED diagnostic, so "every day
+  was present" is readable off the record. **The three recorded ratios are
+  byte-unchanged** (0.8336 · 0.8776 · 0.3913 — no diff line at all). This is
+  implementation catching up to the calendar language §8.4 and the annotation
+  already used (F-041's family), not a threshold change and not a PO fork.
+- **The deliverable is the PROPERTY, and its load-bearing half is negative.**
+  Four tests: a strictly worse collapse must lower the ratio at every step · a
+  crossed bar may not be re-crossed upward · a 20-of-31-day extract reads as a
+  collapse, not as health · **and the OLD denominator must still be
+  non-monotonic**, pinned so the defect cannot return through an edit that
+  "derives the days from the data" for tidiness. `make drift-monotonicity` re-runs
+  REV's counterfactual **through the shipped functions** — the half
+  `rev_rederive_m7.py` structurally could not do, since it deliberately does not
+  import the module under review — and keeps the old column beside the new one as
+  a CONTROL, failing if the old arithmetic stops reproducing the finding.
+- **PSI was not deterministic and now is.** `_psi` summed an unordered set, so
+  float non-associativity made the 17th digit a function of the process hash seed
+  (observed live: `0.0015194096507573718` → `…72`). Nothing reads that digit — but
+  the module argues for exact SQL counts over sampling on the grounds that a
+  sampled number "changes between runs", and that argument cannot be made by a
+  number that changes between runs. Sorted union; two consecutive runs are now
+  identical apart from `computed_at`.
+- **`configs/drift.yaml` is DELETED and the diagram that cited it is corrected
+  (F-052).** It was read by nothing and both its numbers were wrong — reference
+  `2019-08` (the *test* split, the thing `drift.py`'s docstring argues against)
+  and a 0.5 *share* bar against A-8's live PSI ≥ 0.10 on ≥2 of 5. Not inert:
+  `docs/m7_flow.html` rendered both under "Sources of truth". Both halves landed
+  together — stamp, drift-check node, the Gate-2 diamond (now A-8's and A-9's real
+  conditions), signature B's table (now carrying the MEASURED outcome), footer,
+  with a dated note leaving visible what the page used to claim. **F-013's knob
+  tuple is widened** with `reference_month`/`drift_share_threshold`/
+  `psi_threshold`/`volume_ratio_threshold`: F-013 is a law about **bars**, not
+  about the promotion gate, and a drift bar walked through five promotion names
+  for a whole milestone.
+- **The gateway is a stateful tenant now, and its ABSENCE is a page (F-050
+  (a)+(b), proved together).** `make backup` first (`2026-08-21T05-00-56Z`, 6
+  databases + 418 objects, 1.7 GiB). The PV plus
+  `--persistence.file=/data/pushgateway.data --persistence.interval=10s`, all read
+  live off the subchart (its `strategy.type` is ALREADY `Recreate`, which a
+  node-local RWO volume needs — F-033 avoided by construction). **A mounted volume
+  with no `--persistence.file` is decoration** — pushgateway keeps metrics in
+  memory unless one names a file, and the chart mounts the volume either way; that
+  is its own test. **A-11 `DriftMetricsAbsent`** (`absent(...)`, `for: 10m`,
+  SLO-D4) is the other half, because **A-10 cannot fire on an absent series**:
+  `time() - max by (month)(X)` over zero series is *zero series*, not a large
+  number. A-10 carries a `blind_spot` annotation saying so at the rule.
+- **Neither half is honest alone, and the recurrence measurement is what decided
+  it**: the volume without the rule leaves nothing watching a real deletion; the
+  rule without the volume pages on every laptop reboot and trains its reader to
+  ignore it. **`make drift-persistence-drill` PASSED 16/16**, prediction committed
+  first and pinned by a test: 48 samples survived a `kubectl delete pod` onto a
+  **different pod object, ready in 13.12 s** (the same read returned 0 three times
+  on an emptyDir); the deliberate wipe fired **A-11 at 625.1 s** against a 600 s
+  sustain and reached **Alertmanager**, while **A-10 AND A-9 both stayed inactive
+  through a total loss of the surface** — the negative predictions, and A-10's
+  silence is A-11's whole reason to exist; the re-push cleared A-11 in **37.8 s**
+  and A-9 returned for 2020-03, so the board ends carrying the truth.
+- **F-046 closes on a sentence, and the sentence commits the program to
+  something.** `docs/slo_serving.md` §8.1 now states the WINDOW's blindness beside
+  PSI's — *a regime change confined to part of a month is invisible to SLO-D1 at
+  monthly grain regardless of columns* — names the reliance that makes accepting
+  it honest (A-9, monotonic since F-051 landed FIRST in the same story) and
+  records the residual: **a shape change with NO volume change would be missed by
+  both rules**. The daily window is named and deliberately NOT scheduled — it
+  needs its own 2019 DAILY headroom leg, and choosing a window after seeing which
+  window would have fired is walking a threshold by another route.
+- **F-053, found by this story's own first command and closed in it: `make
+  backup` was RUNNING `make restore-drill`.** The manifest heredoc's delimiter is
+  unquoted (its body interpolates `$(human …)`) and the M6-S5 sentence named its
+  target in backticks — command substitution, with `make`'s `Entering directory`
+  chatter spliced mid-sentence into a lifeboat artifact. Dated by the artifacts:
+  2026-08-19 clean, 2026-08-20 and 2026-08-21T04-53-42Z polluted. It never
+  completed (the drill's record still has its 2026-08-19 mtime) — luck, not
+  design, since `restore_rehearsal.py` creates and drops scratch databases in the
+  ONE Postgres. **Gotcha #60's second occurrence, and the real finding is that
+  the lesson had no test**; it has a repo-wide one now (every heredoc in
+  `scripts/*.sh` + the Makefile), red-teamed RED on the exact two lines. The
+  polluted manifest is KEPT as evidence beside its clean control.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2585,6 +2672,8 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Drift for a scoring month, issuing NO verdict (M7-S3) | `make drift DRIFT_ARGS="--months YYYY-MM [--push]"` (`--push` needs a gateway; `make drift DRIFT_GATEWAY="--pushgateway http://localhost:9098"` for a port-forward) | VERIFIED 2026-08-20 (M7-S3): exact PSI from DuckDB value counts (no sampling, so the number does not move when nothing moved) over six monitored columns — five INPUTS and, separately, the TARGET, which is excluded from the alert's share **by name** because inputs-steady-plus-target-moved and both-moved are opposite diagnoses. **It prints no verdict and contains no threshold**: the bar lives in the SELECTOR of one Prometheus rule, and an **AST** test (never a grep — these modules argue their own design at length, #53/#68) fails if a bar-shaped constant appears anywhere under `src/taxi_mlops/monitoring/`. Observed 2020-01/02/03: max input PSI **0.0103 / 0.0087 / 0.0217**, volume ratio **0.8336 / 0.8776 / 0.3913**, `unseen_share` **0.000% on every column in every month** |
 | Push 2020-01..03 and watch the rules decide, prediction FIRST (M7-S3) | `make drift-drill` (`DRILL_ARGS=--dry-run` writes the prediction and computes nothing; ~12 min, **no injection and no outage**) | VERIFIED 2026-08-20 (M7-S3): **PASSED.** Unlike M6's drill this one injects NOTHING — the condition is real 2020 data already in the repo — so there is nothing to stop and nothing to undo. **A-9 `ScoringVolumeCollapse` pending T+31.5 s → FIRING T+331.5 s for `month='2020-03'` ONLY**, reaching **Alertmanager**; A-9 for 2020-01/02 and all seven other watched rules **inactive as predicted**; the pre-registered open question — *does A-8 fire at monthly grain?*, tagged `confidence: low` — answered **correctly (it does not)**. `@champion` **2** before and after. **Phase 0 resets the gateway** (it has no expiry, so a second run would start with A-9 already firing and could never observe a transition) and **phase 7 proves it CLEARS then restores the truth**: the 2020-03 group deleted, A-9 inactive **40.0 s** later, real numbers pushed straight back — the board ends carrying the fact that March 2020 lost 61% of its trips, because latching it off to tidy a transcript would be publishing a false board. **Its first run went RED over a defect in its own JUDGE**, not the system: `fired_at` was keyed on the alert NAME while A-9's prediction is per **(alert, month)** — three statements about one rule — so it reported `A-9 fired and was predicted INACTIVE` over a system behaving exactly as predicted (#67's family). The repair reads the per-series `alerts` array, which is **strictly stronger**: a bar so low that an ordinary January trips it passes a name-level check and fails this one. The PREDICTION object was untouched, and a test pinning it to the committed JSON would have gone red if it had not been |
 | Evidently beside our SQL PSI — a second instrument on the same question (M7-S3) | `make drift-witness WITNESS_ARGS="--months 2020-01 2020-03"` (a READER: deploys nothing, pushes nothing, touches no alert) | VERIFIED 2026-08-20 (M7-S3): Evidently **0.7.21** on a **seeded** 200,000-row sample per side (seed recorded, because an unreproducible number in a record is a number nobody can check twice). **On the question the alert asks — did any INPUT column drift? — the two instruments AGREE for both months: none did**, ours by PSI < 0.10 and theirs by Wasserstein-normed/Jensen-Shannon at their own defaults (the statistic each column got is recorded in `methods`, because that is exactly why the NUMBERS must not be compared). Read sceptically, which is what a second witness is for: Evidently flags the TARGET at **0.1014 in January and 0.1008 in March** — the same value in an ordinary month and in the collapse, both barely over its 0.1 default — so it does not distinguish them either, and "Evidently detected drift in March" would be true and misleading. **Its first run reported total disagreement and nothing had disagreed**: the parser looked for `metric_id` and `status`, and the payload carries `metric_name`, a structured `config` and `value`. **A second witness that cannot be read reports maximum disagreement** — the most alarming thing it could say and the least true |
+| F-051's counterfactual, through the SHIPPED arithmetic (M8-S1) | `make drift-monotonicity` (`F051_ARGS="--month YYYY-MM"`; a READER — opens the analyst layer, writes nothing, pushes nothing, takes A-9's bar by PARSING the rules file) | VERIFIED 2026-08-21 (M8-S1 leg 1): 2020-03, deleting the k quietest days — a strictly worse shutdown each step — **against calendar days the ratio falls at every step, 0.3913 → 0.3583, and never re-crosses the bar**; against the OLD observed-days denominator the same series **ROSE at every k and went SILENT from k=8** (0.4768 · **0.5143** · 0.6641 — REV's numbers reproduced). The old column is the CONTROL, not decoration: the script FAILS if it stops reproducing F-051, because a table showing only the new series falling is consistent with a month that was never at risk |
+| F-050's pair, proved: the store survives a pod, its absence pages (M8-S1) | `make drift-persistence-drill` (`PERSISTENCE_ARGS=--dry-run` writes the prediction and deletes nothing; ~18 min, **no outage** — the only destructive act is deleting the drift SERIES, and phase 4 pushes the real ones back) | VERIFIED 2026-08-21 (M8-S1 leg 1): **PASSED 16/16**, prediction committed BEFORE the run and pinned by a unit test. PVC **Bound 128Mi** and the container's args carry `--persistence.file` (a mounted volume with no flag is decoration) · 48 samples pushed, pod deleted, **a DIFFERENT pod object (uid `bf053286…` → `2a1591bc…`) ready in 13.12 s serving the SAME 48** — the same read returned **0** three times on an emptyDir (F-050) · wipe → **A-11 FIRED at 625.1 s** against its 600 s sustain and **reached Alertmanager**, while **A-10 stayed inactive through a TOTAL loss of the drift surface** (its blind spot demonstrated, not asserted — and the whole argument for A-11) and A-9 went quiet with it · re-push → **A-11 cleared in 37.8 s**, A-9 back for 2020-03. `@champion` **2**, read never written |
 | A-4's two series: the wire vs the registry (M7-S3, F-035) | `make push-serving-version A4_ARGS="--no-push"` reads both and prints; without it, pushes | VERIFIED 2026-08-20 (M7-S3): `served: 2` read off a **real prediction** (the version is stamped on the ANSWER — `GET /v2/models/nyc-taxi-eta` reports `versions: []` on this runtime, M5-S2) and `registry: 2` through F-009's one resolver → `agree`, so A-4 correctly stays inactive. F-034 said there were not two series to compare; there are now. **It REFUSES to push when either side is unreadable** rather than pushing a placeholder zero — a gauge of 0 against a registry gauge of 2 is a MISMATCH, so a placeholder would page an on-call for an unreadable endpoint, with the alert right about its own arithmetic and wrong about the world. **Honest cut: the metric SOURCE lands here, the CADENCE lands with M7-S4's scheduler**, which is why A-4's rule carries a freshness clause (`< 1800`) — a stale pushed pair agrees with itself forever |
 | Count a client-side refusal (M7-S3, F-035) | `make quote QUOTE_ARGS="--at 2031-07-04T09:15:00 --pu 132 --do 48 --push-metrics <gateway>"` | VERIFIED 2026-08-20 (M7-S3): the refusal exits 2 as always AND increments `taxi_quote_refusals_total`; after two past-horizon quotes `increase(...[1h])` read **1.2141** and **A-3's client half FIRED** (`QuoteHorizonRefusals`, pending → firing in 60 s) — the alert M6-S2 measured as impossible on this stack (`22 → 22` on the infer counter, because F-019 refuses in the CLIENT before a request exists). **Off by default**, because the gateway has no hostPort and a quote must not fail its metrics leg on a laptop with no port-forward; `record_refusal` never raises, so a rider cannot lose a quote to a down gateway. **Honest limitation recorded**: `increase()` needs the counter to move *while Prometheus is watching*, so the guarantee is "a horizon expiry produces a stream of refusals and will page", not "every single refusal will" — which is why `verify-m6`'s coverage check stays as the complement that catches the expiry BEFORE the first rider meets it |
 | The retrain challenger, re-derived at its own scale (M7-S4, F-020) | `make retrain` (`RETRAIN_ARGS="--plan-only"` is the seconds-long provenance check that fits nothing; `--train-months YYYY-MM` is the SAMPLED, gate-disqualified path). **Exit 0 = a verdict that passed · 1 = refused · 2 = the challenger could not be built · 3 = no verdict was issued · 4 = the run CRASHED after it began (added M7-S4's completion leg, gotcha #96: the first full-data run's traceback exited with a status this program had already given a meaning, so its `.status` file told the next session "the challenger could not be built" about a challenger that had been built, fitted for 28 minutes and judged — an unhandled crash must not be able to wear a verdict's clothes, and note that a bare Python exception exits 1, which here means REFUSED)**. **Those are the CLI's codes and they DO NOT survive `make detach` — gotcha #97**: GNU make exits **2** for any failed recipe (measured, `tests/unit/test_detach_exit_codes.py`), so the vocabulary collapses to {0, 2} at the launcher and 2 collides with "could not be built". **Do not read a verdict out of a `.status` file — read the RECORD, and treat its ABSENCE as the crash signal**; the recipe also echoes the CLI's own code into the log and re-exits with it | VERIFIED 2026-08-20 (M7-S4), plan half: `models:/nyc-taxi-eta@champion -> version 2 (auto-lgbm-v2)`, feature set `v2` read off the version's own tag, and the transfer resolved from three TRACKED artifacts — **`min_data_in_leaf` 1293 -> 8620**, *1 row in 5,103 where it was chosen · 1 in **34,020** unchanged at the refit's scale (F-020's own number, recomputed from the records) · 1 in 5,103 after* — with `bagging_fraction, cat_smooth, feature_fraction, lambda_l1, lambda_l2, learning_rate, max_cat_threshold, num_leaves` **passed through and RECORDED as passed through**. Round budget **500 configured / 800 inherited -> 2400**, and the fit reports `ended_by` (`early_stopping` | `round_cap`) because the champion's own refit ended 791/800 and a metrics table cannot show that. It **cannot promote**: `promote=False` unconditional, no parameter to change it (AST-tested). Transcript: `docs/retrain_m7_transcripts.md` §2. **The FULL-DATA half, measured 2026-08-20T05:59Z on 43,987,422 train rows and judged on the untouched holdout: `retrain-rescaled-v2` KPI-09 **3.2412** / KPI-10 **81.568%** against the serving champion's **3.2403** / **81.577%** → **REFUSE**** — floor conditions passed (+3.30% against a 2.00% bar, KPI-10 +0.835 points), both F-011 incumbent conditions failed. **So F-020's correction is worth 54 milliseconds of mean error over 5,950,708 rows**, and that is the result rather than a disappointment: the finding was about REASONING — a knob applied at a scale it did not mean anything at — and the measurement says the champion was not materially harmed by it. **Half two is discharged in the direction that could not be arranged**: `ended_by: early_stopping` at **779 of the re-derived 2400-round cap**, 1,621 rounds unspent, so this fit is unambiguously NOT truncated where the champion's 791/800 cannot tell converged from truncated. **The verdict also feeds the open fork**: the refusal is −0.03% against an incumbent condition with NO margin, so AWAITING_PO 2026-08-18-1 has now seen that condition move the pointer on +0.63% (M3-S5) and hold it on −0.03% — had the arithmetic landed 54 ms the other way, the pre-registered gate would have spent the whole transition tail on it. **Attempt 1 reached this verdict and crashed writing it down** (`docs/retrain_m7.md` §7.1, gotchas #95/#96); **attempt 2 (2026-08-20T06:43:37Z, 1,618.4 s) reproduced every number and wrote the record** — see the next row |

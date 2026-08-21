@@ -4,7 +4,7 @@
       "column": "hour",
       "current_bins": 24,
       "kind": "categorical",
-      "psi": 0.0015194096507573718,
+      "psi": 0.0015194096507573727,
       "reference_bins": 24,
       "top_moves": [
         {
@@ -84,7 +84,7 @@
       "column": "PULocationID",
       "current_bins": 259,
       "kind": "categorical",
-      "psi": 0.00872485779174562,
+      "psi": 0.008724857791745633,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -124,7 +124,7 @@
       "column": "DOLocationID",
       "current_bins": 261,
       "kind": "categorical",
-      "psi": 0.008583099325734216,
+      "psi": 0.008583099325734209,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -164,7 +164,7 @@
       "column": "passenger_count",
       "current_bins": 11,
       "kind": "categorical",
-      "psi": 0.005152203160864912,
+      "psi": 0.005152203160864911,
       "reference_bins": 11,
       "top_moves": [
         {
@@ -204,7 +204,7 @@
       "column": "trip_duration_minutes",
       "current_bins": 13,
       "kind": "numeric",
-      "psi": 0.007516433450739668,
+      "psi": 0.007516433450739667,
       "reference_bins": 13,
       "top_moves": [
         {
@@ -241,12 +241,15 @@
       "unseen_share": 0
     }
   ],
-  "computed_at": "2026-08-20T04:38:33+00:00",
+  "computed_at": "2026-08-21T04:48:09+00:00",
+  "current_days": 29,
+  "current_observed_days": 29,
   "current_rows": 6185309,
   "current_trips_per_day": 213286.5172413793,
-  "max_input_psi": 0.00872485779174562,
+  "max_input_psi": 0.008724857791745633,
   "month": "2020-02",
   "reference": "train-2019",
+  "reference_days": 181,
   "reference_months": [
     "2019-01",
     "2019-02",
@@ -255,6 +258,7 @@
     "2019-05",
     "2019-06"
   ],
+  "reference_observed_days": 181,
   "reference_rows": 43987422,
   "reference_trips_per_day": 243024.43093922653,
   "volume_ratio": 0.8776340568603828

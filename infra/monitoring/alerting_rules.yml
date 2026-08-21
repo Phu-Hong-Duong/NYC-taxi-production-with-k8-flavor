@@ -407,6 +407,69 @@ groups:
             none, deliberately. The condition already contains a 40-day
             duration; adding a `for:` would mean 40 days plus five minutes,
             which reads like care and is noise.
+          blind_spot: >-
+            A-10 cannot fire on an ABSENT series. `time() - max by (month)(X)`
+            over zero series is zero series, not a large number — so a gateway
+            that lost its store produces no stale metric, it produces no metric,
+            and this rule sits inactive while the board renders empty. That is
+            A-11's job, and the two are complements: A-10 catches a job that
+            stopped running, A-11 catches a board that stopped existing.
+
+      # --- A-11 · the drift surface itself is gone ---------------------------
+      # SLO-D4, and it exists because F-050 measured A-10's blind spot on this
+      # machine three times in 24 hours.
+      #
+      # WHY `absent()` AND NOT A THRESHOLD. There is no number to compare: the
+      # failure is that the series does not exist. A pushgateway restart used to
+      # empty the store (emptyDir), and every drift panel went blank while every
+      # rule stayed inactive — the shape M6-S1 paid for on the Grafana boards
+      # (gotcha #78): an empty rendering is what a QUIET system looks like, so
+      # nothing may treat "no data" as the good state.
+      #
+      # THIS RULE IS ONLY HONEST BECAUSE THE GATEWAY NOW HAS A VOLUME. The pair
+      # was decided together at the M7->M8 boundary: with an emptyDir this fires
+      # on every ordinary host reboot and teaches its reader to ignore it; with
+      # the PersistentVolume it fires when somebody DELETED something — a cluster
+      # rebuild, a wiped PVC, a namespace removed. Landing (b) without (a) would
+      # have been a page for a laptop being switched off.
+      - alert: DriftMetricsAbsent
+        expr: |
+          absent(taxi_drift_last_run_timestamp_seconds{job="taxi-drift"})
+        for: 10m
+        labels:
+          severity: warning
+          signal: A-11
+          slo: SLO-D4
+        annotations:
+          summary: "No drift series exist at all — the drift surface is gone, not quiet"
+          why: >-
+            docs/slo_serving.md §8.5a. The gateway is a bulletin board: a pushed
+            metric persists until it is overwritten or the store is lost. A-10
+            watches the STAMP and therefore requires the stamp to exist; this
+            rule watches the existence. Measured cost of not having it (F-050):
+            the store emptied on a host restart on 2026-08-20 and again on
+            2026-08-21, and on both occasions every drift rule was inactive and
+            every drift panel blank, which is indistinguishable from a month in
+            which nothing drifted.
+          sustain: >-
+            for 10m, and the number is argued from the gateway's own restart
+            time rather than from taste. A pod replacement re-serves the same
+            series as soon as it is Ready — measured in this repo at ~30s
+            (automation/runs/m8-drift/persistence.json) — so 10m is roughly an
+            order of magnitude of headroom over the only benign cause. Longer
+            (an hour, matching A-10's monthly-cadence logic) would be equally
+            defensible against the harm side; 10m is preferred because a wiped
+            board is cheap to notice and expensive to leave, and because a drill
+            has to be able to watch it fire.
+          runbook: >-
+            Check the gateway pod and its PVC first
+            (`kubectl -n monitoring get pod,pvc | grep pushgateway`). If the
+            volume survived and the pod is Ready, the series are gone for a
+            reason worth understanding. The one-command repair, once the cause
+            is known, is to re-push the real numbers:
+            `make drift DRIFT_ARGS="--months 2020-01 2020-02 2020-03 --push"`
+            against a port-forwarded gateway. Do NOT silence this by deleting
+            the rule — an empty board and a calm world render identically.
 
       # --- A-3 (client half) · the horizon expired ---------------------------
       # F-035's first landing. See docs/slo_serving.md §6's dated update.

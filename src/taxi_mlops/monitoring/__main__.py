@@ -134,6 +134,11 @@ def _print_report(report: DriftReport) -> None:
         f"{report.current_trips_per_day:,.0f} trips/day against the reference's "
         f"{report.reference_trips_per_day:,.0f} · volume ratio {report.volume_ratio:.4f}"
     )
+    print(
+        f"[drift]   denominator: {report.current_days} CALENDAR day(s), of which "
+        f"{report.current_observed_days} held a trip (F-051: a day with no trips must "
+        "not leave the denominator with the numerator)"
+    )
     for column in report.columns:
         role = "TARGET" if column.column == "trip_duration_minutes" else "input "
         print(

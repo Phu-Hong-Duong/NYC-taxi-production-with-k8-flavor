@@ -4,7 +4,7 @@
       "column": "hour",
       "current_bins": 24,
       "kind": "categorical",
-      "psi": 0.009790060767708815,
+      "psi": 0.009790060767708813,
       "reference_bins": 24,
       "top_moves": [
         {
@@ -44,7 +44,7 @@
       "column": "dayofweek",
       "current_bins": 7,
       "kind": "categorical",
-      "psi": 0.02166690145034156,
+      "psi": 0.021666901450341558,
       "reference_bins": 7,
       "top_moves": [
         {
@@ -84,7 +84,7 @@
       "column": "PULocationID",
       "current_bins": 259,
       "kind": "categorical",
-      "psi": 0.014301722476400928,
+      "psi": 0.014301722476400918,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -124,7 +124,7 @@
       "column": "DOLocationID",
       "current_bins": 261,
       "kind": "categorical",
-      "psi": 0.015114526743265333,
+      "psi": 0.01511452674326533,
       "reference_bins": 263,
       "top_moves": [
         {
@@ -164,7 +164,7 @@
       "column": "passenger_count",
       "current_bins": 11,
       "kind": "categorical",
-      "psi": 0.017085618281808154,
+      "psi": 0.017085618281808157,
       "reference_bins": 11,
       "top_moves": [
         {
@@ -204,7 +204,7 @@
       "column": "trip_duration_minutes",
       "current_bins": 12,
       "kind": "numeric",
-      "psi": 0.012484979364000852,
+      "psi": 0.012484979364000854,
       "reference_bins": 13,
       "top_moves": [
         {
@@ -241,12 +241,15 @@
       "unseen_share": 0
     }
   ],
-  "computed_at": "2026-08-20T04:38:35+00:00",
+  "computed_at": "2026-08-21T04:47:52+00:00",
+  "current_days": 31,
+  "current_observed_days": 31,
   "current_rows": 2948237,
   "current_trips_per_day": 95104.41935483871,
-  "max_input_psi": 0.02166690145034156,
+  "max_input_psi": 0.021666901450341558,
   "month": "2020-03",
   "reference": "train-2019",
+  "reference_days": 181,
   "reference_months": [
     "2019-01",
     "2019-02",
@@ -255,6 +258,7 @@
     "2019-05",
     "2019-06"
   ],
+  "reference_observed_days": 181,
   "reference_rows": 43987422,
   "reference_trips_per_day": 243024.43093922653,
   "volume_ratio": 0.3913368667803675

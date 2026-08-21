@@ -1,0 +1,152 @@
+{
+  "absence": {
+    "a10_state_during": "inactive",
+    "a9_state_during": "inactive",
+    "fired_after_seconds": 625.1,
+    "reached_alertmanager": true,
+    "wiped_at": "2026-08-21T05:14:34+00:00"
+  },
+  "checks": [
+    {
+      "message": "the gateway has a BOUND PersistentVolumeClaim: ['prometheus-prometheus-pushgateway']",
+      "ok": true
+    },
+    {
+      "message": "the running container carries --persistence.file (args: [\"--persistence.file=/data/pushgateway.data\",\"--persistence.interval=10s\"]) \u2014 a mounted volume with no flag is decoration, because pushgateway keeps metrics in memory unless one names a file",
+      "ok": true
+    },
+    {
+      "message": "the gateway holds 48 taxi_drift_* sample(s) after the push",
+      "ok": true
+    },
+    {
+      "message": "a DIFFERENT pod object is serving (bf053286\u2026 -> 2a1591bc\u2026), ready 13.12s after the delete \u2014 identity, never name (M4-S5)",
+      "ok": true
+    },
+    {
+      "message": "the NEW pod serves the SAME 48 sample(s) the old one held (before=48) \u2014 the store survived the pod. On an emptyDir this read 0, three times, on host restarts (F-050)",
+      "ok": true
+    },
+    {
+      "message": "the restart took 13.12s, under the predicted 180s \u2014 this is the number A-11's 10m sustain is argued against",
+      "ok": true
+    },
+    {
+      "message": "DriftMetricsAbsent is inactive BEFORE the wipe (30s after the push cleared the state F-050 left the gateway in) \u2014 a rule that is always firing proves nothing when it fires",
+      "ok": true
+    },
+    {
+      "message": "the gateway now holds 0 taxi_drift_* sample(s)",
+      "ok": true
+    },
+    {
+      "message": "Prometheus sees no taxi_drift_volume_ratio series at all \u2014 the board is blank, which is exactly what a calm month looks like",
+      "ok": true
+    },
+    {
+      "message": "DriftMetricsAbsent (A-11) FIRED 625.1s after the wipe (predicted about 600s \u2014 its sustain is 10m)",
+      "ok": true
+    },
+    {
+      "message": "Alertmanager holds it \u2014 a rule firing only in Prometheus's own UI has not reached anybody",
+      "ok": true
+    },
+    {
+      "message": "DriftMetricsStale (A-10) stayed inactive through a TOTAL loss of the drift surface \u2014 its blind spot demonstrated rather than asserted, and the whole argument for A-11 existing",
+      "ok": true
+    },
+    {
+      "message": "ScoringVolumeCollapse (A-9) is inactive while the series are gone: the collapse of March 2020 is still true and nothing was rendering it",
+      "ok": true
+    },
+    {
+      "message": "the gateway holds 48 sample(s) again (was 48)",
+      "ok": true
+    },
+    {
+      "message": "DriftMetricsAbsent cleared 37.8s after the re-push \u2014 the rule follows the data and is not latched",
+      "ok": true
+    },
+    {
+      "message": "ScoringVolumeCollapse (A-9) is pending again \u2014 the board ends carrying the truth: March 2020 really did lose 61% of its trips, and silencing that to tidy a transcript would be publishing a false board",
+      "ok": true
+    }
+  ],
+  "clearing": {
+    "a9_firing_months": [],
+    "a9_state_after": "pending",
+    "alert_cleared": true,
+    "samples_restored": 48
+  },
+  "failures": [],
+  "finding": "F-050 (a)+(b)",
+  "finished_at": "2026-08-21T05:25:52+00:00",
+  "passed": true,
+  "prediction": {
+    "absence": {
+      "must_fire": {
+        "after_about_seconds": 600,
+        "alert": "DriftMetricsAbsent",
+        "because": "the rule has for: 10m and the wipe removes every series the selector names, so `absent(...)` becomes 1 within a scrape interval and stays.",
+        "confidence": "high",
+        "must_reach_alertmanager": true,
+        "signal": "A-11"
+      },
+      "must_not_fire": [
+        {
+          "alert": "DriftMetricsStale",
+          "because": "THIS IS THE POINT OF A-11. A-10 reads `time() - max by (month)(stamp)`, and over zero series that expression has no value \u2014 so the rule stays inactive through a total loss of the drift surface. If A-10 fires here, A-11 is redundant and the finding was wrong.",
+          "signal": "A-10"
+        },
+        {
+          "alert": "ScoringVolumeCollapse",
+          "because": "no volume series exists during the wipe, so A-9 has nothing to compare. An empty board renders exactly like a calm one \u2014 restated as a prediction because it is the failure this pair exists to end.",
+          "signal": "A-9"
+        }
+      ]
+    },
+    "clearing": {
+      "claim": "re-pushing the real 2020 numbers clears A-11 within a scrape interval, and A-9 returns for 2020-03 only \u2014 the board ends carrying the truth, not a convenient silence.",
+      "confidence": "high",
+      "volume_ratios_about": {
+        "2020-01": 0.83,
+        "2020-02": 0.88,
+        "2020-03": 0.39
+      }
+    },
+    "not_touched": [
+      "@champion (read, never written)",
+      "the InferenceService and the wire",
+      "every threshold in infra/monitoring/alerting_rules.yml",
+      "the settled data pins"
+    ],
+    "pair_decided_at": "the M7->M8 boundary (F-050 (a)+(b) together)",
+    "survival": {
+      "because": "persistentVolume.enabled plus --persistence.file=/data/pushgateway.data, checkpointed every 10s, and pushgateway also writes on a clean SIGTERM. Before this story the same delete emptied the store completely \u2014 that is F-050, measured three times on host restarts.",
+      "claim": "deleting the pushgateway pod destroys the pod and NOT the data: the same number of taxi_drift_* samples is readable from a different pod object.",
+      "confidence": "high",
+      "expected_restart_seconds_below": 180
+    },
+    "written_before": "the gateway's pod is deleted and before any series is wiped"
+  },
+  "pushed_volume_ratios": {
+    "2020-01": 0.8335556483513884,
+    "2020-02": 0.8776340568603828,
+    "2020-03": 0.3913368667803675
+  },
+  "started_at": "2026-08-21T05:13:27+00:00",
+  "story": "M8-S1 leg 1",
+  "survival": {
+    "pod_after": {
+      "name": "prometheus-prometheus-pushgateway-cd5988f6c-l5zcd",
+      "uid": "2a1591bc-dbe7-4580-99b3-95c21992e45e"
+    },
+    "pod_before": {
+      "name": "prometheus-prometheus-pushgateway-cd5988f6c-7bjk4",
+      "uid": "bf053286-c81c-4fef-9a76-5aa1018efccc"
+    },
+    "restart_seconds": 13.12,
+    "samples_after": 48,
+    "samples_before": 48
+  }
+}

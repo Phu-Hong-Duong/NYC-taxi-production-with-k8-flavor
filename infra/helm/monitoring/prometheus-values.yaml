@@ -243,9 +243,31 @@ prometheus-pushgateway:
   # two different layers: `push_metrics()` REFUSES a payload with no freshness
   # stamp (a type), and A-10 fires on a stamp older than 40 days (a rule).
   #
-  # Persistence is OFF: the gateway's contents are re-derivable by re-running
-  # the drift job over DVC-pinned data, so what a lost PVC costs is one command.
-  # Every other PVC decision in this repo is argued the same way (M0-S4).
+  # PERSISTENCE IS ON FROM M8-S1, AND IT WAS TURNED ON BY A MEASUREMENT (F-050).
+  #
+  # M7-S3 turned it off with an argument that is still true and was still the
+  # wrong call: "the contents are re-derivable by re-running the drift job over
+  # DVC-pinned data, so what a lost PVC costs is one command." What that argument
+  # left out is WHO RUNS THE COMMAND. An emptyDir dies with the pod, and the pod
+  # dies on every host restart — measured at three separate observations in the
+  # 24 hours after F-050 was raised, twice within fourteen of them, because this
+  # cluster lives on a laptop. Between the restart and somebody noticing, the
+  # board renders empty and A-10 CANNOT FIRE: its expression is
+  # `time() - max by (month)(...) > 3456000` and over zero series that is zero
+  # series, not a large number. So the failure mode was "the drift surface is
+  # silently gone, and the rule that exists to catch a silent drift surface is
+  # the one thing that cannot see it" — gotcha #78 one layer up.
+  #
+  # The two halves land together and each is weak alone: this volume stops the
+  # event that actually recurs here, and A-11 (`absent(...)`) catches the
+  # deletions a volume cannot survive — a cluster rebuild, a wiped PVC. Without
+  # the volume, A-11 would page for an ordinary reboot; with it, an absence
+  # means somebody destroyed something.
+  #
+  # Honest costs, both real: this PVC dies with `make destroy` like every PVC in
+  # this repo (that is what A-11 is for), and the values change ROLLS the gateway
+  # once — losing whatever it held at that moment, which is why the drill
+  # re-pushes the real numbers afterwards and the board ends carrying the truth.
   enabled: true
   resources:
     requests:
@@ -253,8 +275,34 @@ prometheus-pushgateway:
       memory: 32Mi
     limits:
       memory: 128Mi
+  # `strategy.type: Recreate` is the SUBCHART's own default (read out of
+  # `helm show values prometheus-community/prometheus-pushgateway`, not assumed)
+  # and it is what a RWO volume needs: kind's default provisioner is node-local,
+  # so a surge pod would either dead-lock on multi-attach or land on a node the
+  # data is not on. F-033 by construction rather than by repair.
   persistentVolume:
-    enabled: false
+    enabled: true
+    # The gateway holds ~30 series of a few hundred bytes each. This number is
+    # nominal: kind's `standard` StorageClass is rancher local-path, which
+    # provisions a host directory and enforces no quota. It is written small so
+    # nobody reads it as a capacity claim.
+    size: 128Mi
+    mountPath: /data
+    accessModes:
+      - ReadWriteOnce
+  extraArgs:
+    # WITHOUT THIS FLAG THE VOLUME IS DECORATION. Pushgateway keeps its metrics
+    # in memory and only writes them to a file when `--persistence.file` names
+    # one; the chart mounts the volume either way, so a PVC with no flag looks
+    # exactly like working persistence until the pod restarts.
+    - --persistence.file=/data/pushgateway.data
+    # The checkpoint interval bounds what an UNGRACEFUL stop loses. A clean
+    # SIGTERM (a `kubectl delete pod`, a helm upgrade) makes pushgateway write
+    # on exit, so the default 5m would have passed this story's own survival
+    # drill — and would have lost the push on the failure this volume exists
+    # for, which is a laptop being switched off. 10s costs a few kilobytes
+    # written every ten seconds to hold a number that is produced monthly.
+    - --persistence.interval=10s
   # NO `prometheus.io/scrape` ANNOTATION, DELIBERATELY — see the
   # `pushgateway` job in `extraScrapeConfigs` below. The annotation would get
   # the gateway scraped by the chart's generic `kubernetes-service-endpoints`

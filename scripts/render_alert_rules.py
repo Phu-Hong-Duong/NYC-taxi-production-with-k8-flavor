@@ -48,10 +48,12 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RULES_FILE = REPO_ROOT / "infra" / "monitoring" / "alerting_rules.yml"
 
-# The M5 PRR box 3 signal ids (A-1..A-7) plus the three drift signals M7-S3 adds
-# (A-8 input drift, A-9 volume collapse, A-10 drift-job staleness). Every rule
-# must claim exactly one of these.
-KNOWN_SIGNALS = {f"A-{n}" for n in range(1, 11)}
+# The M5 PRR box 3 signal ids (A-1..A-7), the three drift signals M7-S3 adds
+# (A-8 input drift, A-9 volume collapse, A-10 drift-job staleness) and A-11,
+# which M8-S1 adds for F-050: the drift SURFACE being absent, which A-10 is
+# structurally unable to see because `time() - max(X)` over no series is no
+# series. Every rule must claim exactly one of these.
+KNOWN_SIGNALS = {f"A-{n}" for n in range(1, 12)}
 
 # The signals this stack CAN alert on, and therefore must.
 #
