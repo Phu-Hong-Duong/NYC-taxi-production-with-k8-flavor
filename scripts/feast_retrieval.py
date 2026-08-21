@@ -244,32 +244,110 @@ def run_quarantine(entities: Path, naive: pd.Timestamp) -> dict[str, Any]:
     return json.loads((WORK_DIR / "retrieval.json").read_text())
 
 
-def _answers(name: str, rows: pd.DataFrame, *, by_row: bool = True) -> pd.DataFrame:
-    """Read one answer file back and align it to the row set.
+#: entity-key columns per answer file. The naive files key on the same entity as
+#: their honest twins; only the timestamp differs, which is the whole design.
+ANSWER_KEYS: dict[str, tuple[str, ...]] = {
+    "pu_zone": ("PULocationID",),
+    "do_zone": ("DOLocationID",),
+    "calendar": ("date_key",),
+    "od_window": ("PULocationID", "DOLocationID"),
+    "od_window_naive": ("PULocationID", "DOLocationID"),
+    "pu_hour_window": ("PULocationID", "hour"),
+    "pu_hour_window_naive": ("PULocationID", "hour"),
+}
 
-    `by_row=False` joins on the ENTITY KEYS instead, which is what the naive pass
-    needs: `get_historical_features` returns one row per DISTINCT (keys,
-    timestamp), and the naive pass collapses every timestamp onto one instant, so
-    rows sharing keys legitimately come back once. The honest pass has no such
-    excuse and is asserted complete by the caller.
-    """
-    frame = pd.read_parquet(WORK_DIR / f"{name}.parquet")
-    if by_row:
-        return rows[["row_id"]].merge(frame, on="row_id", how="left")
-    keys = ["PULocationID", "DOLocationID"] if name.startswith("od_") else [
-        "PULocationID",
-        "hour",
-    ]
-    entity = pd.DataFrame(
+
+def _entity_frame(rows: pd.DataFrame) -> pd.DataFrame:
+    return pd.DataFrame(
         {
             "row_id": rows["row_id"].to_numpy(),
             "PULocationID": rows["PULocationID"].to_numpy(),
             "DOLocationID": rows["DOLocationID"].to_numpy(),
             "hour": rows["tpep_pickup_datetime"].dt.hour.to_numpy(),
+            "date_key": rows["tpep_pickup_datetime"].dt.strftime("%Y-%m-%d").to_numpy(),
+            "event_timestamp": rows["tpep_pickup_datetime"].to_numpy(),
         }
     )
-    lookup = frame.merge(entity, on="row_id", how="left")[[*keys, *frame.columns[1:]]]
-    return entity[["row_id", *keys]].merge(lookup, on=keys, how="left")
+
+
+def _answers(name: str, rows: pd.DataFrame, *, by_row: bool = True) -> pd.DataFrame:
+    """Read one answer file back and align it to the row set — by keys, not by luck.
+
+    **`get_historical_features` does not return one row per row you asked for**,
+    and the two reasons it returns fewer are different facts that a bare
+    left-join-on-row_id would blur into one NaN (F-056):
+
+    * **Duplicate `(entity keys, event_timestamp)`.** The answer carries the
+      first of them. The others are not missing data — the store answered them,
+      once — so they are recovered here by joining on the keys the store actually
+      keyed on. Accepting a NaN for them would manufacture a mismatch against a
+      feature path that has a perfectly good value.
+    * **No source row at or before the entity's timestamp.** Then the row is
+      DROPPED from the answer rather than returned null, and after this alignment
+      it is legitimately NaN. That is the correct feature value — a 2019-01 row
+      has no history and `AggregateTables.empty()` serves it NaN too — but it is
+      the caller's job to say so, which `explain_shortfall` does.
+
+    `by_row=False` is the naive pass, where every timestamp is the same instant
+    and the join is on keys alone.
+    """
+    frame = pd.read_parquet(WORK_DIR / f"{name}.parquet")
+    keys = list(ANSWER_KEYS[name])
+    entity = _entity_frame(rows)
+    features = [column for column in frame.columns if column != "row_id"]
+    with_keys = frame.merge(entity, on="row_id", how="left")
+    join_on = [*keys, "event_timestamp"] if by_row else keys
+    lookup = with_keys[[*join_on, *features]].drop_duplicates(join_on)
+    aligned = entity[["row_id", *join_on]].merge(lookup, on=join_on, how="left")
+    return aligned.sort_values("row_id", ignore_index=True)
+
+
+def explain_shortfall(name: str, rows: pd.DataFrame) -> dict[str, Any]:
+    """Classify every declared row the store did not answer for. No class = FAIL.
+
+    The two legitimate classes are named in `_answers`. Anything else is a row
+    the store lost, and a retrieval that silently returns fewer rows than it was
+    given is gotcha #78's disease in a new place: "this row has no feature" and
+    "this row is not in the answer" render identically once a caller joins back.
+    """
+    frame = pd.read_parquet(WORK_DIR / f"{name}.parquet")
+    keys = list(ANSWER_KEYS[name])
+    entity = _entity_frame(rows)
+    absent = entity[~entity["row_id"].isin(frame["row_id"])]
+
+    answered_keys = set(
+        map(tuple, frame.merge(entity, on="row_id", how="left")[[*keys, "event_timestamp"]].values)
+    )
+    view = name.replace("_naive", "")
+    source = {
+        "pu_zone": "zone_static",
+        "do_zone": "zone_static",
+        "calendar": "calendar_day",
+        "od_window": "od_window_stats",
+        "pu_hour_window": "pu_hour_window_stats",
+    }[view]
+    earliest = pd.read_parquet(REPO_ROOT / "data" / "feast" / f"{source}.parquet")[
+        "event_timestamp"
+    ].min()
+
+    duplicates, before_first, unexplained = [], [], []
+    for record in absent.to_dict("records"):
+        signature = tuple(record[key] for key in keys) + (record["event_timestamp"],)
+        if signature in answered_keys:
+            duplicates.append(int(record["row_id"]))
+        elif pd.Timestamp(record["event_timestamp"]) < earliest:
+            before_first.append(int(record["row_id"]))
+        else:
+            unexplained.append(int(record["row_id"]))
+    return {
+        "answer": name,
+        "declared": int(len(entity)),
+        "returned": int(len(frame)),
+        "duplicate_key_and_timestamp": duplicates,
+        "earlier_than_every_source_row": before_first,
+        "earliest_source_stamp": pd.Timestamp(earliest).isoformat(),
+        "unexplained": unexplained,
+    }
 
 
 def our_truth(rows: pd.DataFrame, naive: pd.Timestamp) -> dict[str, Any]:
@@ -526,14 +604,21 @@ def main(argv: list[str] | None = None) -> int:
     entities = write_entities(rows)
     meta = run_quarantine(entities, naive)
 
-    honest_rows = len(pd.read_parquet(WORK_DIR / "od_window.parquet"))
-    if honest_rows != len(rows):
-        raise SystemExit(
-            f"[retrieval] the HONEST retrieval returned {honest_rows} row(s) for {len(rows)} "
-            "declared. get_historical_features answers once per distinct (entity keys, "
-            "timestamp); the honest pass sends distinct real timestamps, so a short answer "
-            "means rows were dropped and no comparison below would be trustworthy."
+    print("\n[retrieval] --- what the store did NOT answer for, and why (F-056) ---")
+    shortfalls = [
+        explain_shortfall(name, rows)
+        for name in ("pu_zone", "do_zone", "calendar", "od_window", "pu_hour_window")
+    ]
+    for shortfall in shortfalls:
+        print(
+            f"[retrieval] {shortfall['answer']:<16s} declared {shortfall['declared']}  "
+            f"returned {shortfall['returned']}  duplicate-key "
+            f"{len(shortfall['duplicate_key_and_timestamp'])}  before-first-source-row "
+            f"{len(shortfall['earlier_than_every_source_row'])} (earliest source stamp "
+            f"{shortfall['earliest_source_stamp']})  UNEXPLAINED "
+            f"{len(shortfall['unexplained'])}"
         )
+    unexplained = [s for s in shortfalls if s["unexplained"]]
 
     truth = our_truth(rows, naive)
     verdicts = retrieval_parity(rows, truth)
@@ -601,6 +686,7 @@ def main(argv: list[str] | None = None) -> int:
         "tolerance": TOLERANCE,
         "max_abs_delta_over_all_float_columns": max_delta,
         "columns": [v.as_record() for v in verdicts],
+        "shortfalls": shortfalls,
         "no_geometry": geometry_checks,
         "quarantine": meta,
         "fitted_months": list(truth["fitted_months"]),
@@ -623,6 +709,12 @@ def main(argv: list[str] | None = None) -> int:
     problems: list[str] = []
     if failures:
         problems.append(f"{len(failures)} column(s) disagree with the feature path")
+    for shortfall in unexplained:
+        problems.append(
+            f"{shortfall['answer']}: the store lost row(s) {shortfall['unexplained']} for no "
+            "reason this check can account for — neither a duplicate entity key nor a "
+            "timestamp earlier than every source row"
+        )
     if not two_sided_ok:
         problems.append("a no-geometry zone came back with a row in the store")
     if not leaks_somewhere:

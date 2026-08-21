@@ -1,0 +1,302 @@
+{
+  "measured_at": "2026-08-21T07:29:42.689566Z",
+  "row_set": "infra/feast/retrieval_rows.csv",
+  "rows": 88,
+  "tolerance": 0.0,
+  "max_abs_delta_over_all_float_columns": 0.0,
+  "columns": [
+    {
+      "column": "pu.centroid_lat",
+      "kind": "float",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": 0.0,
+      "both_missing": 11,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "pu.centroid_lon",
+      "kind": "float",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": 0.0,
+      "both_missing": 11,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "pu.borough (zones with geometry)",
+      "kind": "string",
+      "compared": 77,
+      "mismatches": 0,
+      "max_abs_delta": null,
+      "both_missing": 0,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "pu.is_airport (zones with geometry)",
+      "kind": "bool",
+      "compared": 77,
+      "mismatches": 0,
+      "max_abs_delta": null,
+      "both_missing": 0,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "do.centroid_lat",
+      "kind": "float",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": 0.0,
+      "both_missing": 18,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "do.centroid_lon",
+      "kind": "float",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": 0.0,
+      "both_missing": 18,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "do.borough (zones with geometry)",
+      "kind": "string",
+      "compared": 70,
+      "mismatches": 0,
+      "max_abs_delta": null,
+      "both_missing": 0,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "do.is_airport (zones with geometry)",
+      "kind": "bool",
+      "compared": 70,
+      "mismatches": 0,
+      "max_abs_delta": null,
+      "both_missing": 0,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "is_holiday",
+      "kind": "bool",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": null,
+      "both_missing": 0,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "is_near_holiday",
+      "kind": "bool",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": null,
+      "both_missing": 0,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "is_business_day",
+      "kind": "bool",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": null,
+      "both_missing": 0,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "od_median_duration_min",
+      "kind": "float",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": 0.0,
+      "both_missing": 12,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "pu_hour_mean_speed_kmh",
+      "kind": "float",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": 0.0,
+      "both_missing": 19,
+      "one_missing": 0,
+      "examples": []
+    },
+    {
+      "column": "pu_hour_trips_per_day",
+      "kind": "float",
+      "compared": 88,
+      "mismatches": 0,
+      "max_abs_delta": 0.0,
+      "both_missing": 10,
+      "one_missing": 0,
+      "examples": []
+    }
+  ],
+  "shortfalls": [
+    {
+      "answer": "pu_zone",
+      "declared": 88,
+      "returned": 87,
+      "duplicate_key_and_timestamp": [
+        43
+      ],
+      "earlier_than_every_source_row": [],
+      "earliest_source_stamp": "2019-01-01T00:00:00",
+      "unexplained": []
+    },
+    {
+      "answer": "do_zone",
+      "declared": 88,
+      "returned": 87,
+      "duplicate_key_and_timestamp": [
+        43
+      ],
+      "earlier_than_every_source_row": [],
+      "earliest_source_stamp": "2019-01-01T00:00:00",
+      "unexplained": []
+    },
+    {
+      "answer": "calendar",
+      "declared": 88,
+      "returned": 87,
+      "duplicate_key_and_timestamp": [
+        59
+      ],
+      "earlier_than_every_source_row": [],
+      "earliest_source_stamp": "2019-01-01T00:00:00",
+      "unexplained": []
+    },
+    {
+      "answer": "od_window",
+      "declared": 88,
+      "returned": 77,
+      "duplicate_key_and_timestamp": [
+        59
+      ],
+      "earlier_than_every_source_row": [
+        16,
+        36,
+        40,
+        57,
+        61,
+        63,
+        64,
+        66,
+        78,
+        84
+      ],
+      "earliest_source_stamp": "2019-02-01T00:00:00",
+      "unexplained": []
+    },
+    {
+      "answer": "pu_hour_window",
+      "declared": 88,
+      "returned": 77,
+      "duplicate_key_and_timestamp": [
+        59
+      ],
+      "earlier_than_every_source_row": [
+        16,
+        36,
+        40,
+        57,
+        61,
+        63,
+        64,
+        66,
+        78,
+        84
+      ],
+      "earliest_source_stamp": "2019-02-01T00:00:00",
+      "unexplained": []
+    }
+  ],
+  "no_geometry": {
+    "checks": [
+      {
+        "side": "pu",
+        "rows_without_geometry": 11,
+        "store_returned_null_for_all": true,
+        "store_returned_a_row_for_any": 0,
+        "zones": [
+          264,
+          265
+        ]
+      },
+      {
+        "side": "do",
+        "rows_without_geometry": 18,
+        "store_returned_null_for_all": true,
+        "store_returned_a_row_for_any": 0,
+        "zones": [
+          264,
+          265
+        ]
+      },
+      {
+        "side": "row",
+        "rows_without_geometry": 20,
+        "our_path_reports_has_geometry_zero": 20,
+        "note": "zones.geometry().has_geometry is 0 exactly where a haversine is NaN"
+      }
+    ]
+  },
+  "quarantine": {
+    "project": "crosstown_eta",
+    "entity_rows": 88,
+    "naive_timestamp": "2019-07-01T00:00:00",
+    "written": {
+      "pu_zone": {
+        "rows": 87,
+        "columns": 5
+      },
+      "do_zone": {
+        "rows": 87,
+        "columns": 5
+      },
+      "calendar": {
+        "rows": 87,
+        "columns": 4
+      },
+      "od_window": {
+        "rows": 77,
+        "columns": 3
+      },
+      "pu_hour_window": {
+        "rows": 77,
+        "columns": 4
+      },
+      "od_window_naive": {
+        "rows": 61,
+        "columns": 3
+      },
+      "pu_hour_window_naive": {
+        "rows": 65,
+        "columns": 4
+      }
+    },
+    "pandas": "2.3.3"
+  },
+  "fitted_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ]
+}

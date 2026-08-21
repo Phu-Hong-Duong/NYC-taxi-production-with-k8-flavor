@@ -1,0 +1,130 @@
+{
+  "measured_at": "2026-08-21T07:29:42.689566Z",
+  "naive_timestamp": "2019-07-01T00:00:00",
+  "fitted_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "full_window_months": [
+    "2019-01",
+    "2019-02",
+    "2019-03",
+    "2019-04",
+    "2019-05",
+    "2019-06"
+  ],
+  "leak": {
+    "od_median_duration_min": {
+      "compared": 76,
+      "differing_rows": 61,
+      "max_abs_delta": 8.199996948242188,
+      "mean_abs_delta": 1.3368418969606097,
+      "one_missing": 10
+    },
+    "pu_hour_mean_speed_kmh": {
+      "compared": 69,
+      "differing_rows": 53,
+      "max_abs_delta": 3.3921642303466797,
+      "mean_abs_delta": 0.5724294496619183,
+      "one_missing": 8
+    },
+    "pu_hour_trips_per_day": {
+      "compared": 78,
+      "differing_rows": 62,
+      "max_abs_delta": 116.60167694091797,
+      "mean_abs_delta": 14.664804272162609,
+      "one_missing": 10
+    }
+  },
+  "naive_equals_full_window": {
+    "column": "naive od == our full-window table",
+    "kind": "float",
+    "compared": 88,
+    "mismatches": 0,
+    "max_abs_delta": 0.0,
+    "both_missing": 2,
+    "one_missing": 0,
+    "examples": []
+  },
+  "windows_served": {
+    "2019-01,2019-02": 17,
+    "2019-01,2019-02,2019-03": 15,
+    "2019-01,2019-02,2019-03,2019-04,2019-05,2019-06": 14,
+    "(no row)": 12,
+    "2019-01": 10,
+    "2019-01,2019-02,2019-03,2019-04": 10,
+    "2019-01,2019-02,2019-03,2019-04,2019-05": 10
+  },
+  "boundary_pairs": [
+    {
+      "before": "2019-01-31T23:59:00",
+      "after": "2019-02-01T00:01:00",
+      "seconds_apart": 120,
+      "window_before": "(no row)",
+      "window_after": "2019-01",
+      "windows_differ": true,
+      "od_median_before": null,
+      "od_median_after": 8.183333396911621,
+      "od_median_naive": 8.350000381469727
+    },
+    {
+      "before": "2019-02-28T23:59:00",
+      "after": "2019-03-01T00:01:00",
+      "seconds_apart": 120,
+      "window_before": "2019-01",
+      "window_after": "2019-01,2019-02",
+      "windows_differ": true,
+      "od_median_before": 8.183333396911621,
+      "od_median_after": 8.266666412353516,
+      "od_median_naive": 8.350000381469727
+    },
+    {
+      "before": "2019-03-31T23:59:00",
+      "after": "2019-04-01T00:01:00",
+      "seconds_apart": 120,
+      "window_before": "2019-01,2019-02",
+      "window_after": "2019-01,2019-02,2019-03",
+      "windows_differ": true,
+      "od_median_before": 8.266666412353516,
+      "od_median_after": 8.166666984558105,
+      "od_median_naive": 8.350000381469727
+    },
+    {
+      "before": "2019-04-30T23:59:00",
+      "after": "2019-05-01T00:01:00",
+      "seconds_apart": 120,
+      "window_before": "2019-01,2019-02,2019-03",
+      "window_after": "2019-01,2019-02,2019-03,2019-04",
+      "windows_differ": true,
+      "od_median_before": 8.166666984558105,
+      "od_median_after": 8.166666984558105,
+      "od_median_naive": 8.350000381469727
+    },
+    {
+      "before": "2019-05-31T23:59:00",
+      "after": "2019-06-01T00:01:00",
+      "seconds_apart": 120,
+      "window_before": "2019-01,2019-02,2019-03,2019-04",
+      "window_after": "2019-01,2019-02,2019-03,2019-04,2019-05",
+      "windows_differ": true,
+      "od_median_before": 8.166666984558105,
+      "od_median_after": 8.25,
+      "od_median_naive": 8.350000381469727
+    },
+    {
+      "before": "2019-06-30T23:59:00",
+      "after": "2019-07-01T00:01:00",
+      "seconds_apart": 120,
+      "window_before": "2019-01,2019-02,2019-03,2019-04,2019-05",
+      "window_after": "2019-01,2019-02,2019-03,2019-04,2019-05,2019-06",
+      "windows_differ": true,
+      "od_median_before": 8.25,
+      "od_median_after": 8.350000381469727,
+      "od_median_naive": 8.350000381469727
+    }
+  ]
+}

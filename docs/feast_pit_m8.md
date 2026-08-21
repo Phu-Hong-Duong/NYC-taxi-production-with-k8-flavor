@@ -176,8 +176,144 @@ honest retrieval's row count equals the row set's.
 
 ## 5. Retrieval parity — the measurement
 
-*(pending — filled from `automation/runs/m8-pit/retrieval_parity.json`)*
+**`max |ours − store| = 0.000e+00` over every float column, 88 declared rows,
+against a bar of `0.0`.** Measured 2026-08-21T07:29:42Z,
+`automation/runs/m8-pit/retrieval_parity.json`, `make feast-retrieval`.
+
+| Column | Compared | Mismatches | max abs delta | both missing | one missing |
+|---|---|---|---|---|---|
+| `pu.centroid_lat` · `pu.centroid_lon` | 88 | 0 | `0.000e+00` | 11 | **0** |
+| `do.centroid_lat` · `do.centroid_lon` | 88 | 0 | `0.000e+00` | 18 | **0** |
+| `pu.borough` · `pu.is_airport` (zones with geometry) | 77 | 0 | — | 0 | 0 |
+| `do.borough` · `do.is_airport` (zones with geometry) | 70 | 0 | — | 0 | 0 |
+| `is_holiday` · `is_near_holiday` · `is_business_day` | 88 | 0 | — | 0 | 0 |
+| `od_median_duration_min` | 88 | 0 | `0.000e+00` | 12 | **0** |
+| `pu_hour_mean_speed_kmh` | 88 | 0 | `0.000e+00` | 19 | **0** |
+| `pu_hour_trips_per_day` | 88 | 0 | `0.000e+00` | 10 | **0** |
+
+Fourteen columns, zero mismatches, and — the column that matters more than the
+deltas — **`one missing` is zero everywhere**. Every value the store declines to
+answer is a value the feature path also declines to answer, and vice versa. A
+comparison that dropped nulls would have printed the same zeros while being blind
+to the ~1% of rows that carry no geometry.
+
+**The two-sided no-geometry assertion holds.** 11 pickup rows and 18 dropoff rows
+name a zone with no centroid (264 and 265, both present in the drawn set); the
+store returned a row for **none** of them, and `zones.geometry().has_geometry` is
+0 on exactly the **20** rows where a haversine is NaN. The store's null and our
+`"Unknown"` are the same fact in two vocabularies, and neither was bent to make a
+column-wise comparison succeed.
+
+**The zero is not a surprise and the doc said so in advance** — §2's argument was
+that nothing on the store's side performs arithmetic, so a retrieval is a copy
+and a lossless widening. What it does close is the last unmeasured seam in the
+offline path: the numbers Feast will serve are the numbers the champion's own
+matrix is built from, measured across pandas 2.3.3 → parquet → pandas 3.0.5, and
+not assumed from the fact that both sides run the same pyarrow.
+
+**F-056, found by running it.** `get_historical_features` does not return one row
+per row it was asked for, and it returns fewer for **two different reasons that a
+naive caller cannot tell apart** — see §7.
 
 ## 6. The point-in-time proof — the measurement
 
-*(pending — filled from `automation/runs/m8-pit/pit_proof.json`)*
+The same store, the same call, one column different.
+`automation/runs/m8-pit/pit_proof.json`.
+
+**The naive join reaches forward, and the difference is the leakage:**
+
+| Column | Rows compared | Rows that differ | max abs delta | mean abs delta | honest says NOTHING, naive answers |
+|---|---|---|---|---|---|
+| `od_median_duration_min` | 76 | **61** | 8.2000 min | 1.3368 min | **10** |
+| `pu_hour_mean_speed_kmh` | 69 | **53** | 3.3922 km/h | 0.5724 km/h | 8 |
+| `pu_hour_trips_per_day` | 78 | **62** | 116.6017 /day | 14.6648 /day | 10 |
+
+The last column is the purest form of the leak and the reason it is broken out:
+those are **2019-01 rows — the first train month, which has no history at all**.
+The honest join has nothing to give them, `AggregateTables.empty()` gives them
+NaN, and the naive join hands them a number. A model fitted on that column would
+have been told, about January, what June did.
+
+**The naive answer IS the full window** — `0` mismatches over all 88 rows against
+our own `fitted.full` table. So the naive pass is not merely "different"; it is
+exactly the aggregate computed over every train month, served to rows that
+precede most of it. That is `docs/feature_dossier.md` §4 trap 2 with the
+timestamps rather than the code changed, which is the honest way to demonstrate
+it: the leak is a property of the join key, not of the SQL.
+
+**Every one of the six month-boundary pairs was served a different window across
+120 seconds**, and the walk reads like the design document:
+
+| Pair (120 s apart) | Window before → after | `od_median` 161→237 | the naive join would say |
+|---|---|---|---|
+| 2019-01-31 23:59 → 2019-02-01 00:01 | *(no row)* → `2019-01` | **NaN** → 8.1833 | 8.3500 |
+| 2019-02-28 23:59 → 2019-03-01 00:01 | `2019-01` → `2019-01,02` | 8.1833 → 8.2667 | 8.3500 |
+| 2019-03-31 23:59 → 2019-04-01 00:01 | `…,02` → `…,03` | 8.2667 → 8.1667 | 8.3500 |
+| 2019-04-30 23:59 → 2019-05-01 00:01 | `…,03` → `…,04` | 8.1667 → 8.1667 | 8.3500 |
+| 2019-05-31 23:59 → 2019-06-01 00:01 | `…,04` → `…,05` | 8.1667 → 8.2500 | 8.3500 |
+| 2019-06-30 23:59 → 2019-07-01 00:01 | `…,05` → `…,06` (full) | 8.2500 → 8.3500 | 8.3500 |
+
+Three things in that table are worth reading slowly. The **first row** is the one
+the whole convention exists for: two minutes apart, one gets NaN and the other
+gets a real number, because at 00:00 on 1 February the January window became
+knowable and not one second earlier. The **fourth row** shows the window changing
+while the value does not — an honest join is about *what a row was entitled to
+know*, not about whether the answer happened to move, and a check written against
+"the number changed" would have called that pair a failure. And the **last
+column** is constant at 8.3500 down the whole table: the naive join gives every
+row the same answer, which is what makes it look so stable and so good.
+
+**The honest join reconciles with our own point-in-time tables to the bit** —
+that is §5's `od_median_duration_min` row, `0.000e+00` over 88 rows. Two
+implementations, one number: Feast's `event_timestamp <= entity_timestamp` merge
+over end-of-window stamps, and `aggregates.transform`'s month-keyed dispatch,
+agreeing on every row including the twelve where the right answer is *nothing*.
+Without that half, a naive-vs-honest difference would only prove the two joins
+disagree; with it, the honest one is pinned to the tables the champion was
+actually fitted against.
+
+The windows the honest join served across the whole row set — derived from the
+store's own `window_months` column, not from what we expected it to serve:
+`(no row)` 12 · `2019-01` 10 · `2019-01,02` 17 · `…,03` 15 · `…,04` 10 · `…,05`
+10 · full six months 14.
+
+## 7. F-056 — a retrieval returns fewer rows than it was asked for, for two
+reasons that look identical
+
+Running the comparison for the first time returned **77 answers for 88 declared
+rows** on the time-varying views and 87 for the static ones. The count guard that
+caught it was written on the way in, from the smoke observation in §4, and it was
+right to fire — but "the store lost rows" turned out to be two different facts:
+
+1. **Duplicate `(entity keys, event_timestamp)`.** One drawn row shares its
+   pickup timestamp *and* its pickup zone with another (row 43 and row 59, both
+   `2019-04-25 20:50:28` at zone 132). `get_historical_features` answers once per
+   distinct key-and-timestamp, so the second is not missing data — it was
+   answered, once. Aligning on `row_id` alone would have given it NaN and
+   manufactured a mismatch against a feature path that has a perfectly good
+   value.
+2. **No source row at or before the entity's timestamp.** All ten of the others
+   are **2019-01** rows, and the earliest `od_window_stats` stamp is
+   `2019-02-01`. Here the row genuinely has no feature, and the *value* after a
+   left join is correct — but the row is DROPPED rather than returned null, so
+   the answer's row count silently stops describing the request.
+
+Both are legitimate; neither is announced. The danger is that after any
+`merge(..., how="left")` they are indistinguishable from each other **and from a
+row the store simply lost** — gotcha #78's disease in a new place, where a NaN
+that means "answered, elsewhere", a NaN that means "correctly nothing" and a NaN
+that means "dropped" render identically.
+
+So `scripts/feast_retrieval.py` does not assert a count. It **classifies every
+unanswered row** (`explain_shortfall`): a row is either a duplicate whose answer
+is recovered by joining on the keys the store actually keyed on, or earlier than
+every source row in that view — and **anything else is a FAIL naming the row
+ids**. The earliest source stamp is read off the published parquet rather than
+typed, so the classification cannot drift from the sources it describes. Observed
+this run: `duplicate-key 1 · before-first-source-row 10 · UNEXPLAINED 0` on the
+time-varying views, `duplicate-key 1 · UNEXPLAINED 0` on the static ones.
+
+The generalisable line, which is the reason this is a finding and not a footnote:
+**a lookup that answers a set of questions with a smaller set of answers must say
+which questions it declined, or every consumer will read "declined" as "the
+answer is nothing".**
