@@ -28,8 +28,8 @@ role interplay are the product.**
 | M4 Pipeline on-cluster: Flyte (MLOps) | **closed 2026-08-19** | tag `m4-closed` · M5 kickoff §0 |
 | M5 Serving & PRR: KServe (MLOps/SRE) | **closed 2026-08-19** | tag `m5-closed` · `verify-m5` 49/49 · M6 kickoff §0 |
 | M6 Reliability: SLO, canary, gameday (SRE) | **closed 2026-08-20** | tag `m6-closed` · `verify-m6` 63/63 · M7 kickoff §0 |
-| M7 Drift & retrain loop (SRE/MLE/DA) ◆REV | **in progress** | kickoff authored 2026-08-20: `docs/milestones/M7_KICKOFF.md` |
-| M8 Feast & side-by-side (DE/MLE) | not started | — |
+| M7 Drift & retrain loop (SRE/MLE/DA) ◆REV | **closed 2026-08-21** | tag `m7-closed` · `verify-m7` 62/62 · ◆REV APPROVE WITH CONDITIONS (F-051/F-052 → M8-S1) · M8 kickoff §0 |
+| M8 Feast & side-by-side (DE/MLE) | **in progress** | kickoff authored 2026-08-21: `docs/milestones/M8_KICKOFF.md` |
 | M9 Stretch: Ray, CI smoke, security + demo page (committed) | not started | — |
 
 Per-milestone direction lives in the ARCH-authored `docs/milestones/M*_KICKOFF.md`

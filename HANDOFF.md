@@ -1,5 +1,92 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (bv) — ARCH boundary: M7 CLEANLY CLOSED, tagged; the M8 kickoff is authored around a wall that was measured, not met
+
+### State
+**ARCH, `claude-fable-5` (stated first line — an architect session on any
+other model is void).** Boot reads per the charter: CLAUDE.md · HANDOFF (bu),
+(bt) · BLUEPRINT §9 · all four ledgers · REV's M7 findings (F-051, F-052) ·
+AWAITING_PO · the M7 kickoff. The chain arrived here exactly as (bu)
+scheduled it.
+
+### Done
+- **Triage: M7 CLEANLY CLOSED — tagged `m7-closed`.** `make verify-m7` re-run
+  by the approver: **GREEN 62/62 across 7 sections, exit 0**, closing line
+  verbatim; the endpoint leg answered `10.665224` min stamped
+  `model_version='2'`, and §5 passed through F-050's *restarted* branch — the
+  finding's THIRD observation, which this triage then priced into its
+  decision. Lineage spot-check: `86a3cf2` (M7-S5's merge, PR #49) is an
+  ancestor of origin/main — deliberately a different merge than REV's.
+  Sign-off row added (producer EXEC PRs #40–#49, approver ARCH/Fable 5 —
+  producer ≠ approver). README rows flipped in the same commit as the
+  kickoff.
+- **Every open M7 item dispositioned, none silent** (M8 kickoff §0, ledger
+  rows updated with dated notes): **F-051** intaken → M8-S1 leg 1 (calendar-day
+  denominator + the monotonicity property test; bar unchanged — a defect fix,
+  not a PO fork) · **F-052** decided (a), REV's recommendation → M8-S1 leg 1 ·
+  **F-050** decided **(a)+(b) together** → M8-S1 leg 1 — the recurrence
+  measurement (once per host restart, three observations) decides it, and the
+  pair is cheaper than (b) alone because the PV collapses the absence rule's
+  noise cost to real deletions; this makes the drift board a STANDING surface,
+  which honors REV's F-051 condition by ORDERING (the fix lands first in the
+  same story) · **F-048** decided (c)+(a) → M8-S1 leg 2 (provenance ON the
+  version, backfill through an additive path inside `registry.py`; (b)
+  refused — the image must not carry evidence it can never be the source of
+  truth for) · **F-047** decided (a) → M8-S1 leg 2 (shares the one image
+  rebuild) · **F-046** decided (a) — accept monthly grain, rely on A-9 made
+  sound by F-051's fix, the one honesty sentence lands in `slo_serving.md`
+  §8.1 at M8-S1; the daily window is named-not-scheduled because no M8/M9
+  quoted scope covers it (gotcha #19) · **F-045 CLOSED by evidence** — its
+  option (a) is what M7-S3 shipped (A-9 first-class, fired on 2020-03,
+  prediction first; daily grain published) · **F-016** standing with the PO,
+  dormant in M8 by construction · error-memo §7 row 2 stays open with M8-S2's
+  catalog as named reader. **Debt: register fully closed, nothing due; M8
+  does not trigger D-001's deferral.**
+- **The M8 kickoff is authored** (`docs/milestones/M8_KICKOFF.md`): five
+  stories — S1 the M7 remediation in two legs (drift surface; image +
+  provenance) · S2 Feast QUARANTINED with the feature repo and the
+  catalog-with-verdicts (including the honest row: g5, the community's
+  favourite family, LOST the ablation and is catalog-only) · S3 point-in-time
+  correctness measured two ways (retrieval parity across the pandas seam;
+  the leakage red-team shape run through Feast's PIT join) · S4 the online
+  store + the blueprint's 100-pair parity table + the transformer BESIDE the
+  champion (the M6-S3 shadow shape — the production wire is not cut over) ·
+  S5 the side-by-side page + verify-m8 + red team (eighth inheritance).
+- **The kickoff's load-bearing measurement, made at draft time**: PyPI read
+  live — **Feast 0.66.0 declares `pandas<3,>=1.4.3`** against our pandas
+  3.0.5 (numpy/pyarrow/python all compatible; pandas is the ONE hard
+  conflict). So M8's law 4 makes the quarantine (gotcha #16) the DESIGN, not
+  the fallback, bans `uv add feast` outright, and makes `uv.lock`
+  byte-identical a story-exit invariant. The executor plans around the wall
+  instead of hitting it at minute forty.
+
+### Decisions
+- **F-050 (a)+(b) is the one that changes the program's posture**: the drift
+  board is now chartered as a standing operational surface on this machine.
+  The empty-gateway state (bt) preserved as evidence has served its purpose —
+  three observations priced the decision — and M8-S1's drill re-pushes the
+  real numbers as its own first step after the persistence roll.
+- **No new PO fork.** Nothing in this triage loosens a gate, moves a
+  threshold, or changes direction on a question that is the PO's: F-051 is
+  arithmetic catching up to its own documentation; F-050 adds a volume and a
+  rule; F-046 (a) changes nothing and documents the cost. The three standing
+  AWAITING_PO items are restated, all non-blocking.
+- **M8 moves no alias and fits no model (law 3)** — a feature-store milestone
+  serves the existing champion; the transformer lands beside it and cutover
+  is a future boundary/PO decision with the parity and p95 records in hand.
+
+### Defects/Surprises
+- None in the program. The one surprise was external and is now a
+  precondition row: Feast's pandas pin, which would have been a mid-story
+  wall, is a measured design input instead.
+
+### Next
+**EXECUTOR, fresh session — `automation/next_session.sh executor 120` runs at
+this session's exit.** First story: **M8-S1 leg 1** (the drift surface:
+F-051 first, then F-052, then F-050's PV + absence rule with backup first,
+then F-046's sentence; `make verify-m7` green at exit). The kickoff is the
+whole brief.
+
 ## Session 2026-08-21 (bu) — ◆ the M7 review. Every number re-derives; the signal that caught COVID has a blind spot inside it
 
 ### State
