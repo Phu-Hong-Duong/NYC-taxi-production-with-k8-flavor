@@ -1535,3 +1535,24 @@ the seed line are earned by THIS project.
     `scripts/*.sh` and the Makefile, skipping quoted delimiters and failing on an
     unescaped backtick in the body: a gotcha that can only be remembered will be
     forgotten by the session that was not there (F-053, M8-S1).
+
+102. **A lookup that answers a set of questions with a SMALLER set of answers
+    must say which questions it declined, or every consumer reads "declined" as
+    "the answer is nothing".** Feast's `get_historical_features` returned 77 rows
+    for 88 entity rows, for two entirely different reasons: one pair of rows
+    shared an entity key AND an event timestamp, so the store answered them once
+    (the second is not missing — it was answered, elsewhere in the frame); and
+    ten rows were earlier than every source row in the view, so they were DROPPED
+    rather than returned null. Both are legitimate library behaviour. The problem
+    is what happens next: after the obvious `merge(answers, on="row_id",
+    how="left")` those two, plus a row the store genuinely lost, are the same
+    NaN. Asserting a row count is the wrong repair — it goes red on both
+    legitimate causes, which is a guard firing on a correct system (#50). The
+    repair is to CLASSIFY the shortfall — recover the duplicates by joining on
+    the keys the store actually keyed on, accept the too-early rows as
+    legitimately null and check two-sidedly that your own path is null there too,
+    and make anything unaccounted-for a FAIL naming the row ids. Read the
+    boundary that decides the second class (here, the earliest source timestamp)
+    OFF the artifact rather than typing it. #78's family, one layer along: there
+    an empty panel looked like a quiet system, here an absent row looks like an
+    absent value (F-056, M8-S3).
