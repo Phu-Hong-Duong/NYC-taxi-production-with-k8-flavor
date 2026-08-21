@@ -167,12 +167,18 @@ def test_the_two_absences_produce_DIFFERENT_outcomes() -> None:
     and simply names no refit for this run (a real no-op), and a records directory
     that is not there at all (a fact about the process — and inside a task pod it
     is the missing file EVERY time). One returns, one raises.
+
+    The visible arm points at `docs/`, which is any directory holding no
+    `refit-*.json`, and it is chosen because it exists on the host AND inside the
+    task image — so this test makes the same assertion in both places. Pointing it
+    at the real records directory would have made the pod-side branch — the one
+    F-048 is about — untestable exactly where it matters, and the first draft did
+    precisely that and was caught by `make image-smoke`.
     """
     present = _notes()
     absent = _notes()
     # (1) visible directory, no matching record: a reported no-op.
-    resolved = RT._search_scale("a-run-nothing-refers-to", "automation/runs/m3s4", present,
-                                version="9")
+    resolved = RT._search_scale("a-run-nothing-refers-to", "docs", present, version="9")
     assert resolved == (None, None, None, None)
     assert any("no sampled search" in note or "no tracked refit record" in note
                for note in present), present

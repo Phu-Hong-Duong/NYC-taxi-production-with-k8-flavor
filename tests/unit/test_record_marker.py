@@ -92,13 +92,26 @@ def _record_reading_tests(path: Path) -> set[str]:
 
     def reads_a_record(func: ast.AST) -> bool:
         for node in ast.walk(func):
-            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            if not isinstance(node, ast.Call):
                 continue
-            if node.func.attr not in READING_CALLS:
-                continue
-            if _mentions_a_record(ast.get_source_segment(source, node.func.value) or "",
-                                  record_names):
+            reader = isinstance(node.func, ast.Attribute) and node.func.attr in READING_CALLS
+            if reader and _mentions_a_record(
+                ast.get_source_segment(source, node.func.value) or "", record_names
+            ):
                 return True
+            # A record CONSTANT handed to something else is a record dependency
+            # too: `_run(RECORD)` shells out and reads it. Restricted to the names
+            # bound to record paths rather than to any mention, because a string
+            # literal in an argument is usually an assertion ABOUT a path and not a
+            # read of one (`str(DEFAULT_RECORD).startswith("automation/runs/")`),
+            # and a check that flags those teaches the next reader to widen it
+            # until it means nothing. The honest residual: a literal record path
+            # passed to a function that reads it is invisible here — `make
+            # image-smoke` is the empirical backstop, and it is what caught the two
+            # this static check could not.
+            for argument in [*node.args, *(kw.value for kw in node.keywords)]:
+                if isinstance(argument, ast.Name) and argument.id in record_names:
+                    return True
         return False
 
     return {node.name for node in _tests(tree) if reads_a_record(node)}

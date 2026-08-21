@@ -27,8 +27,11 @@ two places, and this program's rule about twins outranks the convenience.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 MAKEFILE = (REPO / "Makefile").read_text(encoding="utf-8")
@@ -51,6 +54,17 @@ def _recipe(target: str) -> str:
     raise AssertionError(f"no target {target!r} in the Makefile")
 
 
+@pytest.mark.skipif(
+    shutil.which("make") is None,
+    # Found by M8-S1 leg 2, and it is F-047's shape a second time: this test has
+    # been RED inside the task image since the day it landed, because the image
+    # ships no `make` — and nothing runs `make image-smoke`, so nobody saw it. The
+    # answer is the idiom this suite already uses for `ss`, `git` and `docker`: a
+    # missing TOOL is a different fact from a failing assertion, and it is not the
+    # record marker either, because what is absent here is a binary rather than
+    # evidence.
+    reason="GNU make is not installed here (it is not in the task image)",
+)
 def test_make_collapses_every_failing_recipe_to_exit_2(tmp_path: Path) -> None:
     """The measurement the whole gotcha rests on.
 
