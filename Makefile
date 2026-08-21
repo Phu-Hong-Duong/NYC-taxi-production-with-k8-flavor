@@ -300,6 +300,8 @@ feast-materialize: ## M8-S4: fill the online store from the offline parquet, thr
 	@bash scripts/feast_materialize.sh $(MATERIALIZE_ARGS)
 feast-online-parity: ## M8-S4: THE 100-pair online/offline parity table — get_online_features vs the offline retrieval, bar EXACT (S3's, inherited). A READER: deploys nothing, materializes nothing
 	@uv run python scripts/feast_online_parity.py $(PARITY_ARGS)
+feast-online-parity-redteam: ## M8-S4: prove the parity table can go RED — copy one OD pair's real bytes onto another's key, watch the named column fail while the rest pass, restore byte-identically
+	@bash scripts/feast_online_parity_redteam.sh
 deploy-feast: ## M8: the whole feature-store path — store, sources, apply, materialize
 	@$(MAKE) deploy-feast-store && $(MAKE) feast-apply && $(MAKE) feast-materialize
 verify-m8: ; @echo "TODO(M8): 100-pair online/offline parity + traced enriched request + prior-art revisit"

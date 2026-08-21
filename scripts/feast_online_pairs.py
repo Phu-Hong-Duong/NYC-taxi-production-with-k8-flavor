@@ -227,6 +227,36 @@ def _max_window_drift_pair() -> tuple[int, int]:
     return int(pu), int(do)
 
 
+def redteam_pair() -> tuple[tuple[int, int], tuple[int, int]]:
+    """`(target, donor)` for the online red team — derived here, beside row 92.
+
+    The TARGET is row 92's pair: the row the declared set already names as the one
+    where a wrong value shows up by the largest margin, so the drill plants
+    against a hazard chosen in advance rather than one picked after the fact. The
+    DONOR is the full-window pair whose median is furthest from the target's, so
+    the planted value is unmistakable while still being a real value Feast wrote.
+    Both are derived from the published source, never typed.
+    """
+    target = _max_window_drift_pair()
+    frame = pd.read_parquet(
+        OD_SOURCE,
+        columns=["PULocationID", "DOLocationID", "event_timestamp", "od_median_duration_min"],
+    )
+    newest = frame["event_timestamp"].max()
+    full = frame[frame["event_timestamp"] == newest].set_index(["PULocationID", "DOLocationID"])
+    if target not in full.index:
+        raise SystemExit(f"[pairs] {target} is not in the full window — it cannot be the target")
+    target_value = float(full.loc[target, "od_median_duration_min"])
+    distance = (full["od_median_duration_min"] - target_value).abs().drop(index=target)
+    ranked = sorted(distance.items(), key=lambda item: (-item[1], item[0]))
+    donor, moved = ranked[0]
+    print(
+        f"[pairs] red team: target {target[0]}->{target[1]} (median {target_value:.4f}), "
+        f"donor {int(donor[0])}->{int(donor[1])} ({moved:.4f} min away)"
+    )
+    return target, (int(donor[0]), int(donor[1]))
+
+
 def build() -> list[dict[str, object]]:
     if not SOURCE_ROWS.exists():
         raise SystemExit(f"[pairs] {SOURCE_ROWS} is missing — M8-S3's committed row set")
@@ -275,7 +305,17 @@ def main(argv: list[str] | None = None) -> int:
         help="REBUILD the committed pair set. This changes the set every published "
         "number in docs/feast_online_m8.md was measured on.",
     )
+    parser.add_argument(
+        "--print-redteam-pair",
+        action="store_true",
+        help="print `<target_pu>,<target_do> <donor_pu>,<donor_do>` for the online red team",
+    )
     args = parser.parse_args(argv)
+
+    if args.print_redteam_pair:
+        target, donor = redteam_pair()
+        print(f"{target[0]},{target[1]} {donor[0]},{donor[1]}")
+        return 0
 
     if args.refresh or not PAIRS_CSV.exists():
         rows = build()
