@@ -275,7 +275,7 @@ verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watc
 	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
-.PHONY: deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval
+.PHONY: deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
 feast-quarantine: ## M8-S2: build the ISOLATED feast venv from its exact pins and prove it never touched uv.lock. --resolve rewrites the pins; --check builds nothing
 	@bash scripts/feast_quarantine.sh $(QUARANTINE_ARGS)
 feast-sources: ## M8-S2: build the parquet Feast reads, from the SETTLED trees, into data/feast/ (read-only; --static-only skips the 43.9M-row aggregate fit)
@@ -294,8 +294,14 @@ feast-retrieval: ## M8-S3: historical-retrieval parity (store vs the ONE feature
 	@uv run python scripts/feast_retrieval.py $(RETRIEVAL_ARGS)
 backfill-provenance: ## M8-S1 (F-048): write the SCALE a version's count-scaled knobs were chosen at ONTO the version, derived from the tracked records. Additive tags only — creates no version, deletes nothing, never reads or moves an alias. BACKFILL_ARGS=--dry-run resolves and writes nothing
 	@uv run python scripts/backfill_version_provenance.py $(BACKFILL_ARGS)
-deploy-feast: ## Feast + Redis; materialize; transformer wiring
-	@echo "TODO(M8)"
+deploy-feast-store: ## M8-S4 (ADR-012): the ONLINE store — one in-cluster Redis, no hostPort, and NO features. DRY_RUN=1 mutates nothing; TEARDOWN=1 deletes it and its PVC
+	@bash scripts/deploy_feast_store.sh
+feast-materialize: ## M8-S4: fill the online store from the offline parquet, through an ephemeral port-forward, INSIDE the quarantine. MATERIALIZE_ARGS=--dry-run writes nothing
+	@bash scripts/feast_materialize.sh $(MATERIALIZE_ARGS)
+feast-online-parity: ## M8-S4: THE 100-pair online/offline parity table — get_online_features vs the offline retrieval, bar EXACT (S3's, inherited). A READER: deploys nothing, materializes nothing
+	@uv run python scripts/feast_online_parity.py $(PARITY_ARGS)
+deploy-feast: ## M8: the whole feature-store path — store, sources, apply, materialize
+	@$(MAKE) deploy-feast-store && $(MAKE) feast-apply && $(MAKE) feast-materialize
 verify-m8: ; @echo "TODO(M8): 100-pair online/offline parity + traced enriched request + prior-art revisit"
 
 # ---- M9 stretch (demo committed by PO direction 2026-08-12) ----

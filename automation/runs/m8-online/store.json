@@ -1,0 +1,17 @@
+{
+  "story": "M8-S4",
+  "recorded_at": "2026-08-21T07:50:49Z",
+  "namespace": "feast",
+  "image": "redis:8.2-alpine@sha256:30abb90e62f14b737010746def3ba99cc79fe19dcdb3d37b41f21fc62e7da19d",
+  "pod": "redis-586db48584-sfd97",
+  "pod_uid": "914d39f1-d9b4-4be5-9246-968263a6846d",
+  "node": "mlops-taxi-worker2",
+  "pvc": "Bound 1Gi",
+  "maxmemory_policy": "noeviction",
+  "maxmemory": "536870912",
+  "dbsize_at_deploy": 0,
+  "accept": {"ping": "PONG", "write_round_trip": "ok"},
+  "host_reach": "kubectl port-forward -n feast svc/redis 6380:6379 (ephemeral; NO hostPort — see the manifest header)",
+  "in_cluster_reach": "redis.feast.svc.cluster.local:6379",
+  "state_class": "REGENERABLE — rebuild with make feast-materialize; ledger row yes, backup obligation no (ADR-012)"
+}

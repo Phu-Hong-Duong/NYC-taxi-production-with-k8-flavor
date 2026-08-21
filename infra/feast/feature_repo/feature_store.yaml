@@ -7,16 +7,35 @@
 # the settled trees (M8 law 2). Feast reads those files; it never writes them,
 # and it has no path to `data/processed/` at all.
 #
-# `registry.db` and `online_store.db` are GENERATED and gitignored — the
-# definitions in `definitions.py` are the source of truth, and a registry
-# checked in beside them would be the second home F-013 keeps deleting. Rebuild
-# with `make feast-apply`.
+# `registry.db` is GENERATED and gitignored — the definitions in `definitions.py`
+# are the source of truth, and a registry checked in beside them would be the
+# second home F-013 keeps deleting. Rebuild with `make feast-apply`.
+#
+# THE ONLINE STORE IS REDIS, AND ITS ADDRESS IS AN ENVIRONMENT VARIABLE (M8-S4,
+# ADR-012). Feast's default sqlite file satisfies NEITHER side of this program's
+# boundary: the writer is the quarantined materializer on the HOST and the reader
+# is an in-cluster pod, and a file on a laptop is not reachable from a kind node
+# in either direction. Redis is: `redis.feast.svc.cluster.local:6379` in the
+# cluster, `localhost:6380` through an ephemeral `kubectl port-forward` from the
+# host — two addresses for one store, which is exactly why this line cannot be a
+# committed constant.
+#
+# `os.path.expandvars` is what Feast applies to this file before parsing it
+# (`feast.repo_config.load_repo_config`), so `${FEAST_REDIS_CONNECTION}` is
+# substituted from the environment — and, deliberately, has NO default: an unset
+# variable leaves the literal `${FEAST_REDIS_CONNECTION}` in place, which fails
+# loudly at CONNECT time naming the variable. A default would be a wrong address
+# that connects to something, and the two failure modes are not comparable
+# (F-048's rule: "I cannot see the store" and "the store says no" must never
+# produce the same sentence). The OFFLINE readers — `make feast-retrieval`,
+# `feast apply`, `feast plan` — never open a connection, so the unexpanded
+# literal is harmless to them and they keep working with the variable unset.
 project: crosstown_eta
 provider: local
 registry: data/registry.db
 online_store:
-    type: sqlite
-    path: data/online_store.db
+    type: redis
+    connection_string: ${FEAST_REDIS_CONNECTION}
 offline_store:
     type: file
 # Version 3 is the current serialization; pinning it means a Feast upgrade
