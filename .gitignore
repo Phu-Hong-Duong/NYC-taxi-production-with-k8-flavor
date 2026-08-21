@@ -70,3 +70,20 @@ analytics/dbt/dbt_packages/
 automation/runs/**
 !automation/runs/**/
 !automation/runs/**/*.json
+
+# ---- M8: the Feast quarantine (M8-S2) ----
+# `.venv-feast` is an ISOLATED interpreter holding feast 0.66.0 and pandas 2.3.3
+# against this project's pandas 3.0.5 — the wall M8 law 4 measured. uv writes its
+# own `.gitignore` inside a venv it creates, so this entry is not strictly needed;
+# it is here so the exclusion is visible in the file a reviewer opens (F-029's
+# lesson: what a gate reads must be what review can see).
+.venv-feast/
+# The parquet Feast reads: derived read-only from the settled trees by
+# `make feast-sources`, regenerable by one command, and NOT DVC-tracked for
+# data/predictions/'s reason exactly — a pin that must be refreshed whenever an
+# upstream tree moves is provenance that lies.
+data/feast/
+# Feast's local registry and sqlite online store. GENERATED: the definitions in
+# infra/feast/feature_repo/definitions.py are the source of truth, and a registry
+# committed beside them would be the second home F-013 keeps deleting.
+infra/feast/feature_repo/data/

@@ -1,0 +1,25 @@
+# The Feast repo config. READ BY THE QUARANTINE ONLY (`.venv-feast`), never by
+# this project's own interpreter — M8 law 4, argued in
+# `infra/feast/requirements-feast.txt` and `docs/feast_catalog.md` §2.
+#
+# `provider: local` and a file offline store: the offline store IS the parquet
+# `scripts/feast_sources.py` writes under `data/feast/`, derived read-only from
+# the settled trees (M8 law 2). Feast reads those files; it never writes them,
+# and it has no path to `data/processed/` at all.
+#
+# `registry.db` and `online_store.db` are GENERATED and gitignored — the
+# definitions in `definitions.py` are the source of truth, and a registry
+# checked in beside them would be the second home F-013 keeps deleting. Rebuild
+# with `make feast-apply`.
+project: crosstown_eta
+provider: local
+registry: data/registry.db
+online_store:
+    type: sqlite
+    path: data/online_store.db
+offline_store:
+    type: file
+# Version 3 is the current serialization; pinning it means a Feast upgrade
+# inside the quarantine cannot silently change how entity keys are encoded in
+# the online store an M8-S4 materialization writes.
+entity_key_serialization_version: 3
