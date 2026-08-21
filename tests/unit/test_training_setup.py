@@ -267,15 +267,31 @@ def test_no_second_config_file_defines_a_gate():
 
     The check is on the KNOBS, not on the filename, because the next stub will
     have a different name.
+
+    WIDENED 2026-08-21 (M8-S1, F-052). The tuple held only the five PROMOTION-gate
+    names, so `configs/drift.yaml` — a planning-kit stub naming a drift reference
+    month and a drift bar that BOTH disagreed with what M7 shipped, read by
+    nothing and cited by `docs/m7_flow.html` as a source of truth — walked
+    straight through this test for a whole milestone. F-013 is not a law about
+    the promotion gate; it is a law about bars, and a drift bar is a bar. The
+    drift job's own home is `src/taxi_mlops/monitoring/drift.py` (which carries
+    no threshold at all) and every drift THRESHOLD lives in one rule selector in
+    `infra/monitoring/alerting_rules.yml`, argued in `docs/slo_serving.md` §8.
     """
     import pathlib
 
     knobs = (
+        # the promotion gate (F-013, M3-S1)
         "gate_ratio",
         "min_improvement_pct",
         "require_no_kpi10_regression",
         "holdout_split",
         "champion_alias",
+        # the drift bars (F-052, M8-S1) — same law, different kind of number
+        "reference_month",
+        "drift_share_threshold",
+        "psi_threshold",
+        "volume_ratio_threshold",
     )
     for path in sorted(pathlib.Path("configs").glob("*.yaml")):
         if path.name == "train.yaml":
@@ -283,8 +299,10 @@ def test_no_second_config_file_defines_a_gate():
         text = path.read_text()
         found = [knob for knob in knobs if knob in text]
         assert not found, (
-            f"{path} names gate knob(s) {found}. The gate has ONE home, "
-            "configs/train.yaml: gate — a second definition is F-013 all over again."
+            f"{path} names gate/drift knob(s) {found}. A promotion bar has ONE home, "
+            "configs/train.yaml: gate; a drift bar has ONE home, the selector of its "
+            "rule in infra/monitoring/alerting_rules.yml — a second definition is "
+            "F-013 all over again (F-052 was exactly that, for drift)."
         )
 
 

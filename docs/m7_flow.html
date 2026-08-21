@@ -87,7 +87,7 @@
     gates can catch two different kinds of trouble, and only real drift wakes the retraining
     machinery — which is allowed to <b>make</b> a challenger but never to <b>ship</b> one.
     Hover any box for detail.</p>
-    <p class="stamp">BLUEPRINT v2.6 §9/M7 · reference month 2019-08 · drift threshold 0.5 (configs/drift.yaml) · 2026-08-16</p>
+    <p class="stamp">BLUEPRINT v2.6 §9/M7 · reference = <code>trips_train</code> 2019-01..06 · A-8 fires at per-column PSI &ge; 0.10 on &ge;2 of 5 inputs · A-9 at volume ratio &lt; 0.50 · drawn 2026-08-16, <b>numbers corrected 2026-08-21 to what M7 shipped (F-052)</b></p>
   </div>
   <button class="theme" onclick="tgl()">light / dark</button>
 </header>
@@ -167,20 +167,21 @@
 
   <!-- row 2 -->
   <path class="flow" marker-end="url(#m)" d="M970,94 L970,310"/>
-  <g><title>SRE's model-watcher: Evidently compares the frozen 2019-08 reference against the new month; drift share goes to Pushgateway → Grafana</title>
+  <g><title>SRE's model-watcher: exact PSI in DuckDB compares the champion's TRAIN months (2019-01..06) against the new month — five of six monitored columns are categorical, so their distributions are computed exactly rather than sampled. Evidently 0.7.21 runs beside it as a second witness. Per-column PSI, unseen share and volume ratio go to the Pushgateway; the rules decide.</title>
     <rect class="box" x="770" y="314" width="310" height="66" rx="9" stroke="var(--r-sre)"/>
-    <text class="boxT" x="784" y="336">③ Drift check (Evidently)</text>
-    <text class="boxS" x="784" y="352">reference 2019-08 vs this month →</text>
-    <text class="boxS" x="784" y="366">drift share → Pushgateway → Grafana panel</text>
+    <text class="boxT" x="784" y="336">③ Drift check (PSI in SQL · Evidently 2nd)</text>
+    <text class="boxS" x="784" y="352">reference trips_train 2019-01..06 →</text>
+    <text class="boxS" x="784" y="366">per-column PSI + volume → Pushgateway</text>
     <circle cx="1064" cy="328" r="4" fill="var(--r-sre)"/>
   </g>
   <path class="flow" marker-end="url(#m)" d="M766,347 L702,347"/>
 
   <!-- D2 diamond -->
-  <g><title>Gate 2 — statistics: is this month still the WORLD the model learned? Threshold pre-declared in configs/drift.yaml</title>
+  <g><title>Gate 2 — statistics: is this month still the WORLD the model learned? Two rules, and the second is the marginal the first cannot see: A-8 counts INPUT columns past PSI 0.10 (>=2 of 5 fires); A-9 reads trips per CALENDAR day against the reference's and fires below 0.50. Both thresholds live in infra/monitoring/alerting_rules.yml and are argued in docs/slo_serving.md §8 — the drift job itself carries no bar.</title>
     <path d="M656,301 L700,347 L656,393 L612,347 Z" fill="var(--surface-1)" stroke="var(--ink)" stroke-width="1.5"/>
-    <text class="boxS" x="656" y="342" text-anchor="middle">drift share</text>
-    <text class="boxS" x="656" y="356" text-anchor="middle">&gt; 0.5?</text>
+    <text class="boxS" x="656" y="336" text-anchor="middle">A-8: PSI &ge;0.10</text>
+    <text class="boxS" x="656" y="349" text-anchor="middle">on &ge;2 of 5?</text>
+    <text class="boxS" x="656" y="362" text-anchor="middle">A-9: vol &lt;0.50?</text>
   </g>
 
   <!-- NO quiet -->
@@ -271,8 +272,8 @@ caught by different gates, looking nothing alike — so 2 a.m. you never confuse
     <h3><span class="tagW">⚠ Signature B — statistical drift</span></h3>
     <table>
       <tr><td>demo month</td><td>2020-03 (COVID empties the streets)</td></tr>
-      <tr><td>caught by</td><td>Gate 2 — the SRE's Evidently watcher, <b>downstream</b></td></tr>
-      <tr><td>what you see</td><td>Grafana alert with the drift-share number</td></tr>
+      <tr><td>caught by</td><td>Gate 2 — the SRE's drift job, <b>downstream</b>. Measured 2026-08-20: <b>A-9 (volume) fired, A-8 (input shape) correctly did not</b> — 2020-03's largest input PSI is 0.0217, lower than an accepted July 2019's 0.0323</td></tr>
+      <tr><td>what you see</td><td>a Prometheus alert reaching Alertmanager with the volume ratio (0.3913) — and a board of flat PSI panels beside it, which is the point of having both</td></tr>
       <tr><td>pipeline state</td><td>completed — predictions written, report archived</td></tr>
       <tr><td>who acts</td><td>machine retrains → challenger; DA interprets; ladder decides</td></tr>
       <tr><td>wrong response</td><td>auto-deploying the retrained model — drift ≠ permission</td></tr>
@@ -315,9 +316,16 @@ real drift, chosen at dataset-selection time precisely for this moment.</p>
 </div>
 
 <footer>
-  Sources of truth: docs/BLUEPRINT.md §9/M7 · configs/drift.yaml (reference 2019-08 · threshold 0.5 ·
-  demo months 2020-03, 2025-01) · gotchas #6, #13 · the M6 ladder it hands off to. Companion to the
-  full-platform blueprint (docs/architecture.html).
+  Sources of truth: <code>src/taxi_mlops/monitoring/drift.py</code> (the reference, the monitored
+  columns, the PSI and the calendar-day denominator — and no threshold: it computes and does not judge) ·
+  <code>infra/monitoring/alerting_rules.yml</code> (A-8, A-9, A-10 — every bar lives in a rule selector) ·
+  <code>docs/slo_serving.md</code> §8 (where each bar is argued, from 2019 headroom) ·
+  docs/BLUEPRINT.md §9/M7 · demo months 2020-03 (statistical) and 2025-01 (schema) · gotchas #6, #13 ·
+  the M6 ladder it hands off to. Companion to the full-platform blueprint (docs/architecture.html).
+  <br><b>F-052, 2026-08-21:</b> this page previously cited <code>configs/drift.yaml</code> here and in
+  its stamp line, naming a reference month (2019-08 — the <i>test</i> split) and a bar (0.5 share of
+  columns) that nothing in the program ever used. That file has been deleted; these are the artifacts
+  that decide.
 </footer>
 
 </div>

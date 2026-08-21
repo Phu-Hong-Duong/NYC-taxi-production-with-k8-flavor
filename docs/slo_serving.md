@@ -505,6 +505,33 @@ same mix of trips is invisible to it — which is precisely the F-045 shape M7-S
 measured from the other side. That is why SLO-D2 exists and is not a refinement
 of SLO-D1: it is the marginal the first instrument is blind to.
 
+**What the WINDOW cannot see, stated because it was measured and not fixed
+(F-046, decided at the M7→M8 boundary).** The paragraph above is about columns;
+this one is about the month. *A regime change confined to part of a month is
+invisible to SLO-D1 at monthly grain regardless of which columns are watched:
+2020-03 measured a largest input PSI of 0.0217 — below an accepted July 2019's
+0.0323 — while its last ten days ran a different city.* The mechanism is the one
+the drift memo states in the form that generalises: a row-weighted average of a
+collapse is weighted by exactly the rows that disappeared (68.231% of March's
+rows fall before the 11th; 3.321% after the 21st). **The signal was never absent
+— it was averaged.**
+
+The boundary accepted the monthly window rather than adding a daily drift job,
+and the reliance that makes that honest is SLO-D2: **A-9 needs no column to move
+at all, and since M8-S1 its ratio is monotonic in the depth of the collapse**
+(F-051 — the denominator is the calendar days the window covers, so a day with
+no trips can no longer leave the numerator and the denominator together). The
+residual cost is recorded rather than netted out: **a shape change with no
+volume change — a vendor re-routing, a fare-rule change, a new pickup pattern at
+constant demand — confined to part of a month would be missed entirely by both
+rules.** A daily or rolling window is the upgrade that buys it, and it is
+deliberately *not* scheduled here: it needs its own 2019 daily headroom leg
+before any bar can be argued (law 4's family — choosing a window after seeing
+which window would have fired is the same move as walking a threshold), a push
+cadence, and a staleness story per window. The daily series already exists on
+the OUTPUT side (`marts.scoring_daily`, and the M7-S5 board renders it), so the
+gap is specifically the INPUT side.
+
 ### 8.2 The headroom, measured on months whose verdict already exists
 
 The two held-out 2019 months are the only data in this repository that is
@@ -585,6 +612,24 @@ is ~20%; halving is not a dip. The harm side is what makes it worth a page rathe
 than a chart: a model quoting confidently into a market that has lost half its
 trips is quoting into a *different* market, and volume is the marginal SLO-D1 is
 structurally blind to (§8.1).
+
+**"Trips per day" means per CALENDAR day, and that sentence became true on
+2026-08-21 (F-051).** It is what this section and A-9's annotation always said;
+it is not what the job computed. Until M8-S1 the denominator was
+`COUNT(DISTINCT observed date)` — the days that held a trip — so a day on which
+the city took *no* trips left the numerator **and the denominator together**, and
+the ratio measured *how busy were the days that happened*. That quantity **rises
+as a shutdown deepens**: REV measured it at the M7 review by deleting 2020-03's
+quietest days outright — a strictly worse month — and watched the ratio walk from
+0.3913 through 0.4768 to **0.5143, back across this bar and silent**. The same
+arithmetic read a truncated 20-of-31-day extract as healthy.
+
+The bar did not move; the denominator did. What the change buys is a **property**,
+now asserted by tests and re-measured by `make drift-monotonicity`: *a strictly
+worse collapse produces a strictly lower ratio, and a month that has crossed 0.50
+cannot walk back across it.* An alert whose whole claim is that it sees the
+marginal PSI cannot see has to be monotonic in that marginal, and §8.1's
+acceptance of the monthly window (F-046) rests on this rule specifically.
 
 ### 8.5 SLO-D3 · freshness — *a drift number older than 40 days is not a drift number*
 
