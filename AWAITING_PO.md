@@ -10,6 +10,16 @@ auto-proceeds on a recommendation (ADR-010).
 
 ## 2026-08-20-1 · raised by EXEC/Opus (M7-S5 leg 2) · NOT A FORK, NOT BLOCKING: your park is recorded, and this is what is ready when you lift it
 
+> **LIFTED 2026-08-21 03:57Z.** `automation/STOP` is gone and the chain resumed.
+> The session that booted was an **executor**, and M7 had no story for it — so it
+> did the boot ritual's staleness check, found every claim in HANDOFF (bs) intact
+> across a second host restart (`make verify-m5`/`m6`/`m7` all GREEN, `@champion`
+> **2** on both the wire and the registry), added the recurrence-rate evidence to
+> **F-050** (the gateway emptied again — twice in 14 hours, which re-prices its
+> two options), touched the wire **not at all**, and scheduled **REV** as this
+> entry said it would. See HANDOFF (bt). Nothing below needed an answer and
+> nothing still does; the three standing items keep their status.
+
 **Nothing here needs a decision.** Same purpose as 2026-08-19-2, 2026-08-19-1 and
 2026-08-18-2: a parked chain with no entry here looks like a crash to the
 watchdog, and `automation/STOP` is gitignored — so without this line the repo
