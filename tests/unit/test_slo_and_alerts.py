@@ -35,6 +35,8 @@ DRILL = REPO / "scripts" / "alert_fire_drill.py"
 #: M7-S3's drill. There are two from here on, and the coverage test takes their
 #: union — see `test_the_drill_watches_every_rule_in_the_file`.
 DRIFT_DRILL = REPO / "scripts" / "drift_fire_drill.py"
+#: M8-S1's drill (F-050's pair). Three from here on, same union.
+PERSISTENCE_DRILL = REPO / "scripts" / "drift_persistence_drill.py"
 DEPLOY = REPO / "scripts" / "deploy_monitoring.sh"
 PROM_VALUES = REPO / "infra" / "helm" / "monitoring" / "prometheus-values.yaml"
 SLO_DOC = REPO / "docs" / "slo_serving.md"
@@ -313,9 +315,19 @@ def test_the_drill_watches_every_rule_in_the_file(all_rules):
             watched |= {e["alert"] for e in other["must_not_fire"]}
             watched.add(other["the_open_question"]["alert"])
 
+    # M8-S1's persistence drill is the third, and it is the ONLY one that can
+    # speak about A-11: an absence rule cannot be exercised by a drill that
+    # pushes metrics, nor by one that injects 422s at the endpoint.
+    persistence_source = ast.parse(PERSISTENCE_DRILL.read_text())
+    for node in ast.walk(persistence_source):
+        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "PREDICTION":
+            third = ast.literal_eval(node.value)
+            watched.add(third["absence"]["must_fire"]["alert"])
+            watched |= {e["alert"] for e in third["absence"]["must_not_fire"]}
+
     declared = {rule["alert"] for rule in all_rules}
     assert watched >= declared, (
-        f"the two drills between them watch {sorted(watched)} but the rules file declares "
+        f"the three drills between them watch {sorted(watched)} but the rules file declares "
         f"{sorted(declared)}; {sorted(declared - watched)} is covered by neither. Every rule "
         "must be predicted to fire or predicted not to by SOME drill — an unlisted rule is a "
         "rule that has stopped being exercised."

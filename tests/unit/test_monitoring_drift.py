@@ -338,13 +338,31 @@ def test_every_rule_threshold_appears_in_the_document_that_argues_it() -> None:
 
 
 def test_every_drift_rule_carries_a_signal_and_a_why() -> None:
+    """The id set is DERIVED from the renderer, not typed here.
+
+    It used to be the literal `{"A-3", "A-4", "A-8", "A-9", "A-10"}` — true the
+    day it was written, and RED the moment M8-S1 added A-11 for F-050, which is
+    a guard going red for a correct addition (gotcha #50, and it has now cost
+    this program seven sessions). The property that holds at every state: a
+    drift rule's signal must be one the program KNOWS about, and
+    `render_alert_rules.validate()` is what enforces that both ways.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_render_alert_rules", REPO_ROOT / "scripts" / "render_alert_rules.py"
+    )
+    renderer = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(renderer)
+
     document = yaml.safe_load(RULES_FILE.read_text())
     for group in document["groups"]:
         if group["name"] != "crosstown-drift":
             continue
         assert group["rules"], "the drift group is empty"
         for rule in group["rules"]:
-            assert rule["labels"]["signal"] in {"A-3", "A-4", "A-8", "A-9", "A-10"}
+            assert rule["labels"]["signal"] in renderer.KNOWN_SIGNALS
             assert rule["annotations"]["why"].strip()
 
 
@@ -401,6 +419,47 @@ def test_the_committed_prediction_still_equals_the_code() -> None:
         (REPO_ROOT / "automation" / "runs" / "m7-drift" / "prediction.json").read_text()
     )
     assert committed == module.PREDICTION
+
+
+def test_the_committed_persistence_prediction_still_equals_the_code() -> None:
+    """The same law for M8-S1's F-050 drill — one drill, one prediction, one test.
+
+    Deliberately a SECOND test rather than a parametrised one: when a drill's
+    prediction and its code disagree, the failure should name the drill.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "drift_persistence_drill", REPO_ROOT / "scripts" / "drift_persistence_drill.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    committed = json.loads(
+        (REPO_ROOT / "automation" / "runs" / "m8-drift" / "persistence-prediction.json").read_text()
+    )
+    assert committed == module.PREDICTION
+
+
+def test_the_persistence_drill_predicts_what_must_NOT_happen_too() -> None:
+    """A drill that predicts only "something fires" cannot be wrong.
+
+    A-10 staying inactive through a total loss of the drift surface is the whole
+    argument for A-11 existing; if it fired here, F-050's second half would be
+    redundant and the finding would have been wrong. That has to be a prediction,
+    not a footnote discovered afterwards.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "drift_persistence_drill", REPO_ROOT / "scripts" / "drift_persistence_drill.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    quiet = {entry["signal"] for entry in module.PREDICTION["absence"]["must_not_fire"]}
+    assert "A-10" in quiet, "the drill must predict A-10's silence, which is A-11's reason to exist"
+    assert module.PREDICTION["absence"]["must_fire"]["signal"] == "A-11"
 
 
 def _rule(document: dict, name: str) -> dict:

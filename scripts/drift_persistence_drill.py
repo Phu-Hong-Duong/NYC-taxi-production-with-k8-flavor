@@ -82,6 +82,10 @@ ABSENCE_ALERT = "DriftMetricsAbsent"
 STALE_ALERT = "DriftMetricsStale"
 VOLUME_ALERT = "ScoringVolumeCollapse"
 
+#: A PURE LITERAL, deliberately: `tests/unit/test_slo_and_alerts.py` reads every
+#: drill's prediction with `ast.literal_eval` rather than by importing it, so a
+#: coverage test can never be satisfied by a module with a side effect. Alert
+#: names are spelled out here even though constants for them exist above.
 PREDICTION: dict[str, Any] = {
     "written_before": "the gateway's pod is deleted and before any series is wiped",
     "pair_decided_at": "the M7->M8 boundary (F-050 (a)+(b) together)",
@@ -101,7 +105,7 @@ PREDICTION: dict[str, Any] = {
     },
     "absence": {
         "must_fire": {
-            "alert": ABSENCE_ALERT,
+            "alert": "DriftMetricsAbsent",
             "signal": "A-11",
             "confidence": "high",
             "after_about_seconds": 600,
@@ -113,7 +117,7 @@ PREDICTION: dict[str, Any] = {
         },
         "must_not_fire": [
             {
-                "alert": STALE_ALERT,
+                "alert": "DriftMetricsStale",
                 "signal": "A-10",
                 "because": (
                     "THIS IS THE POINT OF A-11. A-10 reads `time() - max by (month)(stamp)`, "
@@ -123,7 +127,7 @@ PREDICTION: dict[str, Any] = {
                 ),
             },
             {
-                "alert": VOLUME_ALERT,
+                "alert": "ScoringVolumeCollapse",
                 "signal": "A-9",
                 "because": (
                     "no volume series exists during the wipe, so A-9 has nothing to compare. "
@@ -408,9 +412,16 @@ def main(argv: list[str] | None = None) -> int:
 
         # --- phase 3: ABSENCE — wipe the store, watch A-11 -------------------
         say("phase 3 — wipe the drift series deliberately; A-11 must page and A-10 must not")
-        check(rule_state(ABSENCE_ALERT) == "inactive",
-              f"{ABSENCE_ALERT} is inactive BEFORE the wipe (a rule that is always firing "
-              "proves nothing when it fires)")
+        # Waited for rather than asserted instantly: the push has to be scraped
+        # (15s) and evaluated before the rule can leave the state F-050 left it
+        # in, and a check that fails on a scrape interval fails for its own
+        # reasons (#55).
+        quiet, quiet_after = wait_for(lambda: rule_state(ABSENCE_ALERT) == "inactive",
+                                      timeout=180, poll=10)
+        check(quiet,
+              f"{ABSENCE_ALERT} is inactive BEFORE the wipe ({quiet_after:.0f}s after the push "
+              "cleared the state F-050 left the gateway in) — a rule that is always firing "
+              "proves nothing when it fires")
         wiped_at = time.time()
         for month in MONTHS:
             delete_group(
@@ -428,9 +439,9 @@ def main(argv: list[str] | None = None) -> int:
         fired, _ = wait_for(lambda: rule_state(ABSENCE_ALERT) == "firing",
                             timeout=args.absence_timeout, poll=15)
         fired_after = round(time.time() - wiped_at, 1)
+        predicted_at = PREDICTION["absence"]["must_fire"]["after_about_seconds"]
         check(fired, f"{ABSENCE_ALERT} (A-11) FIRED {fired_after}s after the wipe "
-                     f"(predicted about {PREDICTION['absence']['must_fire']['after_about_seconds']}s "
-                     "— its sustain is 10m)")
+                     f"(predicted about {predicted_at}s — its sustain is 10m)")
         at_am, _ = wait_for(lambda: alertmanager_holds(ALERTMANAGER_LOCAL_PORT, ABSENCE_ALERT),
                             timeout=120, poll=10)
         check(at_am, "Alertmanager holds it — a rule firing only in Prometheus's own UI has "
@@ -453,7 +464,7 @@ def main(argv: list[str] | None = None) -> int:
         }
 
         # --- phase 4: CLEAR — and the board ends carrying the truth ----------
-        say("phase 4 — re-push the real numbers; the alert clears and March 2020 is back on the board")
+        say("phase 4 — re-push the real numbers; A-11 clears and March 2020 is back on the board")
         cleared_push_at = time.time()
         push_real_months(PUSHGATEWAY_LOCAL_PORT)
         restored = gateway_samples(PUSHGATEWAY_LOCAL_PORT)
