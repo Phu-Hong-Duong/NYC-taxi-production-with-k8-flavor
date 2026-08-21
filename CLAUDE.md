@@ -2662,6 +2662,92 @@ can never disagree (the port-family twins lesson, applied before it bit).
   three measurements that motivate it (1.90× · 1.91× · 1.86–2.35×), which is
   `docs/error_memo_m2.md` §7 row 2's named reader — catalog only.
 
+## Point-in-time correctness, measured (M8-S3) — an exact seam, and the leak in one column
+- **`max |ours − store| = 0.000e+00` across 14 columns and 88 declared rows, against
+  a bar of EXACT** — and the bar was argued from the dtype path and COMMITTED
+  (`27ea9a1`) before the comparison ran, which is M8 law 4's ordering made checkable
+  from git rather than asserted (M7-S3's headroom precedent). The argument is one
+  sentence: **nothing on the store's side of the wall performs arithmetic** —
+  `make feast-sources` computes every number on THIS side through the champion's own
+  functions and Feast's whole job is to remember it and pick the right row, so a
+  retrieval is a copy, a lossless `float32 -> float64` widening, or parquet's typed
+  encoding. A float bar would have been a hedge against a hazard that does not exist
+  here; a *nonzero* result would have been a finding to investigate (which side
+  rounded), never a bar to widen.
+- **`one missing` is ZERO on every column, and that is the load-bearing number** —
+  stronger than the deltas. Every value the store declines to answer is one the
+  feature path declines too. `NaN != NaN`, so the comparison counts both-missing as
+  agreement and **one-missing as a MISMATCH**; a check that dropped nulls would have
+  printed the same `0.000e+00` while being blind to the ~1% of rows carrying no
+  geometry — the class F-030 was found on.
+- **The no-geometry rows are ASSERTED two-sidedly, never compared.** For zones
+  264/265 the store has no row (DR-04 condition 1) while `zones.load_zone_table()`
+  answers borough `"Unknown"` / airport `False` — the same fact in two vocabularies.
+  So: the store must return **null** (11 PU rows, 18 DO rows, 0 exceptions) AND our
+  path must report `has_geometry = 0` (20 rows). Manufacturing a zeroed row in the
+  store to make a column-wise comparison succeed would put a plausible place at the
+  equator into a feature store.
+- **The PIT proof is two-sided, and the second half is what makes the first mean
+  anything.** Same store, same call, ONE column different — the honest pass sends
+  each row its own timestamp, the naive pass overwrites every timestamp with the
+  instant the last window closed. Honest vs naive differ on **61 of 76** OD rows
+  (max **8.2000** min), 53/69 speeds, 62/78 rates; **the naive answer IS our own
+  full-window table, 0 mismatches over 88 rows**; and the honest answer reconciles
+  with `aggregates.transform` at **0.000e+00**. Without that last clause a
+  difference would only prove two joins disagree.
+- **The purest form of the leak is 10 rows the honest join must tell NOTHING.**
+  2019-01 is the first train month and has no history; `AggregateTables.empty()`
+  serves it NaN and the naive join hands it a number computed from June.
+- **All six month-boundary pairs were served DIFFERENT windows across 120 seconds**,
+  and the walk reads like the design doc: `(no row) -> 2019-01 -> …,02 -> …,03 ->
+  …,04 -> …,05 -> full`, od_median 161->237 **NaN -> 8.1833 -> 8.2667 -> 8.1667 ->
+  8.1667 -> 8.2500 -> 8.3500**, with **the naive column constant at 8.3500 down the
+  whole table** — which is exactly what makes a leaky feature look stable and good.
+  Two rows deserve slow reading: the FIRST (two minutes apart, one gets NaN and the
+  other January, because the window became knowable at 00:00 and not one second
+  earlier) and the FOURTH (**the window changed while the value did not** — an
+  honest join is about what a row was ENTITLED to know, so a check written against
+  "the number moved" would have called that pair a failure).
+- **F-056 (new, closed the same session): `get_historical_features` returns fewer
+  rows than it was asked for, for two reasons a left join cannot tell apart.** The
+  first run answered **77 of 88** on the time-varying views. Cause 1: duplicate
+  `(entity keys, event_timestamp)` — one drawn row shares a pickup second AND a zone
+  with another, and the store answered it *once*, so aligning on `row_id` would have
+  manufactured a mismatch against a perfectly good value. Cause 2: **no source row
+  at or before the timestamp** (all ten others are 2019-01; the earliest
+  `od_window_stats` stamp is 2019-02-01) — the value is correctly nothing, but the
+  row is DROPPED rather than nulled. Both legitimate, neither announced, and after
+  any `how="left"` merge a NaN meaning *answered elsewhere*, one meaning *correctly
+  nothing* and one meaning *lost* render identically (gotcha #78's disease again).
+  So the script **asserts no count**: it CLASSIFIES every unanswered row, recovers
+  the duplicates by joining on the keys the store actually keyed on, reads the
+  earliest source stamp off the published parquet rather than typing it, and
+  **`unexplained` is a FAIL naming row ids**. Observed: `duplicate-key 1 ·
+  before-first-source-row 10 · UNEXPLAINED 0`.
+- **The truth is RE-FITTED from `data/processed/`, never rebuilt from the parquet
+  the store reads** — 43,987,422 rows through `aggregates.fit(point_in_time=True)`.
+  Reconstructing it from the artifact under test would compare the store against
+  itself and pass for any join at all, including no join.
+- **The row set is declared and committed, 88 rows, each naming why**
+  (`infra/feast/retrieval_rows.csv`): 16 **imported from `parity.HAZARDS`** so the
+  wire seam and the store seam are measured against ONE row set · 12 straddling
+  every train-month boundary by 120 s · 60 drawn across M6-S3's four strata. The
+  draw **refuses to come back short**, because the first version used
+  `USING SAMPLE reservoir(15 ROWS) REPEATABLE` after a `WHERE` and returned **ZERO
+  airport rows out of a stratum holding 3,237,471** — DuckDB samples the SCAN, not
+  the filtered set, and a short draw in a committed artifact is indistinguishable
+  from a stratum nobody covered.
+- **Nothing was fitted for a model, no alias moved, nothing materialized.**
+  `@champion` version **2** / `feature_set v2`, versions `['1','2']` — no version 3.
+  `make verify-m7` **GREEN 62/62**, host suite **1008 passed** (22 new), `uv.lock`
+  byte-identical to the `m7-closed` tag, all four settled pins `up to date`,
+  `make feast-plan-check` still `4 clock-only, 0 substantive`.
+- **Two tests went red for matching WORDS and both were the file quoting itself**
+  (gotcha #99, second time in this repo): `"materialize"` matched the comparer's own
+  docstring promising it does not materialize, and `"USING SAMPLE"` matched the note
+  explaining why it is gone. Both are asked of the **AST** now — the single
+  subprocess invocation's argv, and the SQL `_drawn_rows` actually builds.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2827,6 +2913,8 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Build the parquet Feast reads, from the SETTLED trees (M8-S2) | `make feast-sources` (`SOURCES_ARGS=--static-only` skips the 43.9M-row fit; `--train-months` is a SMOKE override that labels its own output) | VERIFIED 2026-08-21 (M8-S2), **3m07s**: `zone_static` **263** rows · `calendar_day` **4,383** · `od_window_stats` **248,169** · `pu_hour_window_stats` **35,589**, from 43,987,422 train rows through `aggregates.fit(point_in_time=True)` — the ONE path, never a re-implementation. Six windows, each stamped at its own EXCLUSIVE end (**2019-02-01 … 2019-07-01**, derived from the window's own months and never typed); **2019-01 gets no rows at all**, because it has no history. Writes ONLY into `data/feast/`: all four settled pins read `up to date` afterwards, and `uv.lock` is byte-identical to the `m7-closed` tag. A test asserts exactly ONE writer call exists in the module, so every output path is `OUT_DIR` by construction |
 | Register the git-defined feature repo, and read it back (M8-S2) | `make feast-apply` · `make feast-registry` (the read-back, run INSIDE the quarantine) | VERIFIED 2026-08-21 (M8-S2): 5 entities and 4 feature views applied into a **gitignored, regenerable** local registry (`definitions.py` is the source of truth; a committed registry would be the second home F-013 keeps deleting). The read-back is the `deploy_serving.sh` idiom — never trust the file you submitted — and it caught its own drift on the first run, reporting tags edited minutes earlier. `automation/runs/m8-feast/registry.json` is what `tests/unit/test_feast_repo.py` compares the catalog against |
 | Ask whether the registry still matches git (M8-S2, **F-055**) | `make feast-plan-check` (`make feast-plan` is the raw output for a human) | VERIFIED 2026-08-21 (M8-S2): **`4 object(s) reported, 4 clock-only, 0 substantive`** → `ok  the registry matches the definitions in git`. It exists because **`feast plan` can never say "no changes"** — Feast re-stamps `DataSource.meta` at import, so all four views report as Updated on a repo where nothing moved (gotcha #78's disease in its worse direction: an always-noisy reading looks like diligence). The checkable statement is that every difference is confined to `("seconds:", "nanos:")`, an allowlist a test pins. **RED-TEAMED live**: `centroid_lat` renamed to `centroid_lat_TAMPERED` in `definitions.py` → **FAIL naming `zone_static` and the field, with the other three views still reading clock-only**, then restored from git, re-applied, GREEN. Record: `automation/runs/m8-feast/plan.json` |
+| The DECLARED row set both M8 seams are measured on (M8-S3) | `make feast-rows` (`ROWS_ARGS=--refresh` REBUILDS it, which changes the set every published number was measured on) | VERIFIED 2026-08-21 (M8-S3): **88 declared row(s)** — `hazard` 16 · `month-boundary` 12 · `ordinary`/`airport`/`no-geometry`/`long-trip` 15 each. The sixteen hazards are **imported from `taxi_mlops.serving.parity.HAZARDS`**, not retyped, so `make parity`'s wire seam and this story's store seam are measured against ONE row set (a test compares them field by field). The boundary twelve are DERIVED from `configs/train.yaml`'s own train months — the last minute of each and the first minute of the next, 120 s apart. The sixty drawn rows are `ORDER BY hash(<the row's own key columns>, 20260821) LIMIT 15`, and the drawer **refuses a short draw**: its first version asked for `USING SAMPLE reservoir(15 ROWS) REPEATABLE (seed)` after a `WHERE` and got **0 airport rows out of 3,237,471**, because DuckDB samples the scan and the filter is applied to what survives it |
+| Retrieval parity + the point-in-time proof (M8-S3) | `make feast-retrieval` (`RETRIEVAL_ARGS=--no-write` prints the verdicts and writes no record; ~4 min, of which the 43.9M-row truth fit is nearly all) | VERIFIED 2026-08-21 (M8-S3): **PASSED.** Parity **`max \|ours − store\| = 0.000e+00` over 14 columns and 88 rows against a bar of EXACT**, with **`one missing` ZERO everywhere** — the store and the feature path agree about which rows have no value at all, not merely about the values. The two-sided no-geometry assertion held (11 PU / 18 DO rows, store returned a row for **none**, our path reports `has_geometry = 0` on 20). PIT: honest vs naive differ on **61/76** OD rows (max **8.2000** min), 53/69 speeds, 62/78 rates; **the naive answer IS our own full-window table (0 mismatches over 88)**; **10 rows the honest join must tell nothing are handed a number by the naive one** (2019-01 has no history); and **all six boundary pairs were served different windows across 120 s** while the naive column sat constant at 8.3500. The truth is re-fitted from `data/processed/`, never rebuilt from the parquet under test. A READER — AST-pinned to make exactly ONE subprocess call (the quarantine crossing) and to name no registry, deploy or materialize verb. Its first run went RED on its own count guard and that is **F-056** |
 | What the SCHEDULED retrain actually resolved, off the control plane (M8-S1, F-048) | `uv run python scripts/retrain_proof_record.py --out automation/runs/m8-provenance/proof.json` (needs a route; a READER — launches nothing, aborts nothing, moves no alias) | VERIFIED 2026-08-21 (M8-S1 leg 2). It asks the server for the newest firings of `retrain-schedule-proof` and reads the record **the POD returned as its output** (the task returns JSON text: a verdict travels as content, never as a path). **Its first run captured the BEFORE state** — five consecutive firings on task version `6d5b536b975b…`, every one `rescale_factor: null, round_cap: 500`, exit **1** — which is F-048 alive, measured by the same instrument that reports the after; `earlier_runs_seen` keeps both in one file so the contrast is not taken on trust. Two defects it found in itself first: the unfiltered run list comes back **OLDEST FIRST** (so a 40-run scan saw only M4's pipeline and reported "the trigger never fired" — gotcha #59's family, an absence inferred from looking in the wrong place), and `ActionOutputs` is neither a mapping nor a string, so `json.loads(str(outputs))` refused and that refusal read as the same absence |
 | Register the retrain's SCHEDULE and read it back off the server (M7-S4) | `make retrain-schedule` (`DRY_RUN=1` resolves and deploys nothing) | VERIFIED 2026-08-20 (M7-S4): **Flyte 2.6.1 / chart v2.0.42 carries triggers natively** — asked of the tooling, not read off a version table (gotcha #70's family) — so the kickoff's recorded cron fallback is **NOT executed and stays armed**. Deployed `taxi-pipeline-train.retrain` (version `6d5b536b975b…`, image `taxi-mlops-pipeline:72a4013`) with two triggers **declared in code with their inputs** (the CLI form cannot pass inputs, so a CLI-created trigger fires the DEFAULTS), then read them back **off the control plane**: `retrain-schedule-proof … every 20 minutes starting at now … True` and `retrain-monthly … cron: 0 3 1 * * (UTC) … **False**`. The monthly one is registered and inactive ON PURPOSE — hours of CPU under a 6-core limit on a laptop nobody watches; one field and a PO's call. **Its F-026 guard fired on this story's own commit** (`scripts/retrain_schedule.sh` not in the image) and the image was rebuilt rather than the guard narrowed |
 | Prove the bake-off can be RUN again (M7-S4, F-022) | `make bakeoff BAKEOFF_ARGS="--smoke-rows 20000"` | VERIFIED 2026-08-20 (M7-S4): **exit 0**, past contender resolution for the first time since M3-S5's own promotion moved the alias. `[resolve] champion (alias) auto-lgbm-v2 family=lgbm features=v2 (24) **(DERIVED from the artifact — F-022)** trees=791` — the row that used to declare `v1` now reads its set off the loaded booster's ordered feature names. Five verdicts printed, **no JSON written, nothing promoted**, and the 2x2 **declines to print** because no contender occupies its origin cell (v1 features, hand params) — computing it against the alias would report `auto-on-v2 +0.00%`, correct arithmetic answering a different question. Transcript: `docs/retrain_m7_transcripts.md` §1 |

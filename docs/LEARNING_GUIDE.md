@@ -3837,3 +3837,71 @@ discover that correspondence; it has to measure it. And one number nobody
 arranged: the full window's OD table holds **46,938** rows, which is the count
 M3-S1's floor independently reported as its `(PU, DO)` backoff cells over the
 same six months.
+
+## M8-S3 — the bar you can only defend if you write it down first (2026-08-21, EXEC/Opus 5)
+
+**The lesson: an exact bar is not confidence, it is an argument about where the
+arithmetic happens.**
+
+It is tempting to write a float tolerance for any cross-language comparison —
+`1e-9`, say — because floats are scary and a small number looks humble. That
+instinct is exactly backwards here, and working out why is the whole of this
+story's craft.
+
+A tolerance is a claim about a mechanism that could make two numbers differ. So
+before choosing one, name the mechanism. Between our pandas 3.0.5 and Feast's
+pandas 2.3.3 there is a parquet file, and along that path: `make feast-sources`
+computes a value on OUR side (through the same functions the champion's own
+matrix uses), widens it `float32 -> float64` (exact for every finite value),
+pyarrow encodes it as a DOUBLE, Feast decodes it, joins on a key, and writes it
+back. **Not one step performs arithmetic.** A store's job is to remember and to
+pick a row. So the honest bar is `0.0`, and a `1e-9` bar would not have been
+humility — it would have been a place for a real defect to hide, one that only
+ever needs to be smaller than the number you were too vague to justify.
+
+Two things follow, and both are the reusable part:
+
+**First, write the bar down before you measure.** M8 law 4 mandates it and this
+story committed §2 of `docs/feast_pit_m8.md` in its own commit (`27ea9a1`) before
+the comparison ran, so the ordering is checkable from git. The reason is not
+ceremony. Had the run come back at `3e-16` and the bar not yet existed, `1e-9`
+would have felt like a perfectly reasonable thing to write — and nobody, ever,
+would have asked which side rounded. Writing the argument first converts a
+surprise from something to accommodate into something to investigate.
+
+**Second, name in advance what a nonzero result would MEAN.** §2 lists them: a
+producer that computes instead of copying, a float32 column decoded through a
+rounding dtype, a store-side aggregation, a join serving the wrong window. That
+list is what turns "the measurement failed" into a diagnosis, and it is only
+writeable before you have a number to explain away.
+
+**The other half: absence is a value, and comparing it is where the design
+lives.** `NaN != NaN`, so the easy comparison drops nulls — and prints exactly
+the same `0.000e+00`. This one counts both-missing as agreement and **one-missing
+as a MISMATCH**, and the number that mattered in the end was not the max delta
+but `one missing = 0` on all fourteen columns: the store and the feature path
+agree about *which rows have no value at all*. Zones 264/265 have no centroid by
+design, so the store holds no row for them while our table says borough
+`"Unknown"` — the same fact in two vocabularies. The temptation is to publish a
+zeroed row so a column-wise comparison succeeds. That is putting a plausible
+place at the equator into a feature store to satisfy a test. The right move is a
+two-sided assertion: the store must say **nothing**, and our path must report
+`has_geometry = 0`.
+
+**And the one about proofs.** The naive-versus-honest difference is the
+photogenic half — 61 of 76 rows differ, the leak in minutes. But on its own it
+proves only that two joins disagree; it is equally consistent with the honest
+join being wrong in some *other* way. What pins it is the boring second half:
+the honest join's values equal our own `aggregates.transform` output at
+`0.000e+00`. **A demonstration of a difference is not a proof until you have also
+shown which side is right.** Every drill in this repo that survived contact has
+that shape, and the ones that had to be repaired usually did not.
+
+Finally, the row set. Sixteen of the 88 rows are `parity.HAZARDS`, *imported*
+rather than copied, so the wire seam and the store seam are measured against one
+set and cannot drift apart. And the drawn rows refuse to come back short —
+because the first draw asked DuckDB for `USING SAMPLE reservoir(15 ROWS)
+REPEATABLE` after a `WHERE` and got **zero airport rows out of 3,237,471**.
+DuckDB samples the scan; the filter is applied to what survives it. A short draw
+in a committed artifact is indistinguishable from a stratum nobody thought to
+cover, which is #78 wearing a sampler's clothes.
