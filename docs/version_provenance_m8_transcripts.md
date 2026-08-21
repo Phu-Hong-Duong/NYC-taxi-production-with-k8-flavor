@@ -142,7 +142,42 @@ $ uv run python scripts/retrain_proof_record.py --limit 5
 rc: 1
 ```
 
-**After** — see `automation/runs/m8-provenance/proof.json`, written by the same
-reader, and §4 of the write-up. The record carries `earlier_runs_seen`, so the
-before and the after sit in one file and a reviewer does not have to take the
-contrast on trust.
+**After** — the first firing on the new task version, 20 minutes later:
+
+```
+$ uv run python scripts/retrain_proof_record.py --limit 8 \
+    --out automation/runs/m8-provenance/proof.json
+[proof] run          : rdc1f3841bd6455e6  (SUCCEEDED, 2026-08-21T06:31:54+00:00)
+[proof] task version : cfe8dc01a11527facc8cbc329e1df85a
+[proof] champion     : version 2
+[proof] target_rows  : 43,987,422
+[proof] rescale_factor: 6.666666969783633
+[proof] round_cap     : 2400
+[proof] decision      : PLAN_ONLY  promoted=False
+[proof] ok   the pod resolved F-020's scale transfer: expected 6.6667, observed 6.6667
+[proof] ok   the pod re-derived the round budget: expected 2400, observed 2400
+[proof] ok   the proof trigger plans only and promotes nothing: expected True, observed True
+rc: 0
+```
+
+The record carries `earlier_runs_seen`, so the before and the after sit in ONE
+file and a reviewer does not have to take the contrast on trust — seven
+consecutive firings of the same trigger, twenty minutes apart, on the same
+champion:
+
+```
+06:31:54Z rdc1f3841bd6455e6 v=cfe8dc01a115 factor=6.666666969783633 cap=2400
+06:11:54Z rf156a0512f7f3e14 v=6d5b536b975b factor=None              cap=500
+05:51:54Z rfe2504b7ad8e1c27 v=6d5b536b975b factor=None              cap=500
+05:31:54Z rd29eacea4f50f291 v=6d5b536b975b factor=None              cap=500
+05:11:54Z r7eb2dcd906efb3ab v=6d5b536b975b factor=None              cap=500
+04:51:54Z r9102f147320ad87a v=6d5b536b975b factor=None              cap=500
+04:31:54Z r3b7f1135e84eb164 v=6d5b536b975b factor=None              cap=500
+04:11:54Z rd18a2924023473b6 v=6d5b536b975b factor=None              cap=500
+```
+
+One more fact the polling produced, worth writing down: **the firing at 06:11:54Z
+still ran the OLD task version even though the redeploy had already returned.** A
+trigger fires the version that was registered when it fired; the redeploy takes
+effect at the NEXT tick. Nothing is wrong with that — but "I deployed it, so the
+next run is the new code" is an assumption, and here it was false for one run.

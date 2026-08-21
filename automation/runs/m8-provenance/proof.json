@@ -1,0 +1,111 @@
+{
+  "finding": "F-048",
+  "written_at": "2026-08-21T06:36:38+00:00",
+  "task": "taxi-pipeline-train.retrain",
+  "trigger": "retrain-schedule-proof",
+  "expected": {
+    "rescale_factor": 6.6667,
+    "round_cap": 2400
+  },
+  "checks": [
+    {
+      "check": "the pod resolved F-020's scale transfer",
+      "expected": 6.6667,
+      "observed": 6.6667,
+      "passed": true
+    },
+    {
+      "check": "the pod re-derived the round budget",
+      "expected": 2400,
+      "observed": 2400,
+      "passed": true
+    },
+    {
+      "check": "the proof trigger plans only and promotes nothing",
+      "expected": true,
+      "observed": true,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "run": {
+    "run": "rdc1f3841bd6455e6",
+    "phase": "SUCCEEDED",
+    "task_version": "cfe8dc01a11527facc8cbc329e1df85a",
+    "started_at": "2026-08-21T06:31:54+00:00",
+    "record": {
+      "challenger": "retrain-rescaled-v2",
+      "champion_version": "2",
+      "target_rows": 43987422,
+      "rescale_factor": 6.666666969783633,
+      "round_cap": 2400,
+      "plan_only": true,
+      "sampled": false,
+      "decision": "PLAN_ONLY",
+      "promoted": false,
+      "challenger_mae": null,
+      "incumbent_version": null,
+      "best_iteration": null,
+      "ended_by": null,
+      "fit_seconds": null
+    }
+  },
+  "earlier_runs_seen": [
+    {
+      "run": "rdc1f3841bd6455e6",
+      "started_at": "2026-08-21T06:31:54+00:00",
+      "task_version": "cfe8dc01a11527facc8cbc329e1df85a",
+      "rescale_factor": 6.666666969783633,
+      "round_cap": 2400
+    },
+    {
+      "run": "rf156a0512f7f3e14",
+      "started_at": "2026-08-21T06:11:54+00:00",
+      "task_version": "6d5b536b975b7814c829cb3ef2bcbaf8",
+      "rescale_factor": null,
+      "round_cap": 500
+    },
+    {
+      "run": "rfe2504b7ad8e1c27",
+      "started_at": "2026-08-21T05:51:54+00:00",
+      "task_version": "6d5b536b975b7814c829cb3ef2bcbaf8",
+      "rescale_factor": null,
+      "round_cap": 500
+    },
+    {
+      "run": "rd29eacea4f50f291",
+      "started_at": "2026-08-21T05:31:54+00:00",
+      "task_version": "6d5b536b975b7814c829cb3ef2bcbaf8",
+      "rescale_factor": null,
+      "round_cap": 500
+    },
+    {
+      "run": "r7eb2dcd906efb3ab",
+      "started_at": "2026-08-21T05:11:54+00:00",
+      "task_version": "6d5b536b975b7814c829cb3ef2bcbaf8",
+      "rescale_factor": null,
+      "round_cap": 500
+    },
+    {
+      "run": "r9102f147320ad87a",
+      "started_at": "2026-08-21T04:51:54+00:00",
+      "task_version": "6d5b536b975b7814c829cb3ef2bcbaf8",
+      "rescale_factor": null,
+      "round_cap": 500
+    },
+    {
+      "run": "r3b7f1135e84eb164",
+      "started_at": "2026-08-21T04:31:54+00:00",
+      "task_version": "6d5b536b975b7814c829cb3ef2bcbaf8",
+      "rescale_factor": null,
+      "round_cap": 500
+    },
+    {
+      "run": "rd18a2924023473b6",
+      "started_at": "2026-08-21T04:11:54+00:00",
+      "task_version": "6d5b536b975b7814c829cb3ef2bcbaf8",
+      "rescale_factor": null,
+      "round_cap": 500
+    }
+  ]
+}

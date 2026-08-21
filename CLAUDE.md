@@ -2551,6 +2551,17 @@ can never disagree (the port-family twins lesson, applied before it bit).
   study -> `sniper-*.json`); a constant there would be F-048 one layer along.
   The host then resolved **factor 6.6667 · `min_data_in_leaf` 1293 -> 8620 · round
   cap 2400** FROM THE REGISTRY — M7-S4's numbers, from a different authority.
+- **And a POD did too, which is the row's own closing condition.** Proof run
+  `rdc1f3841bd6455e6`, fired by `retrain-schedule-proof` at 06:31:54Z on task
+  version `cfe8dc01a115…`: **`rescale_factor` 6.666666969783633 · `round_cap`
+  2400 · `decision PLAN_ONLY promoted=false`**. The same reader had captured the
+  BEFORE — **seven consecutive firings** of the same trigger, 20 minutes apart, on
+  the same champion, every one `null`/500 — and both sides sit in ONE record
+  (`automation/runs/m8-provenance/proof.json`, `earlier_runs_seen`), so the
+  contrast is checkable rather than asserted. Incidental but worth knowing: the
+  06:11:54Z firing still ran the OLD version *after the redeploy had returned* —
+  **a trigger fires the version registered when it fires**, and a redeploy takes
+  effect at the next tick.
 - **F-047 CLOSED: `make image-smoke` GREEN 10/10** on freshly built
   `taxi-mlops-pipeline:5edf9fd`, in-image suite **928 passed · 19 skipped · 22
   deselected**. **The marker set was MEASURED, not enumerated**: the union of what

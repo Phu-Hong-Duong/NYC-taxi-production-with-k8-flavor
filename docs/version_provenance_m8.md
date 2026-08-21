@@ -111,10 +111,31 @@ nothing about the transfer changed, only where the divisor comes from.
 
 `scripts/retrain_proof_record.py` is a READER: it asks the control plane for the
 most recent firings of `retrain-schedule-proof` and takes the record the POD
-returned as its output. Its first run captured the BEFORE state — five consecutive
-firings on the old task version, every one of them `rescale_factor: null,
-round_cap: 500` — which is F-048 alive, measured by the same instrument that
-reports the after. See §4 of the transcripts for both.
+returned as its output. Its first run captured the BEFORE state — seven
+consecutive firings on the old task version, every one of them `rescale_factor:
+null, round_cap: 500` — which is F-048 alive, measured by the same instrument that
+reports the after.
+
+The after, run **`rdc1f3841bd6455e6`**, fired 2026-08-21T06:31:54Z on task version
+`cfe8dc01a11527facc8cbc329e1df85a`:
+
+```
+[proof] rescale_factor: 6.666666969783633
+[proof] round_cap     : 2400
+[proof] decision      : PLAN_ONLY  promoted=False
+[proof] ok   the pod resolved F-020's scale transfer: expected 6.6667, observed 6.6667
+[proof] ok   the pod re-derived the round budget: expected 2400, observed 2400
+[proof] ok   the proof trigger plans only and promotes nothing
+```
+
+**A pod finally resolved the same transfer the host does** — F-048's own closing
+condition, and the record holds both sides so the contrast is checkable rather
+than asserted.
+
+One incidental fact worth keeping: the firing at 06:11:54Z ran the OLD task
+version although the redeploy had already returned. A trigger fires the version
+registered when it fires; a redeploy takes effect at the next tick. "I deployed
+it, so the next run is the new code" was false for exactly one run here.
 
 ## 5. What landed (F-047)
 
