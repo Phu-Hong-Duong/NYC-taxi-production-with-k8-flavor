@@ -1,5 +1,114 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (bu) — ◆ the M7 review. Every number re-derives; the signal that caught COVID has a blind spot inside it
+
+### State
+**REV, `claude-opus-5` (stated first line).** Fresh session, zero builder
+context — that freshness is the whole point of the ◆ ritual. Boot read
+CLAUDE.md, then HANDOFF's newest entry ONLY to learn which milestone was under
+review (**M7**), then stopped. Committed artifacts read first: `configs/`,
+`src/taxi_mlops/monitoring/`, `infra/monitoring/alerting_rules.yml`, the tracked
+`automation/runs/m7-*` records, `tests/unit/`, the marts. **The builder's
+narrative (`docs/drift_detection_m7.md`, `docs/drift_memo_m7.md`,
+`docs/m7_flow.html`) was read LAST, after both findings were drafted** —
+anti-anchoring, and it paid: neither finding is argued anywhere in the prose.
+
+**Verdict: APPROVE WITH CONDITIONS.** `ledgers/signoffs.md` row dated
+2026-08-21, producer EXEC (Opus 5) ≠ approver REV/Opus 5. No S1 was found, so
+**no AWAITING_PO entry is raised by this review and the chain continues** —
+`automation/next_session.sh architect 120` scheduled.
+
+### Done
+- **`make verify-m7` re-run by the approver → GREEN 62/62, 7 sections, exit 0**,
+  closing line verbatim `[verify-m7] GREEN — every M7 sub-check passed.` The live
+  endpoint leg answered **10.665224 minutes stamped `model_version='2'`**,
+  reproducing the parity record to 0.000e+00. Registry read and left untouched:
+  `@champion` → **2**, versions `['1','2']`, **no version 3** — the retrain's
+  REFUSE stayed a run, which is the strong form of "nothing was promoted".
+- **The re-derivation is a committed, re-runnable file** —
+  `scripts/rev_rederive_m7.py`, four sections, read-only, following the
+  `error_memo_numbers.py` / `drift_memo_numbers.py` twin-script precedent. It
+  **deliberately does not import `taxi_mlops.monitoring.drift`**: PSI, the share
+  queries and the trips-per-day arithmetic are re-implemented from the formula in
+  that module's own docstring. Calling `compute_drift()` and diffing it against
+  the JSON it wrote would prove only that the file was written by the function.
+  §4 likewise reads the published parquet, never `marts.scoring_daily` — checking
+  the memo against the mart checks a sum; checking it against the rows checks the
+  claim.
+- **Everything M7 published re-derives, and most of it exactly.** PSI for all six
+  monitored columns of 2020-03 matched `drift-2020-03.json` **to 15 significant
+  figures** (`dayofweek 0.021666901450342` is the max input, correctly below the
+  0.10 bar). `volume_ratio` matched all three months **to 16 decimals**
+  (`0.8335556483513884 · 0.8776340568603828 · 0.3913368667803675`). KPI-14/15/16
+  recomputed off the prediction rows reproduced `3.0295 / 2.9802 / 3.3227`,
+  `83.226 / 83.768 / 80.569%`, `+0.2836 / −0.1703 / +0.5468`. The memo's March cut
+  reproduced to the row — **68.231% / 28.448% / 3.321%** at KPI-14 **3.0463 /
+  3.7534 / 5.3128**, worst day 2020-03-26 **6.3693** against January's **3.5757**,
+  `model_version` exactly `['2']` in every month.
+- **F-051 (S2, NEW) — A-9's volume ratio is non-monotonic in the severity of the
+  collapse it exists to detect.** `drift._days` divides by
+  `COUNT(DISTINCT observed date)`, so a day with no trips leaves the numerator
+  **and the denominator together**. Measured by deleting 2020-03's quietest days
+  outright — a strictly WORSE shutdown: 0 zeroed → **0.3913 FIRES** · 6 → 0.4768
+  fires · **8 → 0.5143 SILENT** · 14 → 0.6641. Deleting the eight quietest days
+  removes 73,340 trips and pushes the ratio **across the 0.50 bar in the wrong
+  direction**. Against calendar days the same series falls monotonically
+  (0.3913 → 0.3642) and never stops firing. Both the doc (§8.4, "*trips per
+  day*") and the rule's annotation state it in calendar language. The same
+  arithmetic reads a **short month as healthy** — a 20-of-31-day extract is
+  divided by 20.
+- **F-052 (S2, NEW) — `configs/drift.yaml` is F-013 recurring.** Unchanged since
+  the planning kit, read by **nothing**, and both its numbers disagree with what
+  shipped: `reference_month: "2019-08"` (the *test* month — as a drift reference
+  that is the very thing `drift.py`'s docstring argues against) against the
+  implemented `trips_train` 2019-01..06, and `drift_share_threshold: 0.5`
+  (3 of 5 columns) against A-8's live `>= 0.10` on `>= 2` of 5. Not inert:
+  **`docs/m7_flow.html` cites it under "Sources of truth."** The F-013 test
+  exists but its knob tuple is the five *promotion*-gate names, so a drift bar in
+  `configs/` walks through it.
+
+### Decisions
+- **Both findings are S2, not S1, and the reasoning is worth keeping.** Nothing
+  published is wrong — I re-derived every headline number and they all hold; the
+  wire is untouched; `@champion` never moved. F-051 has a real compensating
+  control, named in its own row rather than left for ARCH to discover:
+  `verify-m7` §3 asserts the mart carries a row for every **calendar** day
+  (`calendar.monthrange`), so a short month turns the *milestone gate* red. That
+  bounds the severity honestly — but it is a hand-run gate in a different layer
+  reporting the mart's grain, not the alert's arithmetic, and in the deployment
+  this rehearses nothing runs `verify-m7` monthly.
+- **The one sentence I want the boundary to read: M7's central claim is that A-9
+  is the marginal A-8 is structurally blind to — and F-051 is a blind spot inside
+  that marginal.** F-045's own lesson (*a month is not a unit of demand; a day
+  is*) recurring inside F-045's remedy.
+- **F-051 and F-050 should be disposed of together.** Both are about whether this
+  drift board is a standing operational surface or a drill-populated one, and the
+  answer changes what each fix is worth.
+- **REV closes nothing**, per charter. Neither finding is closable by prose (this
+  register's F-008 precedent). Both carry costed options; F-052 carries a
+  recommendation ((a) — delete the config, fix the flow diagram, widen the F-013
+  knob tuple) because the cheaper option is also the one matching how F-013 was
+  itself closed.
+
+### Defects/Surprises
+- **The anti-anchoring order earned itself.** `configs/drift.yaml` was found in
+  the first ten minutes by grepping configs before reading any M7 prose. Had the
+  narrative been read first — it is detailed, internally consistent, and argues
+  the *correct* reference at length — there would have been no reason to open a
+  config file whose contents the prose never mentions.
+- **The strongest evidence for F-051 came from asking a counterfactual of the
+  data rather than reading the code.** The `COUNT(DISTINCT ...)` is easy to read
+  past; the table where a worse collapse walks back across the bar is not.
+- No live state was mutated by this session: no push to the gateway, no deploy,
+  no alias move, no re-fit. The pushgateway is still empty from the reboot
+  (F-050) and was deliberately left that way, for (bt)'s reason — the empty
+  gateway is the boundary's second data point.
+
+### Next
+ARCH's M7→M8 boundary triage. Two conditions to disposition with quoted landings
+(gotcha #19): **F-051** and **F-052**, plus F-050's open (a)/(b) fork which
+F-051 interacts with. M8 has no kickoff — authoring it is ARCH's.
+
 ## Session 2026-08-21 (bt) — the park was lifted; NO STORY REMAINS. Reconciliation after a second host reboot, and the baton to REV
 
 ### State
