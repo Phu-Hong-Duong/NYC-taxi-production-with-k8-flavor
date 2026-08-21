@@ -1,5 +1,131 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (bx) — M8-S1 leg 2: the scale moved onto the version, and the image proves itself again
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (bw) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO. Staleness check
+clean — tree at `f957b44`, 3/3 nodes Ready v1.36.1 (age 4d3h), no
+`automation/STOP`, no `.status` file pointed at, and the wire answered
+`39.0019 minutes` stamped `model_version 2` before anything was touched.
+**Role block: MLOps A** (the kickoff's assignment for this leg); charter read; the
+refusals in play all session were *no threshold moves · no alias moves · the image
+must not carry evidence it can never be the source of truth for* — and none was
+broken.
+
+**M8-S1 leg 2 is DONE and MERGED** (PR **#53**, merge commit `25d128a`, lineage
+proved: `git branch -r --contains a4bf9e0` → origin/main). **M8-S1 is now whole**
+(leg 1 merged as #52 last session). The next story is **M8-S2**.
+
+### Done
+- **F-048 CLOSED, both halves, in ONE image with one redeploy — and the ordering
+  was the point.** **(c)**: `retrain._search_scale` RAISES when the records
+  DIRECTORY is invisible, naming `.dockerignore`, the finding and the fix, because
+  *"no refit record names this run"* is a fact about the CHAMPION and *"I cannot
+  see any records"* is a fact about the PROCESS — and in a pod it is the second
+  every time. `test_the_two_absences_produce_DIFFERENT_outcomes` asserts they
+  differ in KIND (one returns a reported no-op, one raises), and its visible arm
+  points at a directory **the image also has**, so it makes the same assertion
+  inside a pod. **(a)**: three tags on the version through
+  `registry.record_search_scale` — additive, idempotent BY VALUE, **refusing a
+  disagreeing rewrite**, AST-pinned to name no destructive verb and no alias verb.
+  Written by `automl_refit.py` on the RUN at fit time, copied onto the version by
+  `run._promote` **derived from that run and never typed**, and backfilled for the
+  past by `make backfill-provenance`.
+- **`NO_SEARCH` is a VALUE, not an absent tag** — so "this champion had no sampled
+  search", "nobody ever recorded it" and "I cannot see the records" are three
+  answers where they used to be one sentence. That single design decision IS the
+  finding (gotcha #94's shape inside a provenance chain).
+- **The backfill ran: `2 version(s) changed; no alias was read or moved, no version
+  was created, nothing was deleted`**, and a third run `0 version(s) changed`.
+  Version 1 records `no sampled search` as a FACT; version 2 records **6,598,113
+  rows, cap 800** from `automation/runs/m3s4/sniper-v2.json`. The host then
+  resolved **factor 6.6667 · `min_data_in_leaf` 1293 -> 8620 · cap 2400** FROM THE
+  REGISTRY — M7-S4's numbers, from a different authority.
+- **The on-cluster proof, which is F-048's own closing condition: run
+  `rdc1f3841bd6455e6`**, fired by `retrain-schedule-proof` at 06:31:54Z on task
+  version `cfe8dc01a115…` — **`rescale_factor` 6.666666969783633 · `round_cap`
+  2400 · `PLAN_ONLY` · `promoted=false`**. `scripts/retrain_proof_record.py` (a
+  READER) had captured the BEFORE with the same instrument: **seven consecutive
+  firings** of the same trigger, 20 minutes apart, every one `null`/500. Both
+  sides live in `automation/runs/m8-provenance/proof.json` under
+  `earlier_runs_seen`, so the contrast is checkable rather than asserted.
+- **F-047 CLOSED: `make image-smoke` GREEN 10/10** on freshly built
+  `taxi-mlops-pipeline:5edf9fd` (804 MiB, `tree dirty: no`, on all 3 nodes),
+  in-image suite **928 passed · 19 skipped · 22 deselected**. **21 tests** carry
+  `@pytest.mark.needs_records`, and the set was MEASURED — the union of what fails
+  with `automation/runs/` hidden on the host (18) and what failed in the pre-story
+  image (12). `tests/unit/test_record_marker.py` holds the line by AST: deselected
+  in exactly one place, `addopts` may not deselect it, no other script may, and
+  nothing is marked that does not need it.
+- **Verification at story exit**: `make verify-m7` **GREEN 62/62** (endpoint
+  answered `10.665224` stamped `model_version='2'`), host unit suite **969
+  passed**, ruff clean, CI green on PR #53. `@champion` version **2** throughout,
+  read and never written; no traffic moved, no InferenceService touched, no data
+  pin moved, no model fitted.
+
+### Decisions
+- **`run._promote` now records the scale question's answer on EVERY version**,
+  including the explicit "no sampled search". Inside scope, verified undo, and the
+  reason is the finding: a version that simply omits the tag leaves the next
+  reader unable to tell "no search" from "nobody wrote it down", which is the exact
+  ambiguity (c) exists to break. Derived from the run being promoted — never typed
+  at the call site.
+- **The marker guard accepts the older `skipif`-on-the-record form and argues
+  against it in its own docstring** rather than rewriting twelve tests belonging to
+  M6's stories. Recorded as **F-054** instead — see below.
+- **A `-dirty` image was thrown away rather than used.** `make retrain
+  --plan-only` writes a tracked record, so running the provenance check before a
+  build made the tag `-dirty`; the record was committed and the image rebuilt,
+  because a `-dirty` image must not back a verdict (M4-S3's law).
+- **No new PO fork.** Nothing here loosens a gate or moves a threshold. The three
+  standing AWAITING_PO items are unchanged and non-blocking; F-016 stays dormant in
+  M8 by construction.
+
+### Defects/Surprises
+- **F-054 (new, OPEN, routed to ARCH at the M8-S1 boundary)**: twelve tests still
+  guard their record reads with `skipif(not RECORD.exists())`, which on the HOST
+  passes silently when the drill was never run — F-029 made the opposite argument
+  at M5-S1 and converted one such skip into an assertion. Three costed options in
+  the ledger row; (a) would make a fresh clone's suite red until the M6 drills have
+  been run, which is a direction decision rather than an executor's.
+- **The same command that closed F-047 found F-047's second instance**:
+  `test_detach_exit_codes` has been RED in-image since the day it landed, because
+  the image ships no `make`. Same shape, unseen for the same reason. Now `skipif`-
+  guarded on the binary, like `ss`/`git`/`docker` already are.
+- **The coverage guard caught its own author's new test on its first run**, and its
+  first draft had missed four real tests because a record path is spelled two ways
+  in this suite (`REPO / "automation/runs/x"` and `REPO / "automation" / "runs"`) —
+  gotcha #46's family, invisible to any substring match.
+- **The proof reader lied to itself twice before it worked**, and both were the
+  same disease: the unfiltered run list comes back **OLDEST FIRST** (a 40-run scan
+  saw only M4's pipeline and reported "the trigger never fired"), and
+  `ActionOutputs` is neither a mapping nor a string, so `json.loads(str(outputs))`
+  refused — and that refusal ALSO read as "not fired". An absence inferred from a
+  parse failure is gotcha #59's family; it says so in the code now.
+- **A trigger fires the version registered when it fires.** The 06:11:54Z firing
+  ran the OLD task version *after the redeploy had already returned*; the new one
+  took effect at the next tick. Nothing is wrong with that, but "I deployed it, so
+  the next run is the new code" was false for exactly one run.
+
+### Next
+**EXECUTOR, fresh session — `automation/next_session.sh executor 120` runs at this
+session's exit.** Next story: **M8-S2 — Feast, quarantined** (`docs/milestones/
+M8_KICKOFF.md` §"M8-S2"). Its wall is known before it starts (law 4): **Feast
+0.66.0 pins `pandas<3`** against our 3.0.5, so the probe is not "does it install"
+but "what exactly does the quarantine hold" — a fresh isolated venv (gotcha #16,
+the M7-S3 Evidently idiom), `feast` pinned by exact version, the full transitive
+set recorded, and the project's own `uv.lock` asserted **byte-identical**
+afterwards. The catalog also owes `airport_regime_flag` a CANDIDATE row citing the
+three measurements (`docs/error_memo_m2.md` §7 row 2) — catalog only, **nothing is
+fitted** (law 3).
+Two things this leg leaves the next session, both cheap: **gotcha #66 has been
+paid** — the image is current at `5edf9fd` and this session's commits are in it, so
+an on-cluster pipeline run starts cold once and then caches; and the
+**`retrain-schedule-proof` trigger is still firing every 20 minutes**, now
+resolving F-020's transfer correctly, so its records are a free heartbeat that the
+image and the registry still agree.
+
 ## Session 2026-08-21 (bw) — M8-S1 leg 1: the drift surface, made trustworthy. Four obligations closed, and a fifth found by the first command
 
 ### State
