@@ -46,6 +46,12 @@ markers = [
   "unit: no cluster required (CI runs these on every PR)",
   "integration: requires a running kind cluster",
   "smoke: acceptance demos against the deployed stack",
+  # F-047 (M8-S1): reads a TRACKED RECORD under automation/runs/ at call time.
+  # Those records are host artifacts and `.dockerignore` correctly keeps them out
+  # of the task image, so the in-image run (`make image-smoke`) deselects this
+  # marker — the ONLY place it is deselected. It is not a skip flag: on the host
+  # and in CI these run, and they are how a gate's replay inputs stay checkable.
+  "needs_records: reads a tracked record under automation/runs/ (host-only)",
 ]
 addopts = "-m 'not integration and not smoke'"
 

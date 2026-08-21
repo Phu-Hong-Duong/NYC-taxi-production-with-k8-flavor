@@ -41,6 +41,8 @@ import pathlib
 import re
 import subprocess
 
+import pytest
+
 REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M7 = REPO / "scripts" / "verify_m7.sh"
 REDTEAM = REPO / "scripts" / "verify_m7_redteam.sh"
@@ -379,6 +381,7 @@ def test_every_leg_catches_its_own_exception_and_reports_it_as_a_failure():
     assert len(handlers) >= 7, f"only {len(handlers)} leg(s) report their own exception"
 
 
+@pytest.mark.needs_records
 def test_the_gate_reads_the_tracked_records_it_names():
     """The gate composes a few of these from a `root` — one directory named
     once — so the needle is the directory plus the filename rather than the
@@ -399,6 +402,7 @@ def test_the_gate_reads_the_tracked_records_it_names():
         assert (REPO / record).exists(), f"{record} is named by the gate but does not exist"
 
 
+@pytest.mark.needs_records
 def test_the_records_the_gate_replays_are_tracked_by_git():
     """F-029, closed at M5-S1: a gate replaying evidence that is not in the
     repository is a gate whose inputs review cannot see. `git check-ignore` is a
@@ -469,6 +473,7 @@ def test_the_red_team_requires_three_independent_witnesses():
 
 
 # ------------------------------------------ the accept-when, as a data contract --
+@pytest.mark.needs_records
 def test_the_records_the_accept_when_rests_on_say_what_it_needs():
     """§9/M7 accepts on three things. This test does not re-check the gate's
     logic — it pins that the RECORDS still carry the fields those clauses are

@@ -345,6 +345,7 @@ def test_the_selection_happens_before_the_holdout_is_scored(source):
     assert guards, "the selection call must sit under the `split == 'val'` guard"
 
 
+@pytest.mark.needs_records
 def test_the_json_records_where_the_winner_was_ranked(source):
     """Prevents: a future reader having to read the code that wrote the file to
     learn which split decided. The M3 record predates the key, deliberately."""

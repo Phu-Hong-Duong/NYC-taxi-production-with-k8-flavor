@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts/retrain_prediction_check.py"
 PREDICTION = REPO / "automation/runs/m7-retrain/rerun-prediction.json"
@@ -43,6 +45,7 @@ def _run(record: Path, prediction: Path = PREDICTION) -> subprocess.CompletedPro
     )
 
 
+@pytest.mark.needs_records
 def test_the_committed_record_reproduces_the_committed_prediction() -> None:
     """The story's claim, as a test rather than as prose.
 
@@ -55,6 +58,7 @@ def test_the_committed_record_reproduces_the_committed_prediction() -> None:
     assert "MISMATCH" not in proc.stdout
 
 
+@pytest.mark.needs_records
 def test_it_goes_red_on_a_plausible_one_digit_tamper(tmp_path: Path) -> None:
     """A challenger MAE moved by 0.0001 — inside the precision the prediction
     was written at, and invisible to a reader skimming the file."""
@@ -69,6 +73,7 @@ def test_it_goes_red_on_a_plausible_one_digit_tamper(tmp_path: Path) -> None:
     assert "challenger_mae_test" in proc.stdout
 
 
+@pytest.mark.needs_records
 def test_it_goes_red_when_the_verdict_itself_is_rewritten(tmp_path: Path) -> None:
     """The most consequential single-field lie the record can tell: a REFUSE
     relabelled as a PROMOTE, with every number left alone."""
@@ -82,6 +87,7 @@ def test_it_goes_red_when_the_verdict_itself_is_rewritten(tmp_path: Path) -> Non
     assert "MISMATCH" in proc.stdout
 
 
+@pytest.mark.needs_records
 def test_it_goes_red_when_the_failing_checks_stop_being_the_incumbent_ones(
     tmp_path: Path,
 ) -> None:
@@ -102,6 +108,7 @@ def test_it_goes_red_when_the_failing_checks_stop_being_the_incumbent_ones(
     assert "which_checks_fail" in proc.stdout
 
 
+@pytest.mark.needs_records
 def test_a_loose_field_that_differs_never_fails_the_check() -> None:
     """The exit code was predicted 1 and observed 2, and the check must say so
     while still returning 0 — the difference is gotcha #97, not a bad fit."""

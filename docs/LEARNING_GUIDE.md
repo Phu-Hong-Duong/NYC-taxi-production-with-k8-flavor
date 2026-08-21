@@ -3721,3 +3721,58 @@ backticks", it is that **#60 came back because the lesson had no test**. One
 exists now, repo-wide over every heredoc in `scripts/*.sh` and the Makefile, and
 red-teamed by reintroducing the exact two lines. A gotcha that can only be
 remembered will be forgotten by the session that was not there.
+
+## M8-S1 leg 2 — evidence that belongs to the host, read by something that is not (2026-08-21, EXEC/Opus 5)
+
+**The lesson worth carrying: when a fact lives in a file, "I could not find it"
+and "there is nothing to find" are the same sentence — and the second one is the
+one your code will say.** F-048's pod printed *"no sampled search behind this
+champion — no scale transfer to make"*, which was true about what it could see and
+false about the world; the host, in the same minute, resolved a factor of 6.6667
+for the same champion. Nothing crashed, nothing was wrong yet, and the only
+visible difference was a `null` in one field of a record nobody was reading.
+
+Two habits come out of it. **Put provenance ON the thing it describes, not beside
+it** — the row count a version's knobs were chosen at is a fact about that
+version, so it travels as a version tag and resolves identically on a laptop and
+in a pod. And **make the third state expressible**: `NO_SEARCH` is a VALUE, not an
+absent tag, so "this champion had no sampled search", "nobody ever recorded it"
+and "I cannot see the records" are three answers instead of one. Gotcha #94 said a
+cross-instrument check that degrades toward *they agree* hides its own breakage;
+this is the same disease in a provenance chain, degrading toward *nothing to do*.
+
+**The refusal is the cheap half and it has to come first.** Ten lines that raise
+when the records DIRECTORY is invisible turn a silent no-op into a loud exit — but
+they would have left the deployed schedule red until the real fix landed, which is
+precisely why M7-S4 correctly declined to land them alone. Order the two halves so
+the artifact and the tree are never inconsistent: the fix and the refusal shipped
+in ONE image, with one redeploy.
+
+**A marker is one afternoon away from being a skip flag, so write the tests that
+hold the line before you write the marker.** `needs_records` says *where* a test
+can run; it must never come to mean *whether it must pass*. The three properties
+that keep those apart are cheap and mechanical: it is deselected in exactly one
+place, `addopts` may not deselect it, and nothing carries it that does not need it.
+
+**Measure the set; do not enumerate it.** The tests to mark were found by hiding
+`automation/runs/` on the host and reading the failures, then unioned with what
+actually failed inside the image — two measurements, because each saw something
+the other could not (the host keeps its git index; the image has no `.git`). A
+list written from a ledger row would have been twelve; the real answer was
+twenty-one.
+
+**The best evidence a guard can produce is catching its author.** The coverage
+check's first run flagged a test written ten minutes earlier in the same session,
+and its first draft had missed four real tests because a path is spelled two ways
+in this suite — `REPO / "automation/runs/x"` and `REPO / "automation" / "runs"` —
+which no substring match can see (gotcha #46's family). Then `make image-smoke`
+caught two more that no static check could, including one that had been red inside
+the image since the day it landed for a completely different reason: the image
+ships no `make`. **A check nobody runs decays; the second instance of that was
+found by the first run of the command that closes the first instance.**
+
+**Small operational fact with teeth**: `make retrain --plan-only` writes a tracked
+record, so running the provenance check before a build makes the next image tag
+`-dirty` — and a `-dirty` image must not back a verdict. One rebuild was spent on
+it. Anything that writes into a tracked directory is a build input whether or not
+it feels like one.

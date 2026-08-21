@@ -175,7 +175,15 @@ if [[ "${SKIP_UNIT:-0}" == "1" ]]; then
 else
   # The image has no cluster and no data; pyproject's addopts already exclude the
   # integration and smoke markers, so this is the same subset CI runs on a PR.
-  if unit_out="$(run python -m pytest tests/unit -q 2>&1)"; then
+  #
+  # `needs_records` is deselected here and NOWHERE else (F-047). Those tests read
+  # tracked records under `automation/runs/`, and `.dockerignore` keeps those out
+  # of the image on purpose: they are host evidence, and an artifact that carried
+  # them would be carrying evidence it can never be the source of truth for. This
+  # is not the skip flag M1 refused — it does not make a failure optional, it
+  # states which tests are about the HOST and cannot be about a pod. The host run
+  # and CI run every one of them.
+  if unit_out="$(run python -m pytest tests/unit -q -m 'not needs_records' 2>&1)"; then
     tail -n 3 <<<"$unit_out" | sed 's/^/     /'
     ok "tests/unit green in-image: $(grep -oE '[0-9]+ passed[^ ]*' <<<"$unit_out" | tail -n1)"
   else

@@ -259,6 +259,7 @@ def test_the_restore_drill_checks_against_the_repo_and_not_only_against_live():
     assert "m3s4" in source and "sniper-" in source
 
 
+@pytest.mark.needs_records
 def test_the_restore_drill_records_what_it_refuses_to_claim():
     record = json.loads(RESTORE_RECORD.read_text())
     assert "dead platform" in record["what_this_does_not_claim"].lower()
@@ -276,6 +277,7 @@ def test_the_backup_artifacts_no_longer_say_simply_not_rehearsed():
     assert "STILL NOT" in text.upper() or "still not" in text
 
 
+@pytest.mark.needs_records
 def test_the_restore_record_and_the_doc_agree_on_every_quoted_number():
     """Prose against records — the M5-S5 shape.
 
@@ -295,6 +297,7 @@ def test_the_restore_record_and_the_doc_agree_on_every_quoted_number():
 # --- the gameday's own records ------------------------------------------------
 
 
+@pytest.mark.needs_records
 def test_the_predictions_were_written_before_any_injection():
     payload = json.loads((RECORD_DIR / "predictions.json").read_text())
     assert payload["written_before_any_injection"] is True
@@ -302,6 +305,7 @@ def test_the_predictions_were_written_before_any_injection():
     assert payload["positive_control_first"] is True
 
 
+@pytest.mark.needs_records
 def test_the_predictions_on_disk_are_the_ones_in_the_code():
     """A prediction file edited after the fact is the failure mode this guards.
 

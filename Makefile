@@ -275,7 +275,9 @@ verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watc
 	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
-.PHONY: deploy-feast verify-m8
+.PHONY: deploy-feast verify-m8 backfill-provenance
+backfill-provenance: ## M8-S1 (F-048): write the SCALE a version's count-scaled knobs were chosen at ONTO the version, derived from the tracked records. Additive tags only — creates no version, deletes nothing, never reads or moves an alias. BACKFILL_ARGS=--dry-run resolves and writes nothing
+	@uv run python scripts/backfill_version_provenance.py $(BACKFILL_ARGS)
 deploy-feast: ## Feast + Redis; materialize; transformer wiring
 	@echo "TODO(M8)"
 verify-m8: ; @echo "TODO(M8): 100-pair online/offline parity + traced enriched request + prior-art revisit"

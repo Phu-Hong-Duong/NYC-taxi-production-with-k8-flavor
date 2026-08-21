@@ -32,6 +32,17 @@ Three rules live here, all of them refusals:
   "skippable". It also closes the race: two runs that both passed against the same
   incumbent cannot both move the alias, because the second one's ack is stale by
   the time it gets here.
+
+**The scale provenance lives here too, and it is a write of the same family**
+(F-048, M8-S1). The row count a version's count-scaled knobs were CHOSEN at is a
+fact about that version, not about the machine that happens to be reading it —
+and it used to live only in a host JSON under `automation/runs/`, which a task pod
+correctly does not carry. `record_search_scale()` is the additive path that puts
+it on the version: three tags, never a delete, never an alias move, and a refusal
+rather than an overwrite when a tag already says something different. Provenance
+describes a fit that already happened, so silently rewriting it would be the same
+class of defect F-048 is about — a number that is true where it was written and
+false where it is read.
 """
 
 from __future__ import annotations
@@ -39,6 +50,24 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+#: The row count the version's count-scaled knobs (`retrain.COUNT_SCALED`) were
+#: CHOSEN at, as a string, or `NO_SEARCH`.
+SEARCH_SCALE_ROWS = "search_scale_rows"
+#: The per-trial round cap the fit inherited from that search, or `NO_SEARCH`.
+SEARCH_SCALE_ROUND_CAP = "search_scale_round_cap"
+#: Where the two numbers above came from — a tracked record path, or the sentence
+#: that says why there is nothing to transfer.
+SEARCH_SCALE_SOURCE = "search_scale_source"
+
+#: What the two count tags carry when the version's params came from no sampled
+#: search. It is a VALUE and not an absent tag on purpose: "this champion had no
+#: sampled search behind it" and "nobody has recorded what this champion had
+#: behind it" are different facts, and F-048 is the finding that a reader which
+#: cannot tell them apart reports the second as the first (gotcha #94's shape).
+NO_SEARCH = "none"
+
+SEARCH_SCALE_TAGS = (SEARCH_SCALE_ROWS, SEARCH_SCALE_ROUND_CAP, SEARCH_SCALE_SOURCE)
 
 
 class PromotionError(RuntimeError):
@@ -222,3 +251,98 @@ def _alias_version(client: Any, model_name: str, alias: str) -> str | None:
         return str(client.get_model_version_by_alias(model_name, alias).version)
     except Exception:  # noqa: BLE001 — an unset alias is the first-promotion path
         return None
+
+
+# ------------------------------------------------- F-048: the scale provenance ----
+
+
+def search_scale_tags(
+    *, chosen_at_rows: int | None, round_cap: int | None, source: str | None
+) -> dict[str, str]:
+    """The three tags that say what scale a version's count-scaled knobs mean.
+
+    `chosen_at_rows is None` is the champion that came from no sampled search, and
+    it is recorded EXPLICITLY (`NO_SEARCH`) rather than by leaving the tag off —
+    see this module's docstring and `NO_SEARCH`.
+    """
+    if chosen_at_rows is not None and chosen_at_rows <= 0:
+        raise PromotionError(
+            f"a search scale of {chosen_at_rows} rows is not a row count. F-020's "
+            "transfer divides by this number; a zero or negative divisor would "
+            "produce a configuration nobody can check."
+        )
+    return {
+        SEARCH_SCALE_ROWS: NO_SEARCH if chosen_at_rows is None else str(int(chosen_at_rows)),
+        SEARCH_SCALE_ROUND_CAP: NO_SEARCH if round_cap is None else str(int(round_cap)),
+        SEARCH_SCALE_SOURCE: source or (
+            "no sampled search behind this fit: its count-scaled knobs were chosen "
+            "at the scale they were fitted at, so there is no transfer to make"
+        ),
+    }
+
+
+def read_search_scale(tags: dict[str, str] | None) -> tuple[int | None, int | None, str] | None:
+    """Read the provenance back off a version's tags. `None` when it carries none.
+
+    Returns `(chosen_at_rows, round_cap, source)`, where a `None` count is the
+    recorded "no sampled search" — which is a DIFFERENT answer from this function
+    returning `None`, and the whole reason F-048 exists.
+    """
+    tags = dict(tags or {})
+    if SEARCH_SCALE_ROWS not in tags:
+        return None
+    rows = tags[SEARCH_SCALE_ROWS]
+    cap = tags.get(SEARCH_SCALE_ROUND_CAP, NO_SEARCH)
+    return (
+        None if rows == NO_SEARCH else int(rows),
+        None if cap == NO_SEARCH else int(cap),
+        tags.get(SEARCH_SCALE_SOURCE, "recorded on the version, source unstated"),
+    )
+
+
+def record_search_scale(
+    client: Any,
+    *,
+    model_name: str,
+    version: str,
+    chosen_at_rows: int | None,
+    round_cap: int | None,
+    source: str | None,
+) -> dict[str, Any]:
+    """Write the scale provenance onto an EXISTING version. Additive, idempotent.
+
+    The only registry write in this program that is not a promotion, and it is
+    deliberately the narrowest one that can exist: it sets three tags on a version
+    that already exists. It creates nothing, deletes nothing, and never reads or
+    moves an alias — a backfill that could move `@champion` would be a rollback
+    wearing a provenance script's clothes.
+
+    Re-running with the same numbers is a no-op. Re-running with DIFFERENT numbers
+    is refused: these tags describe a fit that already happened, and the one thing
+    a provenance record must never do is change its mind quietly.
+    """
+    wanted = search_scale_tags(
+        chosen_at_rows=chosen_at_rows, round_cap=round_cap, source=source
+    )
+    existing = dict(getattr(client.get_model_version(model_name, version), "tags", None) or {})
+    conflicts = {
+        key: (existing[key], value)
+        for key, value in wanted.items()
+        if key in existing and existing[key] != value
+    }
+    if conflicts:
+        detail = "; ".join(f"{k}: recorded {old!r}, asked to write {new!r}"
+                           for k, (old, new) in sorted(conflicts.items()))
+        raise PromotionError(
+            f"version {version} of {model_name} already records a different search "
+            f"scale ({detail}). Provenance describes a fit that has already happened, "
+            "so this is either a wrong backfill or a registry that has been edited by "
+            "hand — neither is fixed by overwriting the older claim."
+        )
+    written = [key for key, value in sorted(wanted.items()) if existing.get(key) != value]
+    for key in written:
+        client.set_model_version_tag(
+            name=model_name, version=version, key=key, value=wanted[key]
+        )
+    return {"version": str(version), "tags": wanted, "written": written,
+            "unchanged": [k for k in sorted(wanted) if k not in written]}

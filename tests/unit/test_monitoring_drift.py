@@ -401,6 +401,7 @@ def test_the_scrape_job_for_the_gateway_honors_labels() -> None:
     )
 
 
+@pytest.mark.needs_records
 def test_the_committed_prediction_still_equals_the_code() -> None:
     """Amending a prediction to match an outcome must be a RED test, not a diff.
 
@@ -421,6 +422,7 @@ def test_the_committed_prediction_still_equals_the_code() -> None:
     assert committed == module.PREDICTION
 
 
+@pytest.mark.needs_records
 def test_the_committed_persistence_prediction_still_equals_the_code() -> None:
     """The same law for M8-S1's F-050 drill — one drill, one prediction, one test.
 
