@@ -15,7 +15,7 @@ none was broken.
 **M8-S4 LEG 1 is DONE.** The transformer (leg 2) is NOT built — that is the kickoff's
 OWN declared safe stopping point ("store + 100-pair parity landed, transformer undone —
 the blueprint's accept artifact already exists"), and HANDOFF (bz) recommended exactly
-this cut. PR **#56**.
+this cut. **MERGED** — PR **#56**, merge commit `1a6c141`, lineage proved: `git branch -r --contains fc0004b` -> origin/main.
 
 ### Done
 - **The store: an in-cluster Redis (ADR-012), decided by TWO-SIDED reachability.** The
