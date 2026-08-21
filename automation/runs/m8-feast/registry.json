@@ -1,0 +1,198 @@
+{
+  "story": "M8-S2",
+  "written_at": "2026-08-21T07:05:28.162580+00:00",
+  "read_from": "the applied Feast registry, never from definitions.py",
+  "project": "crosstown_eta",
+  "feast_version": "0.66.0",
+  "entities": [
+    {
+      "name": "calendar_day",
+      "join_key": "date_key",
+      "value_type": "ValueType.STRING"
+    },
+    {
+      "name": "dropoff_zone",
+      "join_key": "DOLocationID",
+      "value_type": "ValueType.INT64"
+    },
+    {
+      "name": "pickup_hour",
+      "join_key": "hour",
+      "value_type": "ValueType.INT64"
+    },
+    {
+      "name": "pickup_zone",
+      "join_key": "PULocationID",
+      "value_type": "ValueType.INT64"
+    },
+    {
+      "name": "zone",
+      "join_key": "zone_id",
+      "value_type": "ValueType.INT64"
+    }
+  ],
+  "feature_views": [
+    {
+      "name": "calendar_day_flags",
+      "entities": [
+        "calendar_day"
+      ],
+      "join_keys": [
+        "date_key"
+      ],
+      "fields": [
+        {
+          "name": "is_holiday",
+          "dtype": "Bool"
+        },
+        {
+          "name": "is_near_holiday",
+          "dtype": "Bool"
+        },
+        {
+          "name": "is_business_day",
+          "dtype": "Bool"
+        }
+      ],
+      "ttl_seconds": null,
+      "online": true,
+      "source": "calendar_day.parquet",
+      "source_rows": 4383,
+      "event_timestamps": [
+        "2019-01-01 00:00:00"
+      ],
+      "tags": {
+        "catalog": "docs/feast_catalog.md#calendar_day_flags",
+        "feature_set": "v2",
+        "ablation": "+1.77% relative val MAE, KPI-10 +0.569 pts at FULL data \u2014 KEEP",
+        "group": "g1_temporal_extras",
+        "verdict": "in-champion"
+      }
+    },
+    {
+      "name": "od_window_stats",
+      "entities": [
+        "pickup_zone",
+        "dropoff_zone"
+      ],
+      "join_keys": [
+        "PULocationID",
+        "DOLocationID"
+      ],
+      "fields": [
+        {
+          "name": "od_median_duration_min",
+          "dtype": "Float64"
+        },
+        {
+          "name": "window_months",
+          "dtype": "String"
+        }
+      ],
+      "ttl_seconds": null,
+      "online": true,
+      "source": "od_window_stats.parquet",
+      "source_rows": 248169,
+      "event_timestamps": [
+        "2019-02-01 00:00:00",
+        "2019-03-01 00:00:00",
+        "2019-04-01 00:00:00",
+        "2019-05-01 00:00:00",
+        "2019-06-01 00:00:00",
+        "2019-07-01 00:00:00"
+      ],
+      "tags": {
+        "catalog": "docs/feast_catalog.md#od_window_stats",
+        "leakage_note": "docs/leakage_redteam_m3.md: the illegal fit clears the bar",
+        "group": "g5_point_in_time_aggregates",
+        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts on the 15% SAMPLE \u2014 DROPPED. A dropped group is never refitted, so no full-data number exists",
+        "verdict": "catalog-only"
+      }
+    },
+    {
+      "name": "pu_hour_window_stats",
+      "entities": [
+        "pickup_zone",
+        "pickup_hour"
+      ],
+      "join_keys": [
+        "PULocationID",
+        "hour"
+      ],
+      "fields": [
+        {
+          "name": "pu_hour_mean_speed_kmh",
+          "dtype": "Float64"
+        },
+        {
+          "name": "pu_hour_trips_per_day",
+          "dtype": "Float64"
+        },
+        {
+          "name": "window_months",
+          "dtype": "String"
+        }
+      ],
+      "ttl_seconds": null,
+      "online": true,
+      "source": "pu_hour_window_stats.parquet",
+      "source_rows": 35589,
+      "event_timestamps": [
+        "2019-02-01 00:00:00",
+        "2019-03-01 00:00:00",
+        "2019-04-01 00:00:00",
+        "2019-05-01 00:00:00",
+        "2019-06-01 00:00:00",
+        "2019-07-01 00:00:00"
+      ],
+      "tags": {
+        "catalog": "docs/feast_catalog.md#pu_hour_window_stats",
+        "group": "g5_point_in_time_aggregates",
+        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts on the 15% SAMPLE \u2014 DROPPED. A dropped group is never refitted, so no full-data number exists",
+        "speed_note": "computed from CENTROID distance, never the meter's trip_distance",
+        "verdict": "catalog-only"
+      }
+    },
+    {
+      "name": "zone_static",
+      "entities": [
+        "zone"
+      ],
+      "join_keys": [
+        "zone_id"
+      ],
+      "fields": [
+        {
+          "name": "centroid_lat",
+          "dtype": "Float64"
+        },
+        {
+          "name": "centroid_lon",
+          "dtype": "Float64"
+        },
+        {
+          "name": "borough",
+          "dtype": "String"
+        },
+        {
+          "name": "is_airport",
+          "dtype": "Bool"
+        }
+      ],
+      "ttl_seconds": null,
+      "online": true,
+      "source": "zone_static.parquet",
+      "source_rows": 263,
+      "event_timestamps": [
+        "2019-01-01 00:00:00"
+      ],
+      "tags": {
+        "catalog": "docs/feast_catalog.md#zone_static",
+        "feature_set": "v2",
+        "ablation": "+0.63% relative val MAE, KPI-10 +0.200 pts at FULL data \u2014 KEEP",
+        "group": "g2_centroid_geometry",
+        "verdict": "in-champion"
+      }
+    }
+  ]
+}

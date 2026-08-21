@@ -1,0 +1,85 @@
+# THE QUARANTINE — Feast's complete transitive set, pinned exactly (M8-S2).
+#
+# THIS FILE IS NEVER INSTALLED INTO THE PROJECT ENVIRONMENT. It builds
+# `.venv-feast/`, an isolated interpreter that this repository's own code never
+# imports and that never appears in `uv.lock`.
+#
+# Why (M8 law 4, measured live at the milestone's draft and re-measured here):
+# feast 0.66.0 declares `pandas<3,>=1.4.3`; this project runs pandas 3.0.5. That
+# is a hard major-version wall, the full-`mlflow` shape of gotcha #36 — an
+# `uv add feast` cannot resolve without dragging the project's numeric core two
+# years backwards, and every number this program has published was measured on
+# the core it has. So the wall is the design, not the fallback: Feast lives on
+# its own side and the two sides exchange PARQUET (M8-S3 measures that seam,
+# which is the mlserver precedent — a boundary is only trustworthy once it has
+# been measured across).
+#
+# Regenerate:  make feast-quarantine        (builds .venv-feast from this file)
+# Re-resolve:  bash scripts/feast_quarantine.sh --resolve   (rewrites this file)
+#
+# The exit invariant every M8 story asserts: `uv.lock` byte-identical, and no
+# distribution named below present in the project graph.
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+ast-serialize==0.8.0
+attrs==26.1.0
+bigtree==1.5.3
+certifi==2026.7.22
+charset-normalizer==3.5.1
+click==8.4.2
+cloudpickle==3.1.2
+colorama==0.4.6
+dask==2026.7.1
+dill==0.3.9
+fastapi==0.141.1
+feast==0.66.0
+fsspec==2026.7.0
+greenlet==3.5.5
+gunicorn==26.1.0
+h11==0.16.0
+httptools==0.8.0
+idna==3.19
+jinja2==3.1.6
+librt==0.15.0
+locket==1.0.0
+markupsafe==3.0.3
+mmh3==5.2.1
+mypy-extensions==1.1.0
+mypy==2.3.1
+numpy==2.5.2
+packaging==26.3
+pandas==2.3.3
+partd==1.4.2
+pathspec==1.1.1
+prometheus-client==0.24.1
+protobuf==7.36.0
+psutil==7.2.2
+pyarrow==25.0.1
+pydantic-core==2.46.4
+pydantic==2.13.4
+pygments==2.21.0
+pyjwt==2.13.0
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.3
+pytz==2026.3.post1
+pyyaml==6.0.3
+requests==2.34.2
+six==1.17.0
+sqlalchemy==2.0.52
+starlette==1.6.0
+tabulate==0.10.0
+tenacity==8.5.0
+toml==0.10.2
+toolz==1.1.0
+tqdm==4.70.0
+typeguard==4.6.0
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+tzdata==2026.3
+urllib3==2.7.0
+uvicorn-worker==0.4.0
+uvicorn==0.52.4
+uvloop==0.22.1
+watchfiles==1.2.0
+websockets==17.0.1

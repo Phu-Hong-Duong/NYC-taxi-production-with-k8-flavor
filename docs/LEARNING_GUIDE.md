@@ -3776,3 +3776,64 @@ record, so running the provenance check before a build makes the next image tag
 `-dirty` — and a `-dirty` image must not back a verdict. One rebuild was spent on
 it. Anything that writes into a tracked directory is a build input whether or not
 it feels like one.
+
+## M8-S2 — the quarantine is the design, and a catalog that records its losers (2026-08-21, EXEC/Opus 5)
+
+**A dependency wall measured before the story starts is a design input; discovered
+at `uv add`, it is a crisis.** M8's kickoff read Feast's metadata live and wrote
+law 4 from it: `feast 0.66.0` declares `pandas<3,>=1.4.3` against this project's
+3.0.5. So the story never attempted an install into the project graph — it built
+`.venv-feast`, an isolated interpreter, and made "the two sides never touch" a
+checkable property rather than a habit. The probe then measured what the wall
+actually holds, and the answer is the useful part: **the two sides differ on
+exactly ONE package.** numpy, pyarrow and CPython are identical, so the seam
+M8-S3 is about to measure is a pandas seam and nothing else. That is the same
+shape as M5-S3's mlserver parity, which came back `0.000e+00` for exactly that
+reason — three packages differed, none of them on the numeric path.
+
+**Write the invariant into the script, not into the write-up.** The quarantine's
+exit condition is `uv.lock`'s sha256 before and after, and a difference aborts.
+The alternative — running the build and then checking `git status` by eye — is
+the same claim with nobody obliged to make it. Same instinct one layer along: the
+pin file is installed with `--no-deps`, because a resolver consulted at install
+time can legally return a different answer than the one that was reviewed.
+
+**A catalog that lists only winners cannot be used to argue against repeating an
+experiment.** The strongest feature family in every source this program surveyed
+— historical zone/OD aggregates — is in the store and is NOT in the champion,
+because M3-S3 measured its only legal form at **−1.63%**. Recording it with that
+number, and with the leakage red team's **+1.56% on the month it saw / −3.83% on
+the untouched one** beside it, is what stops the next engineer spending a
+milestone rediscovering it. And the number is labelled a **15%-sample** number,
+because a dropped group is never refitted at full data — quoting it beside g1's
+and g2's confirmed full-data figures without saying so would compare two
+different things (gotcha #15, in a place it is easy to forget it applies).
+
+**Verdicts must live where they can be checked against each other.** They are
+`tags` on the Feast objects and prose in `docs/feast_catalog.md`, and the test
+compares the page against the **applied registry** — read back off the store, not
+re-read from `definitions.py`. Two files in one commit agreeing with each other
+prove nothing; this is the `deploy_serving.sh` idiom (read KServe's mode off the
+live ConfigMap) applied to a feature repo. It earned itself immediately: the
+first run went red because the registry still held tags I had edited minutes
+before, which is precisely the drift the check exists for.
+
+**F-055, and it is gotcha #78 wearing new clothes.** `feast plan` re-stamps a
+DataSource's `meta` at import, so it reports all four views as "Updated" on a
+repo where nothing changed — every single time. An always-noisy signal is as
+unreadable as an always-empty one, and the noisy one is worse because it looks
+like diligence. The fix is not to silence it but to assert the statement that can
+be false: every reported difference must be confined to those two clock fields.
+Red-teamed by renaming one field — the check named it, **and the other three
+views still read clock-only**, which is the half that matters. A drill where
+everything goes red proves the checker noticed *something*, not *what*.
+
+**Derive the timestamps from the data's own structure and the next story's proof
+comes free.** The end-of-window convention (a window is knowable when it ends)
+turns `aggregates.fit`'s six month-cutoff tables into six stamps —
+2019-02-01 … 2019-07-01 — under which Feast's point-in-time join hands each row
+exactly the table `aggregates.transform` hands it. M8-S3 does not have to
+discover that correspondence; it has to measure it. And one number nobody
+arranged: the full window's OD table holds **46,938** rows, which is the count
+M3-S1's floor independently reported as its `(PU, DO)` backoff cells over the
+same six months.

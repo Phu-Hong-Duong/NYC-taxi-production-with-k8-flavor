@@ -275,7 +275,19 @@ verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watc
 	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
-.PHONY: deploy-feast verify-m8 backfill-provenance
+.PHONY: deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry
+feast-quarantine: ## M8-S2: build the ISOLATED feast venv from its exact pins and prove it never touched uv.lock. --resolve rewrites the pins; --check builds nothing
+	@bash scripts/feast_quarantine.sh $(QUARANTINE_ARGS)
+feast-sources: ## M8-S2: build the parquet Feast reads, from the SETTLED trees, into data/feast/ (read-only; --static-only skips the 43.9M-row aggregate fit)
+	@uv run python scripts/feast_sources.py $(SOURCES_ARGS)
+feast-apply: ## M8-S2: register the git-defined entities and views into the (gitignored, regenerable) local registry — runs INSIDE the quarantine
+	@cd infra/feast/feature_repo && uv run --no-project --python $(CURDIR)/.venv-feast/bin/python feast apply
+feast-plan: ## M8-S2: what `feast apply` WOULD change, raw — for a human. `feast-plan-check` is the instrument
+	@cd infra/feast/feature_repo && uv run --no-project --python $(CURDIR)/.venv-feast/bin/python feast plan
+feast-plan-check: ## M8-S2 (F-055): `feast plan` can never say "no changes" — this asserts every reported diff is the re-stamped clock and NOTHING else. Exit 1 on a substantive diff
+	@uv run python scripts/feast_plan_check.py $(PLAN_ARGS)
+feast-registry: ## M8-S2: read the APPLIED registry back and record it (runs inside the quarantine — the deploy-scripts idiom: never trust the file you submitted)
+	@uv run --no-project --python $(CURDIR)/.venv-feast/bin/python python scripts/feast_registry_dump.py $(REGISTRY_ARGS)
 backfill-provenance: ## M8-S1 (F-048): write the SCALE a version's count-scaled knobs were chosen at ONTO the version, derived from the tracked records. Additive tags only — creates no version, deletes nothing, never reads or moves an alias. BACKFILL_ARGS=--dry-run resolves and writes nothing
 	@uv run python scripts/backfill_version_provenance.py $(BACKFILL_ARGS)
 deploy-feast: ## Feast + Redis; materialize; transformer wiring
