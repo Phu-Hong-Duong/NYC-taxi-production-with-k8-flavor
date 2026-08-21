@@ -1,20 +1,20 @@
 {
   "base_image": "python:3.12.14-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a",
-  "build_seconds": 6,
-  "containerd_image_id": "sha256:4fb4ba9eefe176d466183dc79cb55d532b1c5b092ad40289fe4325b86f459804",
-  "content_bytes": 843297645,
+  "build_seconds": 105,
+  "containerd_image_id": "sha256:702a05180a3eccb3af6f775c5eac3356d7119b0ff92a3cd056655d150dc44080",
+  "content_bytes": 843644520,
   "dockerfile": "docker/Dockerfile.pipeline",
-  "git_sha": "72a4013bb7bcc48719d62e1df15202b68bb171db",
-  "image_id": "sha256:556bb0b8198d37c24ed47151a90d7365ae397b34962fd8f63ea52464e5eea7e0",
+  "git_sha": "b4d732c884ece52702fc354b45394ae674c3e149",
+  "image_id": "sha256:e43b1e9bd1a6b8e6685c6125c1cd316a6ae017738de8d309dd8882d5fdff7d39",
   "image_name": "taxi-mlops-pipeline",
-  "image_ref": "taxi-mlops-pipeline:72a4013",
-  "load_seconds": 28,
+  "image_ref": "taxi-mlops-pipeline:b4d732c-dirty",
+  "load_seconds": 51,
   "nodes": [
     "mlops-taxi-worker2",
     "mlops-taxi-control-plane",
     "mlops-taxi-worker"
   ],
-  "tag": "72a4013",
-  "tree_dirty": false,
-  "unpacked_bytes_approx": 2303499600
+  "tag": "b4d732c-dirty",
+  "tree_dirty": true,
+  "unpacked_bytes_approx": 2304599600
 }
