@@ -1,5 +1,125 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (bz) — M8-S3: point-in-time correctness, measured — an exact seam and the leak in one column
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (by) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO. Staleness check clean —
+tree at `59969a1`, 3/3 nodes Ready v1.36.1 (age 4d4h), no `automation/STOP`, no
+`.status` file pointed at, all four settled pins `up to date`, `@champion` version
+**2** / `feature_set v2`. **Role block: DE (A), MLE (R)** — the kickoff's assignment;
+charter read; the refusals in play all session were *nothing fitted for a model · no
+alias moved · no settled byte touched · a mismatch is a finding, never a widened bar*
+and none was broken.
+
+**M8-S3 is DONE.** PR **#55**. The next story is **M8-S4**.
+
+### Done
+- **Retrieval parity: `max |ours − store| = 0.000e+00` over 14 columns and 88
+  declared rows, against a bar of EXACT** — and the bar was argued from the dtype
+  path and **committed in its own commit (`27ea9a1`) before the comparison ran**, so
+  M8 law 4's ordering is checkable from git rather than asserted (the M7-S3 headroom
+  precedent). The argument is one sentence: *nothing on the store's side of the wall
+  performs arithmetic* — every crossing is a copy, a lossless `float32 -> float64`
+  widening, or parquet's typed encoding. A float bar would have been a hedge against
+  a hazard that does not exist here, and a place for a real defect to hide.
+- **`one missing` is ZERO on every column, and that is the load-bearing number** —
+  stronger than the deltas, because it says the store and the feature path agree
+  about *which rows have no value at all*. Both-missing counts as agreement,
+  one-missing as a MISMATCH; a comparison that dropped nulls would have printed the
+  same zeros while being blind to the ~1% of rows with no geometry.
+- **The no-geometry rows are asserted two-sidedly, never compared.** The store
+  returned a row for **none** of the 11 PU / 18 DO rows naming zones 264/265, and our
+  path reports `has_geometry = 0` on 20 rows. `"Unknown"` and null are the same fact
+  in two vocabularies; publishing a zeroed row to make a column-wise comparison
+  succeed would put a plausible place at the equator into a feature store.
+- **The point-in-time proof, two-sided.** Same store, same call, ONE column
+  different. Honest vs naive differ on **61/76** OD rows (max **8.2000** min), 53/69
+  speeds, 62/78 rates; **the naive answer IS our own full-window table — 0 mismatches
+  over 88 rows**; and the honest answer reconciles with `aggregates.transform` at
+  **0.000e+00**. The second half is what makes the first mean anything: a difference
+  alone proves only that two joins disagree.
+- **Ten rows are the purest form of the leak** — 2019-01 has no history, the honest
+  join gives NaN, the naive one hands them a number computed from June.
+- **All six month-boundary pairs were served DIFFERENT windows across 120 seconds**:
+  `(no row) -> 2019-01 -> …,02 -> …,03 -> …,04 -> …,05 -> full`, od_median 161→237
+  **NaN -> 8.1833 -> 8.2667 -> 8.1667 -> 8.1667 -> 8.2500 -> 8.3500** — with the
+  naive column **constant at 8.3500 down the whole table**, which is exactly what
+  makes a leaky feature look stable and good.
+- **The declared row set is committed, 88 rows, each naming why**
+  (`infra/feast/retrieval_rows.csv`): 16 **imported from `parity.HAZARDS`** so both
+  M8 seams are measured against ONE set · 12 straddling every train-month boundary ·
+  60 drawn across M6-S3's four strata by a deterministic hash order.
+- **Verification at story exit**: `make verify-m7` **GREEN 62/62** · host unit suite
+  **1008 passed** (22 new) · `ruff` clean · `make feast-plan-check` `4 clock-only, 0
+  substantive` · `uv.lock` **byte-identical to the `m7-closed` tag** · all four
+  settled pins `up to date` · `@champion` **2**, versions `['1','2']` — no version 3,
+  nothing fitted for a model, no alias read or moved, nothing materialized.
+
+### Decisions
+- **The truth is RE-FITTED from `data/processed/` (43,987,422 rows), never rebuilt
+  from the parquet the store reads.** Reconstructing it from the artifact under test
+  would compare the store against itself and pass for any join at all, including no
+  join. It costs ~3 min of the ~4 min run and is not optional.
+- **The naive pass is made with TIMESTAMPS, not with `point_in_time=False`.** The
+  leakage switch belongs to `scripts/leakage_redteam.py` and to nothing else;
+  demonstrating the leak by moving the join key is the honest form, because the leak
+  IS a property of the join key rather than of the SQL. A test forbids the switch here.
+- **`infra/feast/retrieve.py` lives OUTSIDE `feature_repo/`** — `feast apply` imports
+  every module in the repo directory looking for definitions.
+- **`data/feast/retrieval/` is scratch: gitignored, not DVC-tracked**, on
+  `data/feast/`'s own terms. The records are the two tracked JSONs under
+  `automation/runs/m8-pit/`.
+- **No new PO fork.** Nothing loosens a gate or moves a threshold; the three standing
+  AWAITING_PO items are unchanged and non-blocking.
+
+### Defects/Surprises
+- **F-056 (new, CLOSED the same session): `get_historical_features` returns fewer
+  rows than it was asked for, for two reasons a left join cannot tell apart.** The
+  first run answered **77 of 88**. Cause 1: duplicate `(entity keys,
+  event_timestamp)` — one drawn row shares a pickup second AND a zone with another,
+  and the store answered it *once*. Cause 2: no source row at or before the timestamp
+  — all ten others are 2019-01 and the earliest `od_window_stats` stamp is
+  2019-02-01; the value is correctly nothing but the ROW is dropped. Closed not by
+  asserting a count (which would go red on both legitimate causes — gotcha #50) but
+  by **classifying every unanswered row**, recovering the duplicates by joining on
+  the keys the store actually keyed on, reading the earliest source stamp off the
+  published parquet rather than typing it, and making `unexplained` a FAIL naming row
+  ids. Observed at closure: `duplicate-key 1 · before-first-source-row 10 ·
+  UNEXPLAINED 0`. **Gotcha #102.**
+- **The row draw returned ZERO airport rows out of 3,237,471.** `USING SAMPLE
+  reservoir(15 ROWS) REPEATABLE` after a `WHERE` samples the SCAN, and the filter is
+  applied to what survives it. Replaced with `ORDER BY hash(...) LIMIT n` plus a
+  refusal to come back short — a short draw in a committed artifact is
+  indistinguishable from a stratum nobody covered.
+- **Two tests went red for matching WORDS and both were the file quoting itself**
+  (gotcha #99, second time here): `"materialize"` matched the comparer's own docstring
+  promising it does not materialize, and `"USING SAMPLE"` matched the note explaining
+  why it is gone. Both are asked of the AST now.
+- **The record tests were verified non-vacuous**: planting `windows_differ=False` on
+  the ONE boundary pair whose value did not move — the most plausible lie the file can
+  tell, since the value column already agrees with it — turned the boundary test RED
+  with 21 still passing; `git checkout` → GREEN 22/22, tree clean.
+
+### Next
+**EXECUTOR, fresh session — `automation/next_session.sh executor 120` runs at this
+session's exit.** Next story: **M8-S4 — the online store, the 100-pair parity, and
+the transformer beside the champion** (`docs/milestones/M8_KICKOFF.md` §"M8-S4").
+Four things this story leaves it, all ready: **S3's bar is the one S4 inherits** and
+it is `TOLERANCE = 0.0` in `scripts/feast_retrieval.py`, argued in
+`docs/feast_pit_m8.md` §2 — read it there rather than re-arguing it, and note the
+argument only holds while nothing on the store's side computes, which an ONLINE store
+plus a serialization format may change (that is S4's own dtype argument to make, not
+to inherit). **The offline retrieval it must compare against already exists** —
+`make feast-retrieval` is the reader and `automation/runs/m8-pit/retrieval_parity.json`
+is its record. **F-056 will bite the 100-pair table too**: `get_online_features`
+answers per entity key, so declared pairs sharing an entity legitimately collapse —
+`explain_shortfall`'s shape is the thing to reuse. And **the kickoff's three
+transformer shapes are still unattempted and in order** ((i) feature-server pod over
+HTTP → (ii) thin direct store read, recorded DIFFER → (iii) Feast off the request
+path, recorded DIFFER); the safe split is store + 100-pair parity merged alone, with
+the transformer handed to a second leg.
+
 ## Session 2026-08-21 (by) — M8-S2: Feast, quarantined — one package of difference, and a catalog that records its losers
 
 ### State
