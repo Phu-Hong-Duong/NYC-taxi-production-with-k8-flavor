@@ -1,0 +1,134 @@
+# Redis — the Feast ONLINE store, and the only thing in this program that exists
+# to be read at request time. (M8-S4, ADR-012)
+#
+# WHY A PLAIN MANIFEST AND NOT A CHART. Same call as Postgres and Metabase (see
+# those manifests' headers). The chart most people reach for is bitnami/redis,
+# which brings a StatefulSet, a replica/sentinel story, a metrics exporter and a
+# values surface we would spend the story overriding into the shape below: one
+# container, one volume, one ClusterIP. Fifty lines we can read beat a chart we
+# would have to argue with. Undo is one `kubectl delete -f` (proved by the
+# teardown leg of `make deploy-feast-store`).
+#
+# WHY NO hostPort. kind publishes host ports at cluster-CREATE time only (the
+# port-family note in CLAUDE.md), so adding one means a cluster rebuild, and this
+# cluster's PVCs are the only copy of the registry. The in-cluster reader (the
+# M8-S4 leg 2 transformer) reaches this by Service DNS; the HOST writer (the
+# quarantined materializer, which cannot run in-cluster because there is no Feast
+# image) reaches it through an ephemeral `kubectl port-forward` on **6380** —
+# deliberately off 6379 so a materialization can never write into a developer's
+# own local Redis if the forward were to die. Same recorded deviation as Flyte's
+# console and the pushgateway's 9091.
+#
+# WHY A VOLUME FOR A REGENERABLE STORE. ADR-012 records the state class honestly:
+# every byte in here is REGENERABLE — `make feast-materialize` rebuilds it from
+# the offline parquet in minutes — so it carries a ledger row and NO backup
+# obligation. That is an argument about BACKUP, not about durability across a pod
+# restart, and F-050 is the measured reason the two are not the same thing: the
+# pushgateway lost its whole surface twice in fourteen hours on this machine (host
+# restarts), and an empty store that nobody notices is worse than a missing one
+# that pages. RDB snapshots onto a 1Gi PVC cost nothing and remove the commonest
+# way this store empties itself. The residual is recorded rather than netted out:
+# there is still NO alert on an empty online store — leg 2 puts a reader in front
+# of it, and that is the story that owes the signal.
+#
+# WHY `noeviction`. A feature store that silently drops the key the next request
+# asks for is the same disease one layer along: the answer comes back null, the
+# transformer builds a NaN feature, and the model quotes a confident wrong number
+# with nothing red anywhere. With `maxmemory-policy noeviction` a write past the
+# cap FAILS the materialization loudly instead. The cap is 512mb against a
+# measured working set of ~71,000 keys; the materialize record prints the real
+# `used_memory` so the margin is a number and not a hope.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: feast
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: feast
+  labels: {app: redis}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: feast
+  labels: {app: redis}
+spec:
+  type: ClusterIP
+  selector: {app: redis}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: feast
+  labels: {app: redis}
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: the PVC is RWO and node-local, so a surge pod
+  # could never attach it while the old pod holds it — F-033's deadlock, avoided
+  # by construction rather than discovered. The honest cost is that every change
+  # to this Deployment is a real (seconds-long) outage of the online store.
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: redis}
+  template:
+    metadata:
+      labels: {app: redis}
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.2-alpine@sha256:30abb90e62f14b737010746def3ba99cc79fe19dcdb3d37b41f21fc62e7da19d
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--dir"
+            - "/data"
+            # RDB only. AOF would fsync on every materialized key for a store
+            # whose whole content is regenerable by one command; a snapshot after
+            # 60s/1000 changes is the right trade for a bulk writer.
+            - "--save"
+            - "60 1000"
+            - "--appendonly"
+            - "no"
+            - "--maxmemory"
+            - "512mb"
+            - "--maxmemory-policy"
+            - "noeviction"
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: "1", memory: 768Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redis-data

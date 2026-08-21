@@ -14,6 +14,15 @@
 # which is the mlserver precedent — a boundary is only trustworthy once it has
 # been measured across).
 #
+# M8-S4 added exactly two lines — `redis` and `hiredis`, feast's `redis` extra
+# (`redis<8,>=4.2.2`, `hiredis<4,>=2.0.0`, read off feast's own metadata). The
+# ONLINE store is an in-cluster Redis (ADR-012) and Feast's redis driver refuses
+# to import without them: `FeastExtrasDependencyImportError: No module named
+# 'redis'`, raised at config load, i.e. before any connection is attempted. They
+# are pinned here rather than resolved at install time for this file's whole
+# reason — a resolver consulted later can legally answer differently from the one
+# that was reviewed. Nothing else moved: `git diff` over this file is +2/-0.
+#
 # Regenerate:  make feast-quarantine        (builds .venv-feast from this file)
 # Re-resolve:  bash scripts/feast_quarantine.sh --resolve   (rewrites this file)
 #
@@ -38,6 +47,7 @@ fsspec==2026.7.0
 greenlet==3.5.5
 gunicorn==26.1.0
 h11==0.16.0
+hiredis==3.4.1
 httptools==0.8.0
 idna==3.19
 jinja2==3.1.6
@@ -64,6 +74,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.3
 pytz==2026.3.post1
 pyyaml==6.0.3
+redis==7.4.1
 requests==2.34.2
 six==1.17.0
 sqlalchemy==2.0.52

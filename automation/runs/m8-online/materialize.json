@@ -1,0 +1,9 @@
+{
+  "story": "M8-S4",
+  "recorded_at": "2026-08-21T07:52:13Z",
+  "window": {"start": "2019-01-01T00:00:00", "end": "2019-07-01T00:00:01", "derived_from": "max/min event_timestamp across data/feast/*.parquet"},
+  "elapsed_seconds": 7,
+  "store": {"dbsize": 57688, "used_memory_human": "14.32M", "maxmemory_bytes": 536870912, "pod": "redis-586db48584-sfd97"},
+  "connection": "localhost:6380 (ephemeral port-forward; in-cluster readers use redis.feast.svc.cluster.local:6379)",
+  "semantics": "LATEST value per entity key in [start, end) — no history. The time-varying views therefore serve the FULL window to every request; see the script header and docs/feast_online_m8.md 3."
+}

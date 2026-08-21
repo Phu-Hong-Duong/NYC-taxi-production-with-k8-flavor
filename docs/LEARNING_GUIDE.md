@@ -3905,3 +3905,75 @@ REPEATABLE` after a `WHERE` and got **zero airport rows out of 3,237,471**.
 DuckDB samples the scan; the filter is applied to what survives it. A short draw
 in a committed artifact is indistinguishable from a stratum nobody thought to
 cover, which is #78 wearing a sampler's clothes.
+
+---
+
+## M8-S4 leg 1 — the online store, and what an online store structurally cannot do
+
+The sentence worth keeping from this story is not the parity number. It is this:
+**an online feature store cannot serve a point-in-time feature.** `feast
+materialize` keeps the latest row per entity key and no history, so a
+time-varying view serves whatever the newest window says to every request that
+ever arrives. M8-S3 spent a whole story proving that a *training* row must be
+served only what it was entitled to know; this story's store is structurally
+incapable of that distinction. Both facts are true at once and neither is a
+defect — a training set and a request are different questions — but the seam
+between them is exactly where a leaky feature would enter production wearing a
+correct offline proof as its passport.
+
+It happens to cost nothing here, and that is worth understanding rather than
+being relieved by: **every stored feature the champion actually eats is static.**
+Nine geometry lookups and three calendar flags. The two time-varying views are
+`catalog-only` — they lost the M3 ablation. So the champion's exposure to this
+limit is zero *today*, by an accident of which features won, and the day a
+window aggregate wins an ablation is the day this becomes a real design problem.
+
+**The immediate consequence is a comparison design.** The offline half of the
+parity table has to be retrieved at one instant *after the last window closed*,
+because that is the only offline answer the online store is trying to be. Ask for
+each row's own point-in-time answer and a perfectly working store reports as
+broken — gotcha #50, and the version of it that would have been easiest to
+believe, because "compare like with like" sounds like the careful choice.
+
+**Then the thing I did not see coming.** Holding every timestamp constant turned
+M8-S3's F-056 from a curiosity into the normal case. `get_historical_features`
+answered **34 rows for 100 declared pairs** on one view; `get_online_features`
+answered 100 of 100 on every one. Nothing was wrong — a lookup returns one row
+per request, a join returns one row per distinct key — but I had inherited an
+aligner written when the collapse affected one row in eighty-eight, and the
+property that made it rare was the exact property this story was required to
+remove. Aligning by position would have compared the store against a shuffled
+copy of itself. The general lesson: **before comparing two APIs, ask what each
+one's row count MEANS**, and check whether the assumption that made a previous
+edge case rare still holds.
+
+**A design refused by its own data.** I declared a hazard row for "a key whose
+newest source row predates the full window" — the row that would go null if
+materialization filtered on the window's end. The builder found no such key, and
+the reason is structural: the point-in-time windows are cumulative, so the full
+window's key set is a superset of every earlier one's. The temptation is to
+quietly substitute something nearby that runs. The replacement has to do the same
+*job*: the pair whose median moves most across its windows (80 minutes), which is
+where a wrong-stamp materialization shows up largest. **A hazard row you cannot
+construct is a fact about the system, and it belongs in the write-up next to the
+row that replaced it.**
+
+**The bar, and why it was not inherited.** M8-S3 argued EXACT from "nothing on
+the store's side performs arithmetic". Copying that sentence into a story that
+adds a serialization format and a network hop would have been a hedge wearing an
+argument's clothes. So it was re-made for the new path — protobuf `double` is
+fixed-width, bool and string have no numeric path, the hop moves bytes, the
+entity-key encoding is pinned, `materialize` selects rather than aggregates — and
+committed before the comparison ran. That ordering is checkable from git, which
+is the only form of "we decided this in advance" that survives a sceptic.
+
+**And the red team, which is the reason the table is worth committing at all.**
+Both halves come from one Feast install, so the first sceptical reading is that
+two reads of one store will always agree. The drill copies one OD pair's *real
+serialized bytes* onto another pair's key: every byte written by Feast, the
+protobuf parses, the dtype is right, nothing logs anything. That is what a
+wrong-row materialization looks like from outside, and it is the one failure the
+offline store cannot detect for itself. Eighty-seven minutes of skew, one column
+named, twenty-six other lines still green, a byte-identical restore. **Planting
+garbage would have proved the parser works. Planting something valid is what
+proves the table does.**

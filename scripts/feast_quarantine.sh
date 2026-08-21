@@ -26,7 +26,12 @@ cd "$REPO_ROOT"
 
 VENV=".venv-feast"
 PINS="infra/feast/requirements-feast.txt"
-FEAST_PIN="feast==0.66.0"
+# The `[redis]` extra is M8-S4's: the ONLINE store is an in-cluster Redis
+# (ADR-012), and feast's redis driver raises at config load without the `redis`
+# and `hiredis` distributions. It is declared HERE, in the resolver's input, so a
+# future `--resolve` produces the set the pin file already holds rather than
+# silently dropping two lines somebody added by hand.
+FEAST_PIN="feast[redis]==0.66.0"
 RECORD_DIR="automation/runs/m8-feast"
 RECORD="$RECORD_DIR/probe.json"
 REPO_DIR="infra/feast/feature_repo"

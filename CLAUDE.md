@@ -128,6 +128,9 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | Serving alert rules | **7 rules across 6 signal ids** (A-1, A-2, A-3, A-5 ×2, A-6, A-7) in `infra/monitoring/alerting_rules.yml`, a plain Prometheus rules file · thresholds **5%** beyond 250 ms · **10%** edge 5xx · **1%** 4xx · **<1** available replica · **>2** restarts/15 m · **0.90** CFS-throttled fraction | 2026-08-19 | M6-S2, read back off `/api/v1/rules` (7 loaded, `health=ok`). Every threshold's argument lives in `docs/slo_serving.md`, and `scripts/render_alert_rules.py` REFUSES a rule with no `annotations.why`. **A-4 and A-3's client half have NO rule and that is recorded** (F-035) |
 | KServe `deploymentMode` | **`RawDeployment`** (ADR-004's Standard mode) — the chart default is `Knative` | 2026-08-19 | `infra/helm/kserve/values.yaml`, and READ BACK off `configmap/inferenceservice-config` by `scripts/deploy_serving.sh` rather than off the values that were submitted. Honest cost, landing on M6: **Standard mode has no canary** — `canaryTrafficPercent` requires Serverless (the prior-art ADOPT) |
 
+| Redis (the Feast ONLINE store) | **`redis:8.2-alpine@sha256:30abb90e62f14b737010746def3ba99cc79fe19dcdb3d37b41f21fc62e7da19d`** — TAG AND DIGEST, the Metabase precedent. Plain manifest (`infra/manifests/redis.yaml`), not a chart — the header says why. `maxmemory 512mb` + **`maxmemory-policy noeviction`** (a correctness setting, not tuning) · RDB `--save "60 1000"` onto a 1Gi PVC · `strategy: Recreate` · **no hostPort** | 2026-08-21 | `docker image inspect` (M8-S4), read back off the live Deployment and off the running server with `redis-cli CONFIG GET`. ADR-012 records why it is Redis and not sqlite (two-sided reachability) and not Postgres (blast radius: the ONE Postgres holds five irreplaceable tenants and an online store is the opposite state class) |
+| redis / hiredis (in the QUARANTINE only) | **`redis==7.4.1` · `hiredis==3.4.1`** — feast's own `[redis]` extra (`redis<8,>=4.2.2`, `hiredis<4,>=2.0.0`, read off feast's metadata) | 2026-08-21 | M8-S4. The only two lines `infra/feast/requirements-feast.txt` gained (+2/−0, hand-inserted in sorted position — see F-057 for why not by regeneration), and `scripts/feast_quarantine.sh`'s `FEAST_PIN` is now `feast[redis]==0.66.0` so a future `--resolve` produces the set the pin file already holds. **`uv.lock` byte-identical to the `m7-closed` tag across the whole story** |
+
 ## The data contract (M1-S1) — where the rules actually live
 Knobs: `configs/data.yaml` (source/contract/clean/write). Split months are NOT
 there — they live in `configs/train.yaml` and are read from it, so the two files
@@ -2748,6 +2751,90 @@ can never disagree (the port-family twins lesson, applied before it bit).
   explaining why it is gone. Both are asked of the **AST** now — the single
   subprocess invocation's argv, and the SQL `_drawn_rows` actually builds.
 
+## The online store, and the 100-pair parity (M8-S4 leg 1) — a lossless projection, and the collapse that became the normal case
+- **The store is an in-cluster Redis and the constraint that decided it is
+  TWO-SIDED reachability** (ADR-012): the materializer writes it from the HOST
+  inside the quarantine (there is no Feast image and building one would move the
+  wall into the cluster), the leg-2 transformer reads it from a POD. **Feast's
+  default sqlite file satisfies neither, and fails in the dangerous direction** —
+  `feast materialize` writes a local file, reports success, and every in-cluster
+  lookup returns null. So the address cannot be a committed constant: it is
+  `${FEAST_REDIS_CONNECTION}`, expanded by Feast's own `os.path.expandvars`, with
+  **no default** — an unset variable fails loudly naming itself, where a default
+  would connect to something wrong (F-048's rule). The OFFLINE readers never open
+  a connection, so the unexpanded literal is harmless to them. **1 of the
+  3-attempt wall spent; it worked first time.**
+- **Two settings whose failure mode is silent, both read back off the SERVER.**
+  `maxmemory-policy noeviction` is a CORRECTNESS setting, not tuning: an evicting
+  feature store drops the key the next request asks for, the lookup returns null,
+  the transformer builds a NaN and the model quotes a confident wrong number with
+  nothing red anywhere — with `noeviction` the materialization FAILS instead
+  (57,688 keys / 14.32 MiB against a 512mb cap, so the margin is a number). And
+  `strategy: Recreate`, because a node-local RWO volume plus RollingUpdate is
+  F-033's deadlock — avoided by construction rather than discovered.
+- **The state class is recorded in BOTH directions, because they are different
+  questions.** Materialized features are REGENERABLE (7 s), so **ledger row yes,
+  backup obligation no** — `make backup` enumerates from the server and will not
+  see Redis, which is correct and is written down so nobody reads the absence as
+  an omission. A PVC anyway: backup is about losing the machine, the volume is
+  about losing the POD, and F-050 measured that event twice in fourteen hours on
+  this machine. The residual is named, not netted out: **there is still no alert
+  on an empty online store**, and it belongs to the story that puts a reader in
+  front of it.
+- **`max |online − offline| = 0.000e+00` across 16 columns and 100 declared
+  pairs, bar EXACT — and `one missing` is ZERO on every one.** The bar was
+  **re-argued for the new path and committed before the comparison ran** (commit
+  `3777e71`): protobuf `double` is fixed-width, bool/string have no numeric path,
+  the hop moves bytes, the entity-key serialization is pinned at version 3, and
+  `materialize` SELECTS rather than aggregates. Inheriting M8-S3's sentence would
+  have been a hedge — its argument was about parquet.
+- **The anchor is what stops this being two Feast reads agreeing with each
+  other.** The seven STATIC columns are additionally compared against
+  `taxi_mlops.features.zones` and `.calendar` — the functions the champion's own
+  matrix is built from, and **every stored feature the champion actually eats**.
+  The two time-varying views are anchored by an INHERITED measurement, cited and
+  not re-run (M8-S3: the full-window retrieval == our `aggregates.fit` table, 0
+  mismatches over 88 rows); re-fitting 43.9M rows to restate it would cost three
+  minutes to learn nothing.
+- **An online store cannot serve a point-in-time feature, and that is the honest
+  limit of the category rather than a defect of this one.** `materialize` keeps
+  the latest row per key, so the time-varying views serve the FULL window to
+  every request — which is exactly M8-S3's *naive* column. The offline half is
+  therefore retrieved at an instant AFTER the last window closed; comparing
+  against a per-row point-in-time answer would report a correctly-working store
+  as a mismatch (gotcha #50). It costs nothing here because all twelve stored
+  features the champion eats are static.
+- **F-056 stopped being a curiosity and became the majority case** (gotcha #103).
+  Hold every timestamp constant and the join's duplicate-collapse is no longer an
+  edge: `get_historical_features` answered **34 rows of 100** on one view (37, 67,
+  73 on the others) while `get_online_features` answered **100 of 100 on every
+  one**. Nothing was wrong — a lookup returns one row per request and a join one
+  row per distinct key — but aligning by POSITION would have compared the store
+  against a shuffled copy of itself, and aligning by `row_id` alone would have
+  read two thirds of the table as nulls. Aligned on the keys the store actually
+  keyed on; shortfall CLASSIFIED, `UNEXPLAINED 0`, and M8-S3's second cause
+  correctly EMPTY (a retrieval after the last window cannot predate its sources).
+- **The declared row 92's first design was refused BY THE DATA, and the refusal
+  is the better instrument.** The intent was a key whose newest source row
+  predates the full window; no such key exists, because the point-in-time windows
+  are **cumulative**, making the full window's key set a superset of every
+  earlier one's. Replaced rather than approximated: it is now the OD pair whose
+  median moves most across its windows (**169 -> 191, 80.15 min**) — the row where
+  a wrong-stamp materialization shows up by the largest margin.
+- **The table can go RED and was watched doing it.** The drill copies one OD
+  pair's REAL serialized bytes onto another's key (the protobuf parses, the dtype
+  is right, nothing logs anything — a drill that planted garbage would prove the
+  parser works): **exit 1 at 8.727e+01 naming `od_window.od_median_duration_min`,
+  26 sub-check lines still passing, sha256-identical restore, GREEN again, clean
+  tree.** Both of its parity runs use `--no-write`, pinned by a test — a drill
+  that rewrote the committed table with its own tampered verdict would be
+  planting evidence rather than looking for it.
+- **End state is exactly M8-S3's**: `@champion` **2** / `feature_set v2`,
+  versions `['1','2']`, `make verify-m5` GREEN, `make verify-m7` **GREEN 62/62**,
+  host suite **1041 passed**, `uv.lock` byte-identical to `m7-closed`, all four
+  settled pins `up to date`. **The transformer is NOT built** — the kickoff's own
+  declared safe stopping point, and leg 2 inherits an unspent 3-attempt wall.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -2771,6 +2858,16 @@ controller until KServe at M5, so the console/API is reached with
 `make flyte-console` — a recorded deviation from the declared-route doctrine,
 with its reason, not a drift. The declared route lands at the next PO-sanctioned
 rebuild.
+
+**Redis (the Feast ONLINE store, M8-S4) is NOT in the port family, and that is a
+decision.** It is not a required port: it gets **no hostPort** (M8/M7 law 1 —
+kind publishes host ports at cluster-CREATE only), nothing binds it on the host,
+and the only host access is an EPHEMERAL `kubectl port-forward` that
+`make feast-materialize` and `make feast-online-parity` each start and tear down
+themselves. That forward uses **6380, deliberately off 6379**, so a
+materialization can never write into a developer's own local Redis if the forward
+were to die. In-cluster readers use `redis.feast.svc.cluster.local:6379`. Same
+recorded deviation as Flyte's console and the pushgateway — see ADR-012.
 
 **Port 9091 is RESERVED, not used — and the pushgateway is LIVE behind it
 (M7-S3).** The gateway runs in-cluster from M7-S3 and gets **NO hostPort**
@@ -2923,6 +3020,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Execute EVERY board card; an empty panel is a FAILURE (M7-S5) | `make board-cards` (`BOARD="…"` scopes it to one board) | VERIFIED 2026-08-20 (M7-S5 leg 1): **36 cards across all 4 boards, 0 failures.** It exists because `--verify` runs ONE card per dashboard, which proves the connection and the credentials and not the board — and an empty panel is indistinguishable from a quiet system (**gotcha #78**, learned expensively on the Grafana boards at M6-S1). It runs the SQL a reviewer reads in the checked-in JSON straight at the one Postgres over the `make marts` transport, so what is under test is the reviewed artifact. **Deliberately NOT wired into `verify-m1`**: widening a gate's behaviour late in a session is how a guard goes red for a correct system (gotcha #50) |
 | Gate check M7 | `make verify-m7` | VERIFIED 2026-08-20 (M7-S5 leg 2): **GREEN 62/62 sub-checks in 7 sections, 5.328 s, exit 0** — the scoring months (`trips_clean` still exactly `{train,val,test}` asked of the ROWS · the config loader REFUSES a month in both lists · the 2019 pins unmodified in git while the scoring trees carry their own · the 2025 probe VALIDATED and having acquired nothing · three refusal shapes, exit 1 each, and their month in NO ingest or scoring table) · **the two failure signatures differing in all 4 discriminating fields**, built from record shapes rather than from a doc table, with the drift metric's ABSENCE counted where a landed month would have to appear · the predictions table reconciling **15,413,352 rows across three systems** with the ingest report as the AUTHORITY, the self-check matching the registry's own `gate_challenger_mae`, `model_versions_seen = 1` per month, a row per calendar day, and NO floor/margin/KPI-09/10 column · the drift judgement (5 M7 rules LOADED and `health=ok`, **every threshold parsed out and found in §6/§8 specifically** — a bar argued in the latency section is not an argument for a drift bar — the absence list EMPTY, A-8 excluding the target BY NAME, no bar-shaped constant under `src/taxi_mlops/monitoring/`, `honor_labels: true`, and `push_metrics` REFUSING a payload with no freshness stamp) · **the order of work on three clocks including git** · the retrain's REFUSE with F-020's rescale re-derived and **not one of its 8 runs a registry version** · the memo's 14 instrument numbers against the records at the precision the document wrote them. **RE-RUNS NOTHING** and asks the live system exactly three questions (one prediction, one PromQL query, one rules read), pinned by `tests/unit/test_verify_m7.py`. No skip flag, no fast mode (M1's rule, **seventh** inheritance). Transcript: `docs/verify_m7_transcripts.md` §1 |
 | Prove the M7 gate can go RED | `make verify-m7-redteam` (`bash scripts/verify_m7_redteam.sh`) | VERIFIED 2026-08-20 (M7-S5 leg 2): rewrites ONE number in `automation/runs/m7-drift/drift-2020-03.json` — `volume_ratio` **0.3913 → 0.4021**, a ratio of TOTALS where a ratio of RATES belongs, derived from the record's OWN fields (`current_rows` over `reference_rows / 6`) and **still under the 0.50 bar so the alert still fires** → **RED exit 1 with 3 FAILs from THREE DIFFERENT ARTIFACTS**: the anchor arithmetic (trips/DAY over trips/DAY), `drift_fire_drill.json` (what the live gateway held while the alert was judged), and `docs/drift_memo_m7.md` §7 (the only witness a human reads). **59 sub-check lines still ran and passed**, and the **bar-daylight leg stayed GREEN by design** — the planted value keeps the argument intact, which is what separates a gate that fails on a WRONG number from one that fails on any edit. Restored under an EXIT trap, sha256-verified byte-identical, `git status` clean → **GREEN 62/62**. Touches no pod, no rule, no pushed metric, no MLflow run, no registry version, no alias. It is **F-045 itself** — *a month is not a unit of demand; a day is* — planted against the milestone that found it |
+| The Feast ONLINE store (M8-S4, ADR-012) | `make deploy-feast-store` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` deletes the namespace **and its PVC**) — one in-cluster Redis, no hostPort, and **NO features** | VERIFIED 2026-08-21 (M8-S4): `redis:8.2-alpine@sha256:30abb90e62f1…` (TAG AND DIGEST) on `mlops-taxi-worker2`, PVC Bound 1Gi. The accept is an **answer from the server**, not a list of ready objects (gotcha #59): `PING -> PONG` **plus a real SET/GET/DEL round trip** — a WRITE, which is what a materialization needs and a readiness probe does not prove — then `maxmemory-policy=noeviction maxmemory=536870912 dbsize=0` read back **off the running server** rather than off the values submitted (`deploy_serving.sh`'s idiom). It **FAILS if the policy is anything but `noeviction`**: an evicting feature store drops the key the next request asks for and answers null, which reads as a feature with no value. It does not materialize (that is its own command with its own record) and it cannot name the champion in code (unit-tested). Record: `automation/runs/m8-online/store.json` |
+| Fill the online store (M8-S4) | `make feast-materialize` (`MATERIALIZE_ARGS=--dry-run` prints the derived window and writes nothing) | VERIFIED 2026-08-21 (M8-S4): window **`2019-01-01T00:00:00` -> `2019-07-01T00:00:01`, DERIVED** from the published parquet by `scripts/feast_source_window.py` and never typed — a typed end would keep materializing successfully while silently ceasing to include a seventh window. Through an ephemeral port-forward on **6380**, inside the quarantine: `feast apply` first (a materialization into a store the registry does not know about is a half-configured success), then **57,688 keys / 14.32 MiB in 7 s**, read back off the SERVER. It **REFUSES to report success against a store that is empty afterwards** — an empty online store answers every lookup with null, which is F-050's shape one layer along. Record: `automation/runs/m8-online/materialize.json` |
+| THE 100-pair online/offline parity (M8-S4) | `make feast-online-parity` (`PARITY_ARGS=--no-write` prints the verdicts and writes no record or table) | VERIFIED 2026-08-21 (M8-S4): **`max \|online − offline\| = 0.000e+00` across 16 columns and 100 declared pairs against a bar of EXACT, with `one missing` ZERO on every column** — the load-bearing count, because it says the store and the feature path agree about *which rows have no value at all*. Plus the ANCHOR (the seven static columns against `taxi_mlops.features.zones`/`.calendar`, the champion's own lookup — without it this is two Feast reads agreeing with each other), the **two-sided no-geometry assertion** (our path has no geometry on 13 pu / 19 do rows, the store declined exactly those, **0 disagreements**, zones `264, 265, 999`), and the offline join's shortfall **CLASSIFIED** — `34/37/79/67/73` rows returned for 100 declared, every one a duplicate entity key, **UNEXPLAINED 0** (gotcha #103). A READER: two subprocess launches, both named and AST-pinned. Artifact: `docs/feast_online_parity_table.md` (committed — the blueprint's named accept artifact) |
+| Prove the parity table can go RED (M8-S4) | `make feast-online-parity-redteam` | VERIFIED 2026-08-21 (M8-S4): **PASSED.** Copies one OD pair's **real serialized bytes** onto another pair's Redis key — every byte written by Feast, the protobuf parses, the dtype is right, nothing logs anything; a drill that planted garbage would prove the parser works. Target is **row 92**, the pair the declared set named IN ADVANCE as the one where a wrong value shows up by the largest margin (`169 -> 191`), donor derived (`14 -> 259`). → **RED exit 1, `max = 8.727e+01`, naming `od_window.od_median_duration_min`**, with **26 other sub-check lines still passing** (a gate that fails on any edit is a checksum), **sha256-identical restore** (`bd91004815981b5c…` before the plant and after), GREEN again, `git status` clean. Both parity runs inside it use `--no-write` — pinned by a test, because a drill that rewrote the table it tests would be planting evidence |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
