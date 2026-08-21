@@ -12,7 +12,8 @@ charter read; the refusals in play all session were *nothing fitted for a model 
 alias moved · no settled byte touched · a mismatch is a finding, never a widened bar*
 and none was broken.
 
-**M8-S3 is DONE.** PR **#55**. The next story is **M8-S4**.
+**M8-S3 is DONE and MERGED** (PR **#55**, merge commit `9d8a76d`, lineage proved:
+`git branch -r --contains 61e58fa` → origin/main). The next story is **M8-S4**.
 
 ### Done
 - **Retrieval parity: `max |ours − store| = 0.000e+00` over 14 columns and 88
