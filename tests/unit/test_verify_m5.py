@@ -36,6 +36,8 @@ from __future__ import annotations
 import pathlib
 import re
 
+import pytest
+
 REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M5 = REPO / "scripts" / "verify_m5.sh"
 REDTEAM = REPO / "scripts" / "verify_m5_redteam.sh"
@@ -172,6 +174,7 @@ def test_every_python_leg_demands_a_minimum_verdict_count():
     )
 
 
+@pytest.mark.needs_records
 def test_the_gate_reads_the_tracked_records_it_names():
     body = VERIFY_M5.read_text()
     for record in (
@@ -186,6 +189,7 @@ def test_the_gate_reads_the_tracked_records_it_names():
         assert (REPO / record).exists(), f"{record} is named by the gate but does not exist"
 
 
+@pytest.mark.needs_records
 def test_the_records_the_gate_replays_are_tracked_by_git():
     """F-029, closed at M5-S1: a gate replaying evidence that is not in the
     repository is a gate whose inputs review cannot see. `git check-ignore` is a

@@ -40,6 +40,8 @@ import pathlib
 import re
 import subprocess
 
+import pytest
+
 REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M6 = REPO / "scripts" / "verify_m6.sh"
 REDTEAM = REPO / "scripts" / "verify_m6_redteam.sh"
@@ -245,6 +247,7 @@ def test_every_python_leg_demands_a_minimum_verdict_count():
     )
 
 
+@pytest.mark.needs_records
 def test_the_gate_reads_the_tracked_records_it_names():
     body = VERIFY_M6.read_text()
     for record in (
@@ -260,6 +263,7 @@ def test_the_gate_reads_the_tracked_records_it_names():
         assert (REPO / record).exists(), f"{record} is named by the gate but does not exist"
 
 
+@pytest.mark.needs_records
 def test_the_records_the_gate_replays_are_tracked_by_git():
     """F-029, closed at M5-S1: a gate replaying evidence that is not in the
     repository is a gate whose inputs review cannot see. `git check-ignore` is a
@@ -310,6 +314,7 @@ def test_the_red_team_asserts_both_halves():
 
 
 # ------------------------------------------ the accept-when, as a data contract --
+@pytest.mark.needs_records
 def test_the_records_the_accept_when_rests_on_say_what_it_needs():
     """§9/M6 accepts on three things. This test does not re-check the gate's
     logic — it pins that the RECORDS still carry the fields those clauses are

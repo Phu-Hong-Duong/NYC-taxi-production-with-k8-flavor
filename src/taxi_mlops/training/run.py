@@ -425,6 +425,27 @@ def _resolve_incumbent(train_cfg: dict[str, Any], holdout: str) -> gate.Incumben
     )
 
 
+def _search_scale_tags_of(client: Any, run_id: str) -> dict[str, str]:
+    """F-048: the fit's own scale provenance, read off the RUN being promoted.
+
+    `scripts/automl_refit.py` writes these tags at fit time when the params came
+    from a sampled search. A run without them was fitted from a config a human
+    wrote at the scale it ran at — which is a legitimate no-op and is recorded as
+    one, because an absent tag would leave a future reader unable to tell "no
+    search" from "nobody wrote it down" (that is the whole of F-048).
+    """
+    tags = dict(client.get_run(run_id).data.tags or {})
+    recorded = registry_mod.read_search_scale(tags)
+    if recorded is None:
+        return registry_mod.search_scale_tags(
+            chosen_at_rows=None, round_cap=None,
+            source=(f"run {run_id}: fitted from a configured parameter set at this "
+                    "fit's own scale — no sampled search, so nothing to transfer"),
+        )
+    rows, cap, source = recorded
+    return registry_mod.search_scale_tags(chosen_at_rows=rows, round_cap=cap, source=source)
+
+
 def _promote(
     challenger: Contender, train_cfg: dict[str, Any], decision: gate.Decision
 ) -> registry_mod.Promotion:
@@ -439,8 +460,9 @@ def _promote(
             "claim about a model that does not exist anywhere but this process."
         )
     print()
+    client = mlflow.MlflowClient()
     promotion = registry_mod.promote(
-        mlflow.MlflowClient(),
+        client,
         model_name=cfg["model_name"],
         alias=cfg["champion_alias"],
         run_id=challenger.run_id,
@@ -469,6 +491,12 @@ def _promote(
             ),
             "feature_set": train_cfg["features"]["version"],
             "metric_source": "taxi_mlops.training.evaluate",
+            # F-048: every version ANSWERS the question "what scale were your
+            # count-scaled knobs chosen at?", including when the answer is "no
+            # sampled search". Derived from the run being promoted — never typed
+            # here — so a hand-configured fit records the honest no-op and a refit
+            # from a search carries the divisor a later retrain will need.
+            **_search_scale_tags_of(client, challenger.run_id),
         },
     )
     print(promotion.lines())

@@ -217,6 +217,17 @@ def resolve_champion_configuration(
     is recorded as a note and the rescale becomes an explicit no-op. What is NOT
     allowed is assuming a sample fraction — a wrong divisor produces a plausible
     configuration nobody can check.
+
+    **F-048 changed where step 3 looks first.** The scale is provenance about the
+    VERSION, so a version that carries it (`registry.SEARCH_SCALE_TAGS`) is read
+    from the registry and the host records are never consulted — which is what
+    makes this resolve identically in a task pod, where `automation/runs/` is
+    correctly absent from the image. The host chain remains the fallback for
+    versions minted before the tags existed, and it now REFUSES rather than
+    reporting a no-op when the records directory is invisible altogether: "no
+    refit record names this run" and "I cannot see any records" are different
+    facts, and a pod that printed the first while meaning the second is exactly
+    how F-020's transfer silently stopped happening on-cluster.
     """
     import mlflow
 
@@ -250,7 +261,9 @@ def resolve_champion_configuration(
         f"not-hyperparameters: {', '.join(dropped) or 'none'}",
     ]
 
-    chosen_at, chosen_src, cap, cap_src = _search_scale(str(version.run_id), records_dir, notes)
+    chosen_at, chosen_src, cap, cap_src = _scale_of(
+        version, records_dir, notes, model_name=str(reg["model_name"])
+    )
     return Provenance(
         champion_version=str(version.version),
         champion_run_id=str(version.run_id),
@@ -265,13 +278,65 @@ def resolve_champion_configuration(
     )
 
 
+def _scale_of(
+    version: Any, records_dir: str, notes: list[str], *, model_name: str
+) -> tuple[int | None, str | None, int | None, str | None]:
+    """The scale the count-scaled knobs mean: the VERSION first, the host chain after.
+
+    The order is the finding (F-048). A version tag travels with the thing it
+    describes and is readable from anywhere the registry is; a host JSON is
+    readable only from the host, and the pod that could not see it reported the
+    absence as "this champion had no sampled search" — true about what the code
+    could see, false about the world.
+    """
+    from . import registry as registry_mod
+
+    recorded = registry_mod.read_search_scale(getattr(version, "tags", None))
+    if recorded is not None:
+        rows, cap, source = recorded
+        where = (f"registry: {model_name} version {version.version} tag "
+                 f"{registry_mod.SEARCH_SCALE_ROWS} (recorded from {source})")
+        if rows is None:
+            notes.append(
+                f"scale: {where} — this champion records NO sampled search behind it, "
+                "so the count-scaled knobs are passed through unchanged. That is a "
+                "recorded fact about the version, not a file this process could not find."
+            )
+            return None, None, None, None
+        notes.append(
+            f"scale: {where}: chosen on {rows:,} rows, per-trial cap {cap} rounds. "
+            "Read from the REGISTRY, so it resolves identically on a host and in a "
+            "task pod (F-048)."
+        )
+        return rows, where, cap, where
+    notes.append(
+        f"{model_name} version {version.version} carries no "
+        f"{registry_mod.SEARCH_SCALE_ROWS} tag, so the scale is being followed through "
+        f"the tracked host records under {records_dir} instead. Backfill it with "
+        "`make backfill-provenance` and this read stops depending on where it runs."
+    )
+    return _search_scale(str(version.run_id), records_dir, notes, version=str(version.version))
+
+
 def _search_scale(
-    run_id: str, records_dir: str, notes: list[str]
+    run_id: str, records_dir: str, notes: list[str], *, version: str = "?"
 ) -> tuple[int | None, str | None, int | None, str | None]:
     """Follow refit-record -> study -> sniper-record for the scale and the cap."""
     root = repo_root() / records_dir
+    if not root.exists():
+        raise RetrainError(
+            f"champion version {version} carries no scale provenance tag AND "
+            f"{records_dir} does not exist here, so what scale its count-scaled knobs "
+            "mean cannot be established from anything this process can see. This is "
+            "NOT the same as a champion with no sampled search behind it, and it must "
+            "not produce the same sentence: `.dockerignore` excludes the host records "
+            "from the task image on purpose, so inside a pod this absence is the "
+            "MISSING FILE every time (F-048). Fix it where the fact belongs — "
+            "`make backfill-provenance` writes the scale onto the version, after "
+            "which this resolves from the registry and needs no host JSON at all."
+        )
     refit = None
-    for path in sorted(root.glob("refit-*.json")) if root.exists() else []:
+    for path in sorted(root.glob("refit-*.json")):
         row = json.loads(path.read_text())
         if str(row.get("run_id")) == run_id:
             refit = (path, row)

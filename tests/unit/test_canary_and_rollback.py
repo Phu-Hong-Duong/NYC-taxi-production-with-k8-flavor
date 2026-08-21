@@ -333,6 +333,7 @@ def test_the_coherence_check_was_green_at_BOTH_states() -> None:
 # -------------------------------------------------- prose against the record --
 
 
+@pytest.mark.needs_records
 def test_the_runbook_declares_the_rollback_rehearsed_and_cites_a_record() -> None:
     body = re.search(r"##\s*4\..*?(?=\n---|\n##\s*5\.)", RUNBOOK.read_text(), re.S).group(0)
     heading = body.splitlines()[0]

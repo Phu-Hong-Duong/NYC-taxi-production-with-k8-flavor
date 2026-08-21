@@ -137,7 +137,8 @@ def main() -> int:
     print(f"[budget] measured FITTING wall-clock here: {fitting_seconds:,.1f}s (DR-01 AI-1)")
 
     if not args.no_mlflow:
-        row["run_id"] = _log(args, train_cfg, model, metrics, row, val, fraction)
+        row["run_id"] = _log(args, train_cfg, model, metrics, row, val, fraction,
+                             verdict=verdict)
     if args.out:
         Path(args.out).write_text(json.dumps(row, indent=2, default=str) + "\n")
         print(f"[refit] row written to {args.out}")
@@ -147,9 +148,11 @@ def main() -> int:
 def _log(
     args: argparse.Namespace, train_cfg: dict[str, Any], model: Any, metrics: Any,
     row: dict[str, Any], val: Split, fraction: float | None,
+    verdict: dict[str, Any] | None = None,
 ) -> str:
     import mlflow
 
+    from taxi_mlops.training import registry as registry_mod
     from taxi_mlops.training import tracking
 
     tracking.configure(train_cfg["mlflow"])
@@ -169,6 +172,25 @@ def _log(
                     else f"yes — {fraction*100:g}% SMOKE sample (F-008)"
                 ),
                 "hyperparameters_from": "optuna sniper (DR-03: automation searches params)",
+                # F-048: the SCALE those hyperparameters were chosen at, written at
+                # FIT TIME on the run that will one day become a version. It is the
+                # divisor F-020's transfer needs, and until M8-S1 it existed only in
+                # a host JSON — invisible to the pod that has to do the transfer.
+                # `run._promote` copies these onto the version; the retrain resolver
+                # reads them there and never touches the filesystem.
+                **(
+                    {}
+                    if verdict is None
+                    else {
+                        registry_mod.SEARCH_SCALE_ROWS: str(int(verdict["train_rows"])),
+                        registry_mod.SEARCH_SCALE_ROUND_CAP: str(int(verdict["max_rounds"])),
+                        registry_mod.SEARCH_SCALE_SOURCE: (
+                            f"optuna study {verdict['study']} at sample_fraction "
+                            f"{verdict.get('sample_fraction')}, recorded at refit time by "
+                            "scripts/automl_refit.py"
+                        ),
+                    }
+                ),
             }
         )
         mlflow.log_params(
