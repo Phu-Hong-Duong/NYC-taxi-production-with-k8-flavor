@@ -247,3 +247,45 @@ def test_minio_node_ports_are_the_ones_kind_publishes_on_9000_and_9001():
     values = MINIO_VALUES.read_text()
     ports = [int(p) for p in re.findall(r"nodePort:\s*(\d+)", values)]
     assert [kind_port_map()[p] for p in ports] == [9000, 9001]
+
+
+# --- gotcha #60, recurring: prose sitting where a shell reads it as code ------
+
+
+def test_no_shell_script_hides_a_command_substitution_inside_an_unquoted_heredoc():
+    """F-053 (M8-S1). `make backup` was RUNNING `make restore-drill` on every
+    invocation, because the sentence describing the restore rehearsal said
+    ``On 2026-08-19 `make restore-drill` additionally LOADED ...`` inside a
+    heredoc whose delimiter is unquoted — and backticks in an unquoted heredoc
+    are command substitution. The tell was five words of make's own
+    `Entering directory` chatter spliced into the middle of MANIFEST.txt, in a
+    lifeboat artifact nobody reads until an incident.
+
+    This is gotcha #60 for the second time (M4-S4: a pod manifest's explanatory
+    comments naming `tar` and a docker command RAN them), and the lesson had no
+    test — which is why it came back. The rule the test encodes: **a heredoc
+    whose delimiter is unquoted is executable, so prose may not carry backticks
+    inside one.** Quoting the delimiter is the other fix and is refused here
+    where the body legitimately interpolates `$(human ...)`; escaping or
+    re-punctuating the prose is the cheap one.
+
+    Scanned repo-wide rather than for one file, because the next occurrence will
+    be in a script nobody has written yet.
+    """
+    import re as _re
+
+    offenders = []
+    for path in sorted((REPO / "scripts").glob("*.sh")) + [REPO / "Makefile"]:
+        text = path.read_text()
+        for match in _re.finditer(r"<<-?\s*(['\"]?)(\w+)\1\r?\n(.*?)\r?\n\2\b", text, _re.S):
+            if match.group(1):  # quoted delimiter: the body is literal, nothing runs
+                continue
+            body = match.group(3)
+            for offset, line in enumerate(body.splitlines()):
+                if "`" in line and "\\`" not in line:
+                    lineno = text[: match.start(3)].count("\n") + 1 + offset
+                    offenders.append(f"{path.relative_to(REPO)}:{lineno}: {line.strip()[:90]}")
+    assert not offenders, (
+        "backtick(s) inside an UNQUOTED heredoc — the shell will RUN them:\n  "
+        + "\n  ".join(offenders)
+    )

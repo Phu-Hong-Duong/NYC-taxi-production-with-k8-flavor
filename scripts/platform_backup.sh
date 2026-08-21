@@ -182,8 +182,8 @@ total on disk: $(human "$total_bytes")
 RESTORE IS SCRATCH-REHEARSED (2026-08-19, M6-S5) — AND A FULL RESTORE OVER A
 DEAD PLATFORM IS STILL NOT. Each dump is proven COMPLETE (gzip CRC over every
 byte, plus pg_dump's own completion marker in the final lines) and the object
-mirror is verified by object count AND byte total. On 2026-08-19 `make
-restore-drill` additionally LOADED the three small irreplaceable dumps —
+mirror is verified by object count AND byte total. On 2026-08-19
+'make restore-drill' additionally LOADED the three small irreplaceable dumps —
 mlflow (2.34s), optuna (0.78s), metabase (7.29s) — into scratch databases with
 ON_ERROR_STOP=1 and checked the result against the live databases and against
 records committed in the repository, and restored the whole mirrored flyte-data

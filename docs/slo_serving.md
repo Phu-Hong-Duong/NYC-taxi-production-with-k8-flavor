@@ -562,6 +562,7 @@ move a month can make. The largest genuinely-behavioural number is
 | **A-8** | `ModelInputDrift` | SLO-D1 | 5m |
 | **A-9** | `ScoringVolumeCollapse` | SLO-D2 | 5m |
 | **A-10** | `DriftMetricsStale` | SLO-D3 | — |
+| **A-11** | `DriftMetricsAbsent` | SLO-D4 | 10m |
 
 and the two F-035 landings that ride the same gateway (§6's dated update):
 **A-3**'s client half as `QuoteHorizonRefusals`, and **A-4** as
@@ -656,6 +657,49 @@ run of `test_every_rule_threshold_appears_in_the_document_that_argues_it` failed
 on exactly this, and passed A-4's `1800` **by accident** — `"1800".rstrip("0")`
 is `"18"`, which matches `18.24 s` in §7.1. Gotcha #76, found by the test on
 itself.)
+
+### 8.5a SLO-D4 · existence — *the drift surface is there at all* (added 2026-08-21, F-050)
+
+**A-10 cannot fire on an absent series, and that is arithmetic, not an
+oversight.** `time() - max by (month) (taxi_drift_last_run_timestamp_seconds)`
+evaluated over zero series is *zero series* — not a large number. So the state
+this section spent a paragraph warning about, "the drift job died and its
+reassuring number is still pinned to the wall", has a worse sibling that D-3 is
+structurally blind to: **the wall is gone.** Every panel renders empty, every
+rule sits `inactive`, and nothing anywhere says so.
+
+It was not hypothetical. The pushgateway ran on an `emptyDir`, so it lost its
+entire store on every pod restart, and this cluster is a laptop: **measured three
+times inside 24 hours** of the finding being raised (F-050), twice within
+fourteen. Each time, `verify-m7` §5 was the only thing that noticed, and only
+because it had been written to ask the paired question — *are the series there,
+or is there an accounted-for reason they are not?*
+
+The fix is a pair, and neither half is honest alone:
+
+* **The store survives an ordinary restart.** The gateway now writes to a
+  PersistentVolume (`--persistence.file`, checkpointed every 10s). This removes
+  the event that actually recurs here.
+* **A-11 pages when the series are absent for 10 minutes.** With the volume in
+  place an absence means somebody *deleted* something — a cluster rebuild, a
+  wiped PVC, a namespace removed — which is exactly what should page. Landing
+  A-11 alone, on an `emptyDir`, would have fired on every reboot and trained its
+  reader to ignore it; that is why the boundary decided the two together.
+
+**The 10 minutes is argued from the benign cause.** The only thing that
+legitimately produces an absence here is the gateway pod being replaced, and a
+replaced pod re-serves the same series the moment it is Ready — measured at
+~30 s in this repo's own drill. Ten minutes is an order of magnitude of headroom
+over that. An hour would be defensible too, by A-10's monthly-cadence logic; the
+shorter window is preferred because a wiped board costs nothing to notice and a
+great deal to leave, and because a drill has to be able to watch it fire.
+
+**What A-11 still cannot see**, stated rather than netted out: a gateway holding
+*some* series and not others. `absent()` is a statement about the whole selector,
+so a partial loss — one month's group deleted while two remain — leaves it
+inactive. A-10 covers the months that remain, and nothing covers the month that
+does not. The cost is bounded by the cadence: a monthly job re-pushes every
+month it is asked for, and the drift memo cites months by name.
 
 **A-4's freshness window is 30 minutes — `1800` seconds** (§6's dated update).
 
