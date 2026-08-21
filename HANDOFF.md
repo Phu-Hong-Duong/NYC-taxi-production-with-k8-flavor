@@ -1,5 +1,126 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (by) — M8-S2: Feast, quarantined — one package of difference, and a catalog that records its losers
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (bx) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO. Staleness check clean —
+tree at `ed8f8b9`, 3/3 nodes Ready v1.36.1 (age 4d4h), no `automation/STOP`, no
+`.status` file pointed at, `@champion` version **2** / `feature_set v2`. **Role
+block: DE (A), MLE (R)** — the kickoff's assignment; charter read; the refusals in
+play all session were *no `uv add feast` · nothing fitted · no alias moved · no
+settled byte touched* and none was broken.
+
+**M8-S2 is DONE and MERGED** (PR **#54**, merge commit `5086129`, lineage proved:
+`git branch -r --contains a93d949` → origin/main). The next story is **M8-S3**.
+
+### Done
+- **The quarantine, and the wall measured rather than feared.** `feast 0.66.0`
+  declares `pandas<3,>=1.4.3` against this project's **3.0.5**, so there is no
+  `uv add feast` here and never will be: `.venv-feast` IS the design (M8 law 4).
+  **`make feast-quarantine`** builds it from **64 exact pins**
+  (`infra/feast/requirements-feast.txt`) with `--no-deps`, and its exit invariant
+  is in the SCRIPT — `uv.lock` sha256 before and after, a difference aborts.
+  Proved reproducible by DELETING the venv and rebuilding: same 64 packages.
+  `uv.lock` is byte-identical to the **`m7-closed`** tag (`git diff --stat
+  m7-closed -- uv.lock` empty).
+- **The probe's real finding: the two sides differ on exactly ONE package.**
+  numpy 2.5.2 · pyarrow 25.0.1 · CPython 3.12.14 are identical on both sides;
+  only pandas differs (3.0.5 vs 2.3.3). That is what M8-S3's parquet-seam
+  argument gets to start from — the same shape as M5-S3's mlserver parity, which
+  measured `0.000e+00` because nothing on the numeric path differed. Record:
+  `automation/runs/m8-feast/probe.json`.
+- **The feature repo, in git, applying cleanly.** 5 entities (`zone`,
+  `pickup_zone`, `dropoff_zone`, `pickup_hour`, `calendar_day` — the OD pair is a
+  COMPOSITE of two zone entities so the join keys are the column names this
+  program already uses) and 4 views over artifacts it already had:
+  `zone_static` **263** · `calendar_day_flags` **4,383** · `od_window_stats`
+  **248,169** · `pu_hour_window_stats` **35,589**. **Nothing is recomputed** —
+  every source comes out of the same function the champion's own matrix does.
+- **`make feast-sources` (3m07s) writes ONLY into `data/feast/`**, gitignored and
+  NOT DVC-tracked on `data/predictions/`'s terms. All four settled pins read
+  `up to date` afterwards; a test asserts exactly one writer call exists in the
+  module, so every output path is `OUT_DIR` by construction.
+- **End-of-window stamps, DERIVED — and they set up S3's proof rather than
+  leaving it to be discovered.** Six windows, each stamped at its exclusive end:
+  **2019-02-01 … 2019-07-01**. Under those stamps Feast's point-in-time join
+  hands each row exactly the table `aggregates.transform` hands it (a 2019-04 row
+  gets the 2019-01..03 window; val and test get the full one). **2019-01 has no
+  rows at all** — no history, and a null lookup IS the NaN the model was fitted
+  on. One corroboration nobody arranged: the full window's OD table holds
+  **46,938** rows, the exact count `docs/promotion_gate_m3.md` records for M3-S1's
+  floor backoff cells over the same six months.
+- **`docs/feast_catalog.md` — the catalog records what each entry is WORTH.**
+  Verdicts are `in-champion` / `catalog-only` / `candidate`, live BOTH as tags on
+  the Feast objects and as prose, and `tests/unit/test_feast_repo.py` compares the
+  page against the **APPLIED REGISTRY** (`make feast-registry`, read back off the
+  store — the `deploy_serving.sh` idiom). g5 — the strongest family in every
+  surveyed source — is catalog-only at **−1.63% / KPI-10 −0.686**, with the
+  leakage red team's **+1.56% seen / −3.83% unseen** beside it, and the number is
+  **labelled a 15%-SAMPLE number** because a dropped group is never refitted
+  (gotcha #15). `airport_regime_flag` is a CANDIDATE with its three measurements
+  (1.90× · 1.91× · 1.86–2.35×) — `docs/error_memo_m2.md` §7 row 2's named reader.
+- **Verification at story exit**: `make verify-m7` **GREEN 62/62** · host unit
+  suite **986 passed** (17 new) · `ruff` clean · CI green on PR #54 · `dvc status`
+  on all four settled pins `up to date` · `@champion` version **2**,
+  `versions ['2','1']` — no version 3, nothing fitted, no alias read or moved.
+
+### Decisions
+- **`data/feast/` is a fifth derived tree, gitignored and not DVC-tracked** —
+  `data/predictions/`'s exact argument: regenerable by one command from pinned
+  inputs, and a pin needing refresh whenever an upstream tree moves is provenance
+  that lies. Provenance is the catalog page plus the registry record.
+- **The g5 views are DEFINED even though g5 lost.** A catalog that lists only
+  winners cannot be used to argue against repeating an experiment, and S3's
+  point-in-time proof needs exactly these two views to have something to join.
+- **Feast's local registry and sqlite store are gitignored.** `definitions.py` is
+  the source of truth; a committed registry beside it would be the second home
+  F-013 keeps deleting.
+- **The pin file is installed with `--no-deps`.** A resolver consulted at install
+  time can legally answer differently from the one that was reviewed.
+- **No new PO fork.** Nothing here loosens a gate or moves a threshold; the three
+  standing AWAITING_PO items are unchanged and non-blocking.
+
+### Defects/Surprises
+- **F-055 (new, CLOSED the same session): `feast plan` can never report "no
+  changes".** Feast re-stamps `DataSource.meta` at import, so all four views
+  report as "Updated" on a repo where nothing moved — every invocation. That is
+  **gotcha #78 in its worse direction**: an always-noisy reading looks like
+  diligence where an empty panel at least looks empty. Closed not by silencing it
+  but by asserting the statement that CAN be false — `make feast-plan-check`
+  requires every reported difference to be confined to `("seconds:", "nanos:")`,
+  an allowlist a test pins. **Red-teamed live**: `centroid_lat` →
+  `centroid_lat_TAMPERED` made it FAIL naming `zone_static` and the field **while
+  the other three views still read clock-only**; restored from git, re-applied,
+  GREEN.
+- **Two parser defects on the way, both the checker failing for its own reasons**
+  (gotcha #55): the property NAME prefix sits on the before side only, so every
+  diff read as substantive; and `No changes to infrastructure` was being absorbed
+  into the last block, making exactly one view look different for a reason that
+  had nothing to do with it.
+- **The catalog-vs-registry test earned itself on its first run**, going red
+  because the applied registry still held tags edited minutes earlier — precisely
+  the drift it exists for. Re-applied and re-dumped.
+- **A precision slip caught before it shipped**: the first draft of the view tags
+  paired g1's full-data MAE delta with the 15%-sample KPI-10 delta. Corrected to
+  the confirmed full-data pairs (+1.77% / +0.569 and +0.63% / +0.200), with g5
+  labelled a sample number in the tag, the module prose and the catalog.
+
+### Next
+**EXECUTOR, fresh session — `automation/next_session.sh executor 120` runs at this
+session's exit.** Next story: **M8-S3 — point-in-time correctness, measured**
+(`docs/milestones/M8_KICKOFF.md` §"M8-S3"). Three things this leg leaves it, all
+ready: the quarantine builds in ~25 s from committed pins (`make
+feast-quarantine`); the sources exist and the six window stamps are asserted by
+`tests/unit/test_feast_repo.py::test_the_window_stamps_in_the_registry_are_the_six_month_starts`,
+so the correspondence S3's PIT proof asserts is already pinned rather than
+assumed; and **the seam S3 must measure is a pandas seam and nothing else**, which
+the probe record states as a fact and a test guards (`differs_on == ["pandas"]` —
+if that ever changes, S3's tolerance argument must be re-made rather than
+re-quoted). Law-4 reminder for S3: **the tolerance is argued in the doc BEFORE the
+first comparison transcript's timestamp**, from the dtype path, and a mismatch is
+a finding to investigate, never a bar to widen.
+
 ## Session 2026-08-21 (bx) — M8-S1 leg 2: the scale moved onto the version, and the image proves itself again
 
 ### State
