@@ -1,5 +1,122 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (bw) — M8-S1 leg 1: the drift surface, made trustworthy. Four obligations closed, and a fifth found by the first command
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual:
+CLAUDE.md · HANDOFF (bv) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO.
+Staleness check clean — tree at `237d05e`, 3/3 nodes Ready v1.36.1 (age 4d2h),
+no `automation/STOP`, no `.status` file pointed at. **Role block: SRE A** for
+this leg (the kickoff's assignment); charter read; the refusal in play all
+session was *no threshold moves* — and none did.
+
+**M8-S1 leg 1 is DONE and MERGED** (PR **#52**, merge commit `c472453`, lineage
+proved: `git branch -r --contains 9a20a33` → origin/main). **Leg 2 is
+untouched** and is the next story.
+
+### Done
+- **F-051 CLOSED — A-9's volume ratio is monotonic in the collapse now.**
+  `drift.calendar_days()` (`calendar.monthrange` per month in the window — the
+  authority `verify-m7` §3 already trusts) replaces
+  `COUNT(DISTINCT observed date)`; `_observed_days` survives as a REPORTED
+  diagnostic beside it. **The bar did not move** — this is implementation
+  catching up to the calendar language §8.4 and A-9's own annotation already
+  used. **The three recorded ratios are byte-unchanged**: recomputing all three
+  months produced NO diff line for `volume_ratio` or either `trips_per_day`
+  (0.8336 · 0.8776 · 0.3913). Four property tests, and the load-bearing one is
+  NEGATIVE — *the OLD denominator must still be non-monotonic* — so the defect
+  cannot come back as a tidy-up. `make drift-monotonicity`
+  (`scripts/f051_counterfactual.py`) re-runs REV's counterfactual **through the
+  shipped functions**, which is the half `rev_rederive_m7.py` structurally could
+  not do: calendar **0.3913 → 0.3583, falling at every step, never silent**;
+  observed-days **0.4768 · 0.5143 SILENT · 0.6641**, REV's numbers reproduced
+  and kept as the CONTROL (the script fails if that control stops reproducing
+  the finding).
+- **F-052 CLOSED** — `configs/drift.yaml` deleted; `docs/m7_flow.html` corrected
+  in the stamp line, the drift-check node, the **Gate-2 diamond** (now A-8's and
+  A-9's real conditions instead of "drift share > 0.5?"), signature B's table
+  (now carrying the MEASURED outcome — A-9 fired, A-8 correctly did not) and the
+  footer, with a dated note leaving visible what the page used to claim. F-013's
+  knob tuple widened with `reference_month`/`drift_share_threshold`/
+  `psi_threshold`/`volume_ratio_threshold`, and its docstring states the widened
+  law: **F-013 is a law about BARS, not about the promotion gate.**
+- **F-050 (a)+(b) CLOSED, proved together.** `make backup` FIRST (law 1):
+  `2026-08-21T05-00-56Z`, 6 databases + 418 objects, **1.7 GiB**. The gateway
+  gains a **PersistentVolume** + `--persistence.file=/data/pushgateway.data
+  --persistence.interval=10s` (all read live off the subchart — its
+  `strategy.type` is ALREADY `Recreate`, which a node-local RWO volume needs), and
+  **A-11 `DriftMetricsAbsent`** (`absent(...)`, `for: 10m`, SLO-D4) lands as a new
+  signal through `render_alert_rules.py` (13 rules validate). A-10 gains a
+  `blind_spot` annotation stating why it cannot do this job.
+  **`make drift-persistence-drill` PASSED 16/16**, prediction committed BEFORE the
+  run and pinned by a unit test: 48 samples survived a `kubectl delete pod` onto a
+  **different pod object, ready in 13.12 s** (the same read returned **0** three
+  times on an emptyDir); the deliberate wipe fired **A-11 at 625.1 s** against its
+  600 s sustain and it reached **Alertmanager**, while **A-10 AND A-9 both stayed
+  inactive through a TOTAL loss of the surface**; the re-push cleared A-11 in
+  **37.8 s** and A-9 returned for 2020-03 — the board ends carrying the truth.
+- **F-046 CLOSED on its sentence** — `docs/slo_serving.md` §8.1 states the
+  WINDOW's blindness beside PSI's, names the reliance that makes accepting it
+  honest (A-9, monotonic since F-051 landed first in the same story) and records
+  the residual: **a shape change with NO volume change would be missed by both
+  rules.** The daily window is named and deliberately NOT scheduled.
+- **F-053 (NEW, closed the same session): `make backup` was RUNNING `make
+  restore-drill`.** Backticks in the manifest's own prose inside an UNQUOTED
+  heredoc — command substitution, with `make`'s `Entering directory` chatter
+  spliced mid-sentence into a lifeboat artifact. Dated by the artifacts:
+  2026-08-19 clean, 2026-08-20 and 2026-08-21T04-53-42Z polluted. It never
+  completed (the drill's record still has its 2026-08-19 mtime) — **luck, not
+  design**, since `restore_rehearsal.py` creates and drops scratch databases in
+  the ONE Postgres. Gotcha #60's second occurrence; the real finding is that the
+  lesson had no test. It has a repo-wide one now, red-teamed RED on the exact two
+  lines and restored byte-identically. **The polluted manifest is KEPT** beside
+  its clean control.
+- **Verification at leg exit**: `make verify-m7` **GREEN 62/62** — and its §5 now
+  passes through the **present** branch for the first time (`the live gateway
+  carries 3 volume series, one per scoring month`), where three prior runs took
+  the *restarted* branch. `make monitoring-accept` GREEN 10/10. Unit suite **948
+  passed**, ruff clean. `@champion` version **2** throughout, read and never
+  written; no traffic moved, no InferenceService touched, no data pin moved.
+
+### Decisions
+- **Two craft-level calls inside scope, both with verified undo.** (1) `_psi`
+  now sums a SORTED union: float addition is not associative, so the 17th digit
+  of every PSI was a function of the process hash seed (observed live). Nothing
+  reads that digit — but the module argues for exact SQL counts over sampling on
+  the grounds that a sampled number "changes between runs", and that argument
+  cannot be made by a number that changes between runs. Two consecutive runs are
+  now identical apart from `computed_at`. (2) `--persistence.interval=10s`
+  rather than the chart's 5-minute default, argued from the failure the volume
+  exists for: a clean SIGTERM makes pushgateway write on exit, so 5m would have
+  passed this story's own drill and lost the push on a laptop being switched off.
+- **Two inherited guards went RED for correct additions and were RE-DERIVED, not
+  widened** (gotcha #50, seventh time): the drift-rule signal set was the literal
+  `{A-3,A-4,A-8,A-9,A-10}` and is now the property *the signal must be one
+  `render_alert_rules` knows*; the drill-coverage union takes THREE drills now,
+  because A-11 can only be exercised by a drill that deletes series.
+- **No new PO fork.** Nothing here loosens a gate or moves a threshold. The three
+  standing AWAITING_PO items are unchanged and non-blocking.
+
+### Defects/Surprises
+- **F-053** above — the session's most valuable accident, and it was found by
+  obeying law 1 rather than by looking for it.
+- The A-11 sustain is argued from a measurement this drill produced (13.12 s pod
+  replacement), so the rule's `why` annotation cites
+  `automation/runs/m8-drift/persistence.json` — written before the number
+  existed, filled by the run that produced it.
+
+### Next
+**EXECUTOR, fresh session — `automation/next_session.sh executor 120` runs at
+this session's exit.** Next story: **M8-S1 leg 2** — the image and the retrain's
+provenance (**F-048** (c)+(a) and **F-047** (a), which share ONE image rebuild).
+The kickoff §"M8-S1 — Leg 2" is the whole brief; its ordering clause is
+load-bearing: land (a)+backfill and (c) in one image, redeploy the trigger once,
+*then* the closure evidence — one observed on-cluster `retrain-schedule-proof`
+firing whose record shows `rescale_factor` **6.6667** and `round_cap` **2400**.
+Note gotcha #66 is now certain to bite: this session committed under `src/` and
+`scripts/`, so the next on-cluster run rebuilds its image and starts cold.
+Leg 1 needs nothing from leg 2 and the drift surface is whole without it.
+
 ## Session 2026-08-21 (bv) — ARCH boundary: M7 CLEANLY CLOSED, tagged; the M8 kickoff is authored around a wall that was measured, not met
 
 ### State
