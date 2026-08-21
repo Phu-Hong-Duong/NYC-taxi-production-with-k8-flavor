@@ -1,0 +1,38 @@
+{
+  "story": "M8-S2",
+  "written_at": "2026-08-21T06:59:38.062982+00:00",
+  "why": "F-055: `feast plan` re-stamps DataSource meta at import, so it can never print 'no changes' for this repo. The checkable statement is that every reported difference is confined to those clock fields.",
+  "exit_code": 0,
+  "infrastructure_line": "No changes to infrastructure",
+  "objects": [
+    {
+      "action": "Updated",
+      "kind": "feature view",
+      "name": "zone_static",
+      "clock_only": true,
+      "substantive_diff": []
+    },
+    {
+      "action": "Updated",
+      "kind": "feature view",
+      "name": "pu_hour_window_stats",
+      "clock_only": true,
+      "substantive_diff": []
+    },
+    {
+      "action": "Updated",
+      "kind": "feature view",
+      "name": "calendar_day_flags",
+      "clock_only": true,
+      "substantive_diff": []
+    },
+    {
+      "action": "Updated",
+      "kind": "feature view",
+      "name": "od_window_stats",
+      "clock_only": true,
+      "substantive_diff": []
+    }
+  ],
+  "substantive_count": 0
+}
