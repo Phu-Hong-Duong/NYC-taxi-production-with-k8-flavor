@@ -1,5 +1,110 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-21 (bt) — the park was lifted; NO STORY REMAINS. Reconciliation after a second host reboot, and the baton to REV
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot reads: CLAUDE.md ·
+HANDOFF (bs) · M7 KICKOFF · AWAITING_PO. **No role block was declared and no
+charter refusals were put in play, because no story was executed** — see below.
+
+**The scope law found nothing to execute, and that is the finding of this
+session.** M7's kickoff declares S1–S5; all five are complete (S5 in two legs,
+PR #49, `86a3cf2`, reachable from origin/main). There is no unstarted, unblocked
+story in M7, and **M8 has no kickoff** — ARCH authors kickoffs, so an executor
+cannot invent one. `automation/STOP` is **gone**: the PO lifted the park recorded
+in AWAITING_PO 2026-08-20-1, and the successor that entry names is **REV**, not
+another executor. So this session did the one thing a boot is always entitled to
+do — the ritual's step 2, staleness-check and reconcile — and passed the baton.
+
+**Staleness check: (bs)'s claims all hold, and one thing it could not have known
+moved again.** `automation/STOP` absent · tree clean at `e945b62` · 3 nodes Ready
+v1.36.1 · `nyc-taxi-eta` the only isvc, Ready True (the v1 shadow stays torn
+down) · `@champion` **2** and the wire **2** · `configs/train.yaml:
+features.version` **v2**. **What moved: the host restarted at 03:56Z — `uptime`
+read `up 1 min` at boot — so every monitoring pod came back ~106 s before the
+first check, and the pushgateway lost every drift series with it, for the second
+time in 14 hours.** That is F-050, not a new defect.
+
+### Done
+- **Three live gates re-run after the reboot, all GREEN, nothing re-derived**:
+  `make verify-m5` **GREEN** · `make verify-m6` **GREEN** · `make verify-m7`
+  **GREEN**. The M7 gate's endpoint leg answered **10.665224 minutes stamped
+  `model_version='2'`**, reproducing the parity record's `ordinary-midday` row to
+  **0.000e+00**, and its coherence leg confirmed the served version's
+  `feature_set` tag (v2) still equals the config's `features.version` (v2). A
+  reboot is the cheapest possible test of whether a platform's claims were about
+  the platform or about the session that made them; they were about the platform.
+- **F-050's paired check worked on a second, independent occurrence — the design
+  doing exactly what it was built for.** `count(taxi_drift_psi)` and
+  `count(taxi_drift_last_run_timestamp_seconds)` both returned an **empty
+  vector**, and §5 passed through its *restarted* branch rather than its
+  *present* branch, printing: `the gateway holds no drift series and the reason
+  is accounted for: its container started 2026-08-21T03:55:49+00:00, AFTER the
+  drill pushed at 2026-08-20T04:38:35Z`, naming F-050 and printing the command
+  that fixes it. An absence with no restart behind it would still have been a
+  FAIL.
+- **`ledgers/findings.md` F-050 gains the number the boundary decision was
+  missing: the RECURRENCE RATE.** The row said "once, after a host reboot"; it is
+  now measured at **once per host restart, twice in the 14 hours since it was
+  raised**. That re-prices both options and the row says how, in both directions
+  — it strengthens **(b)** (a hole that reopens on every restart is worth a rule)
+  *and* it is **(b)'s own stated cost arriving on schedule** (that rule would have
+  been firing for most of those 14 hours on a laptop nobody is on call for),
+  which is the live argument for **(a)**, a PersistentVolume that makes the
+  samples survive the event that actually keeps happening here. Recommendation
+  moved to **(a)+(b) together** if the boundary wants this board trustworthy on
+  this machine; **(b) alone** stays correct if the drift surface is understood as
+  drill-populated rather than standing. **Still the boundary's decision, not
+  taken here.**
+
+### Decisions
+- **The wire was NOT touched, and declining to re-push is the decision worth
+  reading.** `make drift DRIFT_ARGS="--push"` behind a port-forward would have
+  repopulated the board in minutes, and (bs) offered it to the PO as a
+  standing-state restoration. It was declined for three reasons: no story
+  sanctions a wire mutation, and this boot had none; A-9 would fire for 2020-03
+  on a monitoring surface nobody is watching; and — the load-bearing one — **the
+  empty gateway IS the evidence the boundary needs.** F-050's open question is
+  which fix to buy, and that turns on how often the hole reopens. Re-pushing
+  would have erased the second data point while answering nothing. The undo is
+  one command and it is printed by the gate itself on every run.
+- **No field note was written, because no story ran.** The field-note law is
+  per-story; inventing one for a reconciliation boot would put a note in
+  `docs/LEARNING_GUIDE.md` that no story's evidence stands behind. The
+  generalisable lesson — *measuring the recurrence rate of a known finding is
+  cheap and can change which fix is right* — is recorded where it is actionable,
+  in the F-050 row.
+- **No signoff row, no ledger row beyond the finding.** Nothing was produced to
+  sign off, and `ledgers/deployments.md` records wire changes; there were none.
+
+### Defects/Surprises
+- **None in the program.** The only surprise is the good kind: a milestone's
+  worth of claims survived a full host restart untouched, and the one hole that
+  reopened is the one already written down, caught by the check written for it
+  the day before.
+
+### Next
+**REV, in a fresh session — `automation/next_session.sh rev 120` is run at this
+session's exit** (M7 carries **◆**, and exit ritual (b) names REV; the AWAITING_PO
+entry the PO just lifted names the same successor). REV's monitoring review:
+re-derive at least one drift number from raw artifacts and audit the retrain
+verdict's evidence chain. The cheapest routes, unchanged from (bs) and re-verified
+as still correct this session:
+- `make drift DRIFT_ARGS="--months 2020-03"` recomputes PSI and the volume ratio
+  from DuckDB in seconds, issues no verdict, and **needs no gateway** — so the
+  empty pushgateway does not block the review. Expect max input PSI **0.0217** and
+  volume ratio **0.3913**.
+- `make retrain-prediction-check` judges `automation/runs/m7-retrain/latest.json`
+  against a prediction committed **before** the fit was launched (20 exact claims).
+- **REV should expect the drift board and every drift alert to be empty** and
+  should NOT read that as a defect in M7's work — it is F-050, now with two
+  occurrences, and the finding row carries both options. If REV wants a populated
+  surface for the review it is `make drift DRIFT_ARGS="--months 2020-01 2020-02
+  2020-03 --push"` behind a port-forward, with A-9 correctly re-firing for
+  2020-03 after its 5-minute sustain.
+- After REV: `automation/next_session.sh architect 120` for the M7 boundary,
+  where F-050 and the three standing non-blocking AWAITING_PO items live.
+
 ## Session 2026-08-20 (bs) — M7-S5 leg 2: the M7 gate, the difference it asserts, and the hole it found
 
 ### State
