@@ -1,5 +1,42 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-21-1 — the chain is PARKED by the PO, deliberately. Nothing is blocked.
+
+`automation/STOP` was written at **2026-08-21 08:06 UTC** by `chain_park.sh`, with its
+own instruction: *finish the running session, schedule NO successor*. That is exactly
+what happened — this entry exists so the park reads as a decision rather than as an
+accident (the exit ritual's rule: a park without an entry looks like a crash).
+
+**State at the park — everything is green and nothing is half-done.**
+M8-S4 **leg 1** was completed and MERGED during the parked session (PR #56, merge commit
+`1a6c141`): the Feast online store (an in-cluster Redis, ADR-012) and the blueprint's
+named accept artifact, the 100-pair online/offline parity table at
+`max |online - offline| = 0.000e+00`, with its red team proved able to go RED and
+restore byte-identically. `make verify-m5` GREEN, `make verify-m7` GREEN 62/62, host
+suite 1041 passed, `@champion` version 2 unmoved, `uv.lock` byte-identical to
+`m7-closed`, all four settled DVC pins up to date, working tree clean.
+
+**No decision is being requested here.** The three standing entries below are unchanged
+and still non-blocking (2026-08-18-1 / F-016, 2026-08-17-1, 2026-08-16-2). Nothing in
+M8-S4 leg 1 opened a fork: no gate loosened, no threshold moved, no alias touched.
+
+**To resume the chain** (the next story is M8-S4 leg 2 — the transformer beside the
+champion; HANDOFF (ca) §Next lists exactly what it inherits and the unspent 3-attempt
+wall):
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+rm automation/STOP
+automation/next_session.sh executor 120
+```
+
+**One live resource to know about while parked**: the new `feast` namespace holds a Redis
+pod and a 1Gi PVC. It is a `data/predictions/`-class tenant — every byte in it is
+REGENERABLE — so it carries a ledger row and no backup obligation, and it is safe to
+leave running, safe to tear down with `TEARDOWN=1 bash scripts/deploy_feast_store.sh`,
+and rebuilt by `make deploy-feast-store && make feast-materialize` in seconds.
+
+
 Format per entry: date · raised by (session/role) · the fork in plain language ·
 2–3 options with honest trade-offs (the recommendation must state the cost of
 the honest option — never the demo-easy path dressed as best) · what is parked ·

@@ -110,8 +110,15 @@ this cut. **MERGED** — PR **#56**, merge commit `1a6c141`, lineage proved: `gi
   precedent. Gotcha #104.
 
 ### Next
-**EXECUTOR, fresh session — `automation/next_session.sh executor 120` runs at this
-session's exit.** Next: **M8-S4 leg 2 — the transformer beside the champion**
+**THE CHAIN IS PARKED — NO SUCCESSOR WAS SCHEDULED, and that is the PO's decision,
+not a crash.** `automation/STOP` was written at **2026-08-21 08:06 UTC** by
+`chain_park.sh` — *"finish the running session, schedule NO successor"* — while this
+session was mid-story. The story was finished and merged as instructed;
+`automation/next_session.sh executor 120` was then run and correctly refused
+(`[chain] STOP file present — not scheduling.`), and the watchdog logged
+`08:10:01  STOP present — chain paused deliberately; standing down.` **To resume:**
+`rm automation/STOP && automation/next_session.sh executor 120`. See AWAITING_PO.md
+2026-08-21-1. Next story when it resumes: **M8-S4 leg 2 — the transformer beside the champion**
 (`docs/milestones/M8_KICKOFF.md` §"M8-S4", second paragraph onward). Everything it needs
 is landed and green:
 * **The store is up, filled and reachable**: `redis.feast.svc.cluster.local:6379` from a
