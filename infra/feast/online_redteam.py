@@ -117,9 +117,7 @@ def main(argv: list[str] | None = None) -> int:
                     "target": args.target,
                     "donor": args.donor,
                     "digest_before": _digest(before),
-                    "fields": {
-                        field.hex(): value.hex() for field, value in sorted(before.items())
-                    },
+                    "fields": {field.hex(): value.hex() for field, value in sorted(before.items())},
                 },
                 indent=2,
             )
@@ -139,7 +137,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     saved = json.loads(save.read_text())
-    fields = {bytes.fromhex(field): bytes.fromhex(value) for field, value in saved["fields"].items()}
+    fields = {
+        bytes.fromhex(field): bytes.fromhex(value) for field, value in saved["fields"].items()
+    }
     current = client.hgetall(target)
     for field in current:
         if field not in fields:

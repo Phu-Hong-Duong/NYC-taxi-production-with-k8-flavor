@@ -132,10 +132,73 @@ row where the error is largest.
 
 ## §4 The result
 
-*(This section is written from `automation/runs/m8-online/online_parity.json`
-after the comparison runs. It is deliberately empty in the commit that fixes the
-bar and the pair set — a results section with numbers in it before the run is the
-thing §1's ordering note exists to make impossible.)*
+**`max |online − offline| = 0.000e+00` across 16 columns and 100 declared pairs,
+against a bar of EXACT — and `one missing` is ZERO on every one of them.**
+
+| column | kind | compared | mismatches | max abs delta | both missing | one missing |
+|---|---|---:|---:|---:|---:|---:|
+| `pu_zone.centroid_lat` | float | 100 | 0 | 0.000e+00 | 13 | 0 |
+| `pu_zone.centroid_lon` | float | 100 | 0 | 0.000e+00 | 13 | 0 |
+| `pu_zone.borough` | string | 100 | 0 | — | 13 | 0 |
+| `pu_zone.is_airport` | bool | 100 | 0 | — | 13 | 0 |
+| `do_zone.centroid_lat` | float | 100 | 0 | 0.000e+00 | 19 | 0 |
+| `do_zone.centroid_lon` | float | 100 | 0 | 0.000e+00 | 19 | 0 |
+| `do_zone.borough` | string | 100 | 0 | — | 19 | 0 |
+| `do_zone.is_airport` | bool | 100 | 0 | — | 19 | 0 |
+| `calendar.is_holiday` | bool | 100 | 0 | — | 0 | 0 |
+| `calendar.is_near_holiday` | bool | 100 | 0 | — | 0 | 0 |
+| `calendar.is_business_day` | bool | 100 | 0 | — | 0 | 0 |
+| `od_window.od_median_duration_min` | float | 100 | 0 | 0.000e+00 | 3 | 0 |
+| `od_window.window_months` | string | 100 | 0 | — | 3 | 0 |
+| `pu_hour_window.pu_hour_mean_speed_kmh` | float | 100 | 0 | 0.000e+00 | 13 | 0 |
+| `pu_hour_window.pu_hour_trips_per_day` | float | 100 | 0 | 0.000e+00 | 1 | 0 |
+| `pu_hour_window.window_months` | string | 100 | 0 | — | 1 | 0 |
+
+**Zero is the honest expectation here rather than a pleasant surprise**, which is
+what §2 exists to have said in advance. The one number that is not a
+restatement of the bar is `one missing = 0` on every column: the store and the
+feature path agree about *which rows have no value at all*, and that is the
+column where a plausible defect would actually live.
+
+**The two-sided no-geometry assertion held.** Our path reports no geometry on 13
+pickup rows and 19 dropoff rows; the store declined exactly those, **0
+disagreements** — zones `264, 265, 999` on the pickup side and `264, 265` on the
+dropoff side. The store is never asked to produce a row for a non-place; it is
+asked to be silent about the same ones we are.
+
+**One internal consistency worth reading slowly**: `pu_hour_mean_speed_kmh` is
+missing on 13 rows while `pu_hour_trips_per_day` is missing on 1, out of the same
+view and the same keys. That is correct — the speed is derived from centroid
+distance, so it is unavailable exactly where geometry is, while trips-per-day
+needs no geometry at all. A store that answered both or neither would be the
+suspicious reading.
+
+### §4.1 The table can go RED — `make feast-online-parity-redteam`, PASSED
+
+A table of zeros is not evidence until something has been watched making it
+non-zero, and the sceptical reading of §4 is *two reads of one store will always
+agree*. The drill copies one OD pair's **real serialized bytes** onto another
+pair's Redis key: every byte was written by Feast, the protobuf parses, the dtype
+is right, the value is a real median from a real pair, and nothing logs anything.
+That is what a wrong-row or wrong-stamp materialization looks like from outside,
+and it is the one failure the offline store cannot detect for itself.
+
+It plants on **row 92** — the pair the declared set named *in advance* as the one
+where a wrong value shows up by the largest margin — and the donor is derived,
+not chosen after the fact. Observed: target `169 -> 191`, donor `14 -> 259`,
+
+* **RED, exit 1, `max |online − offline| = 8.727e+01`**, naming
+  `od_window.od_median_duration_min` — 87 minutes of skew from one hash field;
+* **26 other sub-check lines still passed** — a gate that fails on any edit is a
+  checksum, not a gate (the `verify-m3` red team's rule);
+* the restore is **byte-identical by sha256 over the hash**
+  (`bd91004815981b5c…` before the plant and after the restore);
+* the re-run is **GREEN** again and `git status` is clean.
+
+Both parity runs inside the drill use `--no-write`, so the committed accept
+artifact can never be overwritten with a tampered verdict — a unit test pins
+that, because a drill that rewrote the table it is testing would be planting
+evidence rather than looking for it.
 
 ## §5 The anchor: this is not two Feast reads agreeing with each other
 
@@ -169,8 +232,44 @@ The two APIs answer differently and **both are expected to be right**:
 answers are re-attached **by the entity keys the store actually keyed on**, never
 by position, and any shortfall is CLASSIFIED rather than asserted away — an
 `unexplained` row is a FAIL naming row ids, which is M8-S3's own closure shape.
-*(The observed classification lands with §4.)*
+
+**And it is not a rare edge here — it is the majority of every answer**, because
+every declared pair is retrieved at the SAME instant, so `(keys, timestamp)`
+duplicates are the rule rather than the exception:
+
+| answer | declared | returned by the join | duplicate entity key | UNEXPLAINED |
+|---|---:|---:|---:|---:|
+| `pu_zone` | 100 | 34 | 66 | 0 |
+| `do_zone` | 100 | 37 | 63 | 0 |
+| `calendar` | 100 | 79 | 21 | 0 |
+| `od_window` | 100 | 67 | 33 | 0 |
+| `pu_hour_window` | 100 | 73 | 27 | 0 |
+
+`get_online_features` answered **100 of 100 on every view**; the join answered as
+few as **34**. The two APIs disagree about the SHAPE of the answer and both are
+right — and M8-S3's second cause (*no source row at or before the timestamp*) is
+correctly **empty**, because a retrieval after the last window closed cannot
+predate its own sources. Had this table been aligned by position it would have
+compared a store against a shuffled copy of itself, and the failure would have
+been loud, random and mystifying. **F-056 stopped being an M8-S3 curiosity and
+became the normal case the moment the timestamps stopped varying.**
 
 ## §7 End state
 
-*(Written after the run, from the verification pastes.)*
+* `@champion` version **2** / `feature_set v2`, versions `['1', '2']` — read and
+  unmoved. No version was created; nothing was fitted for a model.
+* `make verify-m5` **GREEN** and `make verify-m7` **GREEN** — the champion's own
+  wire was never touched by this story, and both gates re-asked the endpoint for
+  a prediction to prove it (`10.665224` minutes, stamped `model_version='2'`).
+* Host unit suite **1041 passed** (33 new), `ruff` clean.
+* `uv.lock` **byte-identical to the `m7-closed` tag** (`git diff m7-closed --
+  uv.lock` is empty); the quarantine gained exactly two pins, `redis==7.4.1` and
+  `hiredis==3.4.1`, which are feast's own `[redis]` extra.
+* All four settled DVC pins: `Data and pipelines are up to date.`
+* The store is up, holding **57,688 keys / 14.32 MiB** against a 512mb
+  `noeviction` cap, materialized in **7 s**.
+* **The transformer is NOT built.** That is leg 2, and this is the kickoff's own
+  declared safe stopping point: the blueprint's accept artifact — the parity
+  table — exists and is committed. The three candidate shapes are still in the
+  kickoff's order and none has been attempted, so leg 2 inherits an unspent
+  3-attempt wall.

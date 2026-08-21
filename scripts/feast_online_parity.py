@@ -65,14 +65,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from taxi_mlops.features import zones  # noqa: E402
-from taxi_mlops.features import calendar as calendar_features  # noqa: E402
-
 # The comparator, imported so the two M8 seams cannot disagree about what
 # agreement means. `feast_retrieval` imports taxi_mlops and never feast, so this
 # does not widen the wall.
 from feast_retrieval import ColumnVerdict, compare  # noqa: E402
 from feast_source_window import window as source_window  # noqa: E402
+
+from taxi_mlops.features import calendar as calendar_features  # noqa: E402
+from taxi_mlops.features import zones  # noqa: E402
 
 PAIRS_CSV = REPO_ROOT / "infra" / "feast" / "online_pairs.csv"
 QUARANTINE_PYTHON = REPO_ROOT / ".venv-feast" / "bin" / "python"
@@ -347,18 +347,29 @@ def feature_path_anchor(rows: pd.DataFrame) -> list[ColumnVerdict]:
     flags = calendar_features.flags(rows["tpep_pickup_datetime"])
     verdicts: list[ColumnVerdict] = []
 
-    for side, name, column in (("pu", "pu_zone", "PULocationID"), ("do", "do_zone", "DOLocationID")):
+    for side, name, column in (
+        ("pu", "pu_zone", "PULocationID"),
+        ("do", "do_zone", "DOLocationID"),
+    ):
         ids = zones._clip_ids(rows[column])
         online = _online(name, rows)
         present = ~np.isnan(table.lat[ids])
         verdicts.append(
             compare(
-                f"anchor.{side}.centroid_lat", "float", table.lat[ids], online["centroid_lat"], row_ids
+                f"anchor.{side}.centroid_lat",
+                "float",
+                table.lat[ids],
+                online["centroid_lat"],
+                row_ids,
             )
         )
         verdicts.append(
             compare(
-                f"anchor.{side}.centroid_lon", "float", table.lon[ids], online["centroid_lon"], row_ids
+                f"anchor.{side}.centroid_lon",
+                "float",
+                table.lon[ids],
+                online["centroid_lon"],
+                row_ids,
             )
         )
         boroughs = np.array([table.boroughs[code] for code in table.borough_code[ids]])
@@ -402,7 +413,10 @@ def no_geometry_assertion(rows: pd.DataFrame) -> dict[str, Any]:
     """
     table = zones.load_zone_table()
     result: dict[str, Any] = {}
-    for side, name, column in (("pu", "pu_zone", "PULocationID"), ("do", "do_zone", "DOLocationID")):
+    for side, name, column in (
+        ("pu", "pu_zone", "PULocationID"),
+        ("do", "do_zone", "DOLocationID"),
+    ):
         ids = zones._clip_ids(rows[column])
         ours_missing = np.isnan(table.lat[ids])
         online = _online(name, rows)
@@ -579,7 +593,9 @@ def main(argv: list[str] | None = None) -> int:
             + "\n"
         )
         write_table(verdicts, anchors, meta)
-        print(f"[online-parity] record: {(RECORD_DIR / 'online_parity.json').relative_to(REPO_ROOT)}")
+        print(
+            f"[online-parity] record: {(RECORD_DIR / 'online_parity.json').relative_to(REPO_ROOT)}"
+        )
         print(f"[online-parity] table : {TABLE_MD.relative_to(REPO_ROOT)}")
 
     return 0 if ok else 1
