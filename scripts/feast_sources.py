@@ -52,7 +52,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from taxi_mlops.data.config import load_config, load_splits  # noqa: E402
-from taxi_mlops.features import aggregates, calendar as calendar_features, zones  # noqa: E402
+from taxi_mlops.features import aggregates, zones  # noqa: E402
+from taxi_mlops.features import calendar as calendar_features  # noqa: E402
 from taxi_mlops.training import datasets  # noqa: E402
 
 OUT_DIR = REPO_ROOT / "data" / "feast"

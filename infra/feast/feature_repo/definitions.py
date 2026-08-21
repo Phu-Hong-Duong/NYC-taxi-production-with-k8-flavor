@@ -21,7 +21,7 @@ human reads, and it records for every entry below whether the feature is IN the
 champion, CATALOG-ONLY with the measurement that kept it out, or a CANDIDATE. The
 uncomfortable one is stated in both places: the window aggregates are the family
 every surveyed source swears by, and they LOST the M3 ablation (-1.63% relative
-val MAE, KPI-10 -0.686 points, `docs/ablation_m3.md` §4). They are defined here
+val MAE, KPI-10 -0.686 points on the 15% sample — `docs/ablation_m3.md` §4). They are defined here
 because a catalog that lists only the winners is a catalog that cannot be used to
 argue against repeating an experiment.
 
@@ -37,7 +37,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from feast import Entity, FeatureView, Field, FileSource
-from feast.types import Bool, Float64, Int64, String
+from feast.types import Bool, Float64, String
 from feast.value_type import ValueType
 
 #: `<repo>/data/feast` — this file sits at `<repo>/infra/feast/feature_repo/`.
@@ -125,7 +125,7 @@ zone_static_view = FeatureView(
         "verdict": "in-champion",
         "feature_set": "v2",
         "group": "g2_centroid_geometry",
-        "ablation": "+0.63% relative val MAE, KPI-10 +0.182 pts — KEEP",
+        "ablation": "+0.63% relative val MAE, KPI-10 +0.200 pts at FULL data — KEEP",
         "catalog": "docs/feast_catalog.md#zone_static",
     },
 )
@@ -152,7 +152,7 @@ calendar_day_view = FeatureView(
         "verdict": "in-champion",
         "feature_set": "v2",
         "group": "g1_temporal_extras",
-        "ablation": "+1.77% relative val MAE, KPI-10 +0.594 pts — KEEP",
+        "ablation": "+1.77% relative val MAE, KPI-10 +0.569 pts at FULL data — KEEP",
         "catalog": "docs/feast_catalog.md#calendar_day_flags",
     },
 )
@@ -162,7 +162,10 @@ calendar_day_view = FeatureView(
 # CATALOG-ONLY, and the reason is measured, not suspected: group g5 —
 # point-in-time aggregates, the single strongest family in every source
 # `docs/feature_dossier.md` harvested — came in at **-1.63%** relative val MAE
-# with KPI-10 down 0.686 points and was DROPPED (docs/ablation_m3.md §4). The
+# with KPI-10 down 0.686 points on the 15% sample and was DROPPED
+# (docs/ablation_m3.md §4). A dropped group is never refitted at full data, so
+# that number is a SAMPLE number and the catalog labels it as one (gotcha #15).
+# The
 # legal version is weaker than the zone identity v1 already carries, and the
 # ILLEGAL version (fitted across the val month) would have cleared the keep bar:
 # +1.56% on the month it saw, -3.83% on the untouched one
@@ -190,7 +193,10 @@ od_window_stats_view = FeatureView(
     tags={
         "verdict": "catalog-only",
         "group": "g5_point_in_time_aggregates",
-        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts — DROPPED",
+        "ablation": (
+            "-1.63% relative val MAE, KPI-10 -0.686 pts on the 15% SAMPLE — DROPPED. "
+            "A dropped group is never refitted, so no full-data number exists"
+        ),
         "leakage_note": "docs/leakage_redteam_m3.md: the illegal fit clears the bar",
         "catalog": "docs/feast_catalog.md#od_window_stats",
     },
@@ -216,7 +222,10 @@ pu_hour_window_stats_view = FeatureView(
     tags={
         "verdict": "catalog-only",
         "group": "g5_point_in_time_aggregates",
-        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts — DROPPED",
+        "ablation": (
+            "-1.63% relative val MAE, KPI-10 -0.686 pts on the 15% SAMPLE — DROPPED. "
+            "A dropped group is never refitted, so no full-data number exists"
+        ),
         "speed_note": "computed from CENTROID distance, never the meter's trip_distance",
         "catalog": "docs/feast_catalog.md#pu_hour_window_stats",
     },

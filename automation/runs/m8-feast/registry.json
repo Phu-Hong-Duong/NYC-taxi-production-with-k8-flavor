@@ -1,6 +1,6 @@
 {
   "story": "M8-S2",
-  "written_at": "2026-08-21T06:59:34.976440+00:00",
+  "written_at": "2026-08-21T07:05:28.162580+00:00",
   "read_from": "the applied Feast registry, never from definitions.py",
   "project": "crosstown_eta",
   "feast_version": "0.66.0",
@@ -62,10 +62,10 @@
         "2019-01-01 00:00:00"
       ],
       "tags": {
-        "group": "g1_temporal_extras",
         "catalog": "docs/feast_catalog.md#calendar_day_flags",
-        "ablation": "+1.77% relative val MAE, KPI-10 +0.594 pts \u2014 KEEP",
         "feature_set": "v2",
+        "ablation": "+1.77% relative val MAE, KPI-10 +0.569 pts at FULL data \u2014 KEEP",
+        "group": "g1_temporal_extras",
         "verdict": "in-champion"
       }
     },
@@ -102,10 +102,10 @@
         "2019-07-01 00:00:00"
       ],
       "tags": {
-        "group": "g5_point_in_time_aggregates",
-        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts \u2014 DROPPED",
         "catalog": "docs/feast_catalog.md#od_window_stats",
         "leakage_note": "docs/leakage_redteam_m3.md: the illegal fit clears the bar",
+        "group": "g5_point_in_time_aggregates",
+        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts on the 15% SAMPLE \u2014 DROPPED. A dropped group is never refitted, so no full-data number exists",
         "verdict": "catalog-only"
       }
     },
@@ -146,10 +146,10 @@
         "2019-07-01 00:00:00"
       ],
       "tags": {
-        "group": "g5_point_in_time_aggregates",
         "catalog": "docs/feast_catalog.md#pu_hour_window_stats",
+        "group": "g5_point_in_time_aggregates",
+        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts on the 15% SAMPLE \u2014 DROPPED. A dropped group is never refitted, so no full-data number exists",
         "speed_note": "computed from CENTROID distance, never the meter's trip_distance",
-        "ablation": "-1.63% relative val MAE, KPI-10 -0.686 pts \u2014 DROPPED",
         "verdict": "catalog-only"
       }
     },
@@ -187,10 +187,10 @@
         "2019-01-01 00:00:00"
       ],
       "tags": {
-        "group": "g2_centroid_geometry",
         "catalog": "docs/feast_catalog.md#zone_static",
-        "ablation": "+0.63% relative val MAE, KPI-10 +0.182 pts \u2014 KEEP",
         "feature_set": "v2",
+        "ablation": "+0.63% relative val MAE, KPI-10 +0.200 pts at FULL data \u2014 KEEP",
+        "group": "g2_centroid_geometry",
         "verdict": "in-champion"
       }
     }
