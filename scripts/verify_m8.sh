@@ -107,6 +107,7 @@ section "1. the wall — Feast is quarantined, and the invariant is ASKED rather
 consume < <(uv run python - 2>/dev/null <<'PY'
 import ast
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -187,8 +188,16 @@ try:
     # (e) The pin file has only GROWN, and by what the online store needed. A
     # silent shrink would mean the quarantine stopped installing something the
     # probe measured against.
-    recorded = set(probe["quarantine_pins"])
-    current = {p.split("==")[0] for p in pins}
+    # PEP 503 normalisation on BOTH sides. The probe recorded distribution names
+    # as their metadata spells them (`Jinja2`, `PyJWT`, `SQLAlchemy`) and the pin
+    # file spells them as the index does; comparing the raw strings reported
+    # eleven packages "LOST" from a file that had lost nothing — this gate's own
+    # first run, and the same shape as gotcha #46 (a name spelled two ways).
+    def norm(n):
+        return re.sub(r"[-_.]+", "-", n).lower()
+
+    recorded = {norm(p) for p in probe["quarantine_pins"]}
+    current = {norm(p.split("==")[0]) for p in pins}
     added, lost = sorted(current - recorded), sorted(recorded - current)
     if not lost:
         ok(f"every package the probe recorded is still pinned; the file gained "
@@ -516,16 +525,70 @@ try:
     table = Path("docs/feast_online_parity_table.md")
     online = json.loads(Path("automation/runs/m8-online/online_parity.json").read_text())
     pairs = online["declared_pairs"]
-    if table.exists() and re.search(rf"\b{pairs}\b", table.read_text()):
+    table_text = table.read_text() if table.exists() else ""
+    if table_text and re.search(rf"\b{pairs}\b", table_text):
         ok(f"§9/M8's 'Show: parity table' exists at {table} and names the same "
            f"{pairs} declared pairs the record measured")
     else:
         no(f"{table} is missing or does not carry the record's {pairs} declared pairs")
+
+    # THE MISSING COUNTS ARE THIS MILESTONE'S THESIS, so they get three witnesses.
+    # `max |delta| = 0` is what a comparison that silently DROPPED NULLS would
+    # also print — blind to exactly the ~1% of rows F-030 was found on. So the
+    # per-column `both_missing` must reconcile with the record's own two-sided
+    # no-geometry assertion, with the ANCHOR block's independent count of the
+    # same columns, and with the number rendered in the table a human diffs.
+    by_col = {c["column"]: c for c in online["seam"]}
+    anchors = {c["column"]: c for c in online.get("anchor_to_feature_path", [])}
+    geom = online["no_geometry"]
+    bad_geom, bad_anchor, bad_prose = [], [], []
+    for side in ("pu", "do"):
+        expected = geom[side]["rows_without_geometry_our_path"]
+        for col, c in by_col.items():
+            if not col.startswith(f"{side}_zone."):
+                continue
+            if c["both_missing"] != expected:
+                bad_geom.append(f"{col}: both_missing {c['both_missing']} vs "
+                                f"{expected} rows with no geometry")
+            twin = anchors.get(f"anchor.{side}.{col.split('.', 1)[1]}")
+            if twin and twin["both_missing"] != c["both_missing"]:
+                bad_anchor.append(f"{col}: seam says {c['both_missing']}, its anchor "
+                                  f"says {twin['both_missing']}")
+    for col, c in by_col.items():
+        row = re.search(rf"^\|\s*`{re.escape(col)}`\s*\|(.*)\|\s*$", table_text, re.M)
+        if not row:
+            bad_prose.append(f"{col}: no row in the table")
+            continue
+        cells = [x.strip() for x in row.group(1).split("|")]
+        if len(cells) >= 5 and cells[-2] != str(c["both_missing"]):
+            bad_prose.append(f"{col}: the table renders {cells[-2]!r}, the record holds "
+                             f"{c['both_missing']}")
+    if not bad_geom:
+        ok(f"every zone column's `both missing` equals the record's own two-sided "
+           f"no-geometry count (pu {geom['pu']['rows_without_geometry_our_path']}, "
+           f"do {geom['do']['rows_without_geometry_our_path']}) — a null-dropping "
+           f"comparison would print the same 0.000e+00 and this is what it could not fake")
+    else:
+        no("the seam's missing counts do not reconcile with the run's own no-geometry "
+           "assertion: " + " · ".join(bad_geom[:3]))
+    if not bad_anchor:
+        ok(f"and the ANCHOR block counts the same missing rows for every column it shares "
+           f"with the seam ({len(anchors)} anchored columns) — two independently built "
+           f"comparisons inside one record, which is why a single edited field contradicts "
+           f"something")
+    else:
+        no("the seam and its anchor disagree about which rows are missing: "
+           + " · ".join(bad_anchor[:3]))
+    if not bad_prose:
+        ok(f"and the committed table renders exactly what the record holds for all "
+           f"{len(by_col)} columns — the third witness, and the only one a human diffs")
+    else:
+        no("the table a reviewer reads and the record disagree: " + " · ".join(bad_prose[:3]))
 except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the seams check itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 6 "the seams check"
+expect_verdicts 9 "the seams check"
 
 # ------------------------------------------------- 4. point-in-time proof ----
 section "4. the point-in-time proof — a DIFFERENCE with two anchors, not a sentence about a join"
@@ -686,8 +749,10 @@ try:
     resp = client_mod.infer([hazard.request], client_mod.Endpoint(name=isvc, namespace=ns))
     served = str(resp.get("model_version", ""))
     champ_minutes = float(client_mod.minutes_of(resp)[0])
-    if served == str(champion.version) and \
-            abs(champ_minutes - row["champion_minutes"]) < 1e-6:
+    # EXACTLY the recorded value, with no epsilon: the record's own bar for this
+    # seam is EXACT, the endpoint is deterministic, and an epsilon typed here
+    # would be a tolerance this gate invented for itself (F-017).
+    if served == str(champion.version) and champ_minutes == row["champion_minutes"]:
         ok(f"the CHAMPION answered {champ_minutes:.6f} minutes stamped model_version={served!r} "
            f"— equal to what the alias resolves to, reproducing the parity record's "
            f"{hazard_name!r} row. M8 put a second service on the cluster and left this one alone")
