@@ -1,5 +1,160 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-23 (cd) — M8-S5: a survey allowed to lose, and a gate that found its own hole
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cc) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO. **Role block: DA (A) for
+the page, MLOps (A) for the gate** — the kickoff's assignment for S5; charter read.
+Refusals in play all session: *no alias move · nothing fitted · no gate invocation
+(M8 law 3) · no `uv add feast` · no threshold edited · a mismatch is a finding, never
+a widened bar* — none was broken.
+
+**M8-S5 is DONE, BOTH LEGS. M8 has no story left.** The kickoff's declared safe
+stopping point (leg 1 merged, gate unbuilt) was not needed. **No PO fork was opened.**
+
+**MERGED** — PR **#60**, merge commit `9a67682`; lineage proved:
+`git branch -r --contains 9e39d2a` -> origin/main. CI `lint-test` pass 1m35s.
+
+### Reconciliation (the staleness check, before any story work)
+Reality matched HANDOFF (cc) exactly. 3/3 nodes Ready v1.36.1 at 6d9h; both
+InferenceServices Ready (champion 4d8h, transformer 15m — the deliberate re-deploy at
+the end of leg 3); Redis up holding its keys, feature server up; no `automation/STOP`;
+no `.status` file pointed at. `uv.lock` byte-identical to `m7-closed`. `make verify-m5`
+GREEN, which is the strong form of the check because it asserts `@champion` 2 /
+`feature_set v2` coherence AND takes one live prediction.
+
+### Done
+- **Leg 1 — `docs/feast_side_by_side.md`, 12 rows: 3 ADOPT · 4 DIFFER · 5 SURPASS.**
+  Harvested live 2026-08-23 through `gh api` + `curl` (F-001). **Three** substantive
+  Feast-on-taxi repositories exist publicly, all 0★ — the population size is stated
+  above the table and every SURPASS row says *none of these three*. Sources: **F**
+  `adilsaid64/feast-fare-price-prediction` (the closest public analogue to this program
+  that exists: Feast + Redis + Postgres + MLflow + FastAPI on NYC taxi trip duration),
+  **G** `Facco000/mlops-end-to-end-nyc-taxi`, **H** `airdmhund1/nyc-taxi-mlops`, **I**
+  `feast-dev/feast`. Every row cites the file it read; every "they do not do this"
+  rests on a recursive tree listing.
+- **The ADOPTs are real and two of them cost something to write.** F's and H's
+  **`FeatureService`** is a registered contract naming the feature list once for both
+  `get_historical_features` and `get_online_features`; ours is `ZONE_FEATURES`, a Python
+  constant on one side of a wall. F **refuses** a request whose online features are
+  missing (`HTTP 404`, entity named) — right in principle, wrong to copy blanket here
+  because 264/265 legitimately have no row. F's **7-step origin-labelled trace** would
+  have shortened three of M8-S4's debugging sessions. And the page says outright that
+  **F's single Python environment is the better design for anyone who has not pinned
+  pandas 3, and we would have taken it**.
+- **Leg 2 — `make verify-m8` GREEN 51/51 in 7 sections, RE-RUNS NOTHING**, eighth
+  inheritance of M1's no-skip-flag rule. It asks the live system **exactly five
+  questions** — champion inference, transformer inference, one feature-server lookup,
+  one `DBSIZE`, one PromQL query — **and the count is pinned by
+  `tests/unit/test_verify_m8.py`** (36 tests), because a gate whose live footprint can
+  grow quietly will one day re-run what it exists to read.
+- **Law 4 is checked from GIT, four times.** A document cannot testify about its own
+  ordering, so the gate compares the commit that ADDED each bar's document with the one
+  that ADDED its record: **678 s · 356 s · 320 s · 546 s**, all four the right way
+  round. The bar itself is PARSED out of the prose that argues it.
+- **The gate asks whether the online store holds anything** — 57,688 keys read off the
+  server against the materialization's own count, plus `maxmemory-policy noeviction`.
+  No predecessor needed this: an all-null store yields an all-NaN geometry table and a
+  confident quote that **no client can refuse, because `null` is also correct for
+  264/265**. It is the cheapest standing form of the residual, not a closure of it.
+- **`make verify-m8-redteam` PASSED.** One column's `both_missing` **13 → 0**, chosen
+  from the record and not typed, with `compared`, `mismatches`, `max_abs_delta`,
+  `one_missing` and the `PASSED` verdict untouched — **not a lie about a measurement
+  but what a correct-looking measurement of the wrong population reports**, and it
+  looks better than the truth. **RED exit 1 with 3 FAILs from THREE artifacts** (the
+  run's own two-sided no-geometry assertion, the independently-built anchor block, and
+  the committed table a human diffs), **48 sub-check lines still passing**, the
+  four-seam headline leg **deliberately still GREEN**, sha256-identical restore
+  (`153c4399deab…`), GREEN 51/51, clean tree.
+- **Verification at exit**: `verify-m8` GREEN 51/51 · `verify-m8-redteam` PASSED ·
+  `verify-m5` GREEN · `verify-m6` GREEN · `verify-m7` GREEN 62/62 ·
+  `monitoring-accept` GREEN 12/12 · host suite **1127 passed** (+36) · ruff clean ·
+  `@champion` **2** / `feature_set v2`, versions `['1','2']` (**no version 3**) ·
+  `uv.lock` byte-identical to `m7-closed` · all settled DVC pins `up to date`.
+
+### Decisions
+- **Both legs in one session rather than taking the declared safe stop.** Leg 1 was
+  merged-quality within the first third of the session and leg 2's evidence was all
+  already tracked, so the cut would have cost a whole session to re-establish context
+  for a gate that reads records.
+- **The gate does not run `make verify-m7` inside itself.** §9/M8's accept says "v1's
+  M7 gate AND the comparison page exists"; `verify-m7` treated M6's clause the same way
+  — an inherited precondition satisfied by a separately-run target, not a nested gate.
+  Nesting would also have doubled the live-question count the test pins.
+- **F-061 fixed at the CAUSE, not by scoping the gate's question.** Narrowing §5 to the
+  champion's own exporter was one line and would have been green immediately. It would
+  also have been a guard edited to fit a defect — gotcha #50 inverted — on the one
+  signal whose value is that `up == 0` means a predictor stopped reporting. The gate
+  keeps the BROAD question so the next non-predictor in `serving` fails it too.
+- **No sign-off row written.** The M8 gate crossing is ARCH's at the boundary
+  (producer ≠ approver, ORG.md independence rule 2). The deployments and findings
+  ledgers are current.
+- **R-1 (a `FeatureService`) and R-2 (an alert on an empty/stale online store) are
+  ROUTED, not landed**, with their costs in the page's §3. R-1 mutates the registry
+  three artifacts are pinned against and would need M8-S4's three parity records
+  re-measured; R-2 is a new monitored signal with a threshold, and a threshold argued
+  in the session that first measures the thing it watches is exactly what M8 law 4
+  forbids — it needs its own headroom leg.
+
+### Defects/Surprises
+- **F-061 (new, CLOSED same session): two assumptions were the same assumption for
+  three milestones.** The `kserve-predictors` scrape job keeps every pod carrying an
+  isvc label and then forces mlserver's `:8082` on it. "Belongs to an InferenceService"
+  and "is an mlserver" were one fact through the champion, M6-S3's shadow and M6-S4's
+  canary; M8-S4 leg 3's **transformer** pod is the first that is not, and it had
+  silently become a permanently-DOWN target. KServe's own
+  `enable-prometheus-scraping: "false"` IS on that pod and is irrelevant — our job
+  discovers by label and never reads it. Fixed with `component=predictor`, the
+  discriminator KServe already sets. **No restart** (configmap-reload sidecar, M6-S1's
+  measurement re-confirmed); targets converged in under 5 s. **Gotcha #108.**
+- **The gate's first run went RED eight times and FOUR were its own defects** (gotcha
+  #50, twice in one run): a registry demanded ABSENT FROM DISK when the property is
+  *not tracked by git*; a bar regex encoding one sentence's word order; a typed script
+  path (`feast_retrieval_parity.py` — the target runs `feast_retrieval.py`), now
+  derived from the Makefile recipe; a DVC summary line counted as one-of-four over a
+  clean tree; and a ledger searched whole, so the milestone's own prose "M8-S5's gate
+  inherits it live" was read as a ledger row (**gotcha #99, third occurrence**).
+- **Then the TEST FILE went red three times for the same disease** — the `feast` needle
+  matched the gate *reporting* on `feast plan`'s recorded output, and `consume < <(`
+  matched the comment telling the next author to call it that way. **#99's fourth
+  occurrence, in my own guard.** Both needles now sit where a process would START.
+- **A typed `1e-6` in the gate was removed rather than exempted.** The test that
+  forbids typed tolerances caught it; the live champion check is exact equality against
+  the recorded value now, which is also the stronger claim.
+- **The `expect_verdicts` floor earned itself again**: a missing `import re` in §1 was
+  reported as "the wall check emitted 6 verdict(s), expected at least 7 — the check did
+  not run", not as six silent passes.
+
+### Next
+**M8 has no story left. The next session is ARCH's boundary triage** — M8 carries no ◆,
+so the exit is `automation/next_session.sh architect 120` (run by this session).
+
+What the boundary inherits:
+* **`make verify-m8` GREEN 51/51 and its red team PASSED**, both transcripts pasted in
+  `docs/verify_m8_transcripts.md`. **No sign-off row exists for the M8 gate crossing —
+  that row is ARCH's to write** (producer ≠ approver), as is the `m8-closed` tag if the
+  boundary wants the `m7-closed` precedent continued. The gate's own invariant depends
+  on `m7-closed` resolving, so **do not delete or move that tag**.
+* **Everything M8 built is LIVE and the gate reads it**: the champion and the
+  transformer both answering on the 8081 route, Redis holding 57,688 keys, the feature
+  server up. If the cluster is rebuilt, `verify-m8` §5's five live questions go red for
+  no defect — the recovery is `make deploy-feast-store && make feast-materialize &&
+  make deploy-feast-server && make deploy-transformer`.
+* **Three open items, none blocking, each with its cost written down**: **R-1** (a
+  Feast `FeatureService`, credit F and H) and **R-2** (an alert on an empty or stale
+  online store — the residual M8-S4 legs 1, 2 and 3 each restated, now with the
+  community's per-request half attached and a THIRD consumer since rider-shaped traffic
+  can reach the store) in `docs/feast_side_by_side.md` §3; **F-058** (a `FixedRate`
+  Flyte trigger back-fills every missed window at host boot) still OPEN and mitigated,
+  with `retrain-schedule-proof` deactivated and recommendation (a).
+* **Standing PO items, unchanged and non-blocking**: 2026-08-18-1 (F-016, dormant all
+  of M8 by construction), 2026-08-17-1, 2026-08-16-2.
+* **One thing that will cost time if discovered rather than read**: the gate's §3 law-4
+  leg reads `git log --diff-filter=A`, so a history rewrite (a squash, a rebase of
+  merged history) would make it red for no defect. The PR boundary being a merge
+  COMMIT is what keeps it readable.
+
 ## Session 2026-08-23 (cc) — M8-S4 leg 3: the boundary moves, and the number does not
 
 ### State
