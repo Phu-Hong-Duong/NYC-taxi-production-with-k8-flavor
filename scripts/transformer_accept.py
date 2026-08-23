@@ -23,6 +23,17 @@ satisfied by a service that answers everything the same way:
    (ADR-011 condition 2). A service answering to both names would make "which
    boundary produced this number?" unanswerable, and every subsequent measurement
    in this story rests on that question having an answer.
+
+   **This check's first version passed for the wrong reason and that is worth
+   keeping.** On the first deploy the whole route 404'd — F-037's shape, the ISVC
+   reporting Ready ~12 s before nginx had loaded its generated Ingress — so the
+   negative assertion was satisfied by a service that was not answering ANYTHING.
+   A 404 because nothing is routed and a 404 because the model name is wrong are
+   the same bytes. So the check is now CONDITIONAL on check 1 having produced a
+   number: it asserts a difference between two names on a live route, which is the
+   thing it was always meant to say. Gotcha #59's rule, in its negative form —
+   assert on a positive artifact, and where the artifact IS an absence, prove
+   first that presence was possible.
 4. **A 2031 date is REFUSED, not quoted.** F-019's guarantee is a property of the
    DEPLOYMENT and it had to survive the reference data moving into a store. The
    refusal now comes from `feature_store.StoreCoverageError` — the store has no
@@ -149,12 +160,14 @@ def main() -> int:
     # ---- 3. the champion's name 404s here ------------------------------------
     champion_status, _, _ = call(args.route, host, CHAMPION, encode_raw([ACCEPT]))
     record["champion_name_on_transformer_host"] = champion_status
+    live = minutes is not None
     checks.append(
         (
-            champion_status == 404,
+            champion_status == 404 and live,
             f"the champion's model name 404s on this host: HTTP {champion_status} for "
-            f"/v2/models/{CHAMPION}/infer — the negative half, so a number from this "
-            "service can only have come from this boundary",
+            f"/v2/models/{CHAMPION}/infer, while its own name answered — the negative "
+            "half, conditional on the route being live so it cannot pass against a "
+            f"route that answers nothing (route live: {live})",
         )
     )
 
@@ -179,6 +192,8 @@ def main() -> int:
 
     if args.record:
         path = Path(args.record)
+        if not path.is_absolute():
+            path = REPO / path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         print(f"[accept] recorded {path.relative_to(REPO)}")

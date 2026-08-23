@@ -161,6 +161,24 @@ done
 "${KUBECTL[@]}" -n "$SERVING_NS" get pods -o wide \
   -l "serving.kserve.io/inferenceservice=$ISVC_NAME"
 
+# THE THIRD LEG: ASK THE ROUTE. F-037, re-earned by this story's first deploy.
+# KServe generates an Ingress per InferenceService and reports `Ready` as soon as
+# its own objects exist — the accept check ran 0 s later and got a bare nginx 404
+# because the controller had not yet loaded the new rule. Both pods were healthy
+# and every condition was True. So readiness is asked of the thing the next step
+# actually uses: the route, under the Host header the next step will send.
+echo
+echo -n "   waiting for the ROUTE (nginx must load the generated Ingress)"
+for _ in $(seq 1 60); do
+  if [[ "$(curl -s -o /dev/null -w '%{http_code}' \
+        -H "Host: $ISVC_HOST" "$ROUTE/health" || true)" == "200" ]]; then
+    echo " — answering"
+    break
+  fi
+  echo -n "."
+  sleep 2
+done
+
 echo
 echo "   what the transformer process ACTUALLY resolved (read off its own log,"
 echo "   never off the manifest that was submitted):"

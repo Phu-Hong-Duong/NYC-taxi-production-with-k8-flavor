@@ -1,0 +1,47 @@
+{
+  "accept_request": {
+    "at": "2019-07-04T09:15:00",
+    "do": 48,
+    "passenger_count": 1.0,
+    "pu": 132
+  },
+  "champion_name_on_transformer_host": 404,
+  "checks": [
+    {
+      "claim": "a RAW request was answered: HTTP 200, 2019-07-04T09:15:00 zone 132 -> 48 -> 39.0019 minutes",
+      "ok": true
+    },
+    {
+      "claim": "the answer carries the champion's registry version: model_version='2' (stamped by mlserver, forwarded verbatim \u2014 not a claim this script makes)",
+      "ok": true
+    },
+    {
+      "claim": "the stored lookups really came from the store: X-Taxi-Lookups='airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store' (a silent fallback to the committed CSVs would answer identically)",
+      "ok": true
+    },
+    {
+      "claim": "and F-059's two refused groups did NOT: the borough dictionary and the airport constant are still read from the committed artifacts",
+      "ok": true
+    },
+    {
+      "claim": "the champion's model name 404s on this host: HTTP 404 for /v2/models/nyc-taxi-eta/infer, while its own name answered \u2014 the negative half, conditional on the route being live so it cannot pass against a route that answers nothing (route live: True)",
+      "ok": true
+    },
+    {
+      "claim": "a past-horizon quote is REFUSED, not guessed: HTTP 422 naming 2031 (F-019, now raised by the STORE's coverage rather than the CSV's)",
+      "ok": true
+    }
+  ],
+  "failures": 0,
+  "host": "nyc-taxi-eta-transformer-serving.local",
+  "isvc": "nyc-taxi-eta-transformer",
+  "lookup_sources": "airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store",
+  "minutes": 39.00193715359812,
+  "model_name": "nyc-taxi-eta-transformer",
+  "model_version": "2",
+  "past_horizon": {
+    "error": "the online feature store has no calendar row for ['2031-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holiday' for an uncovered date looks exactly like a correct answer (F-019, on the store's wire instead of the CSV's). Fix it where the table is defined \u2014 `make holidays HOLIDAYS_TO=<year>` then `make feast-sources && make feast-materialize`.",
+    "status": 422
+  },
+  "route": "http://localhost:8081"
+}
