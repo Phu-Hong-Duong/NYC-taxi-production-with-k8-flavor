@@ -1,0 +1,123 @@
+# The transformer BESIDE the champion (M8-S4 leg 3) — a SECOND InferenceService.
+#
+# WHY A SECOND ONE AND NOT A TRANSFORMER ON THE CHAMPION'S. M8 law 3 and the
+# M6-S3 shadow precedent: the champion's own wire is untouched for the whole
+# story, and `make verify-m5` green at exit is the proof. Adding a transformer to
+# `nyc-taxi-eta` would change what every existing client sends — the M5 gate,
+# `make quote`, `make parity`, `make load` all POST a 24-column matrix — and a
+# rollback would then be a schema rollback, which F-040 measured as the expensive
+# direction (27.93 s of HTTP 500 at the logged signature). This one gets its own
+# KServe-generated host and its own predictor pod, and deleting it removes
+# exactly its own objects (proved at M6-S3, re-proved by this story's teardown).
+#
+# THE PREDICTOR IS THE SAME CHAMPION BYTES. `storageUri` is resolved from
+# `models:/nyc-taxi-eta@champion` at deploy time by the same
+# `scripts/resolve_champion_storage.py` the champion's own deploy uses — F-009's
+# two hops, in ONE place. So the only difference between this service's answer
+# and the champion's is the boundary the features are built at, which is the
+# whole thing the parity measures.
+#
+# THE MODEL NAME IS THE ISVC NAME, ON BOTH HALVES, AND THAT IS DELIBERATE.
+# ADR-011 condition 2 established that the V2 model name lives in the URL PATH.
+# Here that is a feature rather than an obstacle: the transformer answers
+# `/v2/models/nyc-taxi-eta-transformer/infer` and the champion answers
+# `/v2/models/nyc-taxi-eta/infer`, so a request that arrives at the wrong service
+# gets a loud 404 instead of a plausible answer built from the wrong boundary.
+# No `MLSERVER_MODEL_NAME` override is set — this service is not a canary and
+# must NOT be confusable with the champion's own endpoint.
+#
+# `PREDICTOR_HOST` IS SET EXPLICITLY AND ALSO ARRIVES FROM KSERVE. KServe appends
+# `--predictor_host` / `--model_name` to a custom transformer's args; this
+# manifest sets the environment variables too, and the deploy prints what the
+# process ACTUALLY resolved (read off the pod's own log, never off this file).
+# The repo's standing idiom: derive, apply, then read back off the live object.
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: nyc-taxi-eta-transformer
+  namespace: serving
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+  labels:
+    app.kubernetes.io/part-of: crosstown-eta
+spec:
+  predictor:
+    serviceAccountName: taxi-serving
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: mlflow
+      runtime: taxi-mlserver
+      storageUri: RESOLVED-AT-DEPLOY-TIME-FROM-THE-CHAMPION-ALIAS
+      env:
+        - name: MLSERVER_MODEL_VERSION
+          value: CHAMPION-VERSION-RESOLVED-AT-DEPLOY-TIME
+      # The champion's own numbers, argued at M6-S2 from M5-S4's measurement
+      # (1.31 mean cores at the SLO's load shape, plus ~15%). Copied rather than
+      # re-derived: this pod runs the same image on the same bytes at the same
+      # shape, so a different reservation here would make the p95 comparison a
+      # comparison of two capacity decisions instead of two boundaries.
+      resources:
+        requests:
+          cpu: 1500m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 3Gi
+  transformer:
+    minReplicas: 1
+    maxReplicas: 1
+    containers:
+      # KServe's contract for a custom component: the container is named
+      # `kserve-container`. The M4-S4 lesson about the k8s plugin's `default`
+      # container name, one platform along.
+      - name: kserve-container
+        # OUR image — pandas 3.0.5, `src/taxi_mlops`, the project graph. It
+        # cannot import Feast (pinned `pandas<3`) and does not: the stored
+        # lookups arrive as a JSON document from the quarantined feature server.
+        # Substituted by scripts/deploy_transformer.sh from the image record, so
+        # the manifest cannot drift from what was built and loaded, and a
+        # `-dirty` tag is refused before anything is applied (M4-S3's rule).
+        image: TASK_IMAGE_RESOLVED_AT_DEPLOY_TIME
+        imagePullPolicy: IfNotPresent
+        command: ["python", "-m", "taxi_mlops.serving.transformer"]
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        env:
+          - name: MODEL_NAME
+            value: nyc-taxi-eta-transformer
+          - name: PREDICTOR_HOST
+            value: nyc-taxi-eta-transformer-predictor.serving.svc.cluster.local
+          - name: FEATURE_SERVER_URL
+            value: http://feast-server.feast.svc.cluster.local:6566
+          # The MLflow tracking server is NOT set and is not needed: this
+          # process loads no model and reads no registry. What it forwards to is
+          # a predictor KServe already pointed at the champion's artifacts.
+        readinessProbe:
+          # OURS, explicitly. A probe KServe infers is a probe nobody reviewed,
+          # and this endpoint has a real one: `/health` is served by the same
+          # handler that serves `/infer`, so a process that can answer the probe
+          # is a process that has parsed its config and bound its port.
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 12
+        resources:
+          # Measured rather than guessed is not available before the first run,
+          # so this is argued: the work per request is one dict of numpy over
+          # <=8 rows plus two HTTP calls. 500m/512Mi is generous for that and
+          # small enough that the transformer and its predictor fit beside the
+          # champion's on a 3-node kind cluster whose worker memory F-058
+          # already found to be the binding constraint. The load record
+          # (automation/runs/m8-transformer/transformer-load.json) is what a
+          # future revision should argue from.
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi

@@ -275,7 +275,7 @@ verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watc
 	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
-.PHONY: feast-server-parity deploy-feast-server feast-server-image feast-serve-probe deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
+.PHONY: transformer-probe deploy-transformer transformer-accept transformer-parity transformer-load feast-server-parity deploy-feast-server feast-server-image feast-serve-probe deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
 feast-quarantine: ## M8-S2: build the ISOLATED feast venv from its exact pins and prove it never touched uv.lock. --resolve rewrites the pins; --check builds nothing
 	@bash scripts/feast_quarantine.sh $(QUARANTINE_ARGS)
 feast-sources: ## M8-S2: build the parquet Feast reads, from the SETTLED trees, into data/feast/ (read-only; --static-only skips the 43.9M-row aggregate fit)
@@ -310,6 +310,16 @@ feast-server-image: ## M8-S4 leg 2: build the QUARANTINED feature server (pandas
 	@bash scripts/build_feast_server.sh
 feast-serve-probe: ## M8-S4 leg 2: the CHEAP PROBE in front of an image build — can `feast serve` answer an online lookup at all, on the host, in the quarantine? ~30 s
 	@bash scripts/feast_serve_probe.sh
+transformer-probe: ## M8-S4 leg 3: the CHEAP PROBE in front of an image build and a KServe deploy — the whole request path, in THIS process, against the two real services. ~1 min
+	@uv run python scripts/transformer_probe.py $(PROBE_ARGS)
+deploy-transformer: ## M8-S4 leg 3: the transformer BESIDE the champion — a second isvc, the same champion bytes, features built in the pod. DRY_RUN=1 / TEARDOWN=1
+	@bash scripts/deploy_transformer.sh
+transformer-accept: ## M8-S4 leg 3: the accept twin — a RAW request answered, the store proved consulted, the champion's name 404ing, a past-horizon quote refused
+	@uv run python scripts/transformer_accept.py $(ACCEPT_ARGS)
+transformer-parity: ## M8-S4 leg 3: THE parity through the NEW seam — 16 hazards as RAW requests vs the same rows host-built through the champion's isvc. Bar EXACT (argued first). A READER
+	@uv run python scripts/transformer_parity.py $(TRANSFORMER_PARITY_ARGS)
+transformer-load: ## M8-S4 leg 3: p95 on the transformer path at M5-S4's shape (4 req/s, 60 s, concurrency 8, open loop) — the NEW boundary's number beside the old one
+	@uv run python scripts/transformer_load.py $(TRANSFORMER_LOAD_ARGS)
 deploy-feast: ## M8: the whole feature-store path — store, sources, apply, materialize
 	@$(MAKE) deploy-feast-store && $(MAKE) feast-apply && $(MAKE) feast-materialize
 verify-m8: ; @echo "TODO(M8): 100-pair online/offline parity + traced enriched request + prior-art revisit"

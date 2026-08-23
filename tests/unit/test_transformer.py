@@ -30,7 +30,7 @@ from taxi_mlops.features import calendar as calendar_mod  # noqa: E402
 from taxi_mlops.features import zones as zones_mod  # noqa: E402
 from taxi_mlops.serving import feature_store as fs  # noqa: E402
 from taxi_mlops.serving import transformer as tf  # noqa: E402
-from taxi_mlops.serving.client import QuoteRefused, QuoteRequest, build_matrix  # noqa: E402
+from taxi_mlops.serving.client import QuoteRefused, build_matrix  # noqa: E402
 from taxi_mlops.serving.parity import HAZARDS  # noqa: E402
 
 pytestmark = pytest.mark.unit
