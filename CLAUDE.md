@@ -2835,6 +2835,103 @@ can never disagree (the port-family twins lesson, applied before it bit).
   settled pins `up to date`. **The transformer is NOT built** — the kickoff's own
   declared safe stopping point, and leg 2 inherits an unspent 3-attempt wall.
 
+## The wall with a door (M8-S4 leg 2) — the feature server, and three things that look alike in a schema
+- **Shape (i) landed first try and 1 of the 3-attempt wall is spent.** The
+  kickoff ordered (i) a Feast feature server in its own quarantined pod ->
+  (ii) a thin direct store read -> (iii) Feast off the request path. (i) is the
+  only one under which the wall stays a WALL: the transformer will run OUR image
+  (pandas 3.0.5) and feast 0.66.0 pins `pandas<3`, so the two worlds share **one
+  JSON document over a ClusterIP Service** and nothing else — `uv.lock` is
+  byte-identical to `m7-closed` at exit, exactly as at every other M8 story's.
+  **(ii) was refused with a reason, not skipped**: a "thin read" has to
+  re-implement Feast's entity-key serialization, field naming and value encoding
+  on our side of the wall, and getting any of them subtly wrong returns SOMEBODY
+  ELSE'S ROW — a confident wrong number with nothing red anywhere. 203 MB of pod
+  is cheap against owning a private copy of a vendor's encoding.
+- **It was PROBED before it was built** (`make feast-serve-probe`, ~30 s against
+  a build-and-load): `feast serve` on the HOST, in the quarantine that already
+  existed, against the real in-cluster Redis. It answered zone 132 at JFK's
+  centroid and zone 264 `null`. The M4-S4 `DRILL_STAGE=ingest` idiom, and it paid
+  the usual way — the first defect the build then hit was a **missing execute
+  bit** (`COPY` preserves the source's 0644; containerd reports
+  `exec: permission denied`, which reads like a missing binary or a broken PATH).
+- **The image carries no registry and no store address, and both absences are
+  the point.** `feast apply` runs in the ENTRYPOINT at every start, so the pod's
+  registry is a function of the image's git content rather than of whatever the
+  host had applied the day it was built — a baked registry would be F-013's
+  second home for a thing `definitions.py` owns. `${FEAST_REDIS_CONNECTION}` has
+  **no default** (ADR-012/F-048's rule) and the entrypoint refuses before
+  applying. It is built `--no-deps` from `infra/feast/requirements-feast.txt` —
+  the SAME pin file `scripts/feast_quarantine.sh` uses, so there is one pin file
+  and no twin. **STATELESS**: no volume, no backup obligation, losing the pod
+  costs one restart.
+- **The container mirrors the host's directory DEPTH rather than editing
+  `definitions.py`**, which resolves its sources with `parents[3]`. Flattening it
+  would have needed an edited file and therefore two definitions of where the
+  offline sources live.
+- **`max |ours − server| = 0.000e+00` across 6 columns and 108 comparisons, bar
+  EXACT, `one missing` ZERO** — and the bar was argued for THIS path (JSON's
+  number grammar carries a float64 losslessly because every encoder in this stack
+  emits Python's shortest-round-trip repr; nothing on the server's side does
+  arithmetic) and **committed at `91ab8a6`, before any record existed**.
+  Inheriting M8-S3's parquet sentence or leg 1's protobuf one would have been a
+  hedge wearing an argument's clothes. The anchor is `taxi_mlops.features` — the
+  champion's OWN lookup — never the parquet the store was materialized from,
+  which would be two Feast reads agreeing with each other.
+- **F-059: a feature store is a good home for a per-entity MEASUREMENT and a bad
+  home for anything a program COMPUTES — and the three are indistinguishable in a
+  schema.** `borough` is an **encoding**: the code the champion eats is assigned
+  by first-appearance order across the WHOLE lookup table, so it is a property of
+  the table and not of the zone, and a transformer that fetched two zones and
+  numbered what came back would produce a silent TOTAL category re-map with every
+  individual value correct. `is_airport` is a **constant and a total function**:
+  three integers in code, answering for every id including the non-places, which
+  the store has no row for — so sourcing it from the store turns "not an airport"
+  into "no answer" for exactly the ~1% of rows that already carry no geometry
+  (F-030's class). A centroid is neither. **Leg 3 sources the centroids and the
+  calendar flags from Feast and takes the borough dictionary and the airport
+  constant from the committed tables**; `ZONE_FEATURES` excludes `borough` and a
+  test asserts it.
+- **The parity's first run went RED and the repair was not a wider bar.** It read
+  `is_airport` ours=`False` vs store=`missing` on 264/265 while every numeric
+  column sat at 0.000e+00 — a comparison holding a TOTAL function against a
+  PARTIAL one. Repaired with the shape M8-S3 and leg 1 had already established:
+  **partition the entities, assert the partition two-sidedly in BOTH directions**
+  (a store declining a real zone is a missing feature; a store answering for a
+  non-place is inventing a location), then compare columns only where both sides
+  claim an answer. Observed: `declines EXACTLY [264, 265]`.
+- **Worth knowing before writing any client: Feast's response does NOT preserve
+  the request's column order.** Asked for `centroid_lat, centroid_lon,
+  is_airport`, answered `zone_id, centroid_lat, is_airport, centroid_lon`. Pair
+  by `metadata.feature_names`. This is gotcha #73's positional-vs-named lesson on
+  a new wire, and a client zipping by position would send individually-valid
+  values under each other's names — arm A of `make parity-redteam`, self-inflicted.
+  The join key is `date_key` (`%Y-%m-%d`) and a WRONG key is not a soft failure:
+  Feast answers **HTTP 500 with `Provided join_key_values: []`**, discarding an
+  unrecognised key rather than complaining, so a plausible-looking name compares
+  against nothing.
+- **F-058, found by the boot ritual before the story started: a `FixedRate` Flyte
+  trigger BACK-FILLS every window it missed while the control plane was down.**
+  104 pods in `flyte`, **96 Pending**, all created in one 17-second burst two
+  minutes after the binary restarted at host boot — ~2 days of missed
+  `retrain-schedule-proof` firings replayed at once. They were unschedulable in a
+  self-limiting way (`0/3 nodes … Insufficient memory` / PV node affinity) only
+  because the retrain mounts the RWO `taxi-data` PVC and they queued behind one
+  volume on one node — **luck, not design**. Deactivated with a one-command undo
+  (`flyte update trigger … --deactivate`), read back off the control plane and
+  never off the file submitted; the backlog drained itself (79 Completed in a
+  minute) and was not aborted, because each firing is `plan_only`, mints no MLflow
+  run and moves no alias. **The CODE is unchanged**, so `verify-m7`'s trigger leg
+  — which reads the declarations with `ast` and never asks the server about
+  activation — stayed GREEN, and `make retrain-schedule` re-activates it.
+- **The transformer is NOT built** — the cut is stated in `docs/feast_server_m8.md`
+  §6. Leg 3 inherits a stateless server at
+  `feast-server.feast.svc.cluster.local:6566`, **2 of the 3-attempt wall unspent**,
+  F-059 as a design input rather than a discovery, and no `lookups` seam in
+  `quote_time.build_features` (it is not written). The residual leg 1 named is
+  still open and still belongs to the story that puts a reader in front of the
+  store: **there is no alert on an empty or stale online store.**
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3024,6 +3121,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Fill the online store (M8-S4) | `make feast-materialize` (`MATERIALIZE_ARGS=--dry-run` prints the derived window and writes nothing) | VERIFIED 2026-08-21 (M8-S4): window **`2019-01-01T00:00:00` -> `2019-07-01T00:00:01`, DERIVED** from the published parquet by `scripts/feast_source_window.py` and never typed — a typed end would keep materializing successfully while silently ceasing to include a seventh window. Through an ephemeral port-forward on **6380**, inside the quarantine: `feast apply` first (a materialization into a store the registry does not know about is a half-configured success), then **57,688 keys / 14.32 MiB in 7 s**, read back off the SERVER. It **REFUSES to report success against a store that is empty afterwards** — an empty online store answers every lookup with null, which is F-050's shape one layer along. Record: `automation/runs/m8-online/materialize.json` |
 | THE 100-pair online/offline parity (M8-S4) | `make feast-online-parity` (`PARITY_ARGS=--no-write` prints the verdicts and writes no record or table) | VERIFIED 2026-08-21 (M8-S4): **`max \|online − offline\| = 0.000e+00` across 16 columns and 100 declared pairs against a bar of EXACT, with `one missing` ZERO on every column** — the load-bearing count, because it says the store and the feature path agree about *which rows have no value at all*. Plus the ANCHOR (the seven static columns against `taxi_mlops.features.zones`/`.calendar`, the champion's own lookup — without it this is two Feast reads agreeing with each other), the **two-sided no-geometry assertion** (our path has no geometry on 13 pu / 19 do rows, the store declined exactly those, **0 disagreements**, zones `264, 265, 999`), and the offline join's shortfall **CLASSIFIED** — `34/37/79/67/73` rows returned for 100 declared, every one a duplicate entity key, **UNEXPLAINED 0** (gotcha #103). A READER: two subprocess launches, both named and AST-pinned. Artifact: `docs/feast_online_parity_table.md` (committed — the blueprint's named accept artifact) |
 | Prove the parity table can go RED (M8-S4) | `make feast-online-parity-redteam` | VERIFIED 2026-08-21 (M8-S4): **PASSED.** Copies one OD pair's **real serialized bytes** onto another pair's Redis key — every byte written by Feast, the protobuf parses, the dtype is right, nothing logs anything; a drill that planted garbage would prove the parser works. Target is **row 92**, the pair the declared set named IN ADVANCE as the one where a wrong value shows up by the largest margin (`169 -> 191`), donor derived (`14 -> 259`). → **RED exit 1, `max = 8.727e+01`, naming `od_window.od_median_duration_min`**, with **26 other sub-check lines still passing** (a gate that fails on any edit is a checksum), **sha256-identical restore** (`bd91004815981b5c…` before the plant and after), GREEN again, `git status` clean. Both parity runs inside it use `--no-write` — pinned by a test, because a drill that rewrote the table it tests would be planting evidence |
+| Can `feast serve` answer at all? — the probe in front of the build (M8-S4 leg 2) | `make feast-serve-probe` (host + quarantine + the real in-cluster Redis; a READ, ~30 s) | VERIFIED 2026-08-23 (M8-S4 leg 2): `/health -> 200`, then one `/get-online-features` came back with zone 132 at **`(-73.78653, 40.646985)` `is_airport: true`** and zone 264 at **`null`** — the two-sided no-geometry property, over HTTP, thirty seconds in front of a build-and-load. It decided shape (i) by measurement rather than by preference, and its yield was the usual one: the first defect the build then hit had nothing to do with Feast (a `COPY`ed entrypoint at 0644, reported by containerd as `exec: permission denied`) |
+| The QUARANTINED feature server: build + every node (M8-S4 leg 2) | `make feast-server-image` (`DRY_RUN=1` builds nothing) | VERIFIED 2026-08-23 (M8-S4 leg 2): `taxi-mlops-feast-server:feast-0.66.0-a524771`, **203 MB**, built `--no-deps` from `infra/feast/requirements-feast.txt` — the SAME pin file the host quarantine uses, so one pin file and no twin — then `kind load` and **read back off all 3 nodes with each node's own `crictl`**. The tag carries a git short sha and `-dirty` (M4-S3's rule: a mutable tag makes a stale node a wrong number instead of a loud error), and `deploy_feast_server.sh` REFUSES a `-dirty` image at exit 3. Record: `automation/runs/m8-transformer/feast-server-image.json` |
+| The feature server ON THE CLUSTER (M8-S4 leg 2) | `make deploy-feast-server` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` removes its two objects and leaves Redis alone) | VERIFIED 2026-08-23 (M8-S4 leg 2): rolled out, and the accept is an **ANSWER asked from the REDIS pod** so Service DNS and cross-pod reachability are under test (a server curling itself proves neither) — zone 132 -> `(40.646985, -73.78653) is_airport=True`, **zone 264 -> `null`**, and the null half is asserted because a check that only asserts presence passes against a server answering every question with the same row. The live Deployment's image is read back **off the object**. **STATELESS**: no volume, no hostPort (M8 law 1), no backup obligation; its registry is derived by `feast apply` in the entrypoint at every start. Record: `automation/runs/m8-transformer/feast-server-deploy.json` |
+| THE HTTP-seam parity: the server's answers vs the champion's OWN lookup (M8-S4 leg 2) | `make feast-server-parity` (`SERVER_PARITY_ARGS=--no-write` records nothing). A READER — deploys nothing, materializes nothing, one subprocess (the ephemeral forward on **6567**), AST-pinned | VERIFIED 2026-08-23 (M8-S4 leg 2): **`max \|ours − server\| = 0.000e+00` across 6 columns and 108 comparisons against a bar of EXACT, with `one missing` ZERO** — the load-bearing count, because it says the two sides agree about which values do not EXIST. The bar was argued for THIS path and **committed at `91ab8a6` before any record existed** (`docs/feast_server_m8.md` §3). Rows are the 16 declared hazards **imported from `taxi_mlops.serving.parity.HAZARDS`**, never retyped — 23 distinct zones, 15 distinct pickup dates — so the wire, store, offline and HTTP seams are all measured against ONE row set. The store **declines EXACTLY the zones our path has no geometry for** (`[264, 265]`), asserted in both directions. **Its first run went RED on `is_airport` and that is F-059**, repaired by comparing like with like rather than by widening the bar. Record: `automation/runs/m8-transformer/server-parity.json` |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
