@@ -1619,3 +1619,38 @@ the seed line are earned by THIS project.
     runs eight minutes apart while p50 held to a millisecond, so quote the p50 and
     say the p95 is inside a band wider than the effect (M8-S4 leg 3).
 
+
+108. **Two assumptions can be the same assumption for three milestones, and the
+    day they separate nothing announces it.** The `kserve-predictors` scrape job
+    keeps every pod carrying `serving.kserve.io/inferenceservice` and then
+    rewrites its address to mlserver's `:8082` (pinned there by F-034). "Belongs
+    to an InferenceService" and "is an mlserver" were ONE fact through the
+    champion, M6-S3's shadow and M6-S4's canary — all predictors. M8-S4 added a
+    **transformer** pod, which is the first isvc pod in this program that is not
+    an mlserver, and it silently became a target that can never be up. The cost
+    is not a wrong number: it is a **permanently-false instance of the one signal
+    whose entire value is that `up == 0` means a predictor stopped reporting**
+    (F-043), and a standing false alarm is how a real one becomes invisible.
+    Two transferable halves. (a) When a discovery rule and a transport
+    assumption are written next to each other, the rule is only as narrow as the
+    NARROWER of them — say so in the selector, not in the comment; KServe already
+    labels `component: predictor` vs `component: transformer`, so the
+    discriminator cost nothing and was simply never asked for. (b) When a gate
+    finds this, fix the CAUSE. The tempting repair was to scope the gate's
+    question to the champion's own exporter, which would have been a guard edited
+    to fit a defect — gotcha #50 inverted, and the habit this program exists to
+    refuse (F-061, M8-S5 leg 2).
+
+109. **A red team is only as good as the field nobody was checking, and the
+    milestone's thesis tells you which field that is.** M8's four seams all
+    measure `max |delta| = 0.000e+00`, and `docs/feast_online_m8.md` §2 argues at
+    length that **a comparison which silently dropped nulls would print exactly
+    that same zero** while being blind to the ~1% of rows carrying no geometry.
+    So the plant is not a wrong measurement — it is a `both_missing` count
+    rewritten from 13 to **0**, leaving `compared`, `mismatches`, the delta and
+    the verdict untouched. The record still reads as a clean pass; it now
+    describes a comparison that never looked, and it looks BETTER than the truth.
+    The generalisation: **find the sentence in your own design document that says
+    "a broken version of this would produce the same headline", and plant
+    there** — and then give that field three witnesses, because one artifact
+    agreeing with itself is not a measurement (M8-S5 leg 2).

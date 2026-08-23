@@ -3023,6 +3023,99 @@ can never disagree (the port-family twins lesson, applied before it bit).
   a third consumer: there is no alert on an empty or stale online store**, and this
   leg is the first to put rider-shaped traffic behind it.
 
+## The side-by-side and the M8 gate (M8-S5) — a survey allowed to disagree with us, and the count the milestone rests on
+- **Three Feast-on-taxi implementations exist publicly and all three were read
+  live** (`docs/feast_side_by_side.md`, harvest 2026-08-23 through `gh api` +
+  `curl` — F-001 stands). The population size IS the first finding: a GitHub API
+  search for Feast applied to this exact problem returns **three** substantive
+  repositories at 0★ each, so a SURPASS row means *none of these three*, said in
+  each row. Every row cites the file it read, and **every claim about what a repo
+  does NOT do rests on a recursive tree listing** rather than a skim.
+- **12 rows: 3 ADOPT · 4 DIFFER · 5 SURPASS.** The ADOPTs are the ones that cost
+  something to write. **F's `FeatureService`** is a registered contract naming the
+  feature list once, read by BOTH `get_historical_features` and
+  `get_online_features`; ours is `ZONE_FEATURES`, a Python constant on one side of
+  a wall — a real gap, routed as **R-1** with its honest reason for not landing
+  here (applying one mutates the registry three artifacts are pinned against and
+  would need the server redeployed and M8-S4's three parity records re-measured).
+  **F REFUSES a request whose online features are missing** (`HTTP 404`, entity
+  named) — the principle is right and we say so in three documents, but a blanket
+  copy would be wrong here because zones **264/265** legitimately have no row and
+  `null` IS their correct answer; what it names is the residual **R-2**, still
+  open. **F's 7-step origin-labelled trace** would have shortened three of M8-S4's
+  debugging sessions.
+- **The strongest DIFFER is that the wall is our problem and nobody else's.** F,
+  G and H each hold Feast and their modelling code in ONE environment, and can,
+  because none of them pinned pandas 3. Said plainly in the page: **if this
+  project had not pinned pandas 3, F's single environment would be the better
+  design and we would have taken it.**
+- **What none of the three does, as properties**: an assertion that the
+  point-in-time join is point-in-time correct (F performs it correctly; nothing
+  checks that it stays so — F ships no test file, G's only one is Feast's
+  unmodified `feast init` scaffold operating on `driver_id: 1001`, H's is an API
+  health smoke) · a comparison of the online store against the offline value · a
+  catalog that records which features LOST · a generated registry whose agreement
+  with git is CHECKED · a typed refusal of quote-time-unknowable columns (G's view
+  is keyed on `trip_id` and its schema carries `fare_amount`; a PIT join keyed on
+  the prediction's own unique id can only return that trip's own row).
+- **`make verify-m8` is 51 sub-checks in 7 sections and it RE-RUNS NOTHING** —
+  eighth inheritance of M1's no-skip-flag rule, and here re-running would mean a
+  ~7-minute image build that *changes the artifact under test* (gotcha #66). It
+  asks the live system **exactly FIVE questions** — one prediction through the
+  champion's wire, one through the transformer's, one feature-server lookup, one
+  `DBSIZE`, one PromQL query — **and the count is pinned by its own test**,
+  because a gate whose live footprint can grow quietly is one that will eventually
+  re-run what it exists to read.
+- **Law 4 is checked from GIT, four times.** A document cannot honestly testify
+  that it was written before the measurement it judges, so the gate compares the
+  commit that ADDED each bar's document with the commit that ADDED its record:
+  678 s · 356 s · 320 s · 546 s, all four the right way round. The bar itself is
+  PARSED out of the prose that argues it and typed nowhere.
+- **The gate asks whether the online store holds anything**, which no predecessor
+  needed to. An all-null store yields an all-NaN geometry table and a confident
+  quote, and **no client can refuse that, because `null` is also the correct
+  answer for zones 264/265** — gotcha #78 with the panel removed. 57,688 keys,
+  read off the server, against the count the materialization recorded.
+- **`one missing` and `both missing` are this milestone's thesis, so they got
+  three witnesses.** `max |delta| = 0` is exactly what a comparison that silently
+  DROPPED NULLS would print, blind to the ~1% of rows F-030 was found on. So each
+  column's missing count must reconcile with the run's own two-sided no-geometry
+  assertion, with the independently-built ANCHOR block, and with the number
+  rendered in the committed table a reviewer diffs. **That is what the red team
+  plants against**: one column's `both_missing` 13 → 0 — chosen from the record,
+  never typed — leaving `compared`, `mismatches`, `max_abs_delta`, `one_missing`
+  and the verdict untouched, so the pass still reads as a pass while describing a
+  comparison that never looked. **RED with 3 FAILs from three artifacts, 48
+  sub-check lines still passing, the headline-delta leg deliberately still GREEN,
+  sha256-identical restore, GREEN 51/51, clean tree.**
+- **F-061, found by the gate on its own first run and fixed at the cause.** The
+  `kserve-predictors` scrape job keeps every pod carrying an isvc label and then
+  forces mlserver's `:8082` on it — **two assumptions that were the same
+  assumption** until M8-S4 leg 3 added a transformer pod, which is an isvc pod and
+  is not an mlserver. It had become a permanently-DOWN target on the one signal
+  whose entire value (F-043) is that `up == 0` means a predictor stopped
+  reporting. Fixed with the discriminator KServe already sets
+  (`component=predictor`), **not** by scoping the gate's question to the champion —
+  narrowing a check to accommodate a defect is gotcha #50 inverted. No restart
+  needed; the target list converged in under 5 s.
+- **The gate's first run went RED eight times and four were its own defects**
+  (gotcha #50, twice in one run): a registry demanded ABSENT FROM DISK when the
+  property is *not tracked by git*; a bar regex encoding one sentence's word order
+  instead of the bar; a typed script path (`feast_retrieval_parity.py` — the target
+  runs `feast_retrieval.py`), now DERIVED from the Makefile recipe; a DVC summary
+  line counted as one target out of four over a perfectly clean tree; and a ledger
+  searched whole, so the milestone's own prose sentence "M8-S5's gate inherits it
+  live" was read as a ledger row (gotcha #99, third occurrence). Then the TEST FILE
+  went red three times for the same disease — the `feast` needle matched the gate
+  *reporting* on `feast plan`, and `consume < <(` matched the instruction telling
+  the next author to call it that way.
+- **Nothing was fitted, no alias moved, no version was created.** `@champion` **2**
+  / `feature_set v2`, versions `['1','2']` — and the gate asserts the strong form:
+  not one registry version was created after the `m7-closed` tag, because a
+  promotion cannot hide from a check that reads creation times. `uv.lock`
+  byte-identical to `m7-closed`, host suite **1127 passed**, ruff clean, all
+  settled DVC pins `up to date`, `verify-m5`/`m6`/`m7` all GREEN.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3220,7 +3313,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The transformer BESIDE the champion (M8-S4 leg 3) | `make deploy-transformer` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` deletes exactly its own isvc) | VERIFIED 2026-08-23 (M8-S4 leg 3): a SECOND InferenceService whose predictor holds **the same champion bytes** (resolved from the alias by the same F-009 two hops) and whose transformer runs OUR image. **Accept GREEN 6/6** and it is the artifact, not a ready-list (gotcha #59): a RAW request answered **39.0019 minutes** stamped `model_version='2'` — mlserver's own stamp, forwarded VERBATIM — with `X-Taxi-Lookups` proving the store was consulted AND that F-059's two groups were not, the champion's model name **404ing on this host** (conditional on the route being live — F-060), and a 2031 quote **REFUSED at 422** naming the date. `@champion` **2** before and after; a move exits 2. It REFUSES a `-dirty` image (exit 3) and refuses a stale one (F-026's guard over `src`/`pyproject.toml`/`uv.lock`/`docker`), which fired on this story's own commit. **Three wait legs**: `rollout status` on BOTH Deployments, then `--for=jsonpath=` (F-036, never `--for=condition=`), then **the ROUTE itself** — gotcha #106 |
 | THE parity through the MOVED boundary (M8-S4 leg 3) | `make transformer-parity` (`TRANSFORMER_PARITY_ARGS=--no-write` records nothing). A READER | VERIFIED 2026-08-23 (M8-S4 leg 3): **`max |champion − transformer| = 0.000e+00` minutes across all 16 declared hazards against a bar of EXACT**, argued in `docs/transformer_m8.md` §3 and **committed at `79aedb4` before any record existed** — tighter than M5-S3's 1e-6, and defensible only because the probe had already measured the store-backed matrix bit-identical on the host. Arm A builds the matrix HERE and POSTs it to `nyc-taxi-eta`; arm B POSTs four RAW fields to `nyc-taxi-eta-transformer` and a pod does the rest. Plus three checks the delta alone cannot make: both answers carry registry version **2** (read off the two ANSWERS), the pod really consulted the store, and the borough dictionary and airport constant did not cross. Rows are `parity.HAZARDS`, **imported and never retyped**, so five seams now share ONE declared row set. Table: `docs/transformer_parity_table.md` |
 | p95 at the NEW boundary, beside the old one (M8-S4 leg 3) | `make transformer-load` (`TRANSFORMER_LOAD_ARGS=--no-write`). A READER — it POSTs, it times, it sets no threshold | VERIFIED 2026-08-23 (M8-S4 leg 3): M5-S4's shape EXACTLY (4 req/s, 60 s, concurrency 8, hazard mix, open loop) through the SAME `run_load` with only the payload differing — two percentiles at different shapes are not comparable. **Both arms back to back in one invocation**, so the champion is a CONTROL measured in the same minutes rather than a figure quoted across a host reboot. **p50 31.1 -> 49.3 ms (+18.1), p95 113.1 -> 118.1 (+5.0), 240/240 ok on each arm, ZERO errors on both, 4.01 req/s achieved on both, version `['2']` on both.** **Quote the p50**: the p95 delta was **+23.0 ms** in a run eight minutes earlier while p50 held at +16.8, and both records are tracked (`transformer-load.json`, `transformer-load-run1.json`) so that is checkable rather than asserted — the tail is laptop contention, the reading M6-S2 already refused once |
-| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7 live |
+| Gate check M8 | `make verify-m8` | VERIFIED 2026-08-23 (M8-S5 leg 2): **GREEN 51/51 sub-checks in 7 sections, exit 0** — the wall (`uv.lock` **byte-identical to the `m7-closed` tag**, `feast` **ABSENT** asked of `uv pip list` and not inferred from the lock, the conflict re-read live (`pandas<3,>=1.4.3` vs 3.0.5), the wall **one package wide**, 66 exact pins with `--no-deps`, the import law both directions by **ast**) · the feature repo (the APPLIED registry's 4 views and 5 entities equal to what `ast` parses out of `definitions.py` — two independently produced lists; `feast plan` 0 substantive, F-055's only checkable statement; no registry.db TRACKED and the generated one gitignored, asked of `git check-ignore`; every view carrying a verdict, 2 CATALOG-ONLY, the losing number labelled a SAMPLE number) · **the four seams, all at `0.000e+00` against a bar of EXACT that is PARSED from the prose arguing it, `one missing` ZERO on every column, and all four bars COMMITTED BEFORE the records they judge — 678 s · 356 s · 320 s · 546 s, read off `git log --diff-filter=A`** (M8 law 4 from git, not from a sentence) · the PIT proof as a DIFFERENCE with two anchors (honest vs naive disagree on every time-varying column, **the naive answer IS our own full-window table**, the honest one reconciles with `aggregates.transform` at zero, 10 rows told nothing, 7 distinct windows, F-056's shortfall CLASSIFIED with UNEXPLAINED 0) · **five live questions** (champion 10.665224 min at `model_version='2'` **exactly** the recorded value; the transformer answering the same hazard from four RAW fields at `|Δ| = 0.000e+00` with `X-Taxi-Lookups` naming the two groups that did NOT cross; the feature server two-sided; **57,688 keys** at `noeviction`; one PromQL query — F-043's, and it found **F-061**) · F-059 as a TYPE by ast · the page (12 rows, all verdicted, **3 ADOPT / 5 SURPASS**, per-row provenance) · **the alias law in its strong form: not one registry version created after the `m7-closed` tag**. **RE-RUNS NOTHING and MINTS NOTHING**, pinned by `tests/unit/test_verify_m8.py` (36 tests) incl. the five-question count. No skip flag, no fast mode (M1's rule, **eighth** inheritance). Transcript: `docs/verify_m8_transcripts.md` §1 |
+| Prove the M8 gate can go RED | `make verify-m8-redteam` (`bash scripts/verify_m8_redteam.sh`) | VERIFIED 2026-08-23 (M8-S5 leg 2): rewrites ONE count in `automation/runs/m8-online/online_parity.json` — a pickup-zone column's `both_missing` **13 → 0**, the column CHOSEN from the record rather than typed — leaving `compared`, `mismatches`, `max_abs_delta`, `one_missing`, the headline delta and the `PASSED` verdict untouched. **It is not a lie about a measurement; it is what a correct-looking measurement of the wrong population reports** — zero missing values is exactly what a comparison that dropped nulls prints, and it looks BETTER than the truth. → **RED exit 1 with 3 FAILs from THREE artifacts**: the run's own two-sided no-geometry assertion, the independently-built ANCHOR block inside the same record, and `docs/feast_online_parity_table.md` — the blueprint's named accept artifact and the only witness a human diffs. **48 sub-check lines still ran and passed**, and **the four-seam headline leg stayed GREEN by design** — what separates a gate that fails on a WRONG POPULATION from one that fails on any edit. Restored under an EXIT trap, sha256-verified (`153c4399deab…`), `git status` clean → **GREEN 51/51**. Touches no pod, no image, no Redis key, no MLflow run, no registry version, no alias, no rule and no traffic |
+| Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7/M8 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
