@@ -328,9 +328,18 @@ verify-m8-redteam: ## prove `make verify-m8` can go RED: one online value rewrit
 	@bash scripts/verify_m8_redteam.sh
 
 # ---- M9 stretch (demo committed by PO direction 2026-08-12) ----
-.PHONY: demo
-demo: ## serve/open the stakeholder demo page against the live InferenceService
-	@echo "TODO(M9): port-forward + open demo/eta.html (see demo/README.md)"
+.PHONY: demo demo-page demo-page-check deploy-demo demo-accept
+demo-page: ## M9-S1: regenerate demo/index.html from its template + the TLC zone lookup + transformer.RAW_INPUTS. The page is GENERATED so the zone list cannot be a twin of the CSV
+	@uv run python scripts/build_demo_page.py
+demo-page-check: ## M9-S1: does the committed page still equal what its three sources generate? Writes nothing
+	@uv run python scripts/build_demo_page.py --check
+deploy-demo: ## M9-S1: the stakeholder demo page + its host-less route (same origin as the model, so CORS never happens). DRY_RUN=1 mutates nothing; TEARDOWN=1 removes its four objects. Deploys no model, reads no registry
+	@bash scripts/deploy_demo.sh
+demo-accept: ## M9-S1: the accept check — real requests sent the way the PAGE sends them (endpoint, schema and payload READ OUT of demo/index.html), against a recorded anchor. DEMO_ACCEPT_ARGS=--no-write records nothing
+	@uv run python scripts/demo_accept.py $(DEMO_ACCEPT_ARGS)
+demo: ## M9-S1: where the stakeholder demo lives
+	@echo "The demo is at http://localhost:8081/demo/ — 'make deploy-demo' puts it there,"
+	@echo "'make demo-accept' proves it answers. Route decision: demo/README.md §1."
 
 # ---- always available ----
 .PHONY: lint test fmt

@@ -1,0 +1,272 @@
+<!doctype html>
+<!--
+  THE TEMPLATE. `demo/index.html` is GENERATED from this file by
+  `scripts/build_demo_page.py` (`make demo-page`) and both are committed.
+
+  Three tokens are substituted, and each is substituted because a hand-typed copy
+  of it would be a TWIN that drifts. They are named here WITHOUT their braces on
+  purpose — the first draft of this comment spelled them exactly, the generator
+  substituted them inside this very paragraph, and the page shipped 795 <option>
+  elements across two <select> elements instead of 530. Prose must not sit where
+  a parser will read it as code (gotchas #53 and #60); the generator now asserts
+  each token's occurrence COUNT, so the same slip fails loudly next time.
+
+    ZONE_OPTIONS       (twice — one per picker) the 265 zone choices, derived
+                       from data/reference/taxi_zone_lookup.csv, the same file
+                       taxi_mlops.features.zones reads.
+    RAW_INPUT_SCHEMA   (once) the request schema, derived from
+                       taxi_mlops.serving.transformer.RAW_INPUTS — the dict the
+                       SERVER decodes with. A page that spelled one field NAME
+                       differently would be refused by name (decode_raw refuses
+                       unknown inputs rather than ignoring them), but a page that
+                       spelled a DATATYPE differently would quote a number nobody
+                       could see was wrong.
+    DEFAULT_TRIP       (once) the form's opening state — the published hazard row.
+
+  tests/unit/test_demo_page.py regenerates this into a temp file and requires the
+  result to be byte-identical to the committed index.html, so the generated file
+  cannot drift from either source without a red test.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crosstown ETA — live quote</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 2rem 1rem; background: #f6f7f9; color: #16181d;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  .sub { color: #5b6270; margin: 0 0 1.5rem; }
+  .card {
+    background: #fff; border: 1px solid #dfe3e8; border-radius: 10px;
+    padding: 1.25rem; margin-bottom: 1rem;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem 1.1rem; }
+  @media (max-width: 34rem) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-weight: 600; font-size: .85rem; margin-bottom: .3rem; }
+  select, input {
+    width: 100%; padding: .5rem .55rem; font: inherit; box-sizing: border-box;
+    border: 1px solid #c6ccd4; border-radius: 6px; background: #fff; color: inherit;
+  }
+  button {
+    margin-top: 1.1rem; padding: .65rem 1.4rem; font: inherit; font-weight: 600;
+    border: 0; border-radius: 6px; background: #1a56db; color: #fff; cursor: pointer;
+  }
+  button:disabled { background: #9aa4b2; cursor: progress; }
+  .answer { font-size: 2.4rem; font-weight: 700; margin: 0; }
+  .answer small { font-size: .95rem; font-weight: 400; color: #5b6270; }
+  .meta { margin: .6rem 0 0; font-size: .85rem; color: #5b6270; }
+  .meta code { background: #eef0f3; padding: .05rem .3rem; border-radius: 4px; }
+  .refused .answer { font-size: 1.25rem; color: #9a3412; }
+  .outage .answer { font-size: 1.25rem; color: #9f1239; }
+  .broken .answer { font-size: 1.25rem; color: #7c2d12; }
+  details { margin-top: .9rem; font-size: .85rem; }
+  pre { background: #16181d; color: #e6e8eb; padding: .8rem; border-radius: 6px;
+        overflow-x: auto; font-size: .78rem; }
+  footer { color: #5b6270; font-size: .8rem; margin-top: 1.5rem; }
+  a { color: #1a56db; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Crosstown ETA — how long will this trip take?</h1>
+  <p class="sub">
+    A live quote from the model that is serving right now. Pick two zones and a
+    time, and the answer comes back from the cluster — nothing here is
+    pre-computed.
+  </p>
+
+  <form class="card" id="quote-form">
+    <div class="grid">
+      <div>
+        <label for="pu">Pick-up zone</label>
+        <select id="pu" name="pu">{{ZONE_OPTIONS}}</select>
+      </div>
+      <div>
+        <label for="do">Drop-off zone</label>
+        <select id="do" name="do">{{ZONE_OPTIONS}}</select>
+      </div>
+      <div>
+        <label for="at">Pick-up date &amp; time</label>
+        <input type="datetime-local" id="at" name="at">
+      </div>
+      <div>
+        <label for="pax">Passengers</label>
+        <input type="number" id="pax" name="pax" min="0" max="6" step="1">
+      </div>
+    </div>
+    <button type="submit" id="go">Get ETA</button>
+  </form>
+
+  <div class="card" id="result" hidden>
+    <p class="answer" id="answer"></p>
+    <p class="meta" id="meta"></p>
+    <details>
+      <summary>What was sent, and what came back</summary>
+      <pre id="wire"></pre>
+    </details>
+  </div>
+
+  <footer>
+    <p>
+      The quote is served by <code>nyc-taxi-eta-transformer</code>: this page
+      sends the four things a dispatcher knows — a time, two zone ids and a
+      party size — and the twenty-four features the model eats are built
+      <em>inside the cluster</em> by the same code that trained it. Zone
+      centroids and calendar flags come from the online feature store; the
+      <code>lookups</code> line below every answer says so, per request.
+    </p>
+    <p>
+      Two things worth trying: a date in <strong>2031</strong> (the committed
+      federal-holiday table runs to 2030, so the quote is <em>refused</em> rather
+      than guessed), and the two <strong>“not a place”</strong> zones at the
+      bottom of each picker (TLC records them for trips whose zone is unknown —
+      they have no geometry, and the model answers from the features that remain).
+    </p>
+  </footer>
+</main>
+
+<script>
+// The endpoint is a RELATIVE url, and that is the whole route decision in one
+// line: the page and the model are served from the same origin through the one
+// ingress this cluster has, so the browser sends no cross-origin request and
+// CORS never enters the picture. demo/README.md records why.
+const ENDPOINT = "/v2/models/nyc-taxi-eta/infer";
+
+// Generated from taxi_mlops.serving.transformer.RAW_INPUTS — see the header.
+const RAW_INPUTS = {{RAW_INPUT_SCHEMA}};
+
+// The form's opening state, and it is not decoration: this is the hazard row
+// every parity record in this repo carries (JFK -> Clinton East, 4 July 2019 —
+// a federal holiday), whose answer is a published 39.0019 minutes at model
+// version 2. So the first thing anyone sees is a number that can be checked
+// against the record, and `scripts/demo_accept.py` READS this object out of the
+// page rather than retyping it.
+const DEFAULT_TRIP = {{DEFAULT_TRIP}};
+
+function encodeRaw(values) {
+  // The mirror of `transformer.encode_raw` for a single row: a KServe V2 body
+  // whose inputs are the RAW request, not the feature matrix. Paired BY NAME.
+  return {
+    inputs: RAW_INPUTS.map(function (spec) {
+      const raw = values[spec.field];
+      let datum;
+      if (spec.datatype === "BYTES") { datum = String(raw); }
+      else if (spec.datatype === "INT32") { datum = parseInt(raw, 10); }
+      else { datum = parseFloat(raw); }
+      return { name: spec.name, shape: [1, 1], datatype: spec.datatype, data: [datum] };
+    })
+  };
+}
+
+function normaliseInstant(value) {
+  // <input type="datetime-local"> yields "2019-07-04T09:15" — the same instant
+  // as "2019-07-04T09:15:00", but every record in this repo writes the seconds,
+  // and the demo's own accept check compares payloads byte for byte.
+  return value.length === 16 ? value + ":00" : value;
+}
+
+document.getElementById("pu").value = String(DEFAULT_TRIP.pu_location_id);
+document.getElementById("do").value = String(DEFAULT_TRIP.do_location_id);
+document.getElementById("at").value = DEFAULT_TRIP.pickup_datetime.slice(0, 16);
+document.getElementById("pax").value = String(DEFAULT_TRIP.passenger_count);
+
+const form = document.getElementById("quote-form");
+const result = document.getElementById("result");
+const answer = document.getElementById("answer");
+const meta = document.getElementById("meta");
+const wire = document.getElementById("wire");
+const go = document.getElementById("go");
+
+function show(kind, headline, detail, sent, got) {
+  result.hidden = false;
+  result.className = "card " + kind;
+  answer.innerHTML = headline;
+  meta.innerHTML = detail;
+  wire.textContent =
+    "POST " + ENDPOINT + "\n\n" + JSON.stringify(sent, null, 2) +
+    "\n\n---\n\n" + got;
+}
+
+form.addEventListener("submit", async function (event) {
+  event.preventDefault();
+  const body = encodeRaw({
+    pickup_datetime: normaliseInstant(document.getElementById("at").value),
+    pu_location_id: document.getElementById("pu").value,
+    do_location_id: document.getElementById("do").value,
+    passenger_count: document.getElementById("pax").value
+  });
+  go.disabled = true;
+  go.textContent = "asking the cluster…";
+  try {
+    const response = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const text = await response.text();
+    let payload;
+    try { payload = JSON.parse(text); } catch (e) { payload = null; }
+    const shown = payload ? JSON.stringify(payload, null, 2) : text;
+
+    if (response.ok && payload && payload.outputs && payload.outputs.length) {
+      const minutes = payload.outputs[0].data[0];
+      const version = payload.model_version || "(unstamped)";
+      const lookups = response.headers.get("X-Taxi-Lookups") || "(not reported)";
+      show(
+        "quoted",
+        "≈ " + minutes.toFixed(1) + " minutes",
+        "exactly <code>" + minutes.toFixed(4) + "</code> min &nbsp;·&nbsp; " +
+        "serving model version <code>" + version + "</code> &nbsp;·&nbsp; " +
+        "lookups <code>" + lookups + "</code>",
+        body, shown
+      );
+    } else if (response.status === 422) {
+      // A REFUSAL, not a failure. The typed boundary (F-019's holiday horizon,
+      // the store's coverage) says no before a wrong number can be invented.
+      show(
+        "refused",
+        "Refused — this trip cannot be quoted",
+        "The service refused the request rather than guessing: <code>" +
+        ((payload && payload.error) || text) + "</code>",
+        body, shown
+      );
+    } else if (response.status === 503) {
+      // A DEPENDENCY outage, deliberately distinguishable from a refusal: the
+      // caller did nothing wrong and there is nothing for them to fix.
+      show(
+        "outage",
+        "The quote service is temporarily unavailable",
+        "A dependency the quote needs is not answering. Nothing is wrong with " +
+        "your request — try again shortly. <code>" +
+        ((payload && payload.error) || text) + "</code>",
+        body, shown
+      );
+    } else {
+      show(
+        "broken",
+        "Unexpected answer (HTTP " + response.status + ")",
+        "This is not one of the answers the page knows how to read.",
+        body, shown
+      );
+    }
+  } catch (err) {
+    show(
+      "outage",
+      "Could not reach the quote service",
+      "The request never completed: <code>" + err + "</code>. Is the cluster " +
+      "up and is the route at <code>localhost:8081</code> answering?",
+      body, String(err)
+    );
+  } finally {
+    go.disabled = false;
+    go.textContent = "Get ETA";
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,842 @@
+<!doctype html>
+<!--
+  THE TEMPLATE. `demo/index.html` is GENERATED from this file by
+  `scripts/build_demo_page.py` (`make demo-page`) and both are committed.
+
+  Three tokens are substituted, and each is substituted because a hand-typed copy
+  of it would be a TWIN that drifts. They are named here WITHOUT their braces on
+  purpose — the first draft of this comment spelled them exactly, the generator
+  substituted them inside this very paragraph, and the page shipped 795 <option>
+  elements across two <select> elements instead of 530. Prose must not sit where
+  a parser will read it as code (gotchas #53 and #60); the generator now asserts
+  each token's occurrence COUNT, so the same slip fails loudly next time.
+
+    ZONE_OPTIONS       (twice — one per picker) the 265 zone choices, derived
+                       from data/reference/taxi_zone_lookup.csv, the same file
+                       taxi_mlops.features.zones reads.
+    RAW_INPUT_SCHEMA   (once) the request schema, derived from
+                       taxi_mlops.serving.transformer.RAW_INPUTS — the dict the
+                       SERVER decodes with. A page that spelled one field NAME
+                       differently would be refused by name (decode_raw refuses
+                       unknown inputs rather than ignoring them), but a page that
+                       spelled a DATATYPE differently would quote a number nobody
+                       could see was wrong.
+    DEFAULT_TRIP       (once) the form's opening state — the published hazard row.
+
+  tests/unit/test_demo_page.py regenerates this into a temp file and requires the
+  result to be byte-identical to the committed index.html, so the generated file
+  cannot drift from either source without a red test.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crosstown ETA — live quote</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 2rem 1rem; background: #f6f7f9; color: #16181d;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  .sub { color: #5b6270; margin: 0 0 1.5rem; }
+  .card {
+    background: #fff; border: 1px solid #dfe3e8; border-radius: 10px;
+    padding: 1.25rem; margin-bottom: 1rem;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem 1.1rem; }
+  @media (max-width: 34rem) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-weight: 600; font-size: .85rem; margin-bottom: .3rem; }
+  select, input {
+    width: 100%; padding: .5rem .55rem; font: inherit; box-sizing: border-box;
+    border: 1px solid #c6ccd4; border-radius: 6px; background: #fff; color: inherit;
+  }
+  button {
+    margin-top: 1.1rem; padding: .65rem 1.4rem; font: inherit; font-weight: 600;
+    border: 0; border-radius: 6px; background: #1a56db; color: #fff; cursor: pointer;
+  }
+  button:disabled { background: #9aa4b2; cursor: progress; }
+  .answer { font-size: 2.4rem; font-weight: 700; margin: 0; }
+  .answer small { font-size: .95rem; font-weight: 400; color: #5b6270; }
+  .meta { margin: .6rem 0 0; font-size: .85rem; color: #5b6270; }
+  .meta code { background: #eef0f3; padding: .05rem .3rem; border-radius: 4px; }
+  .refused .answer { font-size: 1.25rem; color: #9a3412; }
+  .outage .answer { font-size: 1.25rem; color: #9f1239; }
+  .broken .answer { font-size: 1.25rem; color: #7c2d12; }
+  details { margin-top: .9rem; font-size: .85rem; }
+  pre { background: #16181d; color: #e6e8eb; padding: .8rem; border-radius: 6px;
+        overflow-x: auto; font-size: .78rem; }
+  footer { color: #5b6270; font-size: .8rem; margin-top: 1.5rem; }
+  a { color: #1a56db; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Crosstown ETA — how long will this trip take?</h1>
+  <p class="sub">
+    A live quote from the model that is serving right now. Pick two zones and a
+    time, and the answer comes back from the cluster — nothing here is
+    pre-computed.
+  </p>
+
+  <form class="card" id="quote-form">
+    <div class="grid">
+      <div>
+        <label for="pu">Pick-up zone</label>
+        <select id="pu" name="pu">
+      <optgroup label="Bronx">
+        <option value="3">Allerton/Pelham Gardens (Bronx)</option>
+        <option value="18">Bedford Park (Bronx)</option>
+        <option value="20">Belmont (Bronx)</option>
+        <option value="31">Bronx Park (Bronx)</option>
+        <option value="32">Bronxdale (Bronx)</option>
+        <option value="46">City Island (Bronx)</option>
+        <option value="47">Claremont/Bathgate (Bronx)</option>
+        <option value="51">Co-Op City (Bronx)</option>
+        <option value="58">Country Club (Bronx)</option>
+        <option value="59">Crotona Park (Bronx)</option>
+        <option value="60">Crotona Park East (Bronx)</option>
+        <option value="69">East Concourse/Concourse Village (Bronx)</option>
+        <option value="78">East Tremont (Bronx)</option>
+        <option value="81">Eastchester (Bronx)</option>
+        <option value="94">Fordham South (Bronx)</option>
+        <option value="119">Highbridge (Bronx)</option>
+        <option value="126">Hunts Point (Bronx)</option>
+        <option value="136">Kingsbridge Heights (Bronx)</option>
+        <option value="147">Longwood (Bronx)</option>
+        <option value="159">Melrose South (Bronx)</option>
+        <option value="167">Morrisania/Melrose (Bronx)</option>
+        <option value="168">Mott Haven/Port Morris (Bronx)</option>
+        <option value="169">Mount Hope (Bronx)</option>
+        <option value="174">Norwood (Bronx)</option>
+        <option value="182">Parkchester (Bronx)</option>
+        <option value="183">Pelham Bay (Bronx)</option>
+        <option value="184">Pelham Bay Park (Bronx)</option>
+        <option value="185">Pelham Parkway (Bronx)</option>
+        <option value="199">Rikers Island (Bronx)</option>
+        <option value="200">Riverdale/North Riverdale/Fieldston (Bronx)</option>
+        <option value="208">Schuylerville/Edgewater Park (Bronx)</option>
+        <option value="212">Soundview/Bruckner (Bronx)</option>
+        <option value="213">Soundview/Castle Hill (Bronx)</option>
+        <option value="220">Spuyten Duyvil/Kingsbridge (Bronx)</option>
+        <option value="235">University Heights/Morris Heights (Bronx)</option>
+        <option value="240">Van Cortlandt Park (Bronx)</option>
+        <option value="241">Van Cortlandt Village (Bronx)</option>
+        <option value="242">Van Nest/Morris Park (Bronx)</option>
+        <option value="247">West Concourse (Bronx)</option>
+        <option value="248">West Farms/Bronx River (Bronx)</option>
+        <option value="250">Westchester Village/Unionport (Bronx)</option>
+        <option value="254">Williamsbridge/Olinville (Bronx)</option>
+        <option value="259">Woodlawn/Wakefield (Bronx)</option>
+      </optgroup>
+      <optgroup label="Brooklyn">
+        <option value="11">Bath Beach (Brooklyn)</option>
+        <option value="14">Bay Ridge (Brooklyn)</option>
+        <option value="17">Bedford (Brooklyn)</option>
+        <option value="21">Bensonhurst East (Brooklyn)</option>
+        <option value="22">Bensonhurst West (Brooklyn)</option>
+        <option value="25">Boerum Hill (Brooklyn)</option>
+        <option value="26">Borough Park (Brooklyn)</option>
+        <option value="29">Brighton Beach (Brooklyn)</option>
+        <option value="33">Brooklyn Heights (Brooklyn)</option>
+        <option value="34">Brooklyn Navy Yard (Brooklyn)</option>
+        <option value="35">Brownsville (Brooklyn)</option>
+        <option value="36">Bushwick North (Brooklyn)</option>
+        <option value="37">Bushwick South (Brooklyn)</option>
+        <option value="39">Canarsie (Brooklyn)</option>
+        <option value="40">Carroll Gardens (Brooklyn)</option>
+        <option value="49">Clinton Hill (Brooklyn)</option>
+        <option value="52">Cobble Hill (Brooklyn)</option>
+        <option value="54">Columbia Street (Brooklyn)</option>
+        <option value="55">Coney Island (Brooklyn)</option>
+        <option value="61">Crown Heights North (Brooklyn)</option>
+        <option value="62">Crown Heights South (Brooklyn)</option>
+        <option value="63">Cypress Hills (Brooklyn)</option>
+        <option value="66">DUMBO/Vinegar Hill (Brooklyn)</option>
+        <option value="65">Downtown Brooklyn/MetroTech (Brooklyn)</option>
+        <option value="67">Dyker Heights (Brooklyn)</option>
+        <option value="71">East Flatbush/Farragut (Brooklyn)</option>
+        <option value="72">East Flatbush/Remsen Village (Brooklyn)</option>
+        <option value="76">East New York (Brooklyn)</option>
+        <option value="77">East New York/Pennsylvania Avenue (Brooklyn)</option>
+        <option value="80">East Williamsburg (Brooklyn)</option>
+        <option value="85">Erasmus (Brooklyn)</option>
+        <option value="89">Flatbush/Ditmas Park (Brooklyn)</option>
+        <option value="91">Flatlands (Brooklyn)</option>
+        <option value="97">Fort Greene (Brooklyn)</option>
+        <option value="106">Gowanus (Brooklyn)</option>
+        <option value="108">Gravesend (Brooklyn)</option>
+        <option value="111">Green-Wood Cemetery (Brooklyn)</option>
+        <option value="112">Greenpoint (Brooklyn)</option>
+        <option value="123">Homecrest (Brooklyn)</option>
+        <option value="133">Kensington (Brooklyn)</option>
+        <option value="149">Madison (Brooklyn)</option>
+        <option value="150">Manhattan Beach (Brooklyn)</option>
+        <option value="154">Marine Park/Floyd Bennett Field (Brooklyn)</option>
+        <option value="155">Marine Park/Mill Basin (Brooklyn)</option>
+        <option value="165">Midwood (Brooklyn)</option>
+        <option value="177">Ocean Hill (Brooklyn)</option>
+        <option value="178">Ocean Parkway South (Brooklyn)</option>
+        <option value="181">Park Slope (Brooklyn)</option>
+        <option value="189">Prospect Heights (Brooklyn)</option>
+        <option value="190">Prospect Park (Brooklyn)</option>
+        <option value="188">Prospect-Lefferts Gardens (Brooklyn)</option>
+        <option value="195">Red Hook (Brooklyn)</option>
+        <option value="210">Sheepshead Bay (Brooklyn)</option>
+        <option value="217">South Williamsburg (Brooklyn)</option>
+        <option value="222">Starrett City (Brooklyn)</option>
+        <option value="225">Stuyvesant Heights (Brooklyn)</option>
+        <option value="227">Sunset Park East (Brooklyn)</option>
+        <option value="228">Sunset Park West (Brooklyn)</option>
+        <option value="255">Williamsburg (North Side) (Brooklyn)</option>
+        <option value="256">Williamsburg (South Side) (Brooklyn)</option>
+        <option value="257">Windsor Terrace (Brooklyn)</option>
+      </optgroup>
+      <optgroup label="EWR">
+        <option value="1">Newark Airport (EWR)</option>
+      </optgroup>
+      <optgroup label="Manhattan">
+        <option value="4">Alphabet City (Manhattan)</option>
+        <option value="12">Battery Park (Manhattan)</option>
+        <option value="13">Battery Park City (Manhattan)</option>
+        <option value="24">Bloomingdale (Manhattan)</option>
+        <option value="41">Central Harlem (Manhattan)</option>
+        <option value="42">Central Harlem North (Manhattan)</option>
+        <option value="43">Central Park (Manhattan)</option>
+        <option value="45">Chinatown (Manhattan)</option>
+        <option value="48">Clinton East (Manhattan)</option>
+        <option value="50">Clinton West (Manhattan)</option>
+        <option value="68">East Chelsea (Manhattan)</option>
+        <option value="74">East Harlem North (Manhattan)</option>
+        <option value="75">East Harlem South (Manhattan)</option>
+        <option value="79">East Village (Manhattan)</option>
+        <option value="87">Financial District North (Manhattan)</option>
+        <option value="88">Financial District South (Manhattan)</option>
+        <option value="90">Flatiron (Manhattan)</option>
+        <option value="100">Garment District (Manhattan)</option>
+        <option value="103">Governor&#x27;s Island/Ellis Island/Liberty Island (Manhattan)</option>
+        <option value="104">Governor&#x27;s Island/Ellis Island/Liberty Island (Manhattan)</option>
+        <option value="105">Governor&#x27;s Island/Ellis Island/Liberty Island (Manhattan)</option>
+        <option value="107">Gramercy (Manhattan)</option>
+        <option value="113">Greenwich Village North (Manhattan)</option>
+        <option value="114">Greenwich Village South (Manhattan)</option>
+        <option value="116">Hamilton Heights (Manhattan)</option>
+        <option value="120">Highbridge Park (Manhattan)</option>
+        <option value="125">Hudson Sq (Manhattan)</option>
+        <option value="127">Inwood (Manhattan)</option>
+        <option value="128">Inwood Hill Park (Manhattan)</option>
+        <option value="137">Kips Bay (Manhattan)</option>
+        <option value="140">Lenox Hill East (Manhattan)</option>
+        <option value="141">Lenox Hill West (Manhattan)</option>
+        <option value="142">Lincoln Square East (Manhattan)</option>
+        <option value="143">Lincoln Square West (Manhattan)</option>
+        <option value="144">Little Italy/NoLiTa (Manhattan)</option>
+        <option value="148">Lower East Side (Manhattan)</option>
+        <option value="151">Manhattan Valley (Manhattan)</option>
+        <option value="152">Manhattanville (Manhattan)</option>
+        <option value="153">Marble Hill (Manhattan)</option>
+        <option value="158">Meatpacking/West Village West (Manhattan)</option>
+        <option value="161">Midtown Center (Manhattan)</option>
+        <option value="162">Midtown East (Manhattan)</option>
+        <option value="163">Midtown North (Manhattan)</option>
+        <option value="164">Midtown South (Manhattan)</option>
+        <option value="166">Morningside Heights (Manhattan)</option>
+        <option value="170">Murray Hill (Manhattan)</option>
+        <option value="186">Penn Station/Madison Sq West (Manhattan)</option>
+        <option value="194">Randalls Island (Manhattan)</option>
+        <option value="202">Roosevelt Island (Manhattan)</option>
+        <option value="209">Seaport (Manhattan)</option>
+        <option value="211">SoHo (Manhattan)</option>
+        <option value="224">Stuy Town/Peter Cooper Village (Manhattan)</option>
+        <option value="229">Sutton Place/Turtle Bay North (Manhattan)</option>
+        <option value="230">Times Sq/Theatre District (Manhattan)</option>
+        <option value="231">TriBeCa/Civic Center (Manhattan)</option>
+        <option value="232">Two Bridges/Seward Park (Manhattan)</option>
+        <option value="233">UN/Turtle Bay South (Manhattan)</option>
+        <option value="234">Union Sq (Manhattan)</option>
+        <option value="236">Upper East Side North (Manhattan)</option>
+        <option value="237">Upper East Side South (Manhattan)</option>
+        <option value="238">Upper West Side North (Manhattan)</option>
+        <option value="239">Upper West Side South (Manhattan)</option>
+        <option value="243">Washington Heights North (Manhattan)</option>
+        <option value="244">Washington Heights South (Manhattan)</option>
+        <option value="246">West Chelsea/Hudson Yards (Manhattan)</option>
+        <option value="249">West Village (Manhattan)</option>
+        <option value="261">World Trade Center (Manhattan)</option>
+        <option value="262">Yorkville East (Manhattan)</option>
+        <option value="263">Yorkville West (Manhattan)</option>
+      </optgroup>
+      <optgroup label="Queens">
+        <option value="7">Astoria (Queens)</option>
+        <option value="8">Astoria Park (Queens)</option>
+        <option value="9">Auburndale (Queens)</option>
+        <option value="10">Baisley Park (Queens)</option>
+        <option value="15">Bay Terrace/Fort Totten (Queens)</option>
+        <option value="16">Bayside (Queens)</option>
+        <option value="19">Bellerose (Queens)</option>
+        <option value="27">Breezy Point/Fort Tilden/Riis Beach (Queens)</option>
+        <option value="28">Briarwood/Jamaica Hills (Queens)</option>
+        <option value="30">Broad Channel (Queens)</option>
+        <option value="38">Cambria Heights (Queens)</option>
+        <option value="53">College Point (Queens)</option>
+        <option value="56">Corona (Queens)</option>
+        <option value="57">Corona (Queens)</option>
+        <option value="64">Douglaston (Queens)</option>
+        <option value="70">East Elmhurst (Queens)</option>
+        <option value="73">East Flushing (Queens)</option>
+        <option value="82">Elmhurst (Queens)</option>
+        <option value="83">Elmhurst/Maspeth (Queens)</option>
+        <option value="86">Far Rockaway (Queens)</option>
+        <option value="92">Flushing (Queens)</option>
+        <option value="93">Flushing Meadows-Corona Park (Queens)</option>
+        <option value="95">Forest Hills (Queens)</option>
+        <option value="96">Forest Park/Highland Park (Queens)</option>
+        <option value="98">Fresh Meadows (Queens)</option>
+        <option value="101">Glen Oaks (Queens)</option>
+        <option value="102">Glendale (Queens)</option>
+        <option value="117">Hammels/Arverne (Queens)</option>
+        <option value="121">Hillcrest/Pomonok (Queens)</option>
+        <option value="122">Hollis (Queens)</option>
+        <option value="124">Howard Beach (Queens)</option>
+        <option value="132">JFK Airport (Queens)</option>
+        <option value="129">Jackson Heights (Queens)</option>
+        <option value="130">Jamaica (Queens)</option>
+        <option value="2">Jamaica Bay (Queens)</option>
+        <option value="131">Jamaica Estates (Queens)</option>
+        <option value="134">Kew Gardens (Queens)</option>
+        <option value="135">Kew Gardens Hills (Queens)</option>
+        <option value="138">LaGuardia Airport (Queens)</option>
+        <option value="139">Laurelton (Queens)</option>
+        <option value="145">Long Island City/Hunters Point (Queens)</option>
+        <option value="146">Long Island City/Queens Plaza (Queens)</option>
+        <option value="157">Maspeth (Queens)</option>
+        <option value="160">Middle Village (Queens)</option>
+        <option value="171">Murray Hill-Queens (Queens)</option>
+        <option value="173">North Corona (Queens)</option>
+        <option value="175">Oakland Gardens (Queens)</option>
+        <option value="179">Old Astoria (Queens)</option>
+        <option value="180">Ozone Park (Queens)</option>
+        <option value="191">Queens Village (Queens)</option>
+        <option value="192">Queensboro Hill (Queens)</option>
+        <option value="193">Queensbridge/Ravenswood (Queens)</option>
+        <option value="196">Rego Park (Queens)</option>
+        <option value="197">Richmond Hill (Queens)</option>
+        <option value="198">Ridgewood (Queens)</option>
+        <option value="201">Rockaway Park (Queens)</option>
+        <option value="203">Rosedale (Queens)</option>
+        <option value="205">Saint Albans (Queens)</option>
+        <option value="207">Saint Michaels Cemetery/Woodside (Queens)</option>
+        <option value="215">South Jamaica (Queens)</option>
+        <option value="216">South Ozone Park (Queens)</option>
+        <option value="218">Springfield Gardens North (Queens)</option>
+        <option value="219">Springfield Gardens South (Queens)</option>
+        <option value="223">Steinway (Queens)</option>
+        <option value="226">Sunnyside (Queens)</option>
+        <option value="252">Whitestone (Queens)</option>
+        <option value="253">Willets Point (Queens)</option>
+        <option value="258">Woodhaven (Queens)</option>
+        <option value="260">Woodside (Queens)</option>
+      </optgroup>
+      <optgroup label="Staten Island">
+        <option value="5">Arden Heights (Staten Island)</option>
+        <option value="6">Arrochar/Fort Wadsworth (Staten Island)</option>
+        <option value="23">Bloomfield/Emerson Hill (Staten Island)</option>
+        <option value="44">Charleston/Tottenville (Staten Island)</option>
+        <option value="84">Eltingville/Annadale/Prince&#x27;s Bay (Staten Island)</option>
+        <option value="99">Freshkills Park (Staten Island)</option>
+        <option value="109">Great Kills (Staten Island)</option>
+        <option value="110">Great Kills Park (Staten Island)</option>
+        <option value="115">Grymes Hill/Clifton (Staten Island)</option>
+        <option value="118">Heartland Village/Todt Hill (Staten Island)</option>
+        <option value="156">Mariners Harbor (Staten Island)</option>
+        <option value="172">New Dorp/Midland Beach (Staten Island)</option>
+        <option value="176">Oakwood (Staten Island)</option>
+        <option value="187">Port Richmond (Staten Island)</option>
+        <option value="204">Rossville/Woodrow (Staten Island)</option>
+        <option value="206">Saint George/New Brighton (Staten Island)</option>
+        <option value="214">South Beach/Dongan Hills (Staten Island)</option>
+        <option value="221">Stapleton (Staten Island)</option>
+        <option value="245">West Brighton (Staten Island)</option>
+        <option value="251">Westerleigh (Staten Island)</option>
+      </optgroup>
+      <optgroup label="TLC bookkeeping — not places (no geometry)">
+        <option value="264">N/A — zone 264, no centroid</option>
+        <option value="265">Outside of NYC — zone 265, no centroid</option>
+      </optgroup>
+    </select>
+      </div>
+      <div>
+        <label for="do">Drop-off zone</label>
+        <select id="do" name="do">
+      <optgroup label="Bronx">
+        <option value="3">Allerton/Pelham Gardens (Bronx)</option>
+        <option value="18">Bedford Park (Bronx)</option>
+        <option value="20">Belmont (Bronx)</option>
+        <option value="31">Bronx Park (Bronx)</option>
+        <option value="32">Bronxdale (Bronx)</option>
+        <option value="46">City Island (Bronx)</option>
+        <option value="47">Claremont/Bathgate (Bronx)</option>
+        <option value="51">Co-Op City (Bronx)</option>
+        <option value="58">Country Club (Bronx)</option>
+        <option value="59">Crotona Park (Bronx)</option>
+        <option value="60">Crotona Park East (Bronx)</option>
+        <option value="69">East Concourse/Concourse Village (Bronx)</option>
+        <option value="78">East Tremont (Bronx)</option>
+        <option value="81">Eastchester (Bronx)</option>
+        <option value="94">Fordham South (Bronx)</option>
+        <option value="119">Highbridge (Bronx)</option>
+        <option value="126">Hunts Point (Bronx)</option>
+        <option value="136">Kingsbridge Heights (Bronx)</option>
+        <option value="147">Longwood (Bronx)</option>
+        <option value="159">Melrose South (Bronx)</option>
+        <option value="167">Morrisania/Melrose (Bronx)</option>
+        <option value="168">Mott Haven/Port Morris (Bronx)</option>
+        <option value="169">Mount Hope (Bronx)</option>
+        <option value="174">Norwood (Bronx)</option>
+        <option value="182">Parkchester (Bronx)</option>
+        <option value="183">Pelham Bay (Bronx)</option>
+        <option value="184">Pelham Bay Park (Bronx)</option>
+        <option value="185">Pelham Parkway (Bronx)</option>
+        <option value="199">Rikers Island (Bronx)</option>
+        <option value="200">Riverdale/North Riverdale/Fieldston (Bronx)</option>
+        <option value="208">Schuylerville/Edgewater Park (Bronx)</option>
+        <option value="212">Soundview/Bruckner (Bronx)</option>
+        <option value="213">Soundview/Castle Hill (Bronx)</option>
+        <option value="220">Spuyten Duyvil/Kingsbridge (Bronx)</option>
+        <option value="235">University Heights/Morris Heights (Bronx)</option>
+        <option value="240">Van Cortlandt Park (Bronx)</option>
+        <option value="241">Van Cortlandt Village (Bronx)</option>
+        <option value="242">Van Nest/Morris Park (Bronx)</option>
+        <option value="247">West Concourse (Bronx)</option>
+        <option value="248">West Farms/Bronx River (Bronx)</option>
+        <option value="250">Westchester Village/Unionport (Bronx)</option>
+        <option value="254">Williamsbridge/Olinville (Bronx)</option>
+        <option value="259">Woodlawn/Wakefield (Bronx)</option>
+      </optgroup>
+      <optgroup label="Brooklyn">
+        <option value="11">Bath Beach (Brooklyn)</option>
+        <option value="14">Bay Ridge (Brooklyn)</option>
+        <option value="17">Bedford (Brooklyn)</option>
+        <option value="21">Bensonhurst East (Brooklyn)</option>
+        <option value="22">Bensonhurst West (Brooklyn)</option>
+        <option value="25">Boerum Hill (Brooklyn)</option>
+        <option value="26">Borough Park (Brooklyn)</option>
+        <option value="29">Brighton Beach (Brooklyn)</option>
+        <option value="33">Brooklyn Heights (Brooklyn)</option>
+        <option value="34">Brooklyn Navy Yard (Brooklyn)</option>
+        <option value="35">Brownsville (Brooklyn)</option>
+        <option value="36">Bushwick North (Brooklyn)</option>
+        <option value="37">Bushwick South (Brooklyn)</option>
+        <option value="39">Canarsie (Brooklyn)</option>
+        <option value="40">Carroll Gardens (Brooklyn)</option>
+        <option value="49">Clinton Hill (Brooklyn)</option>
+        <option value="52">Cobble Hill (Brooklyn)</option>
+        <option value="54">Columbia Street (Brooklyn)</option>
+        <option value="55">Coney Island (Brooklyn)</option>
+        <option value="61">Crown Heights North (Brooklyn)</option>
+        <option value="62">Crown Heights South (Brooklyn)</option>
+        <option value="63">Cypress Hills (Brooklyn)</option>
+        <option value="66">DUMBO/Vinegar Hill (Brooklyn)</option>
+        <option value="65">Downtown Brooklyn/MetroTech (Brooklyn)</option>
+        <option value="67">Dyker Heights (Brooklyn)</option>
+        <option value="71">East Flatbush/Farragut (Brooklyn)</option>
+        <option value="72">East Flatbush/Remsen Village (Brooklyn)</option>
+        <option value="76">East New York (Brooklyn)</option>
+        <option value="77">East New York/Pennsylvania Avenue (Brooklyn)</option>
+        <option value="80">East Williamsburg (Brooklyn)</option>
+        <option value="85">Erasmus (Brooklyn)</option>
+        <option value="89">Flatbush/Ditmas Park (Brooklyn)</option>
+        <option value="91">Flatlands (Brooklyn)</option>
+        <option value="97">Fort Greene (Brooklyn)</option>
+        <option value="106">Gowanus (Brooklyn)</option>
+        <option value="108">Gravesend (Brooklyn)</option>
+        <option value="111">Green-Wood Cemetery (Brooklyn)</option>
+        <option value="112">Greenpoint (Brooklyn)</option>
+        <option value="123">Homecrest (Brooklyn)</option>
+        <option value="133">Kensington (Brooklyn)</option>
+        <option value="149">Madison (Brooklyn)</option>
+        <option value="150">Manhattan Beach (Brooklyn)</option>
+        <option value="154">Marine Park/Floyd Bennett Field (Brooklyn)</option>
+        <option value="155">Marine Park/Mill Basin (Brooklyn)</option>
+        <option value="165">Midwood (Brooklyn)</option>
+        <option value="177">Ocean Hill (Brooklyn)</option>
+        <option value="178">Ocean Parkway South (Brooklyn)</option>
+        <option value="181">Park Slope (Brooklyn)</option>
+        <option value="189">Prospect Heights (Brooklyn)</option>
+        <option value="190">Prospect Park (Brooklyn)</option>
+        <option value="188">Prospect-Lefferts Gardens (Brooklyn)</option>
+        <option value="195">Red Hook (Brooklyn)</option>
+        <option value="210">Sheepshead Bay (Brooklyn)</option>
+        <option value="217">South Williamsburg (Brooklyn)</option>
+        <option value="222">Starrett City (Brooklyn)</option>
+        <option value="225">Stuyvesant Heights (Brooklyn)</option>
+        <option value="227">Sunset Park East (Brooklyn)</option>
+        <option value="228">Sunset Park West (Brooklyn)</option>
+        <option value="255">Williamsburg (North Side) (Brooklyn)</option>
+        <option value="256">Williamsburg (South Side) (Brooklyn)</option>
+        <option value="257">Windsor Terrace (Brooklyn)</option>
+      </optgroup>
+      <optgroup label="EWR">
+        <option value="1">Newark Airport (EWR)</option>
+      </optgroup>
+      <optgroup label="Manhattan">
+        <option value="4">Alphabet City (Manhattan)</option>
+        <option value="12">Battery Park (Manhattan)</option>
+        <option value="13">Battery Park City (Manhattan)</option>
+        <option value="24">Bloomingdale (Manhattan)</option>
+        <option value="41">Central Harlem (Manhattan)</option>
+        <option value="42">Central Harlem North (Manhattan)</option>
+        <option value="43">Central Park (Manhattan)</option>
+        <option value="45">Chinatown (Manhattan)</option>
+        <option value="48">Clinton East (Manhattan)</option>
+        <option value="50">Clinton West (Manhattan)</option>
+        <option value="68">East Chelsea (Manhattan)</option>
+        <option value="74">East Harlem North (Manhattan)</option>
+        <option value="75">East Harlem South (Manhattan)</option>
+        <option value="79">East Village (Manhattan)</option>
+        <option value="87">Financial District North (Manhattan)</option>
+        <option value="88">Financial District South (Manhattan)</option>
+        <option value="90">Flatiron (Manhattan)</option>
+        <option value="100">Garment District (Manhattan)</option>
+        <option value="103">Governor&#x27;s Island/Ellis Island/Liberty Island (Manhattan)</option>
+        <option value="104">Governor&#x27;s Island/Ellis Island/Liberty Island (Manhattan)</option>
+        <option value="105">Governor&#x27;s Island/Ellis Island/Liberty Island (Manhattan)</option>
+        <option value="107">Gramercy (Manhattan)</option>
+        <option value="113">Greenwich Village North (Manhattan)</option>
+        <option value="114">Greenwich Village South (Manhattan)</option>
+        <option value="116">Hamilton Heights (Manhattan)</option>
+        <option value="120">Highbridge Park (Manhattan)</option>
+        <option value="125">Hudson Sq (Manhattan)</option>
+        <option value="127">Inwood (Manhattan)</option>
+        <option value="128">Inwood Hill Park (Manhattan)</option>
+        <option value="137">Kips Bay (Manhattan)</option>
+        <option value="140">Lenox Hill East (Manhattan)</option>
+        <option value="141">Lenox Hill West (Manhattan)</option>
+        <option value="142">Lincoln Square East (Manhattan)</option>
+        <option value="143">Lincoln Square West (Manhattan)</option>
+        <option value="144">Little Italy/NoLiTa (Manhattan)</option>
+        <option value="148">Lower East Side (Manhattan)</option>
+        <option value="151">Manhattan Valley (Manhattan)</option>
+        <option value="152">Manhattanville (Manhattan)</option>
+        <option value="153">Marble Hill (Manhattan)</option>
+        <option value="158">Meatpacking/West Village West (Manhattan)</option>
+        <option value="161">Midtown Center (Manhattan)</option>
+        <option value="162">Midtown East (Manhattan)</option>
+        <option value="163">Midtown North (Manhattan)</option>
+        <option value="164">Midtown South (Manhattan)</option>
+        <option value="166">Morningside Heights (Manhattan)</option>
+        <option value="170">Murray Hill (Manhattan)</option>
+        <option value="186">Penn Station/Madison Sq West (Manhattan)</option>
+        <option value="194">Randalls Island (Manhattan)</option>
+        <option value="202">Roosevelt Island (Manhattan)</option>
+        <option value="209">Seaport (Manhattan)</option>
+        <option value="211">SoHo (Manhattan)</option>
+        <option value="224">Stuy Town/Peter Cooper Village (Manhattan)</option>
+        <option value="229">Sutton Place/Turtle Bay North (Manhattan)</option>
+        <option value="230">Times Sq/Theatre District (Manhattan)</option>
+        <option value="231">TriBeCa/Civic Center (Manhattan)</option>
+        <option value="232">Two Bridges/Seward Park (Manhattan)</option>
+        <option value="233">UN/Turtle Bay South (Manhattan)</option>
+        <option value="234">Union Sq (Manhattan)</option>
+        <option value="236">Upper East Side North (Manhattan)</option>
+        <option value="237">Upper East Side South (Manhattan)</option>
+        <option value="238">Upper West Side North (Manhattan)</option>
+        <option value="239">Upper West Side South (Manhattan)</option>
+        <option value="243">Washington Heights North (Manhattan)</option>
+        <option value="244">Washington Heights South (Manhattan)</option>
+        <option value="246">West Chelsea/Hudson Yards (Manhattan)</option>
+        <option value="249">West Village (Manhattan)</option>
+        <option value="261">World Trade Center (Manhattan)</option>
+        <option value="262">Yorkville East (Manhattan)</option>
+        <option value="263">Yorkville West (Manhattan)</option>
+      </optgroup>
+      <optgroup label="Queens">
+        <option value="7">Astoria (Queens)</option>
+        <option value="8">Astoria Park (Queens)</option>
+        <option value="9">Auburndale (Queens)</option>
+        <option value="10">Baisley Park (Queens)</option>
+        <option value="15">Bay Terrace/Fort Totten (Queens)</option>
+        <option value="16">Bayside (Queens)</option>
+        <option value="19">Bellerose (Queens)</option>
+        <option value="27">Breezy Point/Fort Tilden/Riis Beach (Queens)</option>
+        <option value="28">Briarwood/Jamaica Hills (Queens)</option>
+        <option value="30">Broad Channel (Queens)</option>
+        <option value="38">Cambria Heights (Queens)</option>
+        <option value="53">College Point (Queens)</option>
+        <option value="56">Corona (Queens)</option>
+        <option value="57">Corona (Queens)</option>
+        <option value="64">Douglaston (Queens)</option>
+        <option value="70">East Elmhurst (Queens)</option>
+        <option value="73">East Flushing (Queens)</option>
+        <option value="82">Elmhurst (Queens)</option>
+        <option value="83">Elmhurst/Maspeth (Queens)</option>
+        <option value="86">Far Rockaway (Queens)</option>
+        <option value="92">Flushing (Queens)</option>
+        <option value="93">Flushing Meadows-Corona Park (Queens)</option>
+        <option value="95">Forest Hills (Queens)</option>
+        <option value="96">Forest Park/Highland Park (Queens)</option>
+        <option value="98">Fresh Meadows (Queens)</option>
+        <option value="101">Glen Oaks (Queens)</option>
+        <option value="102">Glendale (Queens)</option>
+        <option value="117">Hammels/Arverne (Queens)</option>
+        <option value="121">Hillcrest/Pomonok (Queens)</option>
+        <option value="122">Hollis (Queens)</option>
+        <option value="124">Howard Beach (Queens)</option>
+        <option value="132">JFK Airport (Queens)</option>
+        <option value="129">Jackson Heights (Queens)</option>
+        <option value="130">Jamaica (Queens)</option>
+        <option value="2">Jamaica Bay (Queens)</option>
+        <option value="131">Jamaica Estates (Queens)</option>
+        <option value="134">Kew Gardens (Queens)</option>
+        <option value="135">Kew Gardens Hills (Queens)</option>
+        <option value="138">LaGuardia Airport (Queens)</option>
+        <option value="139">Laurelton (Queens)</option>
+        <option value="145">Long Island City/Hunters Point (Queens)</option>
+        <option value="146">Long Island City/Queens Plaza (Queens)</option>
+        <option value="157">Maspeth (Queens)</option>
+        <option value="160">Middle Village (Queens)</option>
+        <option value="171">Murray Hill-Queens (Queens)</option>
+        <option value="173">North Corona (Queens)</option>
+        <option value="175">Oakland Gardens (Queens)</option>
+        <option value="179">Old Astoria (Queens)</option>
+        <option value="180">Ozone Park (Queens)</option>
+        <option value="191">Queens Village (Queens)</option>
+        <option value="192">Queensboro Hill (Queens)</option>
+        <option value="193">Queensbridge/Ravenswood (Queens)</option>
+        <option value="196">Rego Park (Queens)</option>
+        <option value="197">Richmond Hill (Queens)</option>
+        <option value="198">Ridgewood (Queens)</option>
+        <option value="201">Rockaway Park (Queens)</option>
+        <option value="203">Rosedale (Queens)</option>
+        <option value="205">Saint Albans (Queens)</option>
+        <option value="207">Saint Michaels Cemetery/Woodside (Queens)</option>
+        <option value="215">South Jamaica (Queens)</option>
+        <option value="216">South Ozone Park (Queens)</option>
+        <option value="218">Springfield Gardens North (Queens)</option>
+        <option value="219">Springfield Gardens South (Queens)</option>
+        <option value="223">Steinway (Queens)</option>
+        <option value="226">Sunnyside (Queens)</option>
+        <option value="252">Whitestone (Queens)</option>
+        <option value="253">Willets Point (Queens)</option>
+        <option value="258">Woodhaven (Queens)</option>
+        <option value="260">Woodside (Queens)</option>
+      </optgroup>
+      <optgroup label="Staten Island">
+        <option value="5">Arden Heights (Staten Island)</option>
+        <option value="6">Arrochar/Fort Wadsworth (Staten Island)</option>
+        <option value="23">Bloomfield/Emerson Hill (Staten Island)</option>
+        <option value="44">Charleston/Tottenville (Staten Island)</option>
+        <option value="84">Eltingville/Annadale/Prince&#x27;s Bay (Staten Island)</option>
+        <option value="99">Freshkills Park (Staten Island)</option>
+        <option value="109">Great Kills (Staten Island)</option>
+        <option value="110">Great Kills Park (Staten Island)</option>
+        <option value="115">Grymes Hill/Clifton (Staten Island)</option>
+        <option value="118">Heartland Village/Todt Hill (Staten Island)</option>
+        <option value="156">Mariners Harbor (Staten Island)</option>
+        <option value="172">New Dorp/Midland Beach (Staten Island)</option>
+        <option value="176">Oakwood (Staten Island)</option>
+        <option value="187">Port Richmond (Staten Island)</option>
+        <option value="204">Rossville/Woodrow (Staten Island)</option>
+        <option value="206">Saint George/New Brighton (Staten Island)</option>
+        <option value="214">South Beach/Dongan Hills (Staten Island)</option>
+        <option value="221">Stapleton (Staten Island)</option>
+        <option value="245">West Brighton (Staten Island)</option>
+        <option value="251">Westerleigh (Staten Island)</option>
+      </optgroup>
+      <optgroup label="TLC bookkeeping — not places (no geometry)">
+        <option value="264">N/A — zone 264, no centroid</option>
+        <option value="265">Outside of NYC — zone 265, no centroid</option>
+      </optgroup>
+    </select>
+      </div>
+      <div>
+        <label for="at">Pick-up date &amp; time</label>
+        <input type="datetime-local" id="at" name="at">
+      </div>
+      <div>
+        <label for="pax">Passengers</label>
+        <input type="number" id="pax" name="pax" min="0" max="6" step="1">
+      </div>
+    </div>
+    <button type="submit" id="go">Get ETA</button>
+  </form>
+
+  <div class="card" id="result" hidden>
+    <p class="answer" id="answer"></p>
+    <p class="meta" id="meta"></p>
+    <details>
+      <summary>What was sent, and what came back</summary>
+      <pre id="wire"></pre>
+    </details>
+  </div>
+
+  <footer>
+    <p>
+      The quote is served by <code>nyc-taxi-eta-transformer</code>: this page
+      sends the four things a dispatcher knows — a time, two zone ids and a
+      party size — and the twenty-four features the model eats are built
+      <em>inside the cluster</em> by the same code that trained it. Zone
+      centroids and calendar flags come from the online feature store; the
+      <code>lookups</code> line below every answer says so, per request.
+    </p>
+    <p>
+      Two things worth trying: a date in <strong>2031</strong> (the committed
+      federal-holiday table runs to 2030, so the quote is <em>refused</em> rather
+      than guessed), and the two <strong>“not a place”</strong> zones at the
+      bottom of each picker (TLC records them for trips whose zone is unknown —
+      they have no geometry, and the model answers from the features that remain).
+    </p>
+  </footer>
+</main>
+
+<script>
+// The endpoint is a RELATIVE url, and that is the whole route decision in one
+// line: the page and the model are served from the same origin through the one
+// ingress this cluster has, so the browser sends no cross-origin request and
+// CORS never enters the picture. demo/README.md records why.
+const ENDPOINT = "/v2/models/nyc-taxi-eta/infer";
+
+// Generated from taxi_mlops.serving.transformer.RAW_INPUTS — see the header.
+const RAW_INPUTS = [
+  {"datatype": "BYTES", "field": "pickup_datetime", "name": "pickup_datetime"},
+  {"datatype": "INT32", "field": "pu_location_id", "name": "PULocationID"},
+  {"datatype": "INT32", "field": "do_location_id", "name": "DOLocationID"},
+  {"datatype": "FP64", "field": "passenger_count", "name": "passenger_count"}
+];
+
+// The form's opening state, and it is not decoration: this is the hazard row
+// every parity record in this repo carries (JFK -> Clinton East, 4 July 2019 —
+// a federal holiday), whose answer is a published 39.0019 minutes at model
+// version 2. So the first thing anyone sees is a number that can be checked
+// against the record, and `scripts/demo_accept.py` READS this object out of the
+// page rather than retyping it.
+const DEFAULT_TRIP = {
+  "do_location_id": 48,
+  "passenger_count": 1,
+  "pickup_datetime": "2019-07-04T09:15:00",
+  "pu_location_id": 132
+};
+
+function encodeRaw(values) {
+  // The mirror of `transformer.encode_raw` for a single row: a KServe V2 body
+  // whose inputs are the RAW request, not the feature matrix. Paired BY NAME.
+  return {
+    inputs: RAW_INPUTS.map(function (spec) {
+      const raw = values[spec.field];
+      let datum;
+      if (spec.datatype === "BYTES") { datum = String(raw); }
+      else if (spec.datatype === "INT32") { datum = parseInt(raw, 10); }
+      else { datum = parseFloat(raw); }
+      return { name: spec.name, shape: [1, 1], datatype: spec.datatype, data: [datum] };
+    })
+  };
+}
+
+function normaliseInstant(value) {
+  // <input type="datetime-local"> yields "2019-07-04T09:15" — the same instant
+  // as "2019-07-04T09:15:00", but every record in this repo writes the seconds,
+  // and the demo's own accept check compares payloads byte for byte.
+  return value.length === 16 ? value + ":00" : value;
+}
+
+document.getElementById("pu").value = String(DEFAULT_TRIP.pu_location_id);
+document.getElementById("do").value = String(DEFAULT_TRIP.do_location_id);
+document.getElementById("at").value = DEFAULT_TRIP.pickup_datetime.slice(0, 16);
+document.getElementById("pax").value = String(DEFAULT_TRIP.passenger_count);
+
+const form = document.getElementById("quote-form");
+const result = document.getElementById("result");
+const answer = document.getElementById("answer");
+const meta = document.getElementById("meta");
+const wire = document.getElementById("wire");
+const go = document.getElementById("go");
+
+function show(kind, headline, detail, sent, got) {
+  result.hidden = false;
+  result.className = "card " + kind;
+  answer.innerHTML = headline;
+  meta.innerHTML = detail;
+  wire.textContent =
+    "POST " + ENDPOINT + "\n\n" + JSON.stringify(sent, null, 2) +
+    "\n\n---\n\n" + got;
+}
+
+form.addEventListener("submit", async function (event) {
+  event.preventDefault();
+  const body = encodeRaw({
+    pickup_datetime: normaliseInstant(document.getElementById("at").value),
+    pu_location_id: document.getElementById("pu").value,
+    do_location_id: document.getElementById("do").value,
+    passenger_count: document.getElementById("pax").value
+  });
+  go.disabled = true;
+  go.textContent = "asking the cluster…";
+  try {
+    const response = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const text = await response.text();
+    let payload;
+    try { payload = JSON.parse(text); } catch (e) { payload = null; }
+    const shown = payload ? JSON.stringify(payload, null, 2) : text;
+
+    if (response.ok && payload && payload.outputs && payload.outputs.length) {
+      const minutes = payload.outputs[0].data[0];
+      const version = payload.model_version || "(unstamped)";
+      const lookups = response.headers.get("X-Taxi-Lookups") || "(not reported)";
+      show(
+        "quoted",
+        "≈ " + minutes.toFixed(1) + " minutes",
+        "exactly <code>" + minutes.toFixed(4) + "</code> min &nbsp;·&nbsp; " +
+        "serving model version <code>" + version + "</code> &nbsp;·&nbsp; " +
+        "lookups <code>" + lookups + "</code>",
+        body, shown
+      );
+    } else if (response.status === 422) {
+      // A REFUSAL, not a failure. The typed boundary (F-019's holiday horizon,
+      // the store's coverage) says no before a wrong number can be invented.
+      show(
+        "refused",
+        "Refused — this trip cannot be quoted",
+        "The service refused the request rather than guessing: <code>" +
+        ((payload && payload.error) || text) + "</code>",
+        body, shown
+      );
+    } else if (response.status === 503) {
+      // A DEPENDENCY outage, deliberately distinguishable from a refusal: the
+      // caller did nothing wrong and there is nothing for them to fix.
+      show(
+        "outage",
+        "The quote service is temporarily unavailable",
+        "A dependency the quote needs is not answering. Nothing is wrong with " +
+        "your request — try again shortly. <code>" +
+        ((payload && payload.error) || text) + "</code>",
+        body, shown
+      );
+    } else {
+      show(
+        "broken",
+        "Unexpected answer (HTTP " + response.status + ")",
+        "This is not one of the answers the page knows how to read.",
+        body, shown
+      );
+    }
+  } catch (err) {
+    show(
+      "outage",
+      "Could not reach the quote service",
+      "The request never completed: <code>" + err + "</code>. Is the cluster " +
+      "up and is the route at <code>localhost:8081</code> answering?",
+      body, String(err)
+    );
+  } finally {
+    go.disabled = false;
+    go.textContent = "Get ETA";
+  }
+});
+</script>
+</body>
+</html>
