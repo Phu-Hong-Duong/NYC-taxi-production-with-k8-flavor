@@ -1,0 +1,169 @@
+# The stakeholder demo page, and the one route decision this story had to make.
+# (M9-S1 — the PO-committed item, BLUEPRINT §9/M9)
+#
+# ---------------------------------------------------------------------------
+# WHY THE ROUTE HAS NO `host:` — the wrinkle the kickoff named, and how it died
+# ---------------------------------------------------------------------------
+# Every other route in this cluster is host-based (`nyc-taxi-eta-serving.local`,
+# `grafana.local`), and a browser cannot set a Host header on `fetch()`. The
+# kickoff named two ways out: an Ingress on a host the browser naturally sends,
+# or same-origin serving. Both are taken here at once, by giving the rule NO
+# host at all — ingress-nginx puts a host-less rule into the DEFAULT server
+# block, so the paths answer under whatever the browser sends (`localhost:8081`,
+# `127.0.0.1:8081`, the WSL IP) and the page and the model share one origin.
+# CORS therefore never enters the picture: there is no cross-origin request to
+# permit. `demo/README.md` records the decision and what it cost.
+#
+# THE OPTION THAT WAS MEASURED AND REFUSED: `host: localhost`. It works for the
+# browser, and it would have broken `scripts/deploy_serving.sh`'s accept check.
+# `location /healthz` lives ONLY in nginx's default server block, so creating a
+# `server_name "localhost"` block moves the browser's Host into a block that has
+# no /healthz — measured before anything was applied:
+#     curl -H 'Host: totally-unrouted.invalid' localhost:8081/healthz -> 200
+#     curl -H 'Host: nyc-taxi-eta-serving.local' localhost:8081/healthz -> 404
+# The first is the default server answering; the second is a named block that
+# does not carry the location. A demo that turned M5's serving accept red would
+# be gotcha #50 self-inflicted, so the host-less rule is not a shortcut — it is
+# the option that leaves every existing invariant standing.
+#
+# WHAT THE RULE CLAIMS, AND WHAT IT DELIBERATELY DOES NOT. Two paths and no
+# more: `/demo` for the page and the transformer's exact infer path for the
+# quote. `/` is NOT claimed — `GET localhost:8081/` must keep answering 404
+# ("route up, nothing behind it"), which is exactly what deploy_serving.sh
+# asserts. No `rewrite-target` anywhere: the page is mounted AT /www/demo so
+# busybox's httpd resolves `/demo/` natively, and the transformer is given its
+# own path verbatim because the V2 model name is in the URL (ADR-011 cond. 2).
+#
+# F-039, honoured by construction: `taxi-demo-route` and `taxi-demo-page` are
+# names KServe never generates (it generates `<isvc>`, `<isvc>-predictor`,
+# `<isvc>-transformer`). scripts/deploy_demo.sh additionally REFUSES to write to
+# any of these objects if it finds ownerReferences on them.
+#
+# ---------------------------------------------------------------------------
+# WHY BUSYBOX, AND WHY THAT IS NOT A NEW IMAGE
+# ---------------------------------------------------------------------------
+# A static page needs a process to serve it. `busybox:1.38.0` at THIS digest is
+# already pinned in this repo (infra/manifests/flyte-data-stager.yaml, M4-S4)
+# and `httpd` is one of its applets, so the demo adds no new image to the
+# program's surface — which the M9 kickoff's debt section relies on (D-001's
+# image-churn trigger is not pulled). tests/unit/test_demo_page.py asserts the
+# two references are the same string, because two copies of a pin is a twin.
+#
+# STATELESS, so no backup obligation: no PVC, no database, no hostPort. The page
+# it serves is a ConfigMap that `deploy_demo.sh` builds FROM `demo/index.html`
+# at apply time — the file in git is the only copy, and the pod template carries
+# that file's sha256 so a page change rolls the pod deterministically rather
+# than waiting on kubelet's ConfigMap refresh. The accept then fetches the page
+# back through the route and hashes it: what a browser receives is what is in
+# git, checked rather than assumed.
+apiVersion: v1
+kind: Service
+metadata:
+  name: taxi-demo-page
+  namespace: serving
+  labels: {app: taxi-demo-page, owner: m9-s1-demo}
+spec:
+  type: ClusterIP
+  selector: {app: taxi-demo-page}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxi-demo-page
+  namespace: serving
+  labels: {app: taxi-demo-page, owner: m9-s1-demo}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: taxi-demo-page}
+  template:
+    metadata:
+      labels: {app: taxi-demo-page, owner: m9-s1-demo}
+      annotations:
+        # The sha256 of demo/index.html, substituted at apply time. Changing the
+        # page changes this string, which changes the pod template, which rolls
+        # the pod — so "the served bytes are the committed bytes" is a property
+        # of the deploy rather than of somebody remembering to restart it.
+        taxi-mlops.io/page-sha256: "PAGE_SHA256"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: httpd
+          image: busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+          imagePullPolicy: IfNotPresent
+          # -f foreground, -v logs each request to stderr (a demo nobody can see
+          # requests for is a demo nobody can debug), -h is the document root.
+          command: ["httpd", "-f", "-v", "-p", "8080", "-h", "/www"]
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          readinessProbe:
+            httpGet: {path: /demo/index.html, port: 8080}
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /demo/index.html, port: 8080}
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          volumeMounts:
+            # Mounted at /www/demo — NOT /www — so that the document root
+            # contains a `demo` directory and busybox resolves `/demo/` to
+            # `/www/demo/index.html` with no ingress rewrite in the path.
+            - name: page
+              mountPath: /www/demo
+              readOnly: true
+      volumes:
+        - name: page
+          configMap:
+            name: taxi-demo-page
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taxi-demo-route
+  namespace: serving
+  labels: {owner: m9-s1-demo}
+spec:
+  ingressClassName: nginx
+  rules:
+    # No `host:` — see the header. Both paths therefore live in nginx's default
+    # server block, beside the /healthz the controller already answers there.
+    - http:
+        paths:
+          - path: /demo
+            pathType: Prefix
+            backend:
+              service:
+                name: taxi-demo-page
+                port: {number: 80}
+          # The TRANSFORMER's own model name. The V2 model name is in the URL
+          # (ADR-011 condition 2) and this boundary answers to its isvc name
+          # only — the first deploy of this route claimed the CHAMPION's name
+          # and every quote came back 404 with the transformer naming the path
+          # it does answer to. The champion's name stays unrouted here on
+          # purpose: that absence is what proves a number shown by the page came
+          # through the raw boundary and not off the 24-column wire.
+          - path: /v2/models/nyc-taxi-eta-transformer/infer
+            pathType: Exact
+            backend:
+              service:
+                # The TRANSFORMER's service, not the champion's. A browser cannot
+                # build the champion's 24-column matrix and re-implementing
+                # taxi_mlops.features in JavaScript is what the one-transform-path
+                # law forbids. M8-S4 leg 3 built this boundary for this caller.
+                name: nyc-taxi-eta-transformer-transformer
+                port: {number: 80}

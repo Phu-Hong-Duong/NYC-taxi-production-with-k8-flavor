@@ -1,0 +1,151 @@
+{
+  "anchor": {
+    "hazard": "federal-holiday",
+    "lookup_sources": "airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store",
+    "minutes": 39.00193715359812,
+    "model_version": "2",
+    "record": "automation/runs/m8-transformer/transformer-parity.json"
+  },
+  "checks": [
+    {
+      "claim": "the page a browser receives is byte-identical to demo/index.html (HTTP 200, 47147 bytes, sha256 b1edd074b00f7c0c\u2026)",
+      "ok": true
+    },
+    {
+      "claim": "a live quote came back: HTTP 200, 39.0019 minutes",
+      "ok": true
+    },
+    {
+      "claim": "it reproduces the recorded federal-holiday row EXACTLY: 39.00193715359812 vs 39.00193715359812 (|delta| = 0.000e+00), anchor automation/runs/m8-transformer/transformer-parity.json",
+      "ok": true
+    },
+    {
+      "claim": "the serving model version is stamped on the ANSWER: '2' (recorded '2') \u2014 mlserver's own stamp, forwarded",
+      "ok": true
+    },
+    {
+      "claim": "X-Taxi-Lookups on the demo's own response: 'airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store' (recorded 'airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store') \u2014 the feature store was consulted and F-059's two committed groups did not cross",
+      "ok": true
+    },
+    {
+      "claim": "a 2031 quote is REFUSED, not guessed: HTTP 422, and the text names the date \u2014 \"the online feature store has no calendar row for ['2031-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holi\"",
+      "ok": true
+    },
+    {
+      "claim": "the no-geometry path (zone 264 -> 264, TLC's 'Unknown') is QUOTED, not broken: HTTP 200, 8.2445 minutes",
+      "ok": true
+    },
+    {
+      "claim": "the CHAMPION's own model name is NOT routed on this origin (/v2/models/nyc-taxi-eta/infer -> 404), so the quote above came through the RAW boundary \u2014 asserted only because a real quote succeeded first, since an unloaded route 404s identically (F-060)",
+      "ok": true
+    },
+    {
+      "claim": "the host-less rule left deploy_serving.sh's accept standing: /healthz -> 200, / -> 404",
+      "ok": true
+    }
+  ],
+  "default_trip": {
+    "do_location_id": 48,
+    "passenger_count": 1,
+    "pickup_datetime": "2019-07-04T09:15:00",
+    "pu_location_id": 132
+  },
+  "endpoint": "/v2/models/nyc-taxi-eta-transformer/infer",
+  "endpoint_read_from": "demo/index.html (the page's own ENDPOINT constant)",
+  "failures": [],
+  "no_geometry": {
+    "http_status": 200,
+    "lookups": "airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store",
+    "minutes": 8.244465598910075,
+    "trip": {
+      "do_location_id": 264,
+      "passenger_count": 1,
+      "pickup_datetime": "2019-07-04T09:15:00",
+      "pu_location_id": 264
+    }
+  },
+  "page": {
+    "bytes": 47147,
+    "committed_sha256": "b1edd074b00f7c0c28e331d5ad3b7dde9e06800a80df59150251586a62fceddd",
+    "http_status": 200,
+    "served_sha256": "b1edd074b00f7c0c28e331d5ad3b7dde9e06800a80df59150251586a62fceddd"
+  },
+  "page_url": "http://localhost:8081/demo/",
+  "po_observed_run": {
+    "box": "BLUEPRINT \u00a79/M9: one non-technical person (the PO counts) completes a query unassisted, observed",
+    "raised_in": "AWAITING_PO.md",
+    "status": "OPEN \u2014 cannot be closed by an unattended session",
+    "url": "http://localhost:8081/demo/"
+  },
+  "quote": {
+    "abs_delta_minutes": 0.0,
+    "bar": "EXACT \u2014 argued in demo/README.md \u00a74 before this record existed",
+    "http_status": 200,
+    "lookups": "airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store",
+    "minutes": 39.00193715359812,
+    "model_version": "2",
+    "request": {
+      "inputs": [
+        {
+          "data": [
+            "2019-07-04T09:15:00"
+          ],
+          "datatype": "BYTES",
+          "name": "pickup_datetime",
+          "shape": [
+            1,
+            1
+          ]
+        },
+        {
+          "data": [
+            132
+          ],
+          "datatype": "INT32",
+          "name": "PULocationID",
+          "shape": [
+            1,
+            1
+          ]
+        },
+        {
+          "data": [
+            48
+          ],
+          "datatype": "INT32",
+          "name": "DOLocationID",
+          "shape": [
+            1,
+            1
+          ]
+        },
+        {
+          "data": [
+            1.0
+          ],
+          "datatype": "FP64",
+          "name": "passenger_count",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "refusal": {
+    "error": "the online feature store has no calendar row for ['2031-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holiday' for an uncovered date looks exactly like a correct answer (F-019, on the store's wire instead of the CSV's). Fix it where the table is defined \u2014 `make holidays HOLIDAYS_TO=<year>` then `make feast-sources && make feast-materialize`.",
+    "http_status": 422,
+    "pickup_datetime": "2031-07-04T09:15:00"
+  },
+  "route": "http://localhost:8081",
+  "route_invariants": {
+    "healthz": 200,
+    "root": 404
+  },
+  "unclaimed_path": {
+    "http_status": 404,
+    "path": "/v2/models/nyc-taxi-eta/infer"
+  },
+  "verdict": "PASSED"
+}

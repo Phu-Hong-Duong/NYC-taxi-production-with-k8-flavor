@@ -3116,6 +3116,86 @@ can never disagree (the port-family twins lesson, applied before it bit).
   byte-identical to `m7-closed`, host suite **1127 passed**, ruff clean, all
   settled DVC pins `up to date`, `verify-m5`/`m6`/`m7` all GREEN.
 
+## The demo page (M9-S1) — the route that claimed less, and the one box left open
+- **`http://localhost:8081/demo/` — and the Ingress rule carries NO `host:`.**
+  Every route here is host-based (KServe and the charts generate them that way)
+  and a browser cannot set a `Host` header on `fetch()`. A host-less rule lands
+  in nginx's **DEFAULT server block**, so the page and the model share ONE
+  origin and **CORS never happens** — a dissolution, not a configuration: no
+  `enable-cors` annotation, no preflight, no allow-list to maintain, because
+  there is no cross-origin request. **The refused alternative was measured
+  first**: `location /healthz` lives only in the default block, so
+  `host: localhost` would have moved the browser's Host into a named block that
+  has none and turned `deploy_serving.sh`'s accept RED for a correct system
+  (`Host: totally-unrouted.invalid` -> **200**, `Host: nyc-taxi-eta-serving.local`
+  -> **404**, both curled before anything was applied). *When a new route would
+  force an old assertion to be edited, look for the option that claims less.*
+- **It claims TWO paths and neither is `/`.** `/demo` (Prefix) to a busybox
+  `httpd`, and the transformer's infer path (**Exact** — one path, not the `/v2`
+  tree). **No `rewrite-target` anywhere**: the ConfigMap mounts at `/www/demo`
+  so busybox resolves `/demo/` natively. `/` stays 404 and `/healthz` stays 200,
+  and `deploy_demo.sh` asserts both on every run rather than leaving the next
+  `make deploy-serving` to discover them.
+- **The page targets the TRANSFORMER, and the CHAMPION's own model name is
+  deliberately UNROUTED here.** A browser cannot build the 24-column matrix and
+  a JS re-implementation would be the second feature path the one-transform-path
+  law forbids; M8-S4 leg 3 built the raw boundary for exactly this caller. The
+  first route claimed the champion's name and every quote **404**'d — the V2
+  model name is in the URL (ADR-011 condition 2, third occurrence) — and the fix
+  inverted it: that 404 is now an ASSERTED negative, so the demo cannot quietly
+  end up on the 24-column wire. Diagnosis was free only because the
+  transformer's 404 body names the path it does answer to (**gotcha #111**).
+- **Nothing about the page is typed twice.** `demo/index.html` is GENERATED
+  (`make demo-page`) from three sources — the TLC zone lookup (265 zones), the
+  server's own `transformer.RAW_INPUTS`, and a PUBLISHED parity row as the
+  default trip — and a test regenerates it and demands byte-identity. A wrong
+  field NAME would be refused loudly by `decode_raw`; a wrong DATATYPE would not
+  be, and would quote a plausible number nobody could see was wrong.
+- **The generator's first run substituted its own explanatory comment** — the
+  paragraph naming the placeholders — shipping **795 `<option>` elements across
+  two `<select>`s instead of 530**. It rendered, and no "the zone list matches
+  the CSV" assertion would have caught it because all three copies matched. The
+  guard is an **occurrence count** (`TOKEN_COUNTS`), not a cleverer parser:
+  gotcha **#110**, and the fourth time prose has sat where a parser reads it as
+  code.
+- **TLC's two non-places are RENDERED, not hidden** (264 "Unknown", 265 "Outside
+  of NYC", in their own labelled group). They carry no centroid by DR-04
+  condition 1, they are ~1% of every split, `264 -> 264` is the largest single
+  OD "route" in the data, and F-030 was found on that path. Quoting one returns
+  **8.2445 min** from the features that remain. A picker that hid them would
+  make the demo tidier than the world it quotes for. Three error classes render
+  differently on purpose — **422** a refusal (a 2031 date: the horizon is a
+  feature to demo, not to hide), **503** a dependency outage the caller cannot
+  fix, anything else named as unexpected rather than blank (gotcha #78 at the UI).
+- **`make demo-accept` PASSED 9/9, and it sends what the PAGE sends.** The
+  endpoint, the request schema and the payload are READ OUT of `demo/index.html`
+  and posted with **no Host override** — the one thing a browser cannot do and
+  every other client in this repo does; a check that retyped any of the three
+  would be measuring a look-alike. Bar **EXACT**, argued in `demo/README.md` §4
+  and committed two commits before the record existed: **39.00193715359812 vs
+  the recorded 39.00193715359812, |delta| = 0.000e+00**, `model_version` **'2'**
+  off the ANSWER, `X-Taxi-Lookups` equal to the recorded string (the store was
+  consulted through THIS path and F-059's two committed groups did not cross),
+  and the page a browser receives **byte-identical to git by sha256**, fetched
+  back through the route rather than asserted from the ConfigMap.
+- **STATELESS, so ledger row YES and backup obligation NO** (M8-S4 leg 2's
+  precedent, recorded in both directions so the absence does not read as an
+  omission). No PVC, no database, no hostPort, no new image — `busybox:1.38.0`
+  at the digest `flyte-data-stager.yaml` already pins, with a test asserting the
+  two refs are ONE string. Losing all four objects costs one `make deploy-demo`.
+- **The champion's wire is untouched and the proof is a pod UID**: still
+  `9b1f1b03-7dfe-458f…`, the uid M8-S4 leg 3 recorded, at 4d age. `@champion` is
+  never read by this story at all — no registry client is imported by any file
+  it added (asked of the AST), and the version the page shows is mlserver's own
+  stamp forwarded verbatim.
+- **The §9/M9 box "one non-technical person completes a query unassisted,
+  observed" is OPEN, by design and in writing** — in the accept record's
+  `po_observed_run.status`, in the story record, and at AWAITING_PO
+  2026-08-23-3 with the URL and the one command. `make verify-m9` is chartered
+  to assert that entry exists and is honest, never to render the box green. A
+  demo that marked its own human-observation box green would be the only
+  dishonest artifact in this program.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3139,6 +3219,14 @@ controller until KServe at M5, so the console/API is reached with
 `make flyte-console` — a recorded deviation from the declared-route doctrine,
 with its reason, not a drift. The declared route lands at the next PO-sanctioned
 rebuild.
+
+**The demo page (M9-S1) adds NO port and NO route of its own.** It rides the
+EXISTING 8081 ingress (M9 law 1: kind publishes host ports at cluster-CREATE
+only), and its Ingress rule carries **no `host:`** — so it lives in nginx's
+DEFAULT server block beside the `/healthz` that block already answers, claims
+`/demo` and one exact infer path, and leaves `/` at 404. That is what makes the
+page same-origin with the model and dissolves CORS. See `demo/README.md` §1 for
+the alternative that was measured and refused.
 
 **Redis (the Feast ONLINE store, M8-S4) is NOT in the port family, and that is a
 decision.** It is not a required port: it gets **no hostPort** (M8/M7 law 1 —
@@ -3316,6 +3404,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Gate check M8 | `make verify-m8` | VERIFIED 2026-08-23 (M8-S5 leg 2): **GREEN 51/51 sub-checks in 7 sections, exit 0** — the wall (`uv.lock` **byte-identical to the `m7-closed` tag**, `feast` **ABSENT** asked of `uv pip list` and not inferred from the lock, the conflict re-read live (`pandas<3,>=1.4.3` vs 3.0.5), the wall **one package wide**, 66 exact pins with `--no-deps`, the import law both directions by **ast**) · the feature repo (the APPLIED registry's 4 views and 5 entities equal to what `ast` parses out of `definitions.py` — two independently produced lists; `feast plan` 0 substantive, F-055's only checkable statement; no registry.db TRACKED and the generated one gitignored, asked of `git check-ignore`; every view carrying a verdict, 2 CATALOG-ONLY, the losing number labelled a SAMPLE number) · **the four seams, all at `0.000e+00` against a bar of EXACT that is PARSED from the prose arguing it, `one missing` ZERO on every column, and all four bars COMMITTED BEFORE the records they judge — 678 s · 356 s · 320 s · 546 s, read off `git log --diff-filter=A`** (M8 law 4 from git, not from a sentence) · the PIT proof as a DIFFERENCE with two anchors (honest vs naive disagree on every time-varying column, **the naive answer IS our own full-window table**, the honest one reconciles with `aggregates.transform` at zero, 10 rows told nothing, 7 distinct windows, F-056's shortfall CLASSIFIED with UNEXPLAINED 0) · **five live questions** (champion 10.665224 min at `model_version='2'` **exactly** the recorded value; the transformer answering the same hazard from four RAW fields at `|Δ| = 0.000e+00` with `X-Taxi-Lookups` naming the two groups that did NOT cross; the feature server two-sided; **57,688 keys** at `noeviction`; one PromQL query — F-043's, and it found **F-061**) · F-059 as a TYPE by ast · the page (12 rows, all verdicted, **3 ADOPT / 5 SURPASS**, per-row provenance) · **the alias law in its strong form: not one registry version created after the `m7-closed` tag**. **RE-RUNS NOTHING and MINTS NOTHING**, pinned by `tests/unit/test_verify_m8.py` (36 tests) incl. the five-question count. No skip flag, no fast mode (M1's rule, **eighth** inheritance). Transcript: `docs/verify_m8_transcripts.md` §1 |
 | Prove the M8 gate can go RED | `make verify-m8-redteam` (`bash scripts/verify_m8_redteam.sh`) | VERIFIED 2026-08-23 (M8-S5 leg 2): rewrites ONE count in `automation/runs/m8-online/online_parity.json` — a pickup-zone column's `both_missing` **13 → 0**, the column CHOSEN from the record rather than typed — leaving `compared`, `mismatches`, `max_abs_delta`, `one_missing`, the headline delta and the `PASSED` verdict untouched. **It is not a lie about a measurement; it is what a correct-looking measurement of the wrong population reports** — zero missing values is exactly what a comparison that dropped nulls prints, and it looks BETTER than the truth. → **RED exit 1 with 3 FAILs from THREE artifacts**: the run's own two-sided no-geometry assertion, the independently-built ANCHOR block inside the same record, and `docs/feast_online_parity_table.md` — the blueprint's named accept artifact and the only witness a human diffs. **48 sub-check lines still ran and passed**, and **the four-seam headline leg stayed GREEN by design** — what separates a gate that fails on a WRONG POPULATION from one that fails on any edit. Restored under an EXIT trap, sha256-verified (`153c4399deab…`), `git status` clean → **GREEN 51/51**. Touches no pod, no image, no Redis key, no MLflow run, no registry version, no alias, no rule and no traffic |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7/M8 live |
+| The stakeholder demo page (M9-S1) | `make demo-page` regenerates it from its three sources · `make demo-page-check` is the write-nothing twin | VERIFIED 2026-08-23 (M9-S1): **265 zones** from `data/reference/taxi_zone_lookup.csv`, **4 raw inputs** from `transformer.RAW_INPUTS`, and a default trip that is a PUBLISHED parity row — so the first thing a stakeholder sees is checkable against a record. `--check` regenerates in memory and diffs against git; a unit test runs it, and a second asserts regeneration is deterministic. **Its first run substituted the template's own explanatory comment** and shipped 795 `<option>` elements instead of 530 — gotcha **#110**, now guarded by an occurrence COUNT (`TOKEN_COUNTS`), because every one of the three copies matched the CSV |
+| Deploy the demo + its route (M9-S1) | `make deploy-demo` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` removes its four objects and touches nothing else) | VERIFIED 2026-08-23 (M9-S1): ConfigMap rendered FROM `demo/index.html` (the file in git is the only copy), a `busybox:1.38.0` httpd Deployment at the digest the data stager already pins, a ClusterIP Service and ONE **host-less** Ingress. **Three wait legs**: `rollout status`, then the pod template's page-sha256 == the committed file's, then **the ROUTE itself** under the origin the browser will use (F-037/F-060, gotcha #106). It then asserts the two invariants it shares a server block with — **`/healthz` 200 and `/` 404** — rather than leaving the next `make deploy-serving` to discover them. F-039's precondition is asked of the CLUSTER: it refuses to write to any of its four names that carries `ownerReferences`. `DRY_RUN=1` verified to leave the namespace with no demo object. Deploys no model and cannot name the registry in code (AST-tested) |
+| THE demo accept — real requests, sent the way the PAGE sends them (M9-S1) | `make demo-accept` (`DEMO_ACCEPT_ARGS=--no-write` records nothing). A READER | VERIFIED 2026-08-23 (M9-S1): **PASSED 9/9.** The endpoint, the request schema and the payload are READ OUT of `demo/index.html` and posted with **no Host header override** — the one thing a browser cannot do and every other client here does. Bar **EXACT**, argued in `demo/README.md` §4 and committed BEFORE the record existed: **39.00193715359812 vs the recorded 39.00193715359812, |delta| = 0.000e+00** against `automation/runs/m8-transformer/transformer-parity.json`'s `federal-holiday` row (matched on `(at, pu, do)`, never typed) · `model_version` **'2'** read off the ANSWER · `X-Taxi-Lookups` equal to the recorded string · the served page **byte-identical to git by sha256** (47,147 bytes, fetched back through the route) · a **2031** quote **422**-refused naming the date · the no-geometry path 264 -> 264 **quoted at 8.2445 min, not broken** · and the CHAMPION's own model name **404** on this origin, asserted only after a real quote succeeded (F-060). The PO-observed box is recorded **OPEN** in the record itself |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |

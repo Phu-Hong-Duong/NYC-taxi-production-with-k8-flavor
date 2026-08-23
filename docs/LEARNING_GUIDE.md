@@ -4168,3 +4168,64 @@ names actually got worse**, and here the answer was no five times out of eight.
 The permanent lesson from the fourth occurrence of gotcha #99 in this repo: in a
 codebase where prose is load-bearing, a needle must sit where a shell would START
 a command or where an AST would find a call — never where a word appears.
+
+---
+
+## M9-S1 — the demo page: the route decision was the story, and the browser is the only client that cannot lie
+
+**The wrinkle the kickoff named was real, and the way out was to claim less, not
+more.** Every route in this cluster is host-based because KServe and the helm
+charts generate them that way, and `fetch()` cannot set a `Host` header. The
+obvious fix — an Ingress on `host: localhost`, which is what a browser sends —
+works, and it would have broken `deploy_serving.sh`'s accept check, because
+`location /healthz` exists **only in nginx's default server block**. Two curls
+before anything was applied said so:
+`Host: totally-unrouted.invalid` → 200, `Host: nyc-taxi-eta-serving.local` → 404.
+So the rule carries **no `host:` at all**, which puts both paths into that same
+default block: the page and the model share one origin, **CORS never happens**,
+and every existing invariant stays standing. The general shape is worth keeping:
+*when a new route would force an old assertion to be edited, look for the routing
+option that claims less.* Editing an M5-era assertion to fit an M9 convenience is
+how a guard becomes a formality (gotcha #50, refused rather than paid).
+
+**A browser is the one client in this program that cannot be given a helpful
+argument, and that is a feature.** Every other client here sets an explicit
+`Host` header and builds its own 24-column matrix. The demo can do neither, which
+is precisely why it is a good test of M8-S4's boundary: it consumes the raw
+endpoint the way it was designed to be consumed, with four fields, over one
+origin. `demo_accept.py` therefore reads the endpoint, the request schema and the
+payload **out of `demo/index.html`** and sends them with no Host override — a
+check that retyped any of the three would be measuring a second client that
+merely resembles the page, and the failure it could not see (a page whose schema
+drifted from the server's) is the interesting one.
+
+**The failure that taught the most cost one accept run and made the check
+stronger.** The first route claimed the CHAMPION's model name and every quote
+404'd — the V2 model name is in the URL path (ADR-011 condition 2, third
+occurrence). The diagnosis was free only because the transformer's 404 body names
+the path it *does* answer to; an endpoint that answered to both names would have
+made the whole question unanswerable. The repair was not a correction but an
+inversion: the champion's name is now **deliberately unrouted** on the demo's
+origin, and the accept asserts that 404 — so the demo cannot quietly end up
+talking to the 24-column wire, and a number the page shows is attributable to the
+raw boundary by construction. **A wrong assumption you can turn into a standing
+negative check is worth more than one you simply fix.**
+
+**Three derivations, and the one that bit was the one documenting itself.** The
+page's zone list comes from the TLC lookup, its request schema from the server's
+own `RAW_INPUTS`, its default trip from a published parity row. The generator's
+first run then substituted its own explanatory comment — the paragraph *naming*
+the placeholders — and produced a page with three copies of every picker. It
+rendered fine, and no "the zone list matches the CSV" assertion would have caught
+it, because all three copies matched. The guard is not a cleverer parser; it is
+an **occurrence count** (gotcha #110). Prose sitting where a parser reads it as
+code, for the fourth time in this repo, and the first time it was the *template's
+own documentation* that did it.
+
+**What could not be closed, and saying so is the point.** §9/M9's last box needs
+a non-technical person to complete a query unassisted, observed. An unattended
+session cannot do that. It is recorded as OPEN in the accept record itself
+(`po_observed_run.status`), raised at AWAITING_PO 2026-08-23-3 with the URL and
+the one command, and `make verify-m9` is chartered to assert the entry exists and
+is honest. **A demo that marked its own human-observation box green would be the
+only dishonest artifact in the program.**
