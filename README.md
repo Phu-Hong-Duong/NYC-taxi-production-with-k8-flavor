@@ -29,8 +29,8 @@ role interplay are the product.**
 | M5 Serving & PRR: KServe (MLOps/SRE) | **closed 2026-08-19** | tag `m5-closed` · `verify-m5` 49/49 · M6 kickoff §0 |
 | M6 Reliability: SLO, canary, gameday (SRE) | **closed 2026-08-20** | tag `m6-closed` · `verify-m6` 63/63 · M7 kickoff §0 |
 | M7 Drift & retrain loop (SRE/MLE/DA) ◆REV | **closed 2026-08-21** | tag `m7-closed` · `verify-m7` 62/62 · ◆REV APPROVE WITH CONDITIONS (F-051/F-052 → M8-S1) · M8 kickoff §0 |
-| M8 Feast & side-by-side (DE/MLE) | **in progress** | kickoff authored 2026-08-21: `docs/milestones/M8_KICKOFF.md` |
-| M9 Stretch: Ray, CI smoke, security + demo page (committed) | not started | — |
+| M8 Feast & side-by-side (DE/MLE) | **closed 2026-08-23** | tag `m8-closed` · `verify-m8` 51/51 · M9 kickoff §0 |
+| M9 Stretch: demo page (committed) + boundary closure; Ray/CI/security = PO opt-in | **in progress** | kickoff authored 2026-08-23: `docs/milestones/M9_KICKOFF.md` |
 
 Per-milestone direction lives in the ARCH-authored `docs/milestones/M*_KICKOFF.md`
 — one per milestone, and each kickoff's §0 is the closure verdict of the

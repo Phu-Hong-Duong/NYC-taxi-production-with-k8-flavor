@@ -1,5 +1,52 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-23-2 · raised by ARCH/Fable (M8 boundary triage) · NOT BLOCKING — the M9 stretch opt-in menu, and one date you will be asked for
+
+**M8 is closed** (tag `m8-closed`, `verify-m8` GREEN 51/51 re-run at the boundary,
+M9 kickoff §0 has the full triage). **The chain continues on M9's committed
+scope** — the stakeholder demo page (your direction of 2026-08-12) plus three
+boundary-chartered closure stories (the online-store watchdog, two finding
+closures, the M9 gate). Nothing below blocks anything.
+
+**BLUEPRINT §9/M9 makes every other stretch item opt-in per story. This is the
+menu; answer any, all, or none, any time:**
+
+1. **README polished as a portfolio front door** — cheapest (one doc session);
+   pairs naturally with your queued §12 question about publishing the repo
+   publicly. *Recommended if you intend to show the repo.*
+2. **trivy + commit-history secret-scan** — cheap (one session; trivy is one
+   pinned binary, the secret-scan idea was an M1 prior-art ADOPT). Honest note:
+   `.env` never entered git by design, so this VERIFIES hygiene rather than
+   creates it. *Recommended before any public publish.*
+3. **CI smoke on kind nightly** — moderate (GitHub Actions must build a kind
+   cluster per run; the runner is GitHub's, not this laptop, so it proves the
+   repo's portability, not this cluster). Real cost: CI minutes and a
+   maintenance surface that outlives the program.
+4. **Ray Tune on KubeRay re-running the M3 study distributed** — the expensive
+   one, priced honestly: a KubeRay operator on a stateful cluster that must not
+   be rebuilt, new pinned images, a re-run of a 9,000-second study, and a
+   wall-clock/parity comparison that is interesting but changes no champion
+   (the alias would not move either way — M9 law 3). This is a full milestone's
+   worth of platform work compressed into a story. *Only if you want the
+   distributed-tuning artifact for its own sake.*
+
+If you opt in, say which — the items get chartered as M9-S5+ with proper
+accept-when by an ARCH touch; the executor will not improvise them mid-chain.
+
+**The date you will be asked for:** M9-S1's accept has one box only you can
+close — *"one non-technical person (the PO counts) completes a query
+unassisted, observed."* When the demo story lands, its exit will add an entry
+here with the exact URL and anything you need to run first. No action now.
+
+**Also ratified this triage, for your awareness** (details in the M9 kickoff §0
+and `ledgers/findings.md`): your 2026-08-23-1 entry's trigger deactivation is
+now the recorded permanent decision (F-058 option (a), CLOSED — the proof is
+banked and no M9 story registers a Flyte trigger); the Feast `FeatureService`
+adoption (R-1) is DECLINED with its cost recorded; the online-store alert
+(R-2) is chartered as M9-S2. F-016 (the incumbent-margin gate fork,
+2026-08-18-1) still waits for you and stays dormant — nothing in M9 fits or
+moves the alias.
+
 ## 2026-08-23-1 · raised by EXEC/Opus (M8-S4 leg 2) · NOT A FORK, NOT BLOCKING — but a deliberate M7 decision was reversed as a reconciliation, and you should know
 
 **Nothing here needs an answer for the chain to continue.** It is recorded because

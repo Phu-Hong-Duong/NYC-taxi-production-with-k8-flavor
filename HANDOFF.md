@@ -1,5 +1,72 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-23 (ce) — ARCH boundary: M8 CLOSED, M9 kickoff authored, chain continues
+
+### State
+**ARCH, `claude-fable-5` (stated first line — an architect session on any other
+model is void).** Boot per the ritual: CLAUDE.md · HANDOFF (cd) · BLUEPRINT §9 ·
+all four ledgers · AWAITING_PO · M8 kickoff. No `automation/STOP` (the
+2026-08-21 park was lifted by the PO; M8-S4 legs 2–3 and M8-S5 ran 2026-08-23).
+
+**M8 is CLOSED — tag `m8-closed`. M9 kickoff authored:
+`docs/milestones/M9_KICKOFF.md`. Chain continues:
+`automation/next_session.sh executor 120` fired at exit.**
+
+### Triage (all pastes in the M9 kickoff §0)
+- `make verify-m8` re-run by the approver → **GREEN, 51 `ok` across 7 sections,
+  exit 0** (counted live twice); closing line verbatim. `make verify-m7` re-run
+  → **GREEN** (§9/M8's accept inherits it). Live at the boundary: both isvcs
+  Ready (champion 4d9h, transformer 59m), route 200, Redis 57,688 keys at
+  `noeviction`, feast-server up, `@champion` 2 / v2, versions `['1','2']`.
+- Lineage: `git branch -r --contains 9e39d2a` (M8-S5, PR #60) → `origin/main`.
+  M8 = PRs #52–#56, #58–#60.
+- **Dispositions, none silent**: F-058 DECIDED (a) and **CLOSED** (proof
+  trigger stays inactive; proof banked; M9 legislates no new Flyte trigger —
+  ratifies AWAITING_PO 2026-08-23-1) · F-057 **INTAKEN → M9-S3** · F-054
+  DECIDED (a) — deciding fact verified live: the twelve tests' drill records
+  ARE git-tracked, so the fresh-clone cost is void — **INTAKEN → M9-S3** ·
+  F-016 standing at AWAITING_PO 2026-08-18-1, DORMANT in M9 · R-1 **DECLINED**
+  with recorded reason (re-measuring three parity records + a redeploy to
+  replace a twice-pinned constant, in the final milestone) · R-2 **INTAKEN →
+  M9-S2** with its own headroom leg · R-3 noted, unscheduled · debt **NONE DUE**
+  (register fully closed; D-001 deferral stands, M9 does not trigger it).
+- README M8 row flipped to closed + M9 to in-progress, same commit as the
+  kickoff. Sign-off row appended (producer EXEC ≠ approver ARCH).
+
+### The M9 kickoff, in one paragraph
+Four stories: **S1 the stakeholder demo page** (the PO-committed item; the page
+targets the TRANSFORMER's raw boundary — a browser cannot build the 24-column
+matrix and the one-transform-path law forbids a JS twin; Host-header/CORS
+wrinkle named with the same-origin dissolution option; the PO-observed accept
+box parks in AWAITING_PO by design) · **S2 the online-store watchdog** (R-2,
+headroom leg FIRST per law 4; Redis exports no metrics — two costed options,
+probe first; no Flyte trigger) · **S3 closure** (F-057 normalize+regenerate+
+round-trip test; F-054 (a): twelve skipifs become `needs_records` assertions) ·
+**S4 `make verify-m9` + red team** (ninth no-skip-flag inheritance; live-question
+count pinned; the PO-observed box asserted as a NAMED open item, never silently
+green). Out of scope: Ray/CI/trivy/README polish — **PO opt-in menu raised as
+AWAITING_PO 2026-08-23-2** (non-blocking); R-1; any alias move, fit, rebuild,
+or trigger.
+
+### Decisions worth a future session's minute
+- **M9's non-demo stretch items are the PO's, not the executor's.** BLUEPRINT
+  §9/M9 says "opt-in per story, EXCEPT the demo". The menu entry prices each
+  honestly (Ray is a milestone's platform work in a story's clothes). If the PO
+  opts in, the items get chartered by an ARCH touch — never improvised.
+- **The demo hits the transformer.** The blueprint's "live ETA from the
+  InferenceService" predates M8-S4 leg 3; the transformer IS an InferenceService
+  and is the only endpoint a browser can legally use. Stated in the kickoff so
+  S1 does not burn its session rediscovering it.
+- **F-058 closed by decision, not by prose**: the hazard is retired on this
+  cluster (no active FixedRate trigger, none may be added in M9) and option (c)
+  stays the named probe for whoever next needs a schedule.
+
+### Verification at exit
+`verify-m8` GREEN 51/51 (twice) · `verify-m7` GREEN · lineage green · tag
+`m8-closed` pushed · README flipped · ledgers current (findings F-058 closed,
+F-057/F-054 intaken; signoffs M8 row; AWAITING_PO 2026-08-23-2 raised) ·
+`@champion` 2 / `feature_set v2`, versions `['1','2']` — read, never written.
+
 ## Session 2026-08-23 (cd) — M8-S5: a survey allowed to lose, and a gate that found its own hole
 
 ### State
