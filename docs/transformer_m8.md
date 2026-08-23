@@ -116,13 +116,131 @@ The reader asserts the header on the same response it reads the number from.
 
 ## 4. The result
 
-*(filled in by `make transformer-parity`; the table is committed at
-`docs/transformer_parity_table.md`)*
+```
+[transformer-parity] 16 declared hazards (parity.HAZARDS, imported)
+[transformer-parity] A  matrix built HERE  -> http://localhost:8081/v2/models/nyc-taxi-eta/infer
+[transformer-parity] B  raw request        -> http://localhost:8081/v2/models/nyc-taxi-eta-transformer/infer
+[transformer-parity] bar: EXACT (docs/transformer_m8.md §3, argued before this ran)
+
+[transformer-parity] ok  ordinary-midday         champion=10.665224  transformer=10.665224  |d|=0.000e+00
+[transformer-parity] ok  airport-jfk             champion=59.558275  transformer=59.558275  |d|=0.000e+00
+[transformer-parity] ok  no-geometry-both        champion= 9.655549  transformer= 9.655549  |d|=0.000e+00
+[transformer-parity] ok  unseen-od-pair          champion=41.463649  transformer=41.463649  |d|=0.000e+00
+[transformer-parity] ok  federal-holiday         champion=39.001937  transformer=39.001937  |d|=0.000e+00
+[transformer-parity] ok  long-haul-boundary      champion=48.180011  transformer=48.180011  |d|=0.000e+00
+[transformer-parity] ok  out-of-year-2026        champion= 7.375985  transformer= 7.375985  |d|=0.000e+00
+                                                        … 16 of 16, all 0.000e+00 …
+
+[transformer-parity] ok  max |champion - transformer| = 0.000e+00 minutes across 16 declared hazards, bar EXACT
+[transformer-parity] ok  both boundaries served the SAME registry version: champion='2', transformer='2'
+[transformer-parity] ok  the pod really consulted the store: X-Taxi-Lookups='airport_constant=committed-code,
+                         borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store'
+[transformer-parity] ok  and F-059's two refused groups did not cross
+[transformer-parity] GREEN — the boundary moved and the number did not.
+```
+
+The whole table is committed at `docs/transformer_parity_table.md`; the record is
+`automation/runs/m8-transformer/transformer-parity.json`.
+
+**Read the rows, not just the total.** `no-geometry-both` is the F-030 class —
+zones 264/265, which the store has no row for and the committed table holds NaN
+for; both sides produced NaN through the same named fallback and the booster
+answered 9.655549 twice. `federal-holiday` is the row every record in this repo
+already carries at 39.001937, now produced by a pod from four raw fields.
+`out-of-year-2026` is a date beyond the training window and inside the store's
+calendar, which is what makes the horizon refusal at 2031 a boundary rather than
+a wall.
+
+**What the third check buys.** A parity of `0.000e+00` measured against a
+transformer that never called the store is a measurement of nothing, and it would
+look exactly like this one. `X-Taxi-Lookups` is read off the same response the
+number came from.
 
 ## 5. p95 at the new boundary
 
-*(filled in by `make transformer-load`)*
+M5-S4's shape exactly — 4 req/s for 60 s at concurrency 8, hazard mix, open loop —
+because the only useful thing to do with this number is put it beside the
+champion's, and two percentiles measured at different shapes are not comparable.
+Both arms run back to back in one invocation, so the champion's arm is a CONTROL
+measured on the same laptop in the same minutes rather than a figure quoted from
+a record made four days and one host reboot ago.
 
-## 6. Teardown
+**Run 2 (2026-08-23T12:08Z, against the deployed image `taxi-mlops-pipeline:2cdcb36`):**
 
-*(filled in at story exit)*
+| latency_ms (scheduled → response) | champion | transformer | delta |
+|---|---:|---:|---:|
+| p50 | 31.1 | 49.3 | **+18.1** |
+| p95 | 113.1 | 118.1 | **+5.0** |
+| p99 | 117.0 | 160.4 | +43.5 |
+| max | 119.0 | 249.6 | +130.6 |
+
+240/240 requests on each arm, **zero errors on both**, achieved 4.01 req/s on
+both, `model_version` `['2']` on both — read off the timed responses.
+
+**What is inside the transformer's number that is not inside the champion's:**
+decoding four raw inputs, **two HTTP calls to the quarantined feature server**,
+`build_features` over 24 columns, the V2 encode, and a second in-cluster hop to
+the predictor. So a larger number is the expected reading and is not a
+regression — it is a boundary that moved, exactly as `load.py`'s docstring said
+it would in M5-S4.
+
+### The honest reading, which is narrower than the table
+
+**Quote the p50 delta; do not quote the p95 delta as a figure.** Two runs eight
+minutes apart, same shape, same code, same pods:
+
+| | run 1 (12:00Z) | run 2 (12:08Z) |
+|---|---:|---:|
+| p50 delta | +16.8 ms | +18.1 ms |
+| p95 delta | **+23.0 ms** | **+5.0 ms** |
+| p99 delta | −104.9 ms | +43.5 ms |
+
+The p50 move is stable to about a millisecond across both. The p95 and p99 deltas
+are not: run 1's champion arm carried a p99 of 345 ms and a max of 545 ms, run
+2's carried 117 and 119. That tail is host contention on a laptop — the same
+effect M6-S2 refused to claim credit for when the CPU-request change appeared to
+improve p99 by 73%. Both records are tracked
+(`transformer-load.json` and `transformer-load-run1.json`) so this is checkable
+rather than asserted; **the reportable cost of the moved boundary is ~18 ms at
+p50**, and the p95 is "within the same band, and the band is wider than the
+effect".
+
+### A prediction that was pessimistic, and why
+
+M5-S4 priced the feature build at **~30 ms cold for one row** and warned the M7
+delta would land inside this measurement. The measured p50 move is **~18 ms** —
+and it buys *more* than the feature build, because it also includes two
+round-trips to another pod and a second HTTP hop. The gap is the word **cold**:
+that 30 ms was a first call, paying module import and the `lru_cache` fill on
+`load_zone_table` / `load_calendar`. A warm pod pays neither, and the store path
+does not read those CSVs at all. Gotcha #80's family — an analogy from a
+differently-conditioned measurement, and this time it erred in the safe
+direction.
+
+## 6. Teardown, and why the service is still up
+
+**Teardown proven**, the M6-S3 shadow precedent: `TEARDOWN=1 make
+deploy-transformer` deleted `InferenceService/nyc-taxi-eta-transformer` and KServe
+took its two Deployments, its two Services and its Ingress with it. What was left
+in `serving` was the champion's Deployment, Service and Ingress at **4d6h** — and
+the stronger check, its predictor POD at the same uid
+`9b1f1b03-7dfe-458f-a8b0-cd045c61b18c`, still answering 39.0019 minutes. That is
+the evidence that nothing in this story ever touched the champion's own wire; a
+list of surviving object names would not have distinguished "untouched" from
+"recreated".
+
+It was then **re-deployed and deliberately left up**, for the reason M6-S3 left
+the v1 shadow running: M8-S5's gate is the next story, it will want to ask a live
+system the same kind of question `verify-m5` §2 asks, and standing it back up
+costs a `make deploy-transformer`.
+
+**What is NOT closed, and it now has a third consumer.** There is still no alert
+on an empty or stale online store. Leg 1 named it, leg 2 repeated it, and this leg
+is the one that puts *rider-shaped traffic* behind it: if Redis were emptied, the
+feature server would answer `null` for every zone, `zone_table_from_store` would
+return an all-NaN table, and the transformer would quote confidently from
+nine NaN geometry features — the F-030 class, arriving through the store instead
+of through the request. The transformer refuses an unreachable store (503) and a
+date the store cannot answer (422), but it does not and cannot refuse a store that
+answers `null` for a zone that legitimately has no row. That distinction belongs to
+a rule watching the store, not to a client.
