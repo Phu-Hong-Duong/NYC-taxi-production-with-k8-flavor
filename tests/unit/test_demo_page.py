@@ -368,6 +368,39 @@ def test_the_busybox_pin_is_not_a_twin() -> None:
     )
 
 
+def test_every_element_the_script_addresses_exists_in_the_markup() -> None:
+    """A typo'd id is a demo that renders perfectly and silently does nothing.
+
+    No test here runs JavaScript, so this is the cheapest thing that catches the
+    most likely browser-only failure: the script reaches for an element by id,
+    gets null, and the button does nothing at all with no error a user can see.
+    """
+    text = page_text()
+    addressed = set(re.findall(r'getElementById\("([^"]+)"\)', text))
+    assert addressed, "the page addresses no elements — did the script move?"
+    declared = set(re.findall(r'\bid="([^"]+)"', text))
+    missing = addressed - declared
+    assert not missing, f"the script addresses element(s) that do not exist: {sorted(missing)}"
+
+
+def test_the_three_error_classes_render_differently() -> None:
+    """422, 503 and 'anything else' must not collapse into one message.
+
+    A refusal is the guard working, a 503 is a dependency outage the caller
+    cannot fix, and an unreadable answer is neither. `demo/README.md` §3 argues
+    why; this is the check that the page's branches actually exist and carry
+    distinguishable words rather than one shared 'something went wrong'.
+    """
+    text = page_text()
+    assert "response.status === 422" in text, "no 422 branch"
+    assert "response.status === 503" in text, "no 503 branch"
+    for phrase in ("Refused", "temporarily unavailable", "Unexpected answer"):
+        assert phrase in text, f"the page never says {phrase!r}"
+    # The refusal must show the SERVICE's own reason, not a substitute sentence —
+    # F-019's horizon text is the thing worth reading.
+    assert "payload.error" in text, "the page invents its own error text"
+
+
 def test_the_readme_records_the_route_decision_and_the_open_po_box() -> None:
     text = README.read_text()
     assert "host-less" in text.lower()
