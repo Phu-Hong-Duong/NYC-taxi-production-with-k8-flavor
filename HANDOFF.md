@@ -14,6 +14,8 @@ was broken.
 boot; AWAITING_PO 2026-08-21-1's resume steps had been followed). No `.status` file was
 pointed at.
 
+**MERGED** — PR **#58**, merge commit `82e2ec9`; lineage proved: `git branch -r --contains a2f660a` -> origin/main. CI `lint-test` pass 1m36s.
+
 **M8-S4 leg 2 is CUT DELIBERATELY, and the cut is stated in `docs/feast_server_m8.md`
 §6.** Landed: the wall shape decided by measurement, the Feast feature server on the
 cluster, and the HTTP seam measured at `0.000e+00`. **NOT built: the transformer
