@@ -1,7 +1,7 @@
 {
   "content_size_bytes": 202837802,
-  "docker_image_id": "sha256:864e4a2b7d2956a05de918224ff831d2401f57af8308eefce65becd8fe25e1d3",
-  "git_head": "92127a8fb409bec928a3bf89eaab61c4b07ed106",
-  "image": "taxi-mlops-feast-server:feast-0.66.0-92127a8-dirty",
+  "docker_image_id": "sha256:151d361ce40f72bbe8bfde6ebf5cfd88a8249033e7bdf53a264a445b3bf8c5bf",
+  "git_head": "b2c27444d5874bb68dc75581296a4c038af9c590",
+  "image": "taxi-mlops-feast-server:feast-0.66.0-b2c2744",
   "note": "M8-S4 leg 2, shape (i): the pandas-2 half of the wall, containerised. Built --no-deps from infra/feast/requirements-feast.txt, the SAME pin file scripts/feast_quarantine.sh uses. Carries no registry (derived at start from definitions.py) and no store address (from the environment at run time, with no default)."
 }

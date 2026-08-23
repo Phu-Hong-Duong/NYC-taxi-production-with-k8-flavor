@@ -79,7 +79,11 @@ RUN pip install --user --no-deps -r /tmp/requirements-feast.txt
 COPY --chown=feast:feast infra/feast/feature_repo/definitions.py /app/infra/feast/feature_repo/definitions.py
 COPY --chown=feast:feast infra/feast/feature_repo/feature_store.yaml /app/infra/feast/feature_repo/feature_store.yaml
 COPY --chown=feast:feast data/feast /app/data/feast
-COPY --chown=feast:feast docker/feast-server-entrypoint.sh /home/feast/.local/bin/feast-server
+# `--chmod` and not just `--chown`: COPY preserves the SOURCE file's mode, and a
+# shell script written by an editor is 0644. The failure is loud but blames the
+# wrong thing — containerd reports `exec: "...": permission denied`, which reads
+# like a missing binary or a broken PATH rather than a missing execute bit.
+COPY --chown=feast:feast --chmod=0755 docker/feast-server-entrypoint.sh /home/feast/.local/bin/feast-server
 
 WORKDIR /app/infra/feast/feature_repo
 
