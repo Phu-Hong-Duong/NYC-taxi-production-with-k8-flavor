@@ -1,0 +1,189 @@
+{
+  "bar": "EXACT",
+  "bar_argued_in": "docs/transformer_m8.md \u00a73",
+  "breaches": [],
+  "champion": {
+    "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta/infer",
+    "host": "nyc-taxi-eta-serving.local"
+  },
+  "checks": [
+    {
+      "claim": "max |champion - transformer| = 0.000e+00 minutes across 16 declared hazards, bar EXACT",
+      "ok": true
+    },
+    {
+      "claim": "both boundaries served the SAME registry version: champion='2', transformer='2' \u2014 read off the two ANSWERS, not off a metadata call",
+      "ok": true
+    },
+    {
+      "claim": "the pod really consulted the store: X-Taxi-Lookups='airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store' \u2014 without this, a silent fallback to the committed CSVs would produce the same zero",
+      "ok": true
+    },
+    {
+      "claim": "and F-059's two refused groups did not cross: the borough dictionary and the airport constant are still the committed artifacts",
+      "ok": true
+    }
+  ],
+  "failures": 0,
+  "feature_set": "v2",
+  "features": 24,
+  "hazards": 16,
+  "lookup_sources": "airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store",
+  "max_abs_delta_minutes": 0.0,
+  "measured_at": "2026-08-23T11:59:28Z",
+  "model_version": {
+    "champion": "2",
+    "transformer": "2"
+  },
+  "route": "http://localhost:8081",
+  "rows": [
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-10T14:20:00",
+      "champion_minutes": 10.665224429079366,
+      "do": 237,
+      "hazard": "ordinary-midday",
+      "pu": 161,
+      "transformer_minutes": 10.665224429079366
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-06T02:45:00",
+      "champion_minutes": 4.662505785289592,
+      "do": 107,
+      "hazard": "ordinary-weekend-night",
+      "pu": 79,
+      "transformer_minutes": 4.662505785289592
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-09T17:30:00",
+      "champion_minutes": 59.55827507468369,
+      "do": 230,
+      "hazard": "airport-jfk",
+      "pu": 132,
+      "transformer_minutes": 59.55827507468369
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-11T08:05:00",
+      "champion_minutes": 44.611286066632296,
+      "do": 161,
+      "hazard": "airport-lga",
+      "pu": 138,
+      "transformer_minutes": 44.611286066632296
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-12T19:40:00",
+      "champion_minutes": 40.20128942107631,
+      "do": 161,
+      "hazard": "airport-ewr",
+      "pu": 1,
+      "transformer_minutes": 40.20128942107631
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-03-11T00:30:00",
+      "champion_minutes": 9.655548884562359,
+      "do": 264,
+      "hazard": "no-geometry-both",
+      "pu": 264,
+      "transformer_minutes": 9.655548884562359
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-08T12:00:00",
+      "champion_minutes": 35.124482042573625,
+      "do": 265,
+      "hazard": "no-geometry-one-sided",
+      "pu": 132,
+      "transformer_minutes": 35.124482042573625
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-15T13:10:00",
+      "champion_minutes": 41.46364915404994,
+      "do": 148,
+      "hazard": "unseen-od-pair",
+      "pu": 55,
+      "transformer_minutes": 41.46364915404994
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-04T09:15:00",
+      "champion_minutes": 39.00193715359812,
+      "do": 48,
+      "hazard": "federal-holiday",
+      "pu": 132,
+      "transformer_minutes": 39.00193715359812
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-03T18:00:00",
+      "champion_minutes": 6.077414150163941,
+      "do": 141,
+      "hazard": "near-holiday",
+      "pu": 236,
+      "transformer_minutes": 6.077414150163941
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-16T00:00:00",
+      "champion_minutes": 4.7714088554703205,
+      "do": 68,
+      "hazard": "midnight-boundary",
+      "pu": 48,
+      "transformer_minutes": 4.7714088554703205
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-15T00:00:00",
+      "champion_minutes": 4.247801080829604,
+      "do": 230,
+      "hazard": "week-boundary",
+      "pu": 100,
+      "transformer_minutes": 4.247801080829604
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-13T11:00:00",
+      "champion_minutes": 48.18001133033444,
+      "do": 6,
+      "hazard": "long-haul-boundary",
+      "pu": 3,
+      "transformer_minutes": 48.18001133033444
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-17T15:45:00",
+      "champion_minutes": 5.921518128334622,
+      "do": 234,
+      "hazard": "passenger-count-zero",
+      "pu": 90,
+      "transformer_minutes": 5.921518128334622
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2019-07-18T21:20:00",
+      "champion_minutes": 6.104270692412945,
+      "do": 162,
+      "hazard": "passenger-count-max",
+      "pu": 170,
+      "transformer_minutes": 6.104270692412945
+    },
+    {
+      "abs_delta": 0.0,
+      "at": "2026-11-26T16:30:00",
+      "champion_minutes": 7.375984575262269,
+      "do": 237,
+      "hazard": "out-of-year-2026",
+      "pu": 161,
+      "transformer_minutes": 7.375984575262269
+    }
+  ],
+  "transformer": {
+    "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta-transformer/infer",
+    "host": "nyc-taxi-eta-transformer-serving.local"
+  }
+}

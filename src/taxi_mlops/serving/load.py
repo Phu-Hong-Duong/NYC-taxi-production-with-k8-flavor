@@ -306,6 +306,7 @@ def run_load(
     label: str = "",
     note: str = "",
     on_second: Any = None,
+    bodies: list[bytes] | None = None,
 ) -> LoadResult:
     """Drive the endpoint at `rate` req/s for `seconds`, and time every request.
 
@@ -314,13 +315,23 @@ def run_load(
     the load window, so the kill and the measurement share one clock — a kill
     timed by a separate `sleep` in a shell is a kill whose position in the
     timeline is a guess.
+
+    `bodies` overrides what is sent (M8-S4 leg 3). The transformer takes a RAW
+    quote request rather than a matrix, so its p95 has to be measured with a
+    different payload — but by the SAME open loop, the same scheduler, the same
+    percentile function and the same record shape, because the whole point of
+    that number is to be comparable with M5-S4's. A second load client would have
+    made the two numbers incomparable in a way no reader could see. The bodies
+    are still pre-encoded before the clock starts, for the reason `build_bodies`
+    states: encoding is client CPU and must not land in a server percentile.
     """
     if features_cfg is None:
         from ..training.run import load_train_config
 
         features_cfg = load_train_config()["features"]
 
-    bodies = build_bodies(mix, rows_per_request, features_cfg)
+    if bodies is None:
+        bodies = build_bodies(mix, rows_per_request, features_cfg)
     total = max(1, int(round(rate * seconds)))
     url, host = endpoint.infer_url, endpoint.host
 
