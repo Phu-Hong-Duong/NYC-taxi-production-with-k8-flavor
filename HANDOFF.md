@@ -15,6 +15,9 @@ measured, p95 at M5-S4's shape is measured, teardown is proven, and both serving
 green. **No PO fork was opened.** **2 of the 3-attempt wall were inherited unspent and
 remain unspent** — shape (i) was decided at leg 2 and needed no further attempts.
 
+**MERGED** — PR **#59**, merge commit `0d9ba45`; lineage proved:
+`git branch -r --contains bc77595` -> origin/main. CI `lint-test` pass 1m31s.
+
 ### Reconciliation (the staleness check, before any story work)
 Reality matched HANDOFF (cb) and had moved only in ways it predicted. The host had
 rebooted ~34 min before boot (every monitoring pod restarted); `kubectl get nodes` 3/3
