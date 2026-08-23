@@ -95,6 +95,19 @@ extraScrapeConfigs: |
       - source_labels: [__meta_kubernetes_pod_label_serving_kserve_io_inferenceservice]
         action: keep
         regex: .+
+      # …AND the pod must be a PREDICTOR (F-061, found by `verify-m8` on its own
+      # first run). The rule above keeps every pod belonging to an
+      # InferenceService, and the rule below forces mlserver's metrics port on
+      # it — two assumptions that were the same assumption until M8-S4 put a
+      # TRANSFORMER pod in this namespace. That pod belongs to an isvc, carries
+      # the label, is not an mlserver and has nothing on 8082, so it became a
+      # permanently-DOWN target: `up == 0` forever, on a signal whose entire
+      # value (F-043) is that `up == 0` means a predictor has stopped reporting.
+      # A standing false one is how a real one becomes invisible. KServe labels
+      # the two components apart itself, so the discriminator is free.
+      - source_labels: [__meta_kubernetes_pod_label_component]
+        action: keep
+        regex: predictor
       # One target per pod on the metrics port — NOT on the discovered container
       # port, which is the inference port and answers 404 here.
       - source_labels: [__meta_kubernetes_pod_ip]

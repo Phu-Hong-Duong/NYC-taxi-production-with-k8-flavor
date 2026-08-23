@@ -4105,3 +4105,66 @@ than the effect". Two runs is the cheapest possible defence against quoting a ta
 on a laptop, and it is the second time this program has needed it (M6-S2 refused
 the same flattering reading about p99).
 
+
+## M8-S5 — a survey that has to be allowed to lose, and a gate that found its own hole
+
+**Writing a comparison page is a test of whether you will publish the row that
+goes against you.** The kickoff asked for adopt/differ/surpass, "honest in both
+directions", and the hard part was not finding SURPASS rows — none of the three
+surveyed repositories asserts that its point-in-time join is point-in-time
+correct, none compares its online store against its offline values, and that is
+genuinely the milestone's edge. The hard part was writing down that **F's single
+Python environment is the better design for anyone who has not pinned pandas 3,
+and we would have taken it**; that its `FeatureService` is a registered contract
+where ours is a Python constant on one side of a wall; and that its seven-step
+origin-labelled request trace would have shortened three of last session's
+debugging sessions. I made the gate assert `>= 1 ADOPT` for that reason — a
+survey with no ADOPT is a press release, and the check is cheap insurance
+against a future author quietly writing one.
+
+**The population size was the first finding, and it belongs above the table.**
+A GitHub API search for Feast on this exact problem returns three substantive
+repositories at 0★ each. "The community does X" is a sentence with a sample size,
+and mine is three — so every SURPASS row says *none of these three* rather than
+*nobody*. The same discipline applies to absence claims: every "they do not do
+this" here rests on a recursive tree listing, because a skim that missed a
+`tests/` directory would turn a fair comparison into a false one.
+
+**The gate found a real defect in the first thing it asked the live system, and
+the interesting part was the temptation.** `up{job="kserve-predictors"}` came
+back with three targets and one of them permanently zero: M8-S4's transformer pod
+belongs to an InferenceService, so the scrape job keeps it, and the job then
+forces mlserver's metrics port on it, which the transformer does not have. Two
+assumptions had been the same assumption for three milestones. The tempting
+repair was to narrow the gate's question to the champion's own exporter — one
+line, green immediately, and completely wrong: it would have been a guard edited
+to fit a defect, on the one signal whose entire value (F-043) is that `up == 0`
+means a predictor has stopped reporting. A standing false alarm is how a real one
+becomes invisible. I fixed the selector instead, with a label KServe already
+sets, and kept the gate's question BROAD so the next non-predictor in that
+namespace fails it too.
+
+**Where to plant a red team: read your own design document for the sentence that
+admits a broken version would look identical.** `docs/feast_online_m8.md` §2 says
+that a comparison which silently dropped nulls "would print a perfect zero while
+being blind to exactly those rows". That sentence is the plant. Rewriting one
+column's `both_missing` from 13 to 0 leaves the delta, the mismatch count and the
+verdict untouched — the record still reads as a clean pass, and it reads as a
+*better* pass than the truth. Choosing that field forced me to build the three
+witnesses it needed (the run's own two-sided no-geometry assertion, the
+independently-built anchor block, and the committed table a human diffs), and
+those three checks are the best thing in the gate. **The red team did not test the
+gate so much as tell me which checks it was missing.**
+
+**Eight failures on the gate's first run, four of them mine, and every one the
+same disease.** A registry demanded ABSENT FROM DISK when the property is *not
+tracked by git*. A bar regex that encoded one sentence's word order instead of the
+bar. A typed script path. A DVC summary line counted as one target out of four
+over a perfectly clean tree. A ledger searched whole, so the milestone's own prose
+— "M8-S5's gate inherits it live" — was read as a ledger row. Then the *test file*
+went red three times for the same reason, and all three were the gate quoting
+itself. **When a check goes red, the first question is still whether the thing it
+names actually got worse**, and here the answer was no five times out of eight.
+The permanent lesson from the fourth occurrence of gotcha #99 in this repo: in a
+codebase where prose is load-bearing, a needle must sit where a shell would START
+a command or where an AST would find a call — never where a word appears.

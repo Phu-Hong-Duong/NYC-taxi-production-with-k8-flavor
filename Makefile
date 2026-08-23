@@ -275,7 +275,7 @@ verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watc
 	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
-.PHONY: transformer-probe deploy-transformer transformer-accept transformer-parity transformer-load feast-server-parity deploy-feast-server feast-server-image feast-serve-probe deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
+.PHONY: transformer-probe deploy-transformer transformer-accept transformer-parity transformer-load feast-server-parity deploy-feast-server feast-server-image feast-serve-probe deploy-feast verify-m8 verify-m8-redteam backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
 feast-quarantine: ## M8-S2: build the ISOLATED feast venv from its exact pins and prove it never touched uv.lock. --resolve rewrites the pins; --check builds nothing
 	@bash scripts/feast_quarantine.sh $(QUARANTINE_ARGS)
 feast-sources: ## M8-S2: build the parquet Feast reads, from the SETTLED trees, into data/feast/ (read-only; --static-only skips the 43.9M-row aggregate fit)
@@ -322,7 +322,10 @@ transformer-load: ## M8-S4 leg 3: p95 on the transformer path at M5-S4's shape (
 	@uv run python scripts/transformer_load.py $(TRANSFORMER_LOAD_ARGS)
 deploy-feast: ## M8: the whole feature-store path — store, sources, apply, materialize
 	@$(MAKE) deploy-feast-store && $(MAKE) feast-apply && $(MAKE) feast-materialize
-verify-m8: ; @echo "TODO(M8): 100-pair online/offline parity + traced enriched request + prior-art revisit"
+verify-m8: ## M8 gate: the quarantine's invariant, four seams against bars argued before them, the PIT proof, five live questions, and the comparison page. RE-RUNS NOTHING
+	@bash scripts/verify_m8.sh
+verify-m8-redteam: ## prove `make verify-m8` can go RED: one online value rewritten inside the bar's neighbourhood in the 100-pair record, then restored
+	@bash scripts/verify_m8_redteam.sh
 
 # ---- M9 stretch (demo committed by PO direction 2026-08-12) ----
 .PHONY: demo
