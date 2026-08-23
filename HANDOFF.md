@@ -1,5 +1,166 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-23 (cb) — M8-S4 leg 2 (first slice): the wall gets a door, and it is lossless
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (ca) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO. **Role block: MLE (A),
+SRE (R)** — the kickoff's assignment for S4; charter read. The refusals in play all
+session: *nothing fitted for a model · no alias read or moved · the champion's own wire
+untouched · a mismatch is a finding, never a widened bar · no `uv add feast`* — none
+was broken.
+
+**The chain had been PARKED by the PO and was resumed** (`automation/STOP` absent at
+boot; AWAITING_PO 2026-08-21-1's resume steps had been followed). No `.status` file was
+pointed at.
+
+**M8-S4 leg 2 is CUT DELIBERATELY, and the cut is stated in `docs/feast_server_m8.md`
+§6.** Landed: the wall shape decided by measurement, the Feast feature server on the
+cluster, and the HTTP seam measured at `0.000e+00`. **NOT built: the transformer
+InferenceService, the hazard parity through it, and the p95.** Reason: the transformer
+needs a `lookups` seam in `quote_time.build_features`, a task-image rebuild, and a
+KServe transformer deploy — and this slice produced a finding (**F-059**) that changes
+what that seam is allowed to carry. Landing the seam without it would have been the
+wrong seam.
+
+### Reconciliation (the staleness check, before any story work)
+Reality had moved and it was not small. `kubectl -n flyte get pods` returned **104
+pods, 96 `Pending`**, all created inside one 17-second window beginning two minutes
+after `flyte-flyte-binary` restarted at host boot (restart count 8). The scheduler had
+**back-filled ~2 days of missed `retrain-schedule-proof` firings at once** — a
+`FixedRate(20)` trigger replaying every window it slept through (**F-058**, new).
+`kubectl describe` on one: `0/3 nodes are available: 1 Insufficient memory, 1 node(s)
+didn't match PersistentVolume's node affinity, 1 node(s) had untolerated taint(s)` —
+they serialised behind the RWO `taxi-data` PVC instead of stampeding, which is luck and
+not design.
+
+Reconciled by deactivating the trigger and **reading it back off the control plane**
+(never off the file submitted — the `deploy_serving.sh` idiom):
+`retrain-schedule-proof False` · `retrain-monthly False`. The backlog then drained
+itself (79 Completed within a minute) and was **not** aborted: each firing is
+`plan_only`, mints no MLflow run and moves no alias. **The code is unchanged**, so
+`verify-m7`'s trigger leg (AST over `workflows.py`, never a live activation query)
+stayed GREEN; undo is `make retrain-schedule`. Recorded at AWAITING_PO **2026-08-23-1**
+as non-blocking, because M7-S4 registered that trigger active on purpose.
+
+Also observed and worth keeping: **the online store SURVIVED the host reboot** —
+`redis-cli dbsize` returned **57,688**, exactly what leg 1 materialized, with the pod
+restarted 64 s earlier. The PVC + RDB decision leg 1 made against F-050's recurrence
+was paid back on its first real test, without anyone scheduling the drill.
+
+### Done
+- **The shape decided by MEASUREMENT: (i), and 1 of the 3-attempt wall is spent.**
+  `make feast-serve-probe` (new, ~30 s) started `feast serve` on the HOST inside the
+  existing quarantine against the real in-cluster Redis and asked one
+  `/get-online-features`. Zone 132 came back at JFK's centroid, zone 264 came back
+  `null`. Everything after that was packaging a thing already known to work — and the
+  first defect the build hit was a **missing execute bit** (`COPY` preserves 0644;
+  containerd says `exec: permission denied`, which reads like a missing binary).
+- **(ii) was REFUSED with a reason, not skipped.** A "thin direct store read" has to
+  re-implement Feast's entity-key serialization, field naming and value encoding on our
+  side of the wall, and getting any subtly wrong returns SOMEBODY ELSE'S ROW — a
+  confident wrong number with nothing red anywhere. 203 MB of pod is cheap against
+  owning a private copy of a vendor's encoding. **2 attempts remain unspent for leg 3.**
+- **The image**: `taxi-mlops-feast-server:feast-0.66.0-a524771`, **203 MB**, built
+  `--no-deps` from `infra/feast/requirements-feast.txt` — the SAME pin file the host
+  quarantine uses, one file and no twin — on all 3 nodes by each node's own `crictl`.
+  It carries **no registry** (`feast apply` runs in the entrypoint at every start, so
+  the pod's registry is a function of the image's git content) and **no store address**
+  (`${FEAST_REDIS_CONNECTION}`, no default, refused before apply). The container
+  **mirrors the host's directory DEPTH** rather than editing `definitions.py`, which
+  resolves its sources with `parents[3]`.
+- **On the cluster, with an accept that is an ANSWER** asked **from the Redis pod** so
+  Service DNS is under test: zone 132 -> `(40.646985, -73.78653) is_airport=True`,
+  **zone 264 -> `null`** — the null half asserted, because a check that only asserts
+  presence passes against a server answering every question with the same row. The live
+  Deployment's image is read back off the object. **STATELESS**: no volume, no hostPort,
+  **no backup obligation**, ledger row written both directions.
+- **THE HTTP SEAM: `max |ours − server| = 0.000e+00` across 6 columns and 108
+  comparisons, bar EXACT, `one missing` ZERO.** The bar was argued for THIS path (JSON's
+  number grammar carries a float64 losslessly; nothing on the server's side does
+  arithmetic) and **committed at `91ab8a6` before any record existed** — inheriting
+  M8-S3's parquet sentence or leg 1's protobuf one would have been a hedge. The anchor is
+  `taxi_mlops.features`, the champion's OWN lookup, never the parquet the store came
+  from. Rows are the 16 hazards **imported** from `parity.HAZARDS`, so four seams now
+  share one row set.
+- **F-059 (new, OPEN, a design input for leg 3 rather than a defect):** a feature store
+  is a good home for a per-entity MEASUREMENT and a bad home for anything a program
+  COMPUTES — and the three are indistinguishable in a schema. `borough` is an ENCODING
+  (the code is assigned by first-appearance order across the WHOLE lookup table, so
+  fetching two zones and numbering what comes back is a silent TOTAL category re-map with
+  every value individually correct); `is_airport` is a CONSTANT and a TOTAL function
+  (three integers in code, answering for the non-places the store has no row for); a
+  centroid is neither.
+- **The parity's first run went RED and the repair was NOT a wider bar.** It read
+  `is_airport` ours=`False` vs store=`missing` on 264/265 with every numeric column at
+  `0.000e+00` — a comparison holding a TOTAL function against a PARTIAL one. Repaired
+  with the shape M8-S3 and leg 1 had already established: partition the entities, assert
+  the partition **two-sidedly in both directions**, compare columns only where both sides
+  claim an answer. Observed `declines EXACTLY [264, 265]`.
+- **Verification at exit**: `make verify-m5` **GREEN** · `make verify-m7` **GREEN** ·
+  host suite **1057 passed** (16 new) · `ruff` clean · `@champion` **2** /
+  `feature_set v2`, versions `['1','2']` (**no version 3**) · `uv.lock` **byte-identical
+  to `m7-closed`** (`git diff m7-closed -- uv.lock` empty) · all four settled DVC pins
+  `up to date`.
+
+### Decisions
+- **Shape (i) over (ii)**, argued above and in `docs/feast_server_m8.md` §1. **This is
+  not a weakening of ADR-012**: that decision's sentence ("building one would move the
+  wall into the cluster") was about the MATERIALIZER, which still runs on the host in
+  `.venv-feast`; nothing in this image materializes.
+- **The registry is derived, never baked** — a baked one would be F-013's second home for
+  something `definitions.py` owns, and it would let a definitions change that was never
+  applied serve stale features.
+- **`is_airport` may be CORROBORATED by the store but not SOURCED from it** (measured
+  exact on all 21 real zones among the hazards). Sourcing a total function from a partial
+  store turns "not an airport" into "no answer" for the rows that already carry no
+  geometry.
+- **The trigger deactivation** — a reconciliation with a one-command undo, code
+  unchanged; recorded in AWAITING_PO rather than actioned as a fork.
+
+### Defects/Surprises
+- **F-058** (the trigger back-fill) and **F-059** (the schema look-alikes), both above.
+- **A wrong Feast join key is HTTP 500, not a complaint.** `{"day": [...]}` where the
+  entity's join key is `date_key` produced `500` with `Provided join_key_values: []` —
+  Feast DISCARDS an unrecognised key rather than naming it, so a plausible-looking name
+  compares against nothing. The key and its `%Y-%m-%d` format are now read from
+  `definitions.py` and `feast_sources.py` rather than guessed.
+- **Feast's response does not preserve the request's column order.** Asked
+  `centroid_lat, centroid_lon, is_airport`, answered `zone_id, centroid_lat, is_airport,
+  centroid_lon`. Pairing is by `metadata.feature_names`. Gotcha #73 on a new wire.
+- **Gotcha #53 bit my own test on its first run**: `"hostPort" not in manifest` went RED
+  on the manifest's own header, which ARGUES "WHY NO hostPort". `code_only` now filters
+  it, as `tests/unit/test_task_image.py` already did.
+
+### Next
+**Next story: M8-S4 leg 3 — the transformer beside the champion**
+(`docs/milestones/M8_KICKOFF.md` §"M8-S4", second paragraph onward). Everything it needs
+is landed and green:
+* **The feature server is up and stateless**: `feast-server.feast.svc.cluster.local:6566`,
+  rebuilt by `make feast-server-image && make deploy-feast-server` in ~3 minutes. The
+  store behind it holds 57,688 keys and survived a host reboot.
+* **2 of the 3-attempt wall are unspent** — shape (i) worked first time.
+* **The `lookups` seam in `quote_time.build_features` is NOT written**, deliberately.
+  F-059 says precisely which columns may cross it (`centroid_lat`, `centroid_lon`, the
+  three calendar flags) and which may not (`borough`, `is_airport`). The injection points
+  already exist: `zones.geometry(..., table=)`, `zones.borough_codes(..., table=)` and
+  `calendar.flags(..., calendar=)` all take a table today; `_derived_columns` simply
+  never passes one.
+* **Still owed by the kickoff**: THE parity through the transformer seam (16 hazards as
+  RAW requests vs the same rows host-built through the champion's isvc, **bar argued
+  before**, M5-S3's 1e-6 precedent) · **p95 at M5-S4's shape** (4 req/s / 60 s /
+  concurrency 8, open loop) labelled as the NEW boundary's number · teardown proven (the
+  M6-S3 shadow precedent) or the isvc left up with the reason stated · `@champion` 2
+  before and after · `make verify-m5` green at exit.
+* **Two things that will cost time if they are discovered rather than read**: the task
+  image must be rebuilt for any `src/` change (F-026's guard, gotcha #66 — the next
+  on-cluster run is a cold cache), and this repo's KServe deploys have historically cost
+  2–3 defects each (F-036, F-037, F-038, F-039 — readiness waits a predecessor can
+  satisfy, and objects an operator owns).
+* **The residual is STILL open and now has a second consumer**: there is no alert on an
+  empty or stale online store. `ADR-012` §"The residual" says so; leg 3 is the story that
+  puts a reader in front of it.
+
 ## Session 2026-08-21 (ca) — M8-S4 leg 1: the online store, and a projection that is lossless
 
 ### State

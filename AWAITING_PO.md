@@ -1,5 +1,43 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-23-1 · raised by EXEC/Opus (M8-S4 leg 2) · NOT A FORK, NOT BLOCKING — but a deliberate M7 decision was reversed as a reconciliation, and you should know
+
+**Nothing here needs an answer for the chain to continue.** It is recorded because
+M7-S4 registered a trigger ACTIVE on purpose, and this session turned it off.
+
+**What happened.** The boot ritual's staleness check found **104 pods in the
+`flyte` namespace, 96 of them `Pending`**, all created inside one 17-second burst
+that began two minutes after `flyte-flyte-binary` restarted at host boot. A
+`FixedRate(20)` trigger back-fills every window it missed while the control plane
+was down, so roughly two days of `retrain-schedule-proof` firings were replayed at
+once (**F-058**). They queued rather than stampeded only because the retrain
+mounts the RWO `taxi-data` PVC and serialised behind one volume on one node —
+luck, not design: a task without that volume would have run all ~100 at once.
+
+**What was done, and its undo.** `flyte update trigger retrain-schedule-proof
+taxi-pipeline-train.retrain --deactivate`, read back off the control plane
+(`retrain-schedule-proof False`). The backlog drained itself (79 Completed within
+a minute) and was **not** aborted — each firing is `plan_only`, mints no MLflow
+run and moves no alias. **The code is unchanged**, so `verify-m7`'s trigger leg
+(which reads the declarations with `ast` and never asks the server about
+activation) stayed GREEN. Undo is one command: **`make retrain-schedule`**.
+
+**Why this was treated as a reconciliation and not a fork.** The trigger's job was
+to PROVE the schedule mechanism fires, and that proof is delivered and recorded
+(`automation/runs/m8-provenance/proof.json`, M8-S1 leg 2 — the pod resolving
+`rescale_factor` 6.6667 / `round_cap` 2400). Leaving a proof trigger firing
+forever on a laptop that gets restarted is a cost that scales with downtime, for a
+proof already banked. It has a one-command undo and it changes no threshold, no
+gate and no alias.
+
+**If you want a different answer**, the three options are costed in `ledgers/findings.md`
+F-058: (a) leave it inactive permanently — recommended, cost is that the schedule
+mechanism is no longer *continuously* demonstrated; (b) re-activate and accept a
+stampede per host restart — cost as measured above; (c) look for a
+concurrency/backfill policy in Flyte 2.0.42 — **unprobed**, and the honest cost is
+that it needs its own probe before anyone can rely on it, which is why it is not
+presented as the easy win it sounds like.
+
 ## 2026-08-21-1 — the chain is PARKED by the PO, deliberately. Nothing is blocked.
 
 `automation/STOP` was written at **2026-08-21 08:06 UTC** by `chain_park.sh`, with its
