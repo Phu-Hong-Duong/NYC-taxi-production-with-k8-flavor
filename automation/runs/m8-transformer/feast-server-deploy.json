@@ -1,0 +1,17 @@
+{
+  "accept": {
+    "asked_from": "the redis pod, over Service DNS",
+    "zone_132": {
+      "centroid_lat": 40.646985,
+      "centroid_lon": -73.78653,
+      "is_airport": true
+    },
+    "zone_264": {
+      "centroid_lat": null,
+      "centroid_lon": null
+    }
+  },
+  "image": "taxi-mlops-feast-server:feast-0.66.0-a524771",
+  "note": "M8-S4 leg 2 shape (i). Stateless: no volume, no ledger state class, registry derived from definitions.py at every start. The accept is an ANSWER asked from a different pod, and it asserts the null half too.",
+  "service": "feast-server.feast.svc.cluster.local:6566"
+}
