@@ -1,5 +1,103 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-23 (cf) — M9-S1: the demo page, and a route that claimed less
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (ce) · `docs/milestones/M9_KICKOFF.md` · AWAITING_PO. **Role block: MLOps (with
+DA C for stakeholder legibility)** — the kickoff's assignment for S1; charters read.
+Refusals in play all session: *no alias move · nothing fitted · no gate invocation ·
+no new hostPort · no project dependency (`uv.lock` frozen) · no Flyte trigger · the
+champion's wire is not cut over* — none was broken.
+
+**M9-S1 is DONE. M9-S2 (the online-store watchdog), M9-S3 (F-057/F-054 closure) and
+M9-S4 (the gate) remain.** No PO fork was opened.
+
+**MERGED** — PR **#61**, merge commit `46d83a9`; lineage proved:
+`git branch -r --contains abf9770` -> origin/main. CI `lint-test` pass 1m34s.
+
+### Reconciliation (the staleness check, before any story work)
+Reality matched HANDOFF (ce) exactly. 3/3 nodes Ready v1.36.1 at 6d10h; both
+InferenceServices Ready (champion 4d9h, transformer 67m); `feast` redis 1/1 with its
+PVC Bound and feast-server 1/1; route `/healthz` 200; no `automation/STOP`; no
+`.status` file pointed at. `uv.lock` byte-identical to `m7-closed`.
+
+### Done
+- **The page is at `http://localhost:8081/demo/`** — one self-contained HTML file, no
+  framework, no build step. Two zone pickers, a datetime picker, a party size, and a
+  live ETA with the serving model version on it.
+- **The route decision, which was the actual story.** The Ingress rule carries **no
+  `host:`**, so ingress-nginx puts both paths in nginx's **DEFAULT server block**: the
+  page and the model share ONE origin and **CORS never happens** — a dissolution, not
+  a configuration. **The alternative was measured and refused before anything was
+  applied**: `location /healthz` lives only in the default block, so `host: localhost`
+  would have moved the browser's Host into a named block with no `/healthz` and turned
+  `deploy_serving.sh`'s accept RED for a correct system (`Host: totally-unrouted.invalid`
+  -> 200 · `Host: nyc-taxi-eta-serving.local` -> 404). `/` is left unclaimed, and
+  `deploy_demo.sh` asserts `/healthz` 200 and `/` 404 on every run.
+- **`make demo-accept` PASSED 9/9**, and it sends what the PAGE sends: the endpoint,
+  the request schema and the payload are READ OUT of `demo/index.html` and posted with
+  **no Host override** — the one thing a browser cannot do and every other client here
+  does. Bar **EXACT**, argued in `demo/README.md` §4 and committed before the record
+  existed (git: bar 1787491802, record 1787491935). **39.00193715359812 vs the recorded
+  39.00193715359812, |delta| = 0.000e+00**; `model_version` **'2'** off the answer;
+  `X-Taxi-Lookups` equal to the recorded string; the served page **byte-identical to git
+  by sha256** (47,147 bytes, fetched back through the route); a **2031** quote **422**-
+  refused naming the date; the no-geometry path 264 -> 264 **quoted at 8.2445 min**; and
+  the **champion's own model name 404** on this origin (asserted only after a real quote
+  succeeded — F-060).
+- **Nothing about the page is typed twice.** It is GENERATED (`make demo-page`) from the
+  TLC zone lookup (265 zones), the server's own `transformer.RAW_INPUTS`, and a PUBLISHED
+  parity row as the default trip; a test regenerates it and demands byte-identity.
+- **Four new objects, all STATELESS** (`taxi-demo-*` in `serving`): a ConfigMap rendered
+  from `demo/index.html` at apply time, a `busybox:1.38.0` httpd Deployment **at the digest
+  `flyte-data-stager.yaml` already pins** (a test asserts the two refs are one string — so
+  the demo adds no image), a Service and one Ingress. **Ledger row YES, backup obligation
+  NO**, recorded in both directions.
+
+### Two defects, both found by running the thing
+- **The generator substituted the template's own explanatory comment** — the paragraph
+  NAMING the placeholders — and shipped **795 `<option>` elements instead of 530**. It
+  rendered, and no "the zone list matches the CSV" assertion would have caught it because
+  all three copies matched. Guard is an occurrence COUNT (`TOKEN_COUNTS`), not a cleverer
+  parser. **Gotcha #110**, fourth time prose has sat where a parser reads it as code.
+- **The first route claimed the CHAMPION's model name and every quote 404'd** — the V2
+  model name is in the URL path (ADR-011 condition 2, third occurrence). Diagnosis was
+  free only because the transformer's 404 body names the path it does answer to. The
+  repair **inverted** it: the champion's name is now deliberately unrouted on this origin
+  and its 404 is an asserted negative, so the demo cannot quietly end up on the 24-column
+  wire. **Gotcha #111.**
+- Also: the F-047 `needs_records` guard caught the one new test that reads a tracked
+  record, on its first full-suite run — the guard working, exactly as at M8-S1.
+
+### Verification at exit (all re-run on merged `main`, clean tree)
+`make demo-accept` **PASSED 9/9** · `make verify-m5` **GREEN** · `make verify-m8`
+**GREEN 51/51** · host suite **1148 passed** · ruff clean · **`uv.lock` byte-identical to
+`m7-closed`** · all settled DVC pins `up to date` · **`@champion` 2 / `feature_set v2`,
+never read by this story at all** (no registry client is imported by any file it added —
+AST-tested) · **the champion's predictor pod is still uid `9b1f1b03-7dfe-458f-a8b0-cd045c61b18c`**,
+the uid M8-S4 leg 3 recorded — 0% of rider traffic moved.
+
+### Next
+**M9-S2 — the online-store watchdog (R-2).** Headroom leg FIRST (law 4): argue the bars
+from recorded facts and commit them BEFORE the drill. The kickoff's two costed options
+for Redis instrumentation stand (probe first, the `DRILL_STAGE=ingest` idiom); **option
+(ii) — a reader that pushes gauges with a freshness stamp — now has one more argument in
+its favour: this story put a PO-visible reader in front of the store, so an empty store is
+no longer only a machine's problem.** No Flyte trigger for the cadence (F-058's law).
+
+**The demo is left RUNNING deliberately** (the M6-S3 shadow / M8-S5 transformer precedent):
+M9-S2's drill empties the store and the transformer must answer **503**, which is now
+visible in a browser as *"The quote service is temporarily unavailable"* — a second,
+human-legible witness for that drill. `TEARDOWN=1 make deploy-demo` removes its four
+objects if a story ever needs them gone.
+
+**One box is OPEN by design and it is not a defect**: §9/M9's *"one non-technical person
+completes a query unassisted, observed"*. Raised at **AWAITING_PO 2026-08-23-3** with the
+URL and the one command; recorded OPEN inside `automation/runs/m9-demo/accept.json`
+(`po_observed_run.status`). **M9-S4's gate must assert that entry exists and is honest —
+never render the box green.**
+
 ## Session 2026-08-23 (ce) — ARCH boundary: M8 CLOSED, M9 kickoff authored, chain continues
 
 ### State
