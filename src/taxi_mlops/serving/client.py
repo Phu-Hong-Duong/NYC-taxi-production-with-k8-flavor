@@ -78,6 +78,7 @@ import numpy as np
 import pandas as pd
 
 from ..features import calendar as calendar_mod
+from ..features import lookups as lookups_mod
 from ..features import quote_time
 from ..training.run import load_train_config
 
@@ -137,7 +138,10 @@ def request_frame(requests: list[QuoteRequest]) -> pd.DataFrame:
 
 
 def build_matrix(
-    requests: list[QuoteRequest], features_cfg: dict[str, Any] | None = None
+    requests: list[QuoteRequest],
+    features_cfg: dict[str, Any] | None = None,
+    *,
+    lookups: lookups_mod.Lookups = lookups_mod.COMMITTED,
 ) -> pd.DataFrame:
     """Requests -> the champion's feature matrix, through the ONE transform path.
 
@@ -147,11 +151,18 @@ def build_matrix(
     fault, fixable by `make holidays`) from "the model is broken" (500). The
     underlying raise is left exactly as it is — it is still the guard that keeps
     training honest, and this is a translation, not a softening.
+
+    `lookups` (M8-S4 leg 3) reaches `build_features` untouched. It says where the
+    centroid and calendar reference data came from — the committed CSVs by
+    default, the online feature store when a transformer supplies one. This
+    function adds nothing to it and interprets none of it: the F-059 rule about
+    which reference groups may cross lives in `taxi_mlops.features.lookups`, one
+    layer down, so a second caller cannot get a different answer.
     """
     cfg = features_cfg if features_cfg is not None else load_train_config()["features"]
     frame = request_frame(requests)
     try:
-        return quote_time.build_features(frame, cfg)
+        return quote_time.build_features(frame, cfg, lookups=lookups)
     except ValueError as exc:
         if calendar_mod.HOLIDAY_TABLE in str(exc):
             years = sorted(pd.DatetimeIndex(frame[quote_time.PICKUP_TIMESTAMP]).year.unique())

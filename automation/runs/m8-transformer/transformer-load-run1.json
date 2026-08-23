@@ -1,0 +1,975 @@
+{
+  "arms": {
+    "champion": {
+      "buckets_per_second": [
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 25.286,
+          "second": 0,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 108.303,
+          "second": 1,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.138,
+          "second": 2,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.346,
+          "second": 3,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 104.827,
+          "second": 4,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 116.946,
+          "second": 5,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 108.334,
+          "second": 6,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 99.525,
+          "second": 7,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 101.321,
+          "second": 8,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 115.015,
+          "second": 9,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 46.87,
+          "second": 10,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 106.986,
+          "second": 11,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 46.376,
+          "second": 12,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 95.604,
+          "second": 13,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 108.394,
+          "second": 14,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 110.044,
+          "second": 15,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 47.223,
+          "second": 16,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 109.341,
+          "second": 17,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 29.117,
+          "second": 18,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 545.27,
+          "second": 19,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 255.946,
+          "second": 20,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 103.908,
+          "second": 21,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 110.299,
+          "second": 22,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 104.395,
+          "second": 23,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 105.041,
+          "second": 24,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 33.636,
+          "second": 25,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 100.235,
+          "second": 26,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 113.605,
+          "second": 27,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 119.255,
+          "second": 28,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 115.269,
+          "second": 29,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 111.005,
+          "second": 30,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 108.077,
+          "second": 31,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 105.248,
+          "second": 32,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.019,
+          "second": 33,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 100.627,
+          "second": 34,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 101.988,
+          "second": 35,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 102.527,
+          "second": 36,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 28.133,
+          "second": 37,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 204.535,
+          "second": 38,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 24.035,
+          "second": 39,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 105.675,
+          "second": 40,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 26.874,
+          "second": 41,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.421,
+          "second": 42,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 95.027,
+          "second": 43,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.345,
+          "second": 44,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 106.28,
+          "second": 45,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 109.408,
+          "second": 46,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 98.975,
+          "second": 47,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 196.728,
+          "second": 48,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.877,
+          "second": 49,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.036,
+          "second": 50,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 205.841,
+          "second": 51,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 52.699,
+          "second": 52,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 108.196,
+          "second": 53,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 107.449,
+          "second": 54,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 47.363,
+          "second": 55,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 113.078,
+          "second": 56,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 112.504,
+          "second": 57,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 106.849,
+          "second": 58,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 103.523,
+          "second": 59,
+          "sent": 4
+        }
+      ],
+      "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta/infer",
+      "error_window": {
+        "errors": 0,
+        "first_error_s": null,
+        "last_error_s": null,
+        "span_s": 0.0
+      },
+      "host": "nyc-taxi-eta-serving.local",
+      "label": "champion (matrix built in the client) \u2014 the CONTROL, measured now",
+      "latency_ms": {
+        "max": 545.27,
+        "min": 11.191,
+        "p50": 32.194,
+        "p95": 113.078,
+        "p99": 345.063
+      },
+      "measured_at": "2026-08-23T12:00:53Z",
+      "note": "The M5-S4 record stays the champion's number of record. This arm exists so the delta is not partly a measurement of a host that has rebooted since.",
+      "queue_ms": {
+        "max": 0.302,
+        "min": 0.051,
+        "p50": 0.124,
+        "p95": 0.247,
+        "p99": 0.29
+      },
+      "requests": {
+        "error_rate": 0.0,
+        "errors": 0,
+        "ok": 240,
+        "sent": 240
+      },
+      "served_versions": [
+        "2"
+      ],
+      "service_ms": {
+        "max": 545.15,
+        "min": 11.044,
+        "p50": 32.114,
+        "p95": 112.889,
+        "p99": 344.793
+      },
+      "shape": {
+        "achieved_rate_per_second": 4.015,
+        "concurrency": 8,
+        "mix": "hazards",
+        "rows_per_request": 1,
+        "target_rate_per_second": 4.0,
+        "wall_seconds": 59.781,
+        "window_seconds": 60.0
+      },
+      "story": "M5-S4"
+    },
+    "transformer": {
+      "buckets_per_second": [
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 128.961,
+          "second": 0,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 131.132,
+          "second": 1,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 70.039,
+          "second": 2,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 45.673,
+          "second": 3,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 128.936,
+          "second": 4,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 70.309,
+          "second": 5,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 124.206,
+          "second": 6,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 135.147,
+          "second": 7,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 127.783,
+          "second": 8,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 137.085,
+          "second": 9,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 128.941,
+          "second": 10,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 136.916,
+          "second": 11,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 130.905,
+          "second": 12,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 128.849,
+          "second": 13,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 126.294,
+          "second": 14,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 136.056,
+          "second": 15,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 121.346,
+          "second": 16,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 130.213,
+          "second": 17,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 126.607,
+          "second": 18,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 45.298,
+          "second": 19,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 48.852,
+          "second": 20,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 134.929,
+          "second": 21,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 128.027,
+          "second": 22,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 47.027,
+          "second": 23,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 132.648,
+          "second": 24,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 123.777,
+          "second": 25,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 239.002,
+          "second": 26,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 133.754,
+          "second": 27,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 129.045,
+          "second": 28,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 70.409,
+          "second": 29,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 123.709,
+          "second": 30,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 124.553,
+          "second": 31,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 128.779,
+          "second": 32,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 123.522,
+          "second": 33,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 119.824,
+          "second": 34,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 71.988,
+          "second": 35,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 45.295,
+          "second": 36,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 128.791,
+          "second": 37,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 133.009,
+          "second": 38,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 133.141,
+          "second": 39,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 126.203,
+          "second": 40,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 220.072,
+          "second": 41,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 125.028,
+          "second": 42,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 127.326,
+          "second": 43,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 130.314,
+          "second": 44,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 125.572,
+          "second": 45,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 124.712,
+          "second": 46,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 681.473,
+          "second": 47,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 226.293,
+          "second": 48,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 133.734,
+          "second": 49,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 46.552,
+          "second": 50,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 53.616,
+          "second": 51,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 136.813,
+          "second": 52,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 125.832,
+          "second": 53,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 126.022,
+          "second": 54,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 69.649,
+          "second": 55,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 138.929,
+          "second": 56,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 130.945,
+          "second": 57,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 49.714,
+          "second": 58,
+          "sent": 4
+        },
+        {
+          "errors": 0,
+          "ok": 4,
+          "p95_latency_ms": 69.641,
+          "second": 59,
+          "sent": 4
+        }
+      ],
+      "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta-transformer/infer",
+      "error_window": {
+        "errors": 0,
+        "first_error_s": null,
+        "last_error_s": null,
+        "span_s": 0.0
+      },
+      "host": "nyc-taxi-eta-transformer-serving.local",
+      "label": "transformer (features built in the pod, lookups from the store)",
+      "latency_ms": {
+        "max": 681.473,
+        "min": 26.759,
+        "p50": 48.97,
+        "p95": 136.056,
+        "p99": 240.21
+      },
+      "measured_at": "2026-08-23T12:01:53Z",
+      "note": "Inside this number and not the champion's: raw decode, two feature-server calls, build_features over 24 columns, the V2 encode, and a second in-cluster hop to the predictor.",
+      "queue_ms": {
+        "max": 0.474,
+        "min": 0.061,
+        "p50": 0.095,
+        "p95": 0.209,
+        "p99": 0.308
+      },
+      "requests": {
+        "error_rate": 0.0,
+        "errors": 0,
+        "ok": 240,
+        "sent": 240
+      },
+      "served_versions": [
+        "2"
+      ],
+      "service_ms": {
+        "max": 681.31,
+        "min": 26.676,
+        "p50": 48.881,
+        "p95": 135.968,
+        "p99": 240.105
+      },
+      "shape": {
+        "achieved_rate_per_second": 4.014,
+        "concurrency": 8,
+        "mix": "hazards",
+        "rows_per_request": 1,
+        "target_rate_per_second": 4.0,
+        "wall_seconds": 59.793,
+        "window_seconds": 60.0
+      },
+      "story": "M5-S4"
+    }
+  },
+  "delta_latency_ms": {
+    "max": 136.203,
+    "p50": 16.776,
+    "p95": 22.978,
+    "p99": -104.854
+  },
+  "shape": {
+    "concurrency": 8,
+    "mix": "hazards",
+    "rate": 4.0,
+    "seconds": 60.0
+  },
+  "shape_source": "M5-S4's headline, unchanged so the arms compare",
+  "story": "M8-S4 leg 3",
+  "what_moved_into_the_number": [
+    "decode of the four raw inputs",
+    "two HTTP calls to the quarantined feature server",
+    "quote_time.build_features over 24 columns",
+    "the V2 encode of the matrix",
+    "a second in-cluster HTTP hop to the predictor"
+  ]
+}

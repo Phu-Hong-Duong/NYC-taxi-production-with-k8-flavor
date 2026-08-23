@@ -44,6 +44,7 @@ import pandas as pd
 from . import aggregates as aggregates_mod
 from . import calendar as calendar_mod
 from . import zones as zones_mod
+from .lookups import COMMITTED, Lookups
 
 
 class FeatureLeakageError(ValueError):
@@ -360,12 +361,19 @@ def _derived_columns(
     df: pd.DataFrame,
     wanted: list[str],
     fitted: aggregates_mod.PointInTimeAggregates | None,
+    lookups: Lookups = COMMITTED,
 ) -> dict[str, Any]:
     """Every derived feature the set asked for, computed once each.
 
     Shared intermediates (the four centroid lookups, the holiday join) are built
     lazily and reused: nine geometry features off one `zones.geometry` call, not
     nine calls returning the same numbers.
+
+    `lookups` supplies reference data from somewhere other than the committed
+    CSVs — an online feature store, at M8. It reaches exactly two of the four
+    reference groups, and `taxi_mlops.features.lookups` argues at length why the
+    other two are refused (F-059). The refusal is visible below as two branches
+    that call `zones_mod` directly while `geometry()` and `holidays()` do not.
     """
     if not wanted:
         return {}
@@ -385,12 +393,16 @@ def _derived_columns(
 
     def geometry() -> zones_mod.Geometry:
         if "geometry" not in cache:
-            cache["geometry"] = zones_mod.geometry(df["PULocationID"], df["DOLocationID"])
+            # `table=None` is `zones.geometry`'s own "read the committed CSV",
+            # so an absent Lookups changes nothing about this call.
+            cache["geometry"] = zones_mod.geometry(
+                df["PULocationID"], df["DOLocationID"], table=lookups.geometry_table
+            )
         return cache["geometry"]
 
     def holidays() -> dict[str, Any]:
         if "holidays" not in cache:
-            cache["holidays"] = calendar_mod.flags(timestamps())
+            cache["holidays"] = calendar_mod.flags(timestamps(), calendar=lookups.calendar)
         return cache["holidays"]
 
     def aggregate_values() -> dict[str, Any]:
@@ -450,6 +462,15 @@ def _derived_columns(
             out[name] = geometry().midpoint_lon
         elif name == "has_geometry":
             out[name] = geometry().has_geometry
+        # THE NEXT SIX BRANCHES DELIBERATELY IGNORE `lookups` — F-059.
+        # `airport_flags` is a constant, total over every id including the two
+        # non-places the store has no row for; the borough CODE is an encoding
+        # whose value depends on the whole lookup table's iteration order, so it
+        # is not a per-entity value and cannot be fetched per entity. Both read
+        # the committed artifacts unconditionally. `taxi_mlops.features.lookups`
+        # carries the argument; `tests/unit/test_lookups_seam.py` refuses a
+        # regression here by asking the AST rather than the behaviour, because a
+        # store whose values happen to agree would hide it.
         elif name == "pu_is_airport":
             out[name] = zones_mod.airport_flags(df["PULocationID"])
         elif name == "do_is_airport":
@@ -494,6 +515,7 @@ def build_features(
     cfg: dict[str, Any],
     *,
     fitted: aggregates_mod.PointInTimeAggregates | None = None,
+    lookups: Lookups = COMMITTED,
 ) -> pd.DataFrame:
     """DataFrame -> DataFrame. Config-driven, no I/O. Training AND serving.
 
@@ -505,6 +527,13 @@ def build_features(
     make "which months is this row allowed to remember?" a property of the
     process rather than of the call, and that question is the whole of dossier
     §4 trap 2.
+
+    `lookups` (M8-S4 leg 3) is the same shape of parameter for the same reason:
+    it says where the CENTROID and CALENDAR reference data came from for THIS
+    call — the committed CSVs by default, an online feature store when a
+    transformer supplies one. It deliberately cannot reach the borough
+    dictionary or the airport constant; `taxi_mlops.features.lookups` is where
+    that refusal is argued (F-059).
     """
     names = feature_names(cfg)
     out = pd.DataFrame(index=df.index)
@@ -535,7 +564,8 @@ def build_features(
             column.astype("float32") if name == "passenger_count" else column.astype("int16")
         )
 
-    for name, values in _derived_columns(df, list(cfg.get("derived", [])), fitted).items():
+    derived = _derived_columns(df, list(cfg.get("derived", [])), fitted, lookups)
+    for name, values in derived.items():
         out[name] = pd.Series(values, index=df.index).astype(_DERIVED[name][0])
 
     out = out[names]

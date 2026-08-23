@@ -1,5 +1,144 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-23 (cc) — M8-S4 leg 3: the boundary moves, and the number does not
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cb) · `docs/milestones/M8_KICKOFF.md` · AWAITING_PO. **Role block: MLE (A),
+SRE (R)** — the kickoff's assignment for S4; charter read. Refusals in play all session:
+*nothing fitted for a model · no alias read or moved · the champion's own wire untouched ·
+a mismatch is a finding, never a widened bar · no `uv add feast`* — none was broken.
+
+**M8-S4 leg 3 is DONE.** The story the kickoff's second paragraph describes is complete:
+the transformer is on the cluster beside the champion, THE parity through the new seam is
+measured, p95 at M5-S4's shape is measured, teardown is proven, and both serving gates are
+green. **No PO fork was opened.** **2 of the 3-attempt wall were inherited unspent and
+remain unspent** — shape (i) was decided at leg 2 and needed no further attempts.
+
+### Reconciliation (the staleness check, before any story work)
+Reality matched HANDOFF (cb) and had moved only in ways it predicted. The host had
+rebooted ~34 min before boot (every monitoring pod restarted); `kubectl get nodes` 3/3
+Ready v1.36.1 at 6d9h; no `automation/STOP`; no `.status` file pointed at. Two things
+worth recording because they were *checked rather than assumed*: **Redis survived the
+reboot again** (`dbsize` **57,688**, exactly what leg 1 materialized, pod restarted once)
+and the feature server was up. `@champion` version **2**, and the champion quoted
+**39.0019 minutes** for the M5-S2 spot-check row. The 104 `flyte` pods from F-058's
+back-fill are still present as `Completed` and were left alone — the trigger stays
+deactivated per AWAITING_PO 2026-08-23-1.
+
+### Done
+- **THE HEADLINE: `max |champion − transformer| = 0.000e+00` minutes across all 16
+  declared hazards, bar EXACT.** Arm A builds the matrix on the host and POSTs it to
+  `nyc-taxi-eta`; arm B POSTs four RAW fields to `nyc-taxi-eta-transformer` and a pod
+  derives the 24 features. Every row identical to six decimals including the
+  no-geometry pair, the unseen OD pair and the 2026 date. Table committed at
+  `docs/transformer_parity_table.md`.
+- **The bar is TIGHTER than M5-S3's 1e-6, and it was argued from a MEASURED premise.**
+  `docs/transformer_m8.md` §3 committed at `79aedb4`, before any record existed (M8 law
+  4, checkable from git). It was defensible only because `make transformer-probe` had
+  already shown the store-backed matrix bit-identical to the committed one on the host —
+  a bar argued from a measured premise is a different object from one argued from a
+  plausible one, even when they print the same number.
+- **F-059 CLOSED by becoming a TYPE.** `features.lookups.Lookups` has exactly two
+  fields, so there is nowhere to put a fetched borough code or airport flag; the borough
+  and airport branches call `zones` unconditionally; the store-backed `ZoneTable` carries
+  the COMMITTED borough arrays as defence in depth. Pinned by **AST**, not behaviour —
+  a store whose values happened to agree would pass a behavioural test for a wrong
+  design, and the failure it hides is invisible in every individual value.
+- **`Lookups.sources` -> the `X-Taxi-Lookups` header**, reporting all four groups
+  including the two that did NOT cross. Without it, a 0.000e+00 measured against a pod
+  that silently fell back to its committed CSVs would look exactly like this one.
+  Asserted by the accept and by the parity, on the same response they read the number
+  from.
+- **The transformer is stdlib** (`http.server`, `urllib`, `json`) — **`uv.lock`
+  byte-identical to `m7-closed`**, as at every other M8 story's exit. `encode_raw` and
+  `decode_raw` are in ONE module so client and server cannot be twins.
+- **Three distinguishable refusal classes**: unreachable store **503**, a date the store
+  has no row for **422** (F-019's guarantee surviving the reference data's move), an
+  unknown input **422 and named** (ignoring it would quote at a default nobody asked
+  for).
+- **p95 at M5-S4's shape, both arms back to back**: p50 **31.1 -> 49.3 ms (+18.1)**,
+  p95 **113.1 -> 118.1 (+5.0)**, 240/240 ok each, **zero errors on both**, 4.01 req/s
+  achieved on both, version `['2']` on both.
+- **Teardown PROVEN, then re-deployed on purpose.** `TEARDOWN=1` removed exactly the
+  transformer's isvc and its generated objects; the champion's Deployment/Service/Ingress
+  stayed at 4d6h and its predictor **POD kept uid `9b1f1b03-7dfe-458f…`** and still
+  answered 39.0019 — a list of surviving object NAMES would not have distinguished
+  untouched from recreated. Left up for M8-S5 (the M6-S3 shadow precedent, both halves).
+- **Verification at exit**: `make verify-m5` **GREEN** · `make verify-m7` **GREEN 62/62**
+  · host suite **1091 passed** (+34) · ruff clean · `@champion` **2** / `feature_set v2`,
+  versions `['1','2']` (**no version 3**) · `uv.lock` byte-identical to `m7-closed` ·
+  all four settled DVC pins `up to date`.
+
+### Decisions
+- **A SECOND InferenceService, never a transformer on the champion's own.** Adding one
+  to `nyc-taxi-eta` would change what every existing client sends (the M5 gate, `make
+  quote`, `make parity`, `make load`, M6's drills), and F-040 already measured which
+  direction of schema change hurts. `make verify-m5` green at exit is the proof.
+- **Stdlib over a framework**, argued in `transformer.py`'s docstring: three packages
+  into a pinned numeric stack to serve one POST route at 4 req/s is what gotcha #36 is
+  the record of not risking.
+- **The model name is the isvc name on both halves**, no `MLSERVER_MODEL_NAME` override.
+  This is not a canary and must NOT be confusable with the champion's endpoint — a
+  request arriving at the wrong service gets a loud 404 rather than a plausible answer
+  built from the wrong boundary.
+- **`is_business_day` is not fetched even though the store has it** — `calendar.flags`
+  derives it as `weekday & not-holiday`, and taking the store's copy would give the
+  program two definitions of a business day for no gain.
+- **The F-026 guard fired on this story's own commit** for `serving/load.py` (client
+  code the pod cannot run) and **the image was rebuilt rather than the guard narrowed** —
+  M7-S4's precedent, second occurrence. Both measurements were then re-run so the records
+  describe the DEPLOYED image.
+
+### Defects/Surprises
+- **F-060 (new, CLOSED same session): a negative assertion passes for free when the
+  system is entirely absent.** The accept's "the champion's model name 404s here" PASSED
+  on the first deploy while the other five checks failed, because nginx had not loaded
+  KServe's generated Ingress and the host was 404ing EVERYTHING. Repaired two ways,
+  neither a looser bar: the negative check is conditional on the positive one, and the
+  deploy gained a third wait leg that asks the ROUTE. **Gotcha #105.**
+- **F-037's shape on a BRAND-NEW isvc** — `rollout status` on both Deployments and the
+  ISVC's `Ready` condition were all satisfied ~12 s before the route existed, with no
+  predecessor to be satisfied by (#71/#84's family with the usual explanation removed).
+  **Gotcha #106.**
+- **The p95 delta is not a reportable figure.** +23.0 ms in one run, +5.0 ms eight
+  minutes later, same shape and same pods, while p50 held at +16.8/+18.1. Both records
+  are tracked (`transformer-load-run1.json` beside `transformer-load.json`) so the claim
+  is checkable. Quote the p50.
+- **M5-S4's ~30 ms prediction was pessimistic and the word was `cold`** — the measured
+  p50 move is ~18 ms and it buys the feature build PLUS two HTTP round trips PLUS a
+  second in-cluster hop. **Gotcha #107.**
+- Feast's response column order is still not the request's (leg 2's finding); the client
+  pairs by `metadata.feature_names` throughout.
+
+### Next
+**Next story: M8-S5 — the side-by-side page, the M8 gate, and its red team**
+(`docs/milestones/M8_KICKOFF.md` §"M8-S5"; legs allowed, DA A for the page, MLOps A for
+the gate). Everything it needs is landed and live:
+* **The transformer is UP and answering** at `nyc-taxi-eta-transformer-serving.local`
+  through the existing 8081 route, on image `taxi-mlops-pipeline:2cdcb36`. Rebuild +
+  redeploy is `make image-load && make deploy-transformer`, ~3 minutes.
+* **The store holds 57,688 keys** and has now survived two host reboots; the feature
+  server is stateless and rebuilt by `make feast-server-image && make deploy-feast-server`.
+* **The accept artifacts exist for the gate to READ rather than re-run**:
+  `automation/runs/m8-transformer/*.json` (seven records), `automation/runs/m8-online/
+  {store,materialize}.json`, `automation/runs/m8-feast/{probe,registry,plan}.json`, and
+  the two committed tables `docs/feast_online_parity_table.md` and
+  `docs/transformer_parity_table.md`.
+* **`verify-m8` is still the stub** (`Makefile`: `TODO(M8)`). The kickoff's accept for it
+  is the 100-pair parity + a traced enriched request + the prior-art revisit — the first
+  two both exist as tracked records now, and the traced request is the transformer's
+  `X-Taxi-Lookups` + `model_version` pair on one response.
+* **Two things that will cost time if discovered rather than read**: the gate must
+  RE-RUN NOTHING (seventh inheritance of M1's rule — and here re-running would mean a
+  ~7-minute image build, because gotcha #66 makes every commit a new image tag); and its
+  live questions should be counted and pinned by its own test, as `verify-m7`'s three are.
+* **The residual is STILL open and now has a third consumer**: there is no alert on an
+  empty or stale online store. `docs/transformer_m8.md` §6 spells out what it looks like
+  from the rider's side now that traffic can reach it — an all-`null` store yields an
+  all-NaN geometry table and a confident quote, and no client can refuse that, because
+  `null` is also the correct answer for zones 264/265.
+
 ## Session 2026-08-23 (cb) — M8-S4 leg 2 (first slice): the wall gets a door, and it is lossless
 
 ### State
