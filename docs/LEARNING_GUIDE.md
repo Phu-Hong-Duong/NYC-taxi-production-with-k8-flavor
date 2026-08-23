@@ -4041,3 +4041,67 @@ behind it on one node — luck, not design. **A schedule left running forever on
 machine that gets turned off has a cost that scales with how long it was off, and
 the only reason anyone saw this one is that the ritual says look before you
 build.**
+
+## M8-S4 leg 3 — the boundary moves, and the number does not (2026-08-23, EXEC/Opus 5)
+
+**What this story actually is.** Since M5-S2, every client of this program has
+built the champion's 24-column matrix itself and put the FEATURES on the wire.
+That works, and it has an honest weakness: "training and serving agree about what
+a feature is" was a property of each caller separately. This leg puts a pod in
+front of the model that takes what a rider knows — a time, two zone ids, a party
+size — and derives the 24 features inside the cluster, with the centroids and the
+calendar flags read out of the online feature store instead of the committed CSVs.
+The headline is that **`max |champion − transformer| = 0.000e+00` minutes across
+all 16 declared hazards**: the boundary moved and the number did not.
+
+**The lesson I would carry to another program: write the bar's ARGUMENT, then go
+and make one of its premises a measurement.** M8's law 4 makes you commit the
+tolerance before the comparison, and the temptation is to write a hedge that
+cannot be wrong. The bar here is EXACT — *tighter* than M5-S3's 1e-6 — and it was
+defensible only because `make transformer-probe` had already measured the
+store-backed matrix as bit-identical to the committed one, on the host, before the
+bar was written. That turns "float64 should survive JSON" from a hope into a
+precondition. A bar argued from a measured premise is a different object from a
+bar argued from a plausible one, even when they print the same number.
+
+**The probe earned its keep twice, and neither time for the reason it was built.**
+It cost about a minute against a ~7-minute image build and a KServe deploy this
+repo prices at 2–3 defects each. It found nothing wrong with Feast — it found that
+everything except KServe's own wiring already worked, which is what made the
+deploy's one failure attributable in seconds rather than being one candidate among
+five. Leg 2's 30-second probe did exactly the same thing. **A cheap probe's yield
+is usually not the thing it was pointed at; it is the SIZE of the search space
+when the expensive thing then fails.**
+
+**The defect worth remembering is in a CHECK, and it is one I write constantly.**
+The accept asserts that the champion's model name 404s on the transformer's host
+— the negative half, without which a number from that service could have come
+from either boundary. Its first run PASSED that while failing everything else,
+because nginx had not loaded the generated Ingress and the host was 404ing every
+request. A 404 because nothing is routed and a 404 because the name is wrong are
+the same bytes. Gotcha #59 says assert on a positive artifact; this is its
+negative form — **where the artifact IS an absence, prove first that presence was
+possible** — and the repair was to make the negative check conditional on the
+positive one, not to loosen anything.
+
+**F-059 stopped being a note and became a type.** Leg 2 found that a feature store
+is a good home for a per-entity MEASUREMENT and a bad home for anything a program
+COMPUTES, and that the two are indistinguishable in a schema. Landing it meant
+giving `Lookups` exactly two fields, so there is nowhere to put a fetched borough
+code, and pinning it with a test that asks the **AST** rather than the behaviour —
+because a store whose values happened to agree would make a behavioural test pass
+for a design that is wrong, and the failure it hides (a total category re-map with
+every value individually correct) is invisible in every individual value. **When a
+design rule's violation would be silent, the guard has to be about the SHAPE of
+the code, not about its output.**
+
+**And the number I would have got wrong by analogy.** M5-S4 priced the feature
+build at ~30 ms cold and warned it would land inside the p95. The measured p50 move
+is +18 ms — and it buys the feature build plus two round trips to another pod plus a
+second HTTP hop. The word doing the work is *cold*. Meanwhile the p95 DELTA swung
++23.0 → +5.0 ms between two identical runs eight minutes apart while p50 held to a
+millisecond, so the reportable cost is the p50 and the p95 is "inside a band wider
+than the effect". Two runs is the cheapest possible defence against quoting a tail
+on a laptop, and it is the second time this program has needed it (M6-S2 refused
+the same flattering reading about p99).
+

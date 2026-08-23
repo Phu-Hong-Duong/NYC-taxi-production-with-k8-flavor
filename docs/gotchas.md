@@ -1585,3 +1585,37 @@ the seed line are earned by THIS project.
     arriving as a fourteen-line diff is where a third line hides. Whenever a
     generated artifact is ALSO a review surface, prove it round-trips: generate
     it twice and diff (F-057, M8-S4).
+
+105. **A negative assertion passes for free when the system is entirely absent —
+    and the two cases are the same bytes.** The transformer's accept check asserts
+    that the CHAMPION'S model name 404s on the transformer's host, which is what
+    makes "which boundary produced this number?" answerable at all. Its first run
+    PASSED that check while failing every other one, because nginx had not yet
+    loaded KServe's generated Ingress and the host was 404ing EVERYTHING. #59 says
+    assert on a positive artifact; this is its negative form — **where the artifact
+    IS an absence, prove first that presence was possible**. The repair is to make
+    the negative check conditional on the positive one (`404 and route_live`), so
+    it asserts a DIFFERENCE between two names on a live route rather than a silence
+    (F-060, M8-S4 leg 3).
+
+106. **`kubectl wait` and `rollout status` can both be satisfied while the ROUTE
+    does not exist yet, on a FIRST deploy — #71/#84's family with nothing to be
+    satisfied by.** F-037 was found at M6-S3 when a shadow's route 404'd; leg 3 hit
+    it again on a brand-new InferenceService, where there is no predecessor at all:
+    both Deployments rolled out, the ISVC's `Ready` condition went True, and the
+    generated Ingress was ~12 s from being loaded. A readiness wait is only about
+    the objects it names. Ask the thing the NEXT step uses — here, `GET /health` on
+    the route, under the Host header the next step will send (M8-S4 leg 3).
+
+107. **The feature build was priced COLD and paid WARM, so the boundary cost less
+    than its own prediction.** M5-S4 recorded `build_features` at ~30 ms for one
+    row and warned the M7 transformer would move it inside the p95. Measured, the
+    p50 moved **+18 ms** — and that buys the feature build PLUS two HTTP round
+    trips to another pod PLUS a second in-cluster hop. The 30 ms was a first call
+    paying module import and an `lru_cache` fill; a warm pod pays neither, and the
+    store path never reads those CSVs. #80's family (an analogy from a
+    differently-conditioned measurement), erring this time in the safe direction —
+    and the same run showed the p95 DELTA swinging +23.0 -> +5.0 ms between two
+    runs eight minutes apart while p50 held to a millisecond, so quote the p50 and
+    say the p95 is inside a band wider than the effect (M8-S4 leg 3).
+

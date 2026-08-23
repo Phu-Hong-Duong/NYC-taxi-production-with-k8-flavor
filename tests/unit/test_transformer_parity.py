@@ -129,7 +129,9 @@ def test_the_load_run_sets_no_threshold() -> None:
         node
         for node in ast.walk(module)
         if isinstance(node, ast.Compare)
-        and any(isinstance(c, ast.Constant) and isinstance(c.value, float) for c in node.comparators)
+        and any(
+            isinstance(c, ast.Constant) and isinstance(c.value, float) for c in node.comparators
+        )
     ]
     # `error_rate == 0.0` is a count of failures, not a latency bar: zero is not
     # a threshold anybody chose. Anything else would be.

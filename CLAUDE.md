@@ -2932,6 +2932,97 @@ can never disagree (the port-family twins lesson, applied before it bit).
   still open and still belongs to the story that puts a reader in front of the
   store: **there is no alert on an empty or stale online store.**
 
+## The boundary moves (M8-S4 leg 3) — a raw request in a pod, and the number that did not change
+- **`max |champion − transformer| = 0.000e+00` minutes across all 16 declared
+  hazards, bar EXACT** — and the bar is *tighter* than M5-S3's 1e-6, argued in
+  `docs/transformer_m8.md` §3 and **committed at `79aedb4` before any record
+  existed**. A tighter bar needs an argument as much as a wider one does, and this
+  one rests on a MEASURED premise rather than a plausible one: `make
+  transformer-probe` had already shown the store-backed matrix bit-identical to
+  the committed one, on the host, before the sentence was written. The remaining
+  three differences cannot move a bit — a second mlserver on the same image and
+  the same champion bytes, one extra in-cluster JSON hop through the SAME
+  `client.v2_payload`, and reference data whose projection leg 2 measured exact.
+- **The rows are worth reading, not just the total.** `no-geometry-both` (zones
+  264/265, which the store has no row for and the committed table holds NaN for)
+  produced NaN on both sides through the same named fallback and answered
+  9.655549 twice; `federal-holiday` is the 39.001937 every record in this repo
+  already carries, now produced by a pod from four raw fields.
+- **What crosses the wall is F-059 as a TYPE.** `features.lookups.Lookups` has
+  exactly two fields — `geometry_table` and `calendar` — so there is nowhere to
+  put a fetched borough code or airport flag. The borough branches call `zones`
+  directly and unconditionally, the store-backed `ZoneTable` is built with the
+  COMMITTED borough arrays as defence in depth, and `feature_store.ZONE_FEATURES`
+  asks for `centroid_lat`/`centroid_lon` and nothing else. The guard asks the
+  **AST**, never the behaviour: a store whose values happened to agree would make
+  a behavioural test pass for a design that is wrong, and the failure it hides —
+  a total category re-map with every value individually correct — is invisible in
+  every individual value.
+- **`Lookups.sources` reports all four groups INCLUDING the two that did not
+  cross**, and the transformer returns it as the `X-Taxi-Lookups` response header.
+  Without it a parity of 0.000e+00 measured against a pod that silently fell back
+  to its committed CSVs would look exactly like this one — ADR-012's own named
+  failure mode, one layer along. Both the accept and the parity assert it on the
+  same response they read the number from.
+- **The transformer is stdlib**: `http.server.ThreadingHTTPServer`, `urllib`,
+  `json`. No FastAPI, no uvicorn, no KServe SDK — three packages into a pinned
+  numeric stack to serve one POST route at 4 req/s is what gotcha #36 is the
+  record of not risking. **`uv.lock` is byte-identical to `m7-closed`** at exit,
+  as at every other M8 story's. `encode_raw` and `decode_raw` live in ONE module
+  so the client and the server cannot be twins.
+- **It refuses in three distinguishable classes, and the distinction is the
+  point.** A store that cannot be reached is **503** (ours, retryable); a date the
+  store has no calendar row for is **422** — F-019's guarantee is a property of
+  the DEPLOYMENT, not of the CSV, so it had to survive the reference data moving
+  into a store; a body naming an input the schema does not know is **422 and
+  named**, because ignoring it would quote every row at a default nobody asked
+  for. Collapsing 503 into 422 would make a dependency outage look like a
+  malformed quote in every panel that splits 4xx from 5xx.
+- **The champion's own wire is untouched and the proof is a POD UID.** Teardown
+  removed exactly the transformer's isvc and its five generated objects while the
+  champion's Deployment/Service/Ingress stayed at 4d6h and its predictor pod kept
+  uid `9b1f1b03-7dfe-458f…`, still answering 39.0019. A list of surviving object
+  NAMES would not have distinguished "untouched" from "recreated". Then
+  re-deployed and left up on purpose — M8-S5's gate inherits it live (the M6-S3
+  shadow precedent, both halves).
+- **p95: quote the p50, not the p95.** M5-S4's shape exactly (4 req/s, 60 s,
+  concurrency 8, hazards, open loop), both arms back to back in one invocation so
+  the champion is a CONTROL measured in the same minutes. **p50 31.1 -> 49.3
+  (+18.1 ms), p95 113.1 -> 118.1 (+5.0), 240/240 ok on each arm, zero errors,
+  4.01 req/s achieved on both.** But the p95 DELTA was **+23.0 ms** in a run eight
+  minutes earlier while p50 held at +16.8 — that tail is host contention on a
+  laptop, the reading M6-S2 already refused to take credit for once. Both records
+  are tracked so the claim is checkable, and **the reportable cost of the moved
+  boundary is ~18 ms at p50**.
+- **The prediction was pessimistic and the word was `cold`** (gotcha #107).
+  M5-S4 priced the feature build at ~30 ms for one row; the measured move is ~18
+  ms and it buys the build PLUS two HTTP round trips to the feature server PLUS a
+  second in-cluster hop. That 30 ms paid module import and the `lru_cache` fill on
+  `load_zone_table`/`load_calendar`; a warm pod pays neither and the store path
+  never reads those CSVs.
+- **F-060, and it is a defect in a CHECK I write constantly.** The accept asserts
+  that the CHAMPION'S model name 404s on the transformer's host — the negative
+  half, without which a number from that service could have come from either
+  boundary. Its first run PASSED that while failing every other check, because
+  nginx had not loaded KServe's generated Ingress and the host was 404ing
+  EVERYTHING (**F-037's shape on a brand-new isvc, where there is no predecessor
+  to be satisfied by — gotcha #106**). A 404 because nothing is routed and a 404
+  because the name is wrong are the same bytes. Repaired two ways and neither is a
+  looser bar: the negative check is now conditional on the positive one, and the
+  deploy gained a THIRD wait leg that asks the ROUTE under the Host header the
+  next step will send. **Gotcha #105: where the artifact IS an absence, prove
+  first that presence was possible.**
+- **The F-026 guard fired on this story's own commit for a file the pod cannot
+  run** (`serving/load.py` gained a `bodies` parameter, client code) — and the
+  image was rebuilt rather than the guard narrowed, M7-S4's precedent, second
+  occurrence.
+- Exit state: `@champion` **2** / `feature_set v2`, versions `['1','2']` — **no
+  version 3** · `make verify-m5` GREEN · `make verify-m7` **GREEN 62/62** · host
+  suite **1091 passed** · ruff clean · `uv.lock` byte-identical to `m7-closed` ·
+  all four settled DVC pins `up to date`. **The residual is still open and now has
+  a third consumer: there is no alert on an empty or stale online store**, and this
+  leg is the first to put rider-shaped traffic behind it.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3125,6 +3216,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The QUARANTINED feature server: build + every node (M8-S4 leg 2) | `make feast-server-image` (`DRY_RUN=1` builds nothing) | VERIFIED 2026-08-23 (M8-S4 leg 2): `taxi-mlops-feast-server:feast-0.66.0-a524771`, **203 MB**, built `--no-deps` from `infra/feast/requirements-feast.txt` — the SAME pin file the host quarantine uses, so one pin file and no twin — then `kind load` and **read back off all 3 nodes with each node's own `crictl`**. The tag carries a git short sha and `-dirty` (M4-S3's rule: a mutable tag makes a stale node a wrong number instead of a loud error), and `deploy_feast_server.sh` REFUSES a `-dirty` image at exit 3. Record: `automation/runs/m8-transformer/feast-server-image.json` |
 | The feature server ON THE CLUSTER (M8-S4 leg 2) | `make deploy-feast-server` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` removes its two objects and leaves Redis alone) | VERIFIED 2026-08-23 (M8-S4 leg 2): rolled out, and the accept is an **ANSWER asked from the REDIS pod** so Service DNS and cross-pod reachability are under test (a server curling itself proves neither) — zone 132 -> `(40.646985, -73.78653) is_airport=True`, **zone 264 -> `null`**, and the null half is asserted because a check that only asserts presence passes against a server answering every question with the same row. The live Deployment's image is read back **off the object**. **STATELESS**: no volume, no hostPort (M8 law 1), no backup obligation; its registry is derived by `feast apply` in the entrypoint at every start. Record: `automation/runs/m8-transformer/feast-server-deploy.json` |
 | THE HTTP-seam parity: the server's answers vs the champion's OWN lookup (M8-S4 leg 2) | `make feast-server-parity` (`SERVER_PARITY_ARGS=--no-write` records nothing). A READER — deploys nothing, materializes nothing, one subprocess (the ephemeral forward on **6567**), AST-pinned | VERIFIED 2026-08-23 (M8-S4 leg 2): **`max \|ours − server\| = 0.000e+00` across 6 columns and 108 comparisons against a bar of EXACT, with `one missing` ZERO** — the load-bearing count, because it says the two sides agree about which values do not EXIST. The bar was argued for THIS path and **committed at `91ab8a6` before any record existed** (`docs/feast_server_m8.md` §3). Rows are the 16 declared hazards **imported from `taxi_mlops.serving.parity.HAZARDS`**, never retyped — 23 distinct zones, 15 distinct pickup dates — so the wire, store, offline and HTTP seams are all measured against ONE row set. The store **declines EXACTLY the zones our path has no geometry for** (`[264, 265]`), asserted in both directions. **Its first run went RED on `is_airport` and that is F-059**, repaired by comparing like with like rather than by widening the bar. Record: `automation/runs/m8-transformer/server-parity.json` |
+| The CHEAP PROBE in front of a build and a KServe deploy (M8-S4 leg 3) | `make transformer-probe` (host process, two ephemeral forwards, ~1 min) | VERIFIED 2026-08-23 (M8-S4 leg 3): it runs the transformer's WHOLE request path in the calling process against the two real services — `store-backed == committed: True` over 16 hazards x 24 columns, `max |delta| 0.000e+00`, version `'2'`, and the 2031 refusal raised by `StoreCoverageError`. Roughly a minute against a ~7-minute image build plus a KServe deploy this repo prices at 2-3 defects each (F-036/F-037/F-038/F-039). It exercises the store client, the `lookups` seam, `build_matrix`, the V2 payload and mlserver; it does NOT exercise KServe's transformer wiring or the Ingress, **which is why a green probe is not an accept check**. Its yield was the usual one: the deploy's single failure was attributable in seconds because everything else was already known to work |
+| The transformer BESIDE the champion (M8-S4 leg 3) | `make deploy-transformer` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` deletes exactly its own isvc) | VERIFIED 2026-08-23 (M8-S4 leg 3): a SECOND InferenceService whose predictor holds **the same champion bytes** (resolved from the alias by the same F-009 two hops) and whose transformer runs OUR image. **Accept GREEN 6/6** and it is the artifact, not a ready-list (gotcha #59): a RAW request answered **39.0019 minutes** stamped `model_version='2'` — mlserver's own stamp, forwarded VERBATIM — with `X-Taxi-Lookups` proving the store was consulted AND that F-059's two groups were not, the champion's model name **404ing on this host** (conditional on the route being live — F-060), and a 2031 quote **REFUSED at 422** naming the date. `@champion` **2** before and after; a move exits 2. It REFUSES a `-dirty` image (exit 3) and refuses a stale one (F-026's guard over `src`/`pyproject.toml`/`uv.lock`/`docker`), which fired on this story's own commit. **Three wait legs**: `rollout status` on BOTH Deployments, then `--for=jsonpath=` (F-036, never `--for=condition=`), then **the ROUTE itself** — gotcha #106 |
+| THE parity through the MOVED boundary (M8-S4 leg 3) | `make transformer-parity` (`TRANSFORMER_PARITY_ARGS=--no-write` records nothing). A READER | VERIFIED 2026-08-23 (M8-S4 leg 3): **`max |champion − transformer| = 0.000e+00` minutes across all 16 declared hazards against a bar of EXACT**, argued in `docs/transformer_m8.md` §3 and **committed at `79aedb4` before any record existed** — tighter than M5-S3's 1e-6, and defensible only because the probe had already measured the store-backed matrix bit-identical on the host. Arm A builds the matrix HERE and POSTs it to `nyc-taxi-eta`; arm B POSTs four RAW fields to `nyc-taxi-eta-transformer` and a pod does the rest. Plus three checks the delta alone cannot make: both answers carry registry version **2** (read off the two ANSWERS), the pod really consulted the store, and the borough dictionary and airport constant did not cross. Rows are `parity.HAZARDS`, **imported and never retyped**, so five seams now share ONE declared row set. Table: `docs/transformer_parity_table.md` |
+| p95 at the NEW boundary, beside the old one (M8-S4 leg 3) | `make transformer-load` (`TRANSFORMER_LOAD_ARGS=--no-write`). A READER — it POSTs, it times, it sets no threshold | VERIFIED 2026-08-23 (M8-S4 leg 3): M5-S4's shape EXACTLY (4 req/s, 60 s, concurrency 8, hazard mix, open loop) through the SAME `run_load` with only the payload differing — two percentiles at different shapes are not comparable. **Both arms back to back in one invocation**, so the champion is a CONTROL measured in the same minutes rather than a figure quoted across a host reboot. **p50 31.1 -> 49.3 ms (+18.1), p95 113.1 -> 118.1 (+5.0), 240/240 ok on each arm, ZERO errors on both, 4.01 req/s achieved on both, version `['2']` on both.** **Quote the p50**: the p95 delta was **+23.0 ms** in a run eight minutes earlier while p50 held at +16.8, and both records are tracked (`transformer-load.json`, `transformer-load-run1.json`) so that is checkable rather than asserted — the tail is laptop contention, the reading M6-S2 already refused once |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7 live |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
