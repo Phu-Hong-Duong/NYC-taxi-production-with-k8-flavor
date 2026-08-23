@@ -1,0 +1,159 @@
+{
+  "anchor": {
+    "hazard": "federal-holiday",
+    "lookup_sources": "airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store",
+    "minutes": 39.00193715359812,
+    "model_version": "2",
+    "record": "automation/runs/m8-transformer/transformer-parity.json"
+  },
+  "checks": [
+    {
+      "claim": "the page a browser receives is byte-identical to demo/index.html (HTTP 200, 46766 bytes, sha256 2276ffb5f1a7eecf\u2026)",
+      "ok": true
+    },
+    {
+      "claim": "a live quote came back: HTTP 404, no number ({'error': \"no such path '/v2/models/nyc-taxi-eta/infer'; try /v2/models/nyc-taxi-eta-transformer/infer\"})",
+      "ok": false
+    },
+    {
+      "claim": "it reproduces the recorded federal-holiday row EXACTLY: None vs 39.00193715359812 (|delta| = n/a), anchor automation/runs/m8-transformer/transformer-parity.json",
+      "ok": false
+    },
+    {
+      "claim": "the serving model version is stamped on the ANSWER: None (recorded '2') \u2014 mlserver's own stamp, forwarded",
+      "ok": false
+    },
+    {
+      "claim": "X-Taxi-Lookups on the demo's own response: None (recorded 'airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store') \u2014 the feature store was consulted and F-059's two committed groups did not cross",
+      "ok": false
+    },
+    {
+      "claim": "a 2031 quote is REFUSED, not guessed: HTTP 404, and the text names the date \u2014 \"no such path '/v2/models/nyc-taxi-eta/infer'; try /v2/models/nyc-taxi-eta-transformer/infer\"",
+      "ok": false
+    },
+    {
+      "claim": "the no-geometry path (zone 264 -> 264, TLC's 'Unknown') is QUOTED, not broken: HTTP 404, no number ({'error': \"no such path '/v2/models/nyc-taxi-eta/infer'; try /v2/models/nyc-taxi-eta-transformer/infer\"})",
+      "ok": false
+    },
+    {
+      "claim": "an unclaimed V2 path on the same origin 404s (/v2/models/nyc-taxi-eta-transformer/infer -> 404) \u2014 asserted only because a real quote succeeded first, since an unloaded route 404s identically (F-060)",
+      "ok": false
+    },
+    {
+      "claim": "the host-less rule left deploy_serving.sh's accept standing: /healthz -> 200, / -> 404",
+      "ok": true
+    }
+  ],
+  "default_trip": {
+    "do_location_id": 48,
+    "passenger_count": 1,
+    "pickup_datetime": "2019-07-04T09:15:00",
+    "pu_location_id": 132
+  },
+  "endpoint": "/v2/models/nyc-taxi-eta/infer",
+  "endpoint_read_from": "demo/index.html (the page's own ENDPOINT constant)",
+  "failures": [
+    "a live quote came back: HTTP 404, no number ({'error': \"no such path '/v2/models/nyc-taxi-eta/infer'; try /v2/models/nyc-taxi-eta-transformer/infer\"})",
+    "it reproduces the recorded federal-holiday row EXACTLY: None vs 39.00193715359812 (|delta| = n/a), anchor automation/runs/m8-transformer/transformer-parity.json",
+    "the serving model version is stamped on the ANSWER: None (recorded '2') \u2014 mlserver's own stamp, forwarded",
+    "X-Taxi-Lookups on the demo's own response: None (recorded 'airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store') \u2014 the feature store was consulted and F-059's two committed groups did not cross",
+    "a 2031 quote is REFUSED, not guessed: HTTP 404, and the text names the date \u2014 \"no such path '/v2/models/nyc-taxi-eta/infer'; try /v2/models/nyc-taxi-eta-transformer/infer\"",
+    "the no-geometry path (zone 264 -> 264, TLC's 'Unknown') is QUOTED, not broken: HTTP 404, no number ({'error': \"no such path '/v2/models/nyc-taxi-eta/infer'; try /v2/models/nyc-taxi-eta-transformer/infer\"})",
+    "an unclaimed V2 path on the same origin 404s (/v2/models/nyc-taxi-eta-transformer/infer -> 404) \u2014 asserted only because a real quote succeeded first, since an unloaded route 404s identically (F-060)"
+  ],
+  "no_geometry": {
+    "http_status": 404,
+    "lookups": null,
+    "minutes": null,
+    "trip": {
+      "do_location_id": 264,
+      "passenger_count": 1,
+      "pickup_datetime": "2019-07-04T09:15:00",
+      "pu_location_id": 264
+    }
+  },
+  "page": {
+    "bytes": 46766,
+    "committed_sha256": "2276ffb5f1a7eecf881518596573ec5bc211b8fa23691003529113666c198309",
+    "http_status": 200,
+    "served_sha256": "2276ffb5f1a7eecf881518596573ec5bc211b8fa23691003529113666c198309"
+  },
+  "page_url": "http://localhost:8081/demo/",
+  "po_observed_run": {
+    "box": "BLUEPRINT \u00a79/M9: one non-technical person (the PO counts) completes a query unassisted, observed",
+    "raised_in": "AWAITING_PO.md",
+    "status": "OPEN \u2014 cannot be closed by an unattended session",
+    "url": "http://localhost:8081/demo/"
+  },
+  "quote": {
+    "abs_delta_minutes": null,
+    "bar": "EXACT \u2014 argued in demo/README.md \u00a74 before this record existed",
+    "http_status": 404,
+    "lookups": null,
+    "minutes": null,
+    "model_version": null,
+    "request": {
+      "inputs": [
+        {
+          "data": [
+            "2019-07-04T09:15:00"
+          ],
+          "datatype": "BYTES",
+          "name": "pickup_datetime",
+          "shape": [
+            1,
+            1
+          ]
+        },
+        {
+          "data": [
+            132
+          ],
+          "datatype": "INT32",
+          "name": "PULocationID",
+          "shape": [
+            1,
+            1
+          ]
+        },
+        {
+          "data": [
+            48
+          ],
+          "datatype": "INT32",
+          "name": "DOLocationID",
+          "shape": [
+            1,
+            1
+          ]
+        },
+        {
+          "data": [
+            1.0
+          ],
+          "datatype": "FP64",
+          "name": "passenger_count",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "refusal": {
+    "error": "no such path '/v2/models/nyc-taxi-eta/infer'; try /v2/models/nyc-taxi-eta-transformer/infer",
+    "http_status": 404,
+    "pickup_datetime": "2031-07-04T09:15:00"
+  },
+  "route": "http://localhost:8081",
+  "route_invariants": {
+    "healthz": 200,
+    "root": 404
+  },
+  "unclaimed_path": {
+    "http_status": 404,
+    "path": "/v2/models/nyc-taxi-eta-transformer/infer"
+  },
+  "verdict": "FAILED"
+}

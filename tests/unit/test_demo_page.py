@@ -215,7 +215,29 @@ def test_the_endpoint_is_relative_which_is_what_dissolves_cors() -> None:
 
 
 # --------------------------------------------------------------- the route ---
+def _transformer_names() -> tuple[str, str]:
+    """(transformer isvc, champion isvc) read from M8's accept, not retyped here.
+
+    The V2 model name is in the URL path (ADR-011 condition 2), so the demo's api
+    path is a FUNCTION of the transformer's isvc name — and the first deploy of
+    this route proved it by claiming the champion's name and 404ing on every
+    quote. Deriving it from a constant M8-S4's own accept already depends on
+    means a rename breaks one place loudly instead of two places quietly.
+    """
+    tree = ast.parse((REPO / "scripts" / "transformer_accept.py").read_text())
+    found: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id in {"ISVC", "CHAMPION"}:
+                    found[target.id] = node.value.value
+    assert {"ISVC", "CHAMPION"} <= set(found), "transformer_accept.py's names moved"
+    return found["ISVC"], found["CHAMPION"]
+
+
 def test_the_route_has_no_host_and_claims_two_paths_neither_of_them_root() -> None:
+    transformer, champion = _transformer_names()
+    api_path = f"/v2/models/{transformer}/infer"
     ingress = [d for d in manifest_docs() if d["kind"] == "Ingress"]
     assert len(ingress) == 1
     rules = ingress[0]["spec"]["rules"]
@@ -226,15 +248,33 @@ def test_the_route_has_no_host_and_claims_two_paths_neither_of_them_root() -> No
         "for a correct system (demo/README.md §1.1)"
     )
     paths = {p["path"]: p for p in rules[0]["http"]["paths"]}
-    assert set(paths) == {"/demo", "/v2/models/nyc-taxi-eta/infer"}
+    assert set(paths) == {"/demo", api_path}
     assert "/" not in paths, "claiming / would break `GET localhost:8081/` -> 404"
-    assert paths["/v2/models/nyc-taxi-eta/infer"]["pathType"] == "Exact", (
-        "the demo claims ONE api path, not the /v2 tree"
+    assert f"/v2/models/{champion}/infer" not in paths, (
+        "the CHAMPION's own model name must stay unrouted on this origin — its "
+        "absence is what proves a quote came through the raw boundary"
     )
+    assert paths[api_path]["pathType"] == "Exact", "the demo claims ONE api path, not the /v2 tree"
     assert (
-        paths["/v2/models/nyc-taxi-eta/infer"]["backend"]["service"]["name"]
-        == "nyc-taxi-eta-transformer-transformer"
+        paths[api_path]["backend"]["service"]["name"] == f"{transformer}-transformer"
     ), "the demo must target the TRANSFORMER — a browser cannot build the 24-column matrix"
+
+
+def test_the_pages_endpoint_is_the_path_the_route_claims() -> None:
+    """The page and the Ingress must agree, or the demo 404s in a browser only."""
+    ingress = [d for d in manifest_docs() if d["kind"] == "Ingress"][0]
+    claimed = {p["path"] for p in ingress["spec"]["rules"][0]["http"]["paths"]}
+    assert page_const("ENDPOINT") in claimed
+
+
+def test_the_accepts_negative_is_the_champions_own_name() -> None:
+    _, champion = _transformer_names()
+    source = (REPO / "scripts" / "demo_accept.py").read_text()
+    match = re.search(r'^UNCLAIMED_PATH = "(.*)"$', source, re.MULTILINE)
+    assert match and match.group(1) == f"/v2/models/{champion}/infer", (
+        "the accept's negative must be the champion's own model name: a 404 there is "
+        "what says the page reached the raw boundary and not the 24-column wire"
+    )
 
 
 def test_no_rewrite_target_anywhere() -> None:

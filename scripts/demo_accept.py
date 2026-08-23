@@ -55,11 +55,13 @@ PAGE_PATH = "/demo/"
 #: advertises this in its own footer: the horizon is a feature to demo.
 PAST_HORIZON_YEAR = 2031
 
-#: An unclaimed path on the SAME origin. The route's rule is `Exact`, so this
-#: must 404 — and it is only asserted after a real quote has succeeded, because
-#: a 404 from an unloaded route and a 404 from an unclaimed path are the same
-#: bytes (F-060, gotcha #106).
-UNCLAIMED_PATH = "/v2/models/nyc-taxi-eta-transformer/infer"
+#: The CHAMPION's own model name, deliberately NOT routed on this origin. The
+#: route's rule is `Exact` and names the transformer's isvc, so this must 404 —
+#: which is the check that a number the page showed came through the RAW boundary
+#: and not off the 24-column wire. It is only asserted after a real quote has
+#: succeeded, because a 404 from an unloaded route and a 404 from an unclaimed
+#: path are the same bytes (F-060, gotcha #106).
+UNCLAIMED_PATH = "/v2/models/nyc-taxi-eta/infer"
 
 
 class PageParseError(RuntimeError):
@@ -304,9 +306,10 @@ def main() -> int:
     checks.append(
         (
             quote_succeeded and status == 404,
-            f"an unclaimed V2 path on the same origin 404s ({UNCLAIMED_PATH} -> {status}) "
-            "— asserted only because a real quote succeeded first, since an unloaded "
-            "route 404s identically (F-060)",
+            f"the CHAMPION's own model name is NOT routed on this origin "
+            f"({UNCLAIMED_PATH} -> {status}), so the quote above came through the RAW "
+            "boundary — asserted only because a real quote succeeded first, since an "
+            "unloaded route 404s identically (F-060)",
         )
     )
 

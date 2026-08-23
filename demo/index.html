@@ -695,7 +695,12 @@
 // line: the page and the model are served from the same origin through the one
 // ingress this cluster has, so the browser sends no cross-origin request and
 // CORS never enters the picture. demo/README.md records why.
-const ENDPOINT = "/v2/models/nyc-taxi-eta/infer";
+// The model name in the path is the TRANSFORMER's isvc name, not the champion's:
+// the V2 model name lives in the URL (ADR-011 condition 2) and this boundary
+// answers to its own name only. The champion's name is deliberately NOT routed
+// on this origin, which is what proves a quote shown here came through the raw
+// boundary rather than from the 24-column wire.
+const ENDPOINT = "/v2/models/nyc-taxi-eta-transformer/infer";
 
 // Generated from taxi_mlops.serving.transformer.RAW_INPUTS — see the header.
 const RAW_INPUTS = [

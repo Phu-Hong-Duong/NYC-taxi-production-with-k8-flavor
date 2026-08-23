@@ -80,7 +80,20 @@ share the default server (`/healthz` 200, `/` 404) on every run.
 | path | pathType | backend | why exactly this |
 |---|---|---|---|
 | `/demo` | Prefix | `taxi-demo-page:80` | The page. Mounted at `/www/demo` inside the pod so busybox's `httpd` resolves `/demo/` natively — **no `rewrite-target` anywhere in this story**, which this repo has learned to treat as a moving part (ADR-011's spike measured `rewrite-target` changing a canary share by 0 points). |
-| `/v2/models/nyc-taxi-eta/infer` | Exact | `nyc-taxi-eta-transformer-transformer:80` | The V2 model name is in the URL path (ADR-011 condition 2), so the path is given verbatim. `Exact` and not `Prefix`: the demo claims **one** API path, not the `/v2` tree. |
+| `/v2/models/nyc-taxi-eta-transformer/infer` | Exact | `nyc-taxi-eta-transformer-transformer:80` | The V2 model name is in the URL path (ADR-011 condition 2), and this boundary answers to **its own isvc name**. `Exact` and not `Prefix`: the demo claims **one** API path, not the `/v2` tree. |
+
+**The first deploy of this route claimed the CHAMPION's name** —
+`/v2/models/nyc-taxi-eta/infer` — and every quote came back **404**, with the
+transformer's own error naming the path it does answer to. ADR-011 condition 2
+for the third time in this program, and the cheap part was the error message: a
+service that had silently answered to both names would have made "which boundary
+produced this number?" unanswerable, which is the question every measurement in
+M8-S4 rests on. The champion's name is now **deliberately unrouted on this
+origin**, and the accept asserts that 404 — its absence is what proves a number
+the page shows came through the raw boundary rather than off the 24-column wire.
+The path is derived from `scripts/transformer_accept.py`'s own `ISVC` constant
+in `tests/unit/test_demo_page.py`, so a rename breaks one place loudly instead of
+two places quietly.
 
 `/` is deliberately **not** claimed, so `GET localhost:8081/` keeps answering 404
 ("route up, nothing behind it") — the sentence `deploy_serving.sh` asserts.
@@ -164,11 +177,12 @@ argument about an ingress route.
   `lookup_sources` string — so the store is proved consulted **through this
   path**, and F-059's two committed groups are proved *not* to have crossed;
 - a 2031 quote returns **422** and its text names the date;
-- a **negative, and it is conditional on the positive** (gotcha #105/#106): an
-  unclaimed `/v2/...` path on this same origin must 404, proving the route claims
-  exactly one API path. It is only asserted *after* a real quote has succeeded —
-  a 404 because nothing is routed and a 404 because a path is unclaimed are the
-  same bytes, which is how F-060 passed for the wrong reason.
+- a **negative, and it is conditional on the positive** (gotcha #105/#106): the
+  **champion's own model name** must 404 on this origin, proving the number came
+  through the raw boundary and not off the 24-column wire. It is only asserted
+  *after* a real quote has succeeded — a 404 because nothing is routed and a 404
+  because a path is unclaimed are the same bytes, which is how F-060 passed for
+  the wrong reason.
 
 ## 5. What this story could not close, and where it is parked
 
