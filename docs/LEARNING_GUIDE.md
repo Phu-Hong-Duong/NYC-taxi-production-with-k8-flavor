@@ -3977,3 +3977,67 @@ offline store cannot detect for itself. Eighty-seven minutes of skew, one column
 named, twenty-six other lines still green, a byte-identical restore. **Planting
 garbage would have proved the parser works. Planting something valid is what
 proves the table does.**
+
+## M8-S4 leg 2 — a wall with a door in it, and three things that look alike in a schema (2026-08-23, EXEC/Opus 5)
+
+**The cheap probe keeps earning its place, and this time it changed the shape of
+the story rather than saving time.** The kickoff ordered three ways to get stored
+features onto the request path, and shape (i) — Feast's own server in its own
+pod — looked like the expensive one: a Dockerfile, a base pin, a registry
+delivery mechanism, a `kind load` to three nodes. So before any of that,
+`make feast-serve-probe` started `feast serve` on the host inside the quarantine
+that already existed, against the real in-cluster Redis, and asked it one
+question. Thirty seconds. It answered JFK's centroid and answered `null` for zone
+264. Everything after that was packaging a thing already known to work, and the
+first real defect the build hit was a missing execute bit — which is the usual
+yield of a cheap probe: **the defects it finds are almost never about the
+expensive thing it is standing in front of.**
+
+**The shape that keeps a wall a wall.** The temptation with a dependency
+quarantine is to poke one small hole in it — "we only need to read a few keys
+from Redis, we can do that ourselves". That hole is where the vendor's internal
+entity-key encoding, field naming and value serialization move into our
+codebase, and the failure mode of getting any of them subtly wrong is a lookup
+that returns *somebody else's row*: a confident wrong number with nothing red
+anywhere. A 203 MB pod is cheap against owning a private copy of somebody's
+encoding. The two worlds now share exactly one thing — a JSON document over a
+ClusterIP Service — and `uv.lock` never moved.
+
+**The finding, and it is one sentence with two halves.** `zone_static` stores
+four columns and only two of them can be a *source* for the champion's matrix.
+`borough` is an **encoding**: the code the model eats is assigned by
+first-appearance order across the whole lookup table, so it is a property of the
+table and not of the zone, and a transformer that fetched the two zones a request
+names and numbered what came back would produce a silent total category re-map in
+which every individual value is correct. `is_airport` is a **constant** and a
+**total function**: three integers in code, answering for every id including
+TLC's two non-places — which the store has no row for at all, so sourcing it from
+the store turns "not an airport" into "no answer" for exactly the rows that
+already carry no geometry. A centroid is neither: it is a measurement of an
+entity. **All three look identical in a schema, and only the third belongs in a
+feature store.**
+
+**The half I got wrong, and what the repair was not.** The parity reader's first
+run went RED — `is_airport`, ours `False` versus store `missing`, two zones of
+twenty-three, with every numeric column sitting at `0.000e+00`. The tempting
+readings are both wrong: it is not a rounding defect, and it is not a reason to
+widen a bar that had been argued and committed an hour earlier. It was a
+comparison holding a *total* function against a *partial* one and calling the
+difference a defect. The repair was structural and it was already in the
+repository — M8-S3 and leg 1 both partition the entities, assert the partition
+two-sidedly, and compare columns only where both sides claim an answer. I had
+written a new reader instead of inheriting a shape. **When a check goes red, the
+first question is still gotcha #50's — did the thing it names actually change for
+the worse? — and the second one, which I needed here, is: am I comparing like
+with like, or have I asked two differently-shaped functions the same question?**
+
+**And the boot ritual paid for itself before the story started.** The staleness
+check found 104 pods in the `flyte` namespace, 96 of them Pending, all created in
+one 17-second burst two minutes after the control plane restarted at host boot: a
+`FixedRate(20)` proof trigger back-filling two days of missed windows at once.
+Nothing was corrupt and no number was wrong. They were unschedulable in a
+self-limiting way only because the retrain mounts an RWO volume and they queued
+behind it on one node — luck, not design. **A schedule left running forever on a
+machine that gets turned off has a cost that scales with how long it was off, and
+the only reason anyone saw this one is that the ritual says look before you
+build.**

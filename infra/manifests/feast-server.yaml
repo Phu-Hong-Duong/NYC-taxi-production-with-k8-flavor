@@ -1,0 +1,106 @@
+# The Feast FEATURE SERVER — the pandas-2 half of the wall, running in-cluster.
+# (M8-S4 leg 2, shape (i) of the kickoff's three)
+#
+# WHAT THIS IS FOR. M8's transformer runs OUR image — pandas 3.0.5, the project
+# graph, `src/taxi_mlops` — and therefore cannot import the Feast SDK, which pins
+# `pandas<3` (M8 law 4, measured at the milestone draft and re-measured by the
+# S2 probe). The kickoff names three shapes in order for getting stored features
+# onto the request path anyway, and this is (i): Feast's own server, in its own
+# pod, in its own dependency graph, reached over HTTP.
+#
+# It is the shape that keeps the wall a WALL. The two worlds never share an
+# interpreter, a process or a lockfile — they share a JSON document over a
+# ClusterIP Service, which is why `uv.lock` is byte-identical at this story's
+# exit exactly as it was at every other M8 story's.
+#
+# PROBED BEFORE IT WAS BUILT (`make feast-serve-probe`): `feast serve` answered
+# `/get-online-features` for zone 132 with JFK's real centroid and for zone 264
+# with `null` — the two-sided no-geometry property, over HTTP. ~30 s in front of
+# a ~2 minute build and load.
+#
+# WHY NO hostPort AND NO PERSISTENCE. It is STATELESS: it holds no data at all.
+# Its registry is derived from the `definitions.py` in its own image at every
+# start (see docker/feast-server-entrypoint.sh — a baked registry would be a
+# second home for a thing git is the source of truth for), and every value it
+# serves lives in Redis. So it needs no volume, it carries no ledger state class,
+# and losing the pod costs one restart. M7/M8 law 1's hostPort rule applies to it
+# like every other tenant: in-cluster readers use the Service name, a human uses
+# `kubectl port-forward`.
+#
+# WHY `Recreate` IS **NOT** SET HERE, unlike Redis. Redis needs it because a
+# node-local RWO volume cannot be held by two pods at once (F-033's deadlock,
+# avoided by construction). This has no volume and no hostPort, so a rolling
+# update is free and is the better default — the transformer's readiness depends
+# on this Service answering, and a Recreate would take it away for the restart.
+apiVersion: v1
+kind: Service
+metadata:
+  name: feast-server
+  namespace: feast
+  labels: {app: feast-server}
+spec:
+  type: ClusterIP
+  selector: {app: feast-server}
+  ports:
+    - name: http
+      port: 6566
+      targetPort: 6566
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feast-server
+  namespace: feast
+  labels: {app: feast-server}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: feast-server}
+  template:
+    metadata:
+      labels: {app: feast-server}
+    spec:
+      containers:
+        - name: feast-server
+          # The tag is substituted by scripts/deploy_feast_server.sh from the
+          # image record, so the manifest cannot drift from what was actually
+          # built and loaded. `IfNotPresent` because kind load put the bytes on
+          # every node and there is no registry to pull from (D-001).
+          image: FEAST_SERVER_IMAGE
+          imagePullPolicy: IfNotPresent
+          args: []
+          env:
+            # The store's address, and it has NO DEFAULT anywhere in this
+            # program (ADR-012, F-048's rule): an unset variable fails loudly
+            # naming itself, where a default would connect to something wrong
+            # and "I cannot see the store" would read the same as "the store
+            # said no". In-cluster that address is the Service; from the host
+            # it is localhost:6380 through an ephemeral forward. Two addresses
+            # for one store is exactly why it cannot be a committed constant.
+            - name: FEAST_REDIS_CONNECTION
+              value: redis.feast.svc.cluster.local:6379
+            - name: FEAST_SERVE_PORT
+              value: "6566"
+            # Feast phones home by default. Off in both spellings it reads,
+            # the Metabase precedent (gotcha #32).
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: FEAST_USAGE
+              value: "False"
+          ports:
+            - name: http
+              containerPort: 6566
+          readinessProbe:
+            httpGet: {path: /health, port: 6566}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: {path: /health, port: 6566}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1Gi}

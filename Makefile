@@ -275,7 +275,7 @@ verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watc
 	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
-.PHONY: deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
+.PHONY: feast-server-parity deploy-feast-server feast-server-image feast-serve-probe deploy-feast verify-m8 backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
 feast-quarantine: ## M8-S2: build the ISOLATED feast venv from its exact pins and prove it never touched uv.lock. --resolve rewrites the pins; --check builds nothing
 	@bash scripts/feast_quarantine.sh $(QUARANTINE_ARGS)
 feast-sources: ## M8-S2: build the parquet Feast reads, from the SETTLED trees, into data/feast/ (read-only; --static-only skips the 43.9M-row aggregate fit)
@@ -302,6 +302,14 @@ feast-online-parity: ## M8-S4: THE 100-pair online/offline parity table — get_
 	@uv run python scripts/feast_online_parity.py $(PARITY_ARGS)
 feast-online-parity-redteam: ## M8-S4: prove the parity table can go RED — copy one OD pair's real bytes onto another's key, watch the named column fail while the rest pass, restore byte-identically
 	@bash scripts/feast_online_parity_redteam.sh
+feast-server-parity: ## M8-S4 leg 2: the feature server's answers vs the champion's OWN lookup, bar EXACT (argued in docs/feast_server_m8.md §3 before it ran). A READER
+	@uv run python scripts/feast_server_parity.py $(SERVER_PARITY_ARGS)
+deploy-feast-server: ## M8-S4 leg 2: the quarantined feature server ON THE CLUSTER. Accept = a real online lookup asked from another pod, both halves. DRY_RUN=1 / TEARDOWN=1
+	@bash scripts/deploy_feast_server.sh
+feast-server-image: ## M8-S4 leg 2: build the QUARANTINED feature server (pandas 2, feast SDK) and kind-load it onto every node. DRY_RUN=1 builds nothing
+	@bash scripts/build_feast_server.sh
+feast-serve-probe: ## M8-S4 leg 2: the CHEAP PROBE in front of an image build — can `feast serve` answer an online lookup at all, on the host, in the quarantine? ~30 s
+	@bash scripts/feast_serve_probe.sh
 deploy-feast: ## M8: the whole feature-store path — store, sources, apply, materialize
 	@$(MAKE) deploy-feast-store && $(MAKE) feast-apply && $(MAKE) feast-materialize
 verify-m8: ; @echo "TODO(M8): 100-pair online/offline parity + traced enriched request + prior-art revisit"
