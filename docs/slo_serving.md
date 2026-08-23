@@ -812,18 +812,31 @@ not refilled — is *exactly* the stale state this rule exists to catch.
 two shapes that need two expressions). Neither carries a bar on a measured
 quantity.
 
-**A-12a `OnlineStoreCanaryFailing` — the load-bearing half.** Three claims about
-one answer, checked on every run of the reader and pushed as
+**A-12a `OnlineStoreCanaryFailing` — the load-bearing half.** Four claims about
+what the store answers, checked on every run of the reader and pushed as
 `taxi_online_store_canary{check=...}`:
 
 | check | claim | why this one |
 |---|---|---|
+| `store_reachable` | `DBSIZE` was readable at all | see below — this is the one that is reported rather than withheld |
 | `zone_answers` | zone **132** returns a non-null centroid | a *place* must have a location. This is the JFK zone the whole program's records quote — `39.0019` minutes is measured on a trip out of it |
 | `nonplace_declines` | zone **264** returns **null**, and not an error | the negative half. A store that answered for a non-place would be inventing a location, and a check that only asserted presence would pass against a server answering every question with the same row |
 | `calendar_answers` | **2019-07-04** returns its holiday flags | the half that actually refuses the rider: `calendar_from_store` RAISES on an unanswered date (F-019 carried onto the store's wire), so this is the claim whose failure the transformer converts into a 422 |
 
 The expression is `== 0` — a property, not a threshold. `$labels.check` names
-which claim failed, which is why the three are three series and not one boolean.
+which claim failed, which is why the four are four series and not one boolean.
+
+**Why `store_reachable` is a reported 0 and not a refusal to push.**
+`scripts/push_serving_version.py` refuses to push when either side is unreadable,
+and it is right to: an unknown served version is not a mismatch, so a placeholder
+would page an on-call for an unreadable endpoint. **The rule inverts here.** If
+the Redis pod is gone, *"I could not read `DBSIZE`"* is not a gap in the
+measurement — it **is** the measurement. A reader that withheld it would leave
+the last healthy reading on the board to go quietly stale, which is precisely the
+failure this signal exists to prevent. The honest cost, named rather than netted
+out: a broken `kubectl` on the operator's own laptop reads the same as a broken
+store. That is acceptable because the reader is operator-invoked (below) — a
+laptop that cannot reach the cluster is not silently running this in a loop.
 
 **A-12b `OnlineStoreIncomplete` — the coarse half, and the one that closes
 "stale".** `taxi_online_store_keys < taxi_online_store_keys_expected`: the store
