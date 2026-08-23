@@ -139,7 +139,7 @@ def online(url: str, features: list[str], entities: dict[str, list[Any]]) -> dic
             f"the server named {len(names)} columns and returned {len(results)} result "
             "blocks — pairing by name is impossible, so nothing is compared"
         )
-    return {name: block["values"] for name, block in zip(names, results)}
+    return {name: block["values"] for name, block in zip(names, results, strict=True)}
 
 
 def main() -> int:
@@ -177,14 +177,15 @@ def main() -> int:
         print(f"[server-parity] feature server answers at {url}")
 
         zone_ids = sorted(
-            {h.request.pu_location_id for h in HAZARDS} | {h.request.do_location_id for h in HAZARDS}
+            {h.request.pu_location_id for h in HAZARDS}
+            | {h.request.do_location_id for h in HAZARDS}
         )
         days = sorted({str(pd.Timestamp(h.request.pickup_datetime).date()) for h in HAZARDS})
         print(
             f"[server-parity] {len(HAZARDS)} declared hazards -> "
             f"{len(zone_ids)} distinct zones, {len(days)} distinct pickup dates"
         )
-        print(f"[server-parity] bar: EXACT (docs/feast_server_m8.md §3, argued before this ran)")
+        print("[server-parity] bar: EXACT (docs/feast_server_m8.md §3, argued before this ran)")
 
         # ------------------------------------------------------- the zones ---
         stored = online(url, [f"zone_static:{f}" for f in ZONE_FEATURES], {"zone_id": zone_ids})
@@ -197,21 +198,69 @@ def main() -> int:
             "is_airport": [bool(v) for v in airport],
         }
 
+        # THE PARTITION, AND WHY THE COLUMNS ARE COMPARED ONLY OVER HALF OF IT.
+        #
+        # `zone_static` has a row for the 263 real zones and NO ROW for TLC's
+        # non-places (264 "Unknown", 265 "N/A"). Our path is not shaped the same
+        # way: `zones.load_zone_table()` answers NaN for their centroids — the
+        # same fact in the same vocabulary — but `zones.airport_flags` is TOTAL,
+        # a lookup into a constant array built from three integers in code, so it
+        # answers a definite `False` for a zone the store has never heard of.
+        #
+        # The first run of this reader compared the two column-wise and went RED
+        # on exactly that: `is_airport` ours=False vs store=missing for 264 and
+        # 265, with every numeric column at 0.000e+00. Nothing had rounded and
+        # nothing was wrong — the comparison was holding a TOTAL function against
+        # a PARTIAL one and calling the difference a defect.
+        #
+        # So the shape is M8-S3's and leg 1's, inherited rather than reinvented:
+        # partition the entities, ASSERT the partition two-sidedly (the store
+        # must decline exactly the zones our path has no geometry for — and both
+        # directions matter, because a store that declined a REAL zone would be a
+        # missing feature, and one that answered a non-place would be inventing a
+        # location at the equator), then compare columns only where both sides
+        # claim to have an answer.
+        no_geometry = [z for z in zone_ids if bool(np.isnan(table.lat[z]))]
+        declined = [
+            z
+            for i, z in enumerate(zone_ids)
+            if all(stored[name][i] is None for name in ZONE_FEATURES)
+        ]
+        print()
+        if declined == no_geometry:
+            print(
+                f"[server-parity] ok  the store declines EXACTLY the zones our path has no "
+                f"geometry for: {no_geometry} — TLC's non-places, no row on either side"
+            )
+        else:
+            print(
+                f"[server-parity] FAILthe store declines {declined} but our path has no "
+                f"geometry for {no_geometry} — the two sides disagree about which zones exist"
+            )
+
+        present = [i for i, z in enumerate(zone_ids) if z not in no_geometry]
         columns: list[Column] = []
         for name in ZONE_FEATURES:
             column = Column(f"zone_static:{name}", "zone")
-            for key, ours, theirs in zip(zone_ids, ours_zone[name], stored[name]):
-                column.observe(key, ours, theirs)
+            for i in present:
+                column.observe(zone_ids[i], ours_zone[name][i], stored[name][i])
             columns.append(column)
 
         # ---------------------------------------------------- the calendar ---
+        # The join key is `date_key` and its format is `%Y-%m-%d` — both READ
+        # from the definitions and the source builder rather than guessed. A
+        # wrong join key is not a soft failure here: Feast answers HTTP 500 with
+        # `Provided join_key_values: []`, i.e. it discards an unrecognised key
+        # rather than complaining about it, so a plausible-looking name would
+        # have produced a comparison against nothing.
         stored_day = online(
-            url, [f"calendar_day_flags:{f}" for f in DAY_FEATURES], {"day": days}
+            url, [f"calendar_day_flags:{f}" for f in DAY_FEATURES], {"date_key": days}
         )
         flags = calendar_mod.flags(pd.Series([pd.Timestamp(d) for d in days]))
         for name in DAY_FEATURES:
             column = Column(f"calendar_day_flags:{name}", "day")
-            for key, ours, theirs in zip(days, [bool(v) for v in flags[name]], stored_day[name]):
+            ours_day = [bool(v) for v in flags[name]]
+            for key, ours, theirs in zip(days, ours_day, stored_day[name], strict=True):
                 column.observe(key, ours, theirs)
             columns.append(column)
 
@@ -238,11 +287,9 @@ def main() -> int:
         )
         print(f"[server-parity] one missing = {one_missing} (the load-bearing count)")
 
-        no_geometry = [z for z in zone_ids if bool(np.isnan(table.lat[z]))]
-        print(
-            f"[server-parity] the no-geometry zones among the hazards: {no_geometry} — "
-            "our path has no centroid for them and the store returned null for exactly those"
-        )
+        partition_ok = declined == no_geometry
+        if not partition_ok:
+            mismatched += 1
 
         if not args.no_write:
             RECORD.parent.mkdir(parents=True, exist_ok=True)
@@ -267,6 +314,9 @@ def main() -> int:
                         "mismatched": mismatched,
                         "one_missing": one_missing,
                         "no_geometry_zones": no_geometry,
+                        "zones_declined_by_store": declined,
+                        "partition_two_sided": partition_ok,
+                        "zones_compared_columnwise": len(present),
                     },
                     indent=2,
                     sort_keys=True,

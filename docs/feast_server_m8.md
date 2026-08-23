@@ -126,6 +126,54 @@ when it builds the matrix the champion eats. That is what stops this being two
 Feast reads agreeing with each other — the same objection leg 1's static anchor
 answers, one hop further out.
 
+## 4b. The result
+
+```
+[server-parity] 16 declared hazards -> 23 distinct zones, 15 distinct pickup dates
+[server-parity] bar: EXACT (docs/feast_server_m8.md §3, argued before this ran)
+
+[server-parity] ok  the store declines EXACTLY the zones our path has no geometry for: [264, 265]
+
+[server-parity] ok  zone_static:centroid_lat            compared= 21  mismatched=0  one_missing=0  max|d|=0.000e+00
+[server-parity] ok  zone_static:centroid_lon            compared= 21  mismatched=0  one_missing=0  max|d|=0.000e+00
+[server-parity] ok  zone_static:is_airport              compared= 21  mismatched=0  one_missing=0  max|d|=0.000e+00
+[server-parity] ok  calendar_day_flags:is_holiday       compared= 15  mismatched=0  one_missing=0  max|d|=0.000e+00
+[server-parity] ok  calendar_day_flags:is_near_holiday  compared= 15  mismatched=0  one_missing=0  max|d|=0.000e+00
+[server-parity] ok  calendar_day_flags:is_business_day  compared= 15  mismatched=0  one_missing=0  max|d|=0.000e+00
+
+[server-parity] max |ours - server| = 0.000e+00 across 6 columns and 108 comparisons, bar EXACT
+[server-parity] one missing = 0 (the load-bearing count)
+[server-parity] GREEN — the feature server's answers ARE the champion's own lookup.
+```
+
+**The door is lossless.** The projection leg 1 measured through Redis survives
+the HTTP hop unchanged, and `one missing` is zero — the two sides agree about
+which values do not exist, not merely about the ones that do.
+
+### The first run went RED, and what it was actually saying
+
+It reported `is_airport` mismatched on 2 of 23 zones — `ours=False,
+store='missing'` for 264 and 265 — while every numeric column sat at
+`0.000e+00`. Nothing had rounded and nothing was broken. The comparison was
+holding a **total** function against a **partial** one:
+
+- `zone_static` has a row for the 263 real zones and none at all for TLC's two
+  non-places, so *every* column of 264/265 comes back `null`;
+- `zones.load_zone_table()` matches that for the centroids — NaN, the same fact
+  in the same vocabulary — but `zones.airport_flags` is a lookup into a constant
+  array built from three integers in code, so it answers a definite `False` for a
+  zone the store has never heard of.
+
+The repair is the shape M8-S3 and leg 1 already established, inherited rather
+than reinvented: **partition the entities, assert the partition two-sidedly, then
+compare columns only where both sides claim an answer.** The assertion is the
+strong half and it runs in both directions — a store declining a REAL zone would
+be a missing feature, and a store answering for a non-place would be inventing a
+location. Observed: `declines EXACTLY [264, 265]`.
+
+What was *not* done is widen the bar. The bar is the same EXACT it was argued at
+in §3; what changed is that the reader now compares like with like.
+
 ## 5. The finding this slice produced: an encoding is not a per-entity feature
 
 **`zone_static` stores `borough` as a STRING, and the champion eats a borough
@@ -150,6 +198,19 @@ discovery: the transformer sources from Feast exactly the stored columns that ar
 per-entity values with no cross-row encoding — the centroid coordinates and the
 calendar flags — and takes the borough dictionary from the committed table that
 defines it. That is not a shortcut; it is where the boundary actually falls.
+
+**`is_airport` belongs on the same list, for a different reason** (§4b found it):
+the feature path does not read it from a table at all. It is three integers in
+code, total over every id, and the store's copy is a projection of it. For the
+263 zones that exist the projection is exact — measured above — so the store can
+CORROBORATE it, which is worth having, but it cannot be the source: sourcing a
+total function from a partial store turns "not an airport" into "no answer" for
+precisely the ~1% of rows that already carry no geometry.
+
+So the rule the two findings share, and it is the one worth carrying out of this
+slice: **a feature store is a good home for a per-entity measurement and a bad
+home for anything a program computes** — an encoding, a constant, a total
+function. All three look identical in a schema.
 
 ## 6. Where the cut is
 
