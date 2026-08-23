@@ -188,6 +188,7 @@ def test_the_pages_request_schema_is_the_servers() -> None:
     )
 
 
+@pytest.mark.needs_records
 def test_the_default_trip_is_a_published_row() -> None:
     """The opening quote must be checkable against a tracked record, not a guess."""
     trip = page_const("DEFAULT_TRIP")
