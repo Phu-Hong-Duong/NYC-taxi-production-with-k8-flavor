@@ -37,6 +37,14 @@ DRILL = REPO / "scripts" / "alert_fire_drill.py"
 DRIFT_DRILL = REPO / "scripts" / "drift_fire_drill.py"
 #: M8-S1's drill (F-050's pair). Three from here on, same union.
 PERSISTENCE_DRILL = REPO / "scripts" / "drift_persistence_drill.py"
+#: M9-S2's drill (the online store's pair, A-12/A-13). Four.
+STORE_DRILL = REPO / "scripts" / "store_watch_drill.py"
+
+#: Every drill that carries a literal PREDICTION, and therefore every drill whose
+#: prediction the coverage test may take the union of. Named explicitly rather
+#: than globbed: a glob would silently accept a drill that LOST its prediction,
+#: which is the failure this list exists to make loud.
+ALERT_DRILLS = (DRILL, DRIFT_DRILL, PERSISTENCE_DRILL, STORE_DRILL)
 DEPLOY = REPO / "scripts" / "deploy_monitoring.sh"
 PROM_VALUES = REPO / "infra" / "helm" / "monitoring" / "prometheus-values.yaml"
 SLO_DOC = REPO / "docs" / "slo_serving.md"
@@ -277,23 +285,28 @@ def test_something_can_fire_without_any_traffic_at_all(all_rules):
 # --- the drill -----------------------------------------------------------------
 
 
+def _alerts_named(node: object) -> set[str]:
+    """Every value filed under an `alert` key, at any depth of a prediction."""
+    found: set[str] = set()
+    if isinstance(node, dict):
+        value = node.get("alert")
+        if isinstance(value, str):
+            found.add(value)
+        for child in node.values():
+            found |= _alerts_named(child)
+    elif isinstance(node, list):
+        for child in node:
+            found |= _alerts_named(child)
+    return found
+
+
 def test_the_drill_watches_every_rule_in_the_file(all_rules):
     """A new rule forces a decision: does the drill expect it to fire or not?
 
     The drill's prediction is the both-sides check for the rules file. If a rule
     could be added without appearing in either list, the drill would silently
     stop covering it — which is how a positive control becomes a formality."""
-    source = DRILL.read_text()
-    tree = ast.parse(source)
-    prediction = None
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and any(
-            getattr(t, "id", None) == "PREDICTION" for t in node.targets
-        ):
-            prediction = ast.literal_eval(node.value)
-    assert prediction is not None, "the drill has no literal PREDICTION to review"
-
-    # THE UNION OF THE DRILLS, because there are two of them from M7-S3 on.
+    # THE UNION OF THE DRILLS, because there are four of them from M9-S2 on.
     #
     # The property worth keeping is "no rule has fallen out of every drill's
     # sight", and that was the same as "this drill watches every rule" only
@@ -304,32 +317,36 @@ def test_the_drill_watches_every_rule_in_the_file(all_rules):
     # other's rules would push a session toward padding a prediction list with
     # entries nobody reasoned about — which is how a positive control becomes a
     # formality by a different route than the one this test was written for.
-    watched = {e["alert"] for e in prediction["must_fire"]} | {
-        e["alert"] for e in prediction["must_not_fire"]
-    }
-    drift_source = ast.parse(DRIFT_DRILL.read_text())
-    for node in ast.walk(drift_source):
-        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "PREDICTION":
-            other = ast.literal_eval(node.value)
-            watched |= {e["alert"] for e in other["must_fire"]}
-            watched |= {e["alert"] for e in other["must_not_fire"]}
-            watched.add(other["the_open_question"]["alert"])
-
-    # M8-S1's persistence drill is the third, and it is the ONLY one that can
-    # speak about A-11: an absence rule cannot be exercised by a drill that
-    # pushes metrics, nor by one that injects 422s at the endpoint.
-    persistence_source = ast.parse(PERSISTENCE_DRILL.read_text())
-    for node in ast.walk(persistence_source):
-        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "PREDICTION":
-            third = ast.literal_eval(node.value)
-            watched.add(third["absence"]["must_fire"]["alert"])
-            watched |= {e["alert"] for e in third["absence"]["must_not_fire"]}
+    #
+    # THE COLLECTION IS DERIVED, NOT KEY-PATHED. Until M9-S2 this test walked
+    # each drill's prediction along its own hand-written key path
+    # (`["must_fire"]`, `["absence"]["must_not_fire"]`, …), so every new drill
+    # cost a bespoke block here and a drill that restructured its prediction
+    # would have gone silently uncounted. It now collects every value filed
+    # under an `alert` key at any depth — the same property, asked in a way that
+    # does not need editing when a fourth drill shapes its prediction its own
+    # way.
+    watched: set[str] = set()
+    for path in ALERT_DRILLS:
+        found = False
+        for node in ast.walk(ast.parse(path.read_text())):
+            target = None
+            if isinstance(node, ast.AnnAssign):
+                target = getattr(node.target, "id", None)
+            elif isinstance(node, ast.Assign):
+                target = next(
+                    (getattr(t, "id", None) for t in node.targets if getattr(t, "id", None)), None
+                )
+            if target == "PREDICTION":
+                watched |= _alerts_named(ast.literal_eval(node.value))
+                found = True
+        assert found, f"{path.name} has no literal PREDICTION to review"
 
     declared = {rule["alert"] for rule in all_rules}
     assert watched >= declared, (
-        f"the three drills between them watch {sorted(watched)} but the rules file declares "
-        f"{sorted(declared)}; {sorted(declared - watched)} is covered by neither. Every rule "
-        "must be predicted to fire or predicted not to by SOME drill — an unlisted rule is a "
+        f"the {len(ALERT_DRILLS)} drills between them watch {sorted(watched)} but the rules file "
+        f"declares {sorted(declared)}; {sorted(declared - watched)} is covered by neither. Every "
+        "rule must be predicted to fire or predicted not to by SOME drill — an unlisted rule is a "
         "rule that has stopped being exercised."
     )
 

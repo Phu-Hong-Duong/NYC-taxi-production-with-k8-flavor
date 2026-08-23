@@ -882,6 +882,7 @@ fault. The absence is recorded here rather than left to be inferred.
 
 ### SLO-S2 · existence — *the watchdog's surface is there at all* (A-13)
 
+**`OnlineStoreWatchdogAbsent`**:
 `absent(taxi_online_store_last_run_timestamp_seconds{job="taxi-store-watch"})`,
 **`for: 10m`**, and it exists for the reason F-050 measured on this machine three
 times in twenty-four hours: **A-12's freshness clause is structurally unable to

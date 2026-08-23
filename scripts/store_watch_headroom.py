@@ -62,7 +62,9 @@ RECORD_DIR = REPO_ROOT / "automation" / "runs" / "m9-store-watch"
 RECORD = RECORD_DIR / "headroom.json"
 
 MATERIALIZE_RECORD = REPO_ROOT / "automation" / "runs" / "m8-online" / "materialize.json"
-TRANSFORMER_ACCEPT = REPO_ROOT / "automation" / "runs" / "m8-transformer" / "transformer-deploy.json"
+TRANSFORMER_ACCEPT = (
+    REPO_ROOT / "automation" / "runs" / "m8-transformer" / "transformer-deploy.json"
+)
 PERSISTENCE_RECORD = REPO_ROOT / "automation" / "runs" / "m8-drift" / "persistence.json"
 
 #: One entry per published source: the parquet, and the columns Feast keys it on.
@@ -211,7 +213,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print("[headroom] --- the precondition an absent() rule rests on ---")
     gateway = gateway_persistence()
-    print(f"[headroom]   pushgateway --persistence.file present: {gateway['persistence_file_flag']}")
+    flag = gateway["persistence_file_flag"]
+    print(f"[headroom]   pushgateway --persistence.file present: {flag}")
     print(f"[headroom]   monitoring PVCs: {gateway['monitoring_pvcs']}")
 
     payload = {
