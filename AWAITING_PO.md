@@ -1,5 +1,53 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-23-3 · raised by EXEC/Opus (M9-S1) · NOT A FORK, NOT BLOCKING — the demo is live, and the one accept box only you can close
+
+**Nothing here blocks the chain.** M9-S1 is done and merged; M9-S2 (the
+online-store watchdog) is the next story and does not wait on this.
+
+**The page is at <http://localhost:8081/demo/>.** Two things to run first, and
+only if the machine has been restarted since 2026-08-23:
+
+```
+make cluster-up          # only if `kubectl get nodes` fails — Docker Desktop must be running (gotcha #34)
+make deploy-demo         # only if `curl localhost:8081/demo/` does not return 200
+```
+
+Then open the URL in any browser on this machine. Nothing else: no port-forward
+to hold open, no file to double-click, no CORS switch to flip.
+
+**What you should see.** The form opens on a trip this repo has already
+published — JFK (132) → Clinton East (48), 4 July 2019 at 09:15, one passenger.
+Press **Get ETA** and it should answer **≈ 39.0 minutes**, with `exactly
+39.0019 min`, `serving model version 2`, and a `lookups` line underneath naming
+where each piece of reference data came from. That number is not a fixture: the
+accept check reproduces it through the page's own request path at
+`|delta| = 0.000e+00` against `automation/runs/m8-transformer/transformer-parity.json`.
+
+**Two things worth trying, because they are the honest parts:**
+- **a date in 2031** — the committed federal-holiday table runs to 2030, so the
+  page shows *"Refused — this trip cannot be quoted"* with the service's own
+  reason. It is meant to refuse; a quote there would be a wrong number nobody
+  could see was wrong.
+- **the two entries at the bottom of each picker** ("TLC bookkeeping — not
+  places"). Those are the zones TLC records when the real one is unknown. They
+  have no map location at all, and the model still answers from what remains.
+
+**THE BOX ONLY YOU CAN CLOSE.** BLUEPRINT §9/M9's last accept line is *"one
+non-technical person (the PO counts) completes a query unassisted, observed."*
+An unattended session cannot close that and this one did not pretend to: it is
+recorded as **OPEN** in the story record, in `automation/runs/m9-demo/accept.json`
+(`po_observed_run.status`), and `make verify-m9` is chartered to assert that this
+entry exists and is honest rather than render the box silently green.
+
+**What would make it a useful five minutes**, if you want to spend them: try to
+complete one query without reading anything above, and write down whatever you
+had to guess. The demo's purpose is stakeholder legibility, so a confusing label
+is a real defect and would be worth a finding — reply here and the chain will
+pick it up.
+
+**No answer is needed for the chain to continue.**
+
 ## 2026-08-23-2 · raised by ARCH/Fable (M8 boundary triage) · NOT BLOCKING — the M9 stretch opt-in menu, and one date you will be asked for
 
 **M8 is closed** (tag `m8-closed`, `verify-m8` GREEN 51/51 re-run at the boundary,

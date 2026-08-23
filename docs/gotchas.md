@@ -1654,3 +1654,33 @@ the seed line are earned by THIS project.
     "a broken version of this would produce the same headline", and plant
     there** — and then give that field three witnesses, because one artifact
     agreeing with itself is not a measurement (M8-S5 leg 2).
+
+110. **A generator whose template documents its own placeholders will substitute
+    the documentation.** `scripts/build_demo_page.py`'s first run replaced
+    `{{ZONE_OPTIONS}}` inside the template's own explanatory comment — the
+    paragraph naming the tokens — and shipped a page with **795 `<option>`
+    elements across two `<select>`s instead of 530**. It rendered. It scrolled
+    oddly. And it was wrong in a way that *no* assertion of the form "the zone
+    list matches the CSV" would have caught, because each of the three copies
+    matched. This is gotcha #53/#60 in a new place — prose sitting where a parser
+    reads it as code — and the cheap guard is not a smarter parser: it is an
+    OCCURRENCE COUNT. `TOKEN_COUNTS` declares how many times each token may
+    appear, the generator refuses a mismatch naming the token, and a unit test
+    asserts the template agrees. Name a placeholder in prose without its
+    delimiters, always (M9-S1).
+
+111. **The V2 model name is in the URL path, so a new caller's endpoint is a
+    function of the ISVC's name — not of the model's, and not of the champion's.**
+    The demo's first route claimed `/v2/models/nyc-taxi-eta/infer`, the
+    champion's name, and every quote came back **404**. The transformer answers
+    to its own isvc name (`nyc-taxi-eta-transformer`) and 404s on the other —
+    which is not a defect but M8-S4 leg 3's deliberate negative, the thing that
+    makes "which boundary produced this number?" answerable at all. Two lessons.
+    (a) The diagnosis was free ONLY because the transformer's 404 body names the
+    path it does answer to; an endpoint that answered to both names, or that
+    404'd silently, would have cost the session. Write the alternative into the
+    error. (b) The repair turned the failure into a stronger check rather than a
+    correction: the champion's name is now **deliberately unrouted** on the
+    demo's origin and its 404 is asserted, so the demo cannot quietly end up
+    talking to the 24-column wire. ADR-011 condition 2, third occurrence
+    (M9-S1).
