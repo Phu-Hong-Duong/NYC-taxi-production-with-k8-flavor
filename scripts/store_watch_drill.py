@@ -63,6 +63,8 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from taxi_mlops.monitoring.pushgateway import delete_group  # noqa: E402
 from taxi_mlops.monitoring.store_health import PUSH_JOB  # noqa: E402
+from taxi_mlops.serving.client import QuoteRequest  # noqa: E402
+from taxi_mlops.serving.transformer import encode_raw  # noqa: E402
 
 RECORD_DIR = REPO_ROOT / "automation" / "runs" / "m9-store-watch"
 PREDICTION_FILE = RECORD_DIR / "prediction.json"
@@ -85,15 +87,19 @@ INCOMPLETE_ALERT = "OnlineStoreIncomplete"
 ABSENT_ALERT = "OnlineStoreWatchdogAbsent"
 STORE_LABEL = "feast-online"
 
-#: The request every phase sends. It is the parity table's own federal-holiday
-#: row, so a healthy answer is checkable against a published record rather than
-#: against this script's opinion.
-QUOTE = {
-    "pickup_datetime": ["2019-07-04T09:15:00"],
-    "PULocationID": [132],
-    "DOLocationID": [48],
-    "passenger_count": [1.0],
-}
+#: The V2 model name is in the URL PATH (ADR-011 condition 2), and the
+#: transformer answers to its OWN name — the champion's 404s on that host, which
+#: `make transformer-accept` asserts as a deliberate negative. Getting this wrong
+#: is a 404 that looks exactly like a broken route (gotcha #111), and it cost
+#: this drill its first baseline run.
+TRANSFORMER_MODEL = "nyc-taxi-eta-transformer"
+
+#: The request every phase sends: the parity table's own federal-holiday row, so
+#: a healthy answer is checkable against a published record rather than against
+#: this script's opinion. The BODY is built by `transformer.encode_raw` — the
+#: server's own encoder — because a hand-rolled copy of a request schema is the
+#: twin problem this program keeps deleting.
+QUOTE_ROW = QuoteRequest("2019-07-04T09:15:00", 132, 48, 1.0)
 HEALTHY_MINUTES = 39.00193715359812
 
 #: A PURE LITERAL: `tests/unit/test_store_watchdog.py` reads it with
@@ -321,8 +327,8 @@ def dbsize() -> int:
     return int(kubectl("-n", "feast", "exec", pod, "--", "redis-cli", "DBSIZE").strip())
 
 
-def quote(host: str) -> tuple[int, str]:
-    return http(host, f"{ROUTE}/v2/models/nyc-taxi-eta/infer", QUOTE)
+def quote(host: str, model: str = TRANSFORMER_MODEL) -> tuple[int, str]:
+    return http(host, f"{ROUTE}/v2/models/{model}/infer", encode_raw([QUOTE_ROW]))
 
 
 def champion_quote() -> tuple[bool, str]:
@@ -462,8 +468,14 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
     # ---- the undo, and the board ends carrying the truth ---------------------
     say("re-materializing (the one-command repair the runbook names) …")
     t_refill = time.time()
+    # `--no-record`, and the flag exists BECAUSE this drill's first run found the
+    # need for it: the refill rewrote `automation/runs/m8-online/materialize.json`
+    # — a TRACKED record belonging to M8-S4, cited by both §9 and this story's own
+    # headroom leg — with the drill's own minute. The refill is the right repair;
+    # re-dating somebody else's evidence is not. The drill records its own refill
+    # measurement below, where it belongs.
     refill = subprocess.run(  # noqa: S603
-        ["bash", "scripts/feast_materialize.sh"], cwd=REPO_ROOT,
+        ["bash", "scripts/feast_materialize.sh", "--no-record"], cwd=REPO_ROOT,
         capture_output=True, text=True, check=False,
     )
     refill_seconds = round(time.time() - t_refill, 1)

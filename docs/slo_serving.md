@@ -821,6 +821,7 @@ what the store answers, checked on every run of the reader and pushed as
 | `store_reachable` | `DBSIZE` was readable at all | see below — this is the one that is reported rather than withheld |
 | `zone_answers` | zone **132** returns a non-null centroid | a *place* must have a location. This is the JFK zone the whole program's records quote — `39.0019` minutes is measured on a trip out of it |
 | `nonplace_declines` | zone **264** returns **null**, and not an error | the negative half. A store that answered for a non-place would be inventing a location, and a check that only asserted presence would pass against a server answering every question with the same row |
+| | | **and its measured limit:** on a *totally empty* store this check reads **1**, because "correctly declines" and "has nothing to decline with" are the same answer. Measured in the drill, and it is why the two POSITIVE checks are the ones that fire — a canary of negatives alone would be silent on the emptiest possible store |
 | `calendar_answers` | **2019-07-04** returns its holiday flags | the half that actually refuses the rider: `calendar_from_store` RAISES on an unanswered date (F-019 carried onto the store's wire), so this is the claim whose failure the transformer converts into a 422 |
 
 The expression is `== 0` — a property, not a threshold. `$labels.check` names

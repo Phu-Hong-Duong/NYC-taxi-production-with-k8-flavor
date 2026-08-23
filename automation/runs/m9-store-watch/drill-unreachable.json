@@ -1,0 +1,133 @@
+{
+  "story": "M9-S2",
+  "phase": "unreachable",
+  "recorded_at": "2026-08-23T14:28:50Z",
+  "prediction": {
+    "written_before": "the first FLUSHDB, and committed before the drill ran",
+    "bars_argued_in": "docs/slo_serving.md \u00a79, committed before this file",
+    "empty_store": {
+      "rider_request": {
+        "claim": "a quote against an EMPTY store is REFUSED with HTTP 422, not 503 and not a confident wrong number",
+        "confidence": "high",
+        "because": "every request carries a date and calendar_from_store RAISES StoreCoverageError (http_status 422) on an unanswered one \u2014 F-019 carried onto the store's wire. The geometry half CANNOT refuse: an all-null centroid table is exactly what zones 264/265 legitimately produce, so the calendar is what stands between an empty store and a quote nobody can see is wrong.",
+        "supersedes": "the M9 kickoff's expectation of 503. 503 is what an UNREACHABLE store produces (FeatureStoreUnavailable) and that is a different phase of this drill.",
+        "expected_status": 422
+      },
+      "champion_control": {
+        "claim": "the champion's own wire answers 39.0019 throughout",
+        "confidence": "high",
+        "because": "it builds its matrix from committed tables and never reads the store"
+      },
+      "must_fire": [
+        {
+          "alert": "OnlineStoreCanaryFailing",
+          "signal": "A-12",
+          "confidence": "high",
+          "after_about_seconds": 120,
+          "because": "three of four canary checks go to 0 and the rule sustains 2m",
+          "must_reach_alertmanager": true,
+          "expected_failing_checks": [
+            "zone_answers",
+            "calendar_answers"
+          ]
+        },
+        {
+          "alert": "OnlineStoreIncomplete",
+          "signal": "A-12",
+          "confidence": "high",
+          "after_about_seconds": 120,
+          "because": "0 keys against 57,688 the sources define",
+          "must_reach_alertmanager": true
+        }
+      ],
+      "must_not_fire": [
+        {
+          "alert": "OnlineStoreWatchdogAbsent",
+          "signal": "A-13",
+          "because": "the surface is present and fresh \u2014 it is the store that is gone"
+        },
+        {
+          "alert": "ServingEdge5xxRateHigh",
+          "signal": "A-2",
+          "because": "a 422 is a 4xx and the champion's wire is untouched"
+        },
+        {
+          "alert": "PredictorNoAvailableReplica",
+          "signal": "A-5",
+          "because": "no pod moved"
+        },
+        {
+          "alert": "DriftMetricsAbsent",
+          "signal": "A-11",
+          "because": "a different job's series, untouched by this drill"
+        },
+        {
+          "alert": "ServedVersionNotChampion",
+          "signal": "A-4",
+          "because": "no alias moves and no deploy happens"
+        }
+      ],
+      "clears": {
+        "claim": "re-materializing clears both A-12 rules",
+        "confidence": "high",
+        "refill_seconds_below": 60,
+        "expected_keys_after": 57688
+      }
+    },
+    "unreachable_store": {
+      "claim": "with the feature server scaled to 0 the transformer answers HTTP 503",
+      "confidence": "high",
+      "because": "FeatureStoreUnavailable is a distinct type precisely so a dependency outage does not look like a malformed quote \u2014 503 ours, 422 the caller's",
+      "expected_status": 503
+    },
+    "deleted_surface": {
+      "must_fire": {
+        "alert": "OnlineStoreWatchdogAbsent",
+        "signal": "A-13",
+        "confidence": "high",
+        "after_about_seconds": 600,
+        "because": "the rule sustains 10m and absent() is true within a scrape",
+        "must_reach_alertmanager": true
+      },
+      "must_not_fire": {
+        "alert": "OnlineStoreCanaryFailing",
+        "signal": "A-12",
+        "confidence": "high",
+        "because": "THE LOAD-BEARING NEGATIVE. `time() - stamp < 1800` over zero series is zero series, not a stale reading \u2014 so A-12 cannot see its own surface disappear, and a stack with only A-12 would render a wiped board exactly like a healthy store. That blind spot is A-13's whole reason to exist and it is demonstrated here rather than asserted."
+      }
+    },
+    "never_touched": [
+      "@champion (not read and not written by this drill)",
+      "any registry version, any MLflow run",
+      "the champion's InferenceService, its pod and its wire",
+      "every threshold in infra/monitoring/alerting_rules.yml",
+      "the settled data pins and data/feast/*.parquet"
+    ]
+  },
+  "observed": {
+    "unreachable": {
+      "replicas": 1,
+      "status_while_unreachable": 503,
+      "recovered_after_seconds": 15.2
+    }
+  },
+  "checks": [
+    {
+      "ok": true,
+      "claim": "the undo is staged first: feast-server is at 1 replica(s), which is what will be restored"
+    },
+    {
+      "ok": true,
+      "claim": "an UNREACHABLE store is HTTP 503 \u2014 predicted 503, and the point is that it differs from the empty store's refusal: ours vs the caller's"
+    },
+    {
+      "ok": true,
+      "claim": "the CHAMPION's wire is still unaffected: [quote] 2019-07-04T09:15:00  zone 132 -> 48, 1 passenger(s)  ->  39.0019 minutes"
+    },
+    {
+      "ok": true,
+      "claim": "the transformer answers again 15.2s after the server came back"
+    }
+  ],
+  "failures": 0
+}
