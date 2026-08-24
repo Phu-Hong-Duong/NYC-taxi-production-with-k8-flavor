@@ -1,5 +1,158 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (ci) — M9-S4: the program's last gate, three questions instead of fourteen
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md · HANDOFF
+(ch) · `docs/milestones/M9_KICKOFF.md` · AWAITING_PO. **Role block: MLOps** — the kickoff's
+assignment for S4; charter read. Refusals in play all session: *no alias move · nothing
+fitted · no gate invocation · no new hostPort · no project dependency (`uv.lock` frozen) ·
+no Flyte trigger · the champion's wire is not cut over* — none was broken. **No cluster
+state changed**: this story reads.
+
+**M9-S4 is DONE, and it was M9's LAST story.** One new finding, RAISED AND CLOSED the same
+session — **F-064**. No fork. **M9 carries no ◆** (kickoff, top), so the exit is
+`automation/next_session.sh architect 120`, and per the kickoff that architect session
+closes the PROGRAM, not the next milestone.
+
+**MERGED** — PR **#64**, merge commit `c6a08e9`; lineage proved: `git branch -r --contains
+bf2d553` -> origin/main. CI `lint-test` pass in 1m36s.
+
+### Reconciliation (the staleness check)
+Nothing had moved. 3/3 nodes Ready v1.36.1 at 7d3h; tree clean at `b8add91`; no
+`automation/STOP`. Both InferenceServices Ready (champion 5d2h, transformer 17h), `redis`
+1/1 (2d21h) and `feast-server` 1/1 (18h), `taxi-demo-page` 1/1 (16h) with its four objects —
+i.e. every artifact the gate was chartered to READ was live, exactly as (ch) promised. One
+inherited nuisance checked and dismissed: the watchdog's 04:30 UTC RED toast about
+`m7-retrain-fulldata` is a **`FAILED-ACKED`** status file from the PO-side session
+(AWAITING_PO 2026-08-24-1), and the chain self-healed at 04:50/05:00 — no action needed.
+
+### Done — `make verify-m9`, GREEN 45/45 in 4.349 s, 7 sections
+Full transcript: `docs/verify_m9_transcripts.md` §1. What is worth reading here is the
+*shape*, because two of its decisions are subtractions.
+
+**Three live questions, not the union of its predecessors' fourteen.** One quote through the
+DEMO's own request path — endpoint, schema and payload read out of `demo/index.html` by
+`demo_accept.py`'s own helpers (module path DERIVED from the Makefile recipe, F-017), posted
+with **no Host override**, the one thing a browser cannot do and every other client in this
+repo does — one rules read, one DBSIZE. The champion's own wire, the feature server's
+two-sided answer and the exporter's health are `verify-m5`'s and `verify-m8`'s questions,
+and those gates run live as their own evidence. **A gate that re-asks its predecessors'
+questions is not stricter; its live footprint just grows every milestone.** The test pins
+the ABSENCES as well as the count — a bound that says "at most three" is satisfiable by
+three of somebody else's.
+
+**A gate that passes BECAUSE something is unfinished.** §9/M9's last accept line needs a
+human, and every gate in this program renders green. So this one checks the box is recorded
+HONESTLY — the record says OPEN, AWAITING_PO carries the invitation, the two agree on the
+URL — and prints it as an **OPEN ITEM in §2 and in its own GREEN banner**, where a reader
+who skims only the verdict still sees it. Three assertions in the test file hold that,
+banner included, because the failure mode is not a bug but a temptation.
+
+**Two rules that carry no number, so it checks the absence of one.** A-12a compares a canary
+claim to `0`; A-12b compares metric to metric. Checkable instead: no numeric literal on
+either side of A-12b, the ONE number in the three rules (A-12's 1800 s freshness clause)
+argued in **§9 specifically**, and the strongest — **every series the rules SELECT is a
+series `store_health` PUSHES**, because a rule selecting a series nobody produces does not
+error, it sits `health=ok` and `inactive` forever (gotcha #92), which is exactly what a
+healthy store looks like.
+
+Other legs worth naming: the expected key count asked of **three witnesses** (263 + 4,383 +
+46,938 + 6,104 = 57,688 · the M8-S4 materialization record · the live server); **law 4 from
+git four times** (133 s · 0 s · 1878 s · 700 s); the page's schema compared on wire name AND
+datatype AND **source field** (a correct name carrying the wrong field is two valid values
+under each other's names — gotcha #73, self-inflicted); F-057 and F-054 as **derived**
+properties rather than enumerations; and F-062 required to be an honest OPEN row.
+
+### Done — `make verify-m9-redteam`, PASSED
+It plants a **population**, not a measurement: `expected_keys.total` **57,688 -> 57,425**,
+short by exactly the 263 keys of the view CHOSEN from the record as the smallest —
+`zone_static`, which holds every centroid the champion's nine geometry features are built
+from. Nothing about the alerting stack changes (A-12b has no literal to loosen; every rule
+stays `inactive`/`health=ok`), 42 sub-checks have no reason to complain, and the store it
+describes could lose ALL its geometry and still satisfy the alert that exists to notice.
+
+**RED exit 1 with 3 FAILs from THREE artifacts** — the record's own per-view arithmetic, the
+live `DBSIZE` beside the materialization record, and `docs/store_watchdog_m9.md` — with the
+**no-number leg and law 4's ordering leg deliberately still GREEN** (what separates a gate
+that fails on a wrong number from a checksum), sha256-identical restore (`b875049f8289…`),
+**GREEN 45/45**, clean tree. **The prose witness had to be BUILT for the drill**: the gate
+gained the prose leg every predecessor since `verify-m5` carries. That is the usual yield of
+writing the red team second — it tells you which witness the gate was missing.
+
+### Done — F-064, raised and CLOSED, in a clause that had already shipped green
+`verify_m8.sh` §5's fourth live question read `materialize["store"].get("keys")` where the
+record spells the field **`dbsize`**. So `expected` was always `None`, the `expected is None`
+branch of `if dbsize > 0 and (expected is None or dbsize == expected)` fired every time, and
+the leg tested **`dbsize > 0` alone** while telling its reader "the count the materialization
+recorded, survived on its PVC". **It would have passed a store holding one key** — in the
+gate whose job on that line is to notice an empty online store. Green at M8-S5 and at every
+re-run since, the M8 boundary's own verification included.
+
+It was invisible **because the original was written defensively**: `.get()` plus
+`or expected is None` reads as care and degrades toward passing. Found only because the M9
+gate copied the clause and spelled it strictly (`KeyError: 'keys'`). Fixed in the story that
+found it — the field is read, the comparison is unconditional, and an ABSENT field is now a
+FAIL naming the shape. `make verify-m8` re-run **GREEN** with the real comparison live.
+
+Two generalisable halves, both in the field note: **gotcha #51's question asked of a check
+that PASSES** (*could this tell if it were false?*), and **a defensive default in a VERIFIER
+is a different thing from one in a producer** — in a producer it keeps the system running,
+in a verifier it keeps the verdict green.
+
+### The gate's other two first-run REDs, both its own defects
+`AttributeError` on `transformer.RAW_INPUTS` (a dict, not a list of dataclasses) — repaired
+into a *stronger* check, all three fields. And a **guard that fired on correct behaviour**:
+the F-054 leg asked "does any test skip on a `.exists()`?" and flagged a test skipping on
+`.venv-feast/bin/python`, a **gitignored build artifact** absent in CI, where skipping is
+correct and is this suite's idiom for `ss`/`git`/`make`/`docker`. F-054 is about **records**
+under `automation/runs`, which are TRACKED. **Gotcha #50, and the repair is NARROWING to the
+right property** (each file's record constants resolved from their own assignments), never
+widening the bar.
+
+The test file's own needles were verified real rather than assumed: three defects planted in
+the gate (a typed key count, a typed reader path, a dropped OPEN ITEM line) each failed
+exactly the intended test and nothing else; restored, 33 passed, clean tree.
+
+### Verification at exit (all re-run on merged main, tree clean)
+`make verify-m9` **GREEN 45/45, 4.349 s** · `make verify-m9-redteam` **PASSED** ·
+`make verify-m5` · `m6` · `m7` · `m8` **all exit 0** · host suite **1204 passed** (was 1171:
++33 the gate's own tests) · ruff clean · **`uv.lock` byte-identical to `m7-closed`** · all 5
+settled DVC pins `up to date` · `@champion` **2** / `feature_set v2`, versions `['1','2']`
+and **NOT ONE created after `m7-closed`** · the demo, both InferenceServices, the feature
+server, Redis at **57,688 keys** and all 16 alert rules untouched and live.
+
+### Next
+**M9's four stories are done. The exit is `automation/next_session.sh architect 120`, and
+that architect session closes the PROGRAM** (M9 carries no ◆; it is the last milestone in
+BLUEPRINT §9).
+
+What the closing session inherits, precisely:
+- **The PO-observed demo box is OPEN and must stay open until a human closes it** —
+  AWAITING_PO 2026-08-23-3, `automation/runs/m9-demo/accept.json`
+  (`po_observed_run.status`). `make verify-m9` asserts the entry exists and is honest and
+  prints it as an open item in its GREEN banner; it never renders it green. **The program
+  cannot be declared complete on §9/M9's own terms without that observation**, and saying so
+  plainly is the last honest thing this chain can do about it.
+- **F-062 is OPEN and routed to the close**, with three costed options and recommendation
+  (b). It is the one finding M9 raised and did not fix, and the gate REQUIRES the row to be
+  open rather than tidy — a program that closes over a row it quietly dropped is worse than
+  one that closes with an open row.
+- **Standing with the PO, non-blocking**: AWAITING_PO 2026-08-23-2 (the stretch opt-in menu
+  — Ray/KubeRay · CI nightly · trivy+secret-scan · README polish), 2026-08-18-1 (F-016's
+  gate-margin fork, dormant), 2026-08-17-1 (the libgomp one-liner), 2026-08-16-2 (the
+  allowlist paste). Also queued from §12: whether to publish the repo publicly.
+- **Every milestone gate M0…M9 is runnable and green**, and each is its own live target —
+  `verify-m9` deliberately nests none of them (a nested gate turns one red predecessor into
+  a red milestone and re-asks every question it owns). The closing session can run all ten
+  as ten commands.
+- **Debt register: closed** (D-001…D-004). D-001's registry-pattern deferral still stands,
+  trigger unchanged (image churn, landing at the next PO-sanctioned rebuild).
+- **Error memo §7 row 2** (the airport gap) passes to the close as documented future work
+  with its three measurements; M8-S2's catalog named `airport_regime_flag` as the candidate
+  reader. Nothing in M9 fitted anything.
+
+
 ## Session 2026-08-24 (ch) — M9-S3: two closures, and the tool made to agree with the reviewed artifact
 
 ### State
