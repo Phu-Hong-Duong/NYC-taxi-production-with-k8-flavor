@@ -1,0 +1,604 @@
+{
+  "git_head": "4a7d5718733972ed7e878660ac65cf3d601fc69d",
+  "legs": {
+    "history-secrets": {
+      "acknowledged": [
+        {
+          "acknowledged": {
+            "decodes_to": "wrong-credential-gameday",
+            "encoding": "base64",
+            "expected_in": "scripts/gameday_m6.py",
+            "what": "the M6-S5 gameday's deliberately WRONG MinIO secret",
+            "why_not_a_secret": "it is the value the storage-break scenario PATCHES IN to make MinIO refuse the predictor (403 HeadBucket) so A-5 and A-7 can be watched firing. It has never been a working credential anywhere, and the plaintext it decodes to says so in words"
+          },
+          "author": "Phu-Hong-Duong",
+          "class": "in-git",
+          "commit": "06cec9bdfe14d787553915fc37cf36daefc8d366",
+          "date": "2026-08-19T16:03:50Z",
+          "entropy": 4.2653193,
+          "file": "scripts/gameday_m6.py",
+          "finding_id": "938836ccbcc9",
+          "fingerprint": "06cec9bdfe14d787553915fc37cf36daefc8d366:scripts/gameday_m6.py:generic-api-key:699",
+          "proved_decodes_to": "wrong-credential-gameday",
+          "rule": "generic-api-key",
+          "start_line": 699,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "present in git history"
+        }
+      ],
+      "blocking": [],
+      "findings_total": 1,
+      "inputs": {
+        "commits_reachable_from_all_refs": 491,
+        "first_commit": "d5a40c4 2026-08-16",
+        "head": "4a7d571",
+        "note": "--all walks every ref this clone holds, not just HEAD's ancestry: a secret removed from main by a later commit still lives in the objects the old commit points at, and that is what publishing exposes",
+        "refs": 16
+      },
+      "instrument": "gitleaks git --log-opts='--all --full-history'",
+      "leg": "history-secrets",
+      "local_only": [],
+      "raw_report": "automation/runs/m9-security/raw/gitleaks-history.raw (gitignored: it carries the values)",
+      "self_transcript_dropped": 0
+    },
+    "images": {
+      "images": [
+        {
+          "by_severity": {
+            "CRITICAL": 3,
+            "HIGH": 53,
+            "LOW": 67,
+            "MEDIUM": 70,
+            "UNKNOWN": 8
+          },
+          "critical_findings": [
+            {
+              "fixed_in": null,
+              "id": "CVE-2026-13221",
+              "installed": "5.40.1-6",
+              "package": "perl-base",
+              "target": "taxi-mlops-pipeline:4e5dd66 (debian 13.6)"
+            },
+            {
+              "fixed_in": null,
+              "id": "CVE-2026-42496",
+              "installed": "5.40.1-6",
+              "package": "perl-base",
+              "target": "taxi-mlops-pipeline:4e5dd66 (debian 13.6)"
+            },
+            {
+              "fixed_in": null,
+              "id": "CVE-2026-8376",
+              "installed": "5.40.1-6",
+              "package": "perl-base",
+              "target": "taxi-mlops-pipeline:4e5dd66 (debian 13.6)"
+            }
+          ],
+          "fixable_critical_high": 39,
+          "image": "taxi-mlops-pipeline:4e5dd66",
+          "image_id": "sha256:8ef09482bebdac7cd2048efcf763aa087c759a4226cb4ebf3317be37e6586471",
+          "os": {
+            "Family": "debian",
+            "Name": "13.6"
+          },
+          "raw_report": "automation/runs/m9-security/raw/trivy-taxi-mlops-pipeline.raw",
+          "ref_source": "automation/runs/m4-image/image.json",
+          "total": 201
+        },
+        {
+          "by_severity": {
+            "CRITICAL": 3,
+            "HIGH": 50,
+            "LOW": 67,
+            "MEDIUM": 68,
+            "UNKNOWN": 8
+          },
+          "critical_findings": [
+            {
+              "fixed_in": null,
+              "id": "CVE-2026-13221",
+              "installed": "5.40.1-6",
+              "package": "perl-base",
+              "target": "taxi-mlops-feast-server:feast-0.66.0-a524771 (debian 13.6)"
+            },
+            {
+              "fixed_in": null,
+              "id": "CVE-2026-42496",
+              "installed": "5.40.1-6",
+              "package": "perl-base",
+              "target": "taxi-mlops-feast-server:feast-0.66.0-a524771 (debian 13.6)"
+            },
+            {
+              "fixed_in": null,
+              "id": "CVE-2026-8376",
+              "installed": "5.40.1-6",
+              "package": "perl-base",
+              "target": "taxi-mlops-feast-server:feast-0.66.0-a524771 (debian 13.6)"
+            }
+          ],
+          "fixable_critical_high": 36,
+          "image": "taxi-mlops-feast-server:feast-0.66.0-a524771",
+          "image_id": "sha256:e6ff4c69024554e564e7cb9913a888523f802287169ed07ce025441c607f5f47",
+          "os": {
+            "Family": "debian",
+            "Name": "13.6"
+          },
+          "raw_report": "automation/runs/m9-security/raw/trivy-taxi-mlops-feast-server.raw",
+          "ref_source": "automation/runs/m8-transformer/feast-server-image.json",
+          "total": 196
+        },
+        {
+          "by_severity": {
+            "CRITICAL": 8,
+            "HIGH": 148,
+            "LOW": 232,
+            "MEDIUM": 491,
+            "UNKNOWN": 0
+          },
+          "critical_findings": [
+            {
+              "fixed_in": "3.9.0rc0",
+              "id": "CVE-2025-15036",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.8.1",
+              "id": "CVE-2025-15379",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            },
+            {
+              "fixed_in": null,
+              "id": "CVE-2026-0545",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.9.0",
+              "id": "CVE-2026-0596",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.8.0rc0",
+              "id": "CVE-2026-2635",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.11.0rc1",
+              "id": "CVE-2026-2651",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.11.0",
+              "id": "CVE-2026-4035",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.15.0",
+              "id": "CVE-2026-64849",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "target": "Python"
+            }
+          ],
+          "fixable_critical_high": 147,
+          "image": "taxi-mlops-predictor:mlserver-1.7.1-lgb-4.7.0",
+          "image_id": "sha256:2f98ab932f465ed41907be8820e436d1bcae0f37330b5917b57d68e77fe90059",
+          "os": {
+            "Family": "redhat",
+            "Name": "9.6"
+          },
+          "raw_report": "automation/runs/m9-security/raw/trivy-taxi-mlops-predictor.raw",
+          "ref_source": "infra/manifests/serving-runtime-mlserver.yaml",
+          "total": 879
+        }
+      ],
+      "inputs": {
+        "images": [
+          "taxi-mlops-pipeline:4e5dd66",
+          "taxi-mlops-feast-server:feast-0.66.0-a524771",
+          "taxi-mlops-predictor:mlserver-1.7.1-lgb-4.7.0"
+        ],
+        "note": "the three images THIS PROGRAM BUILDS, each ref derived from the record that minted it or the manifest the cluster runs. Base images we merely pin (postgres, redis, mlserver, busybox) are somebody else's build and are out of this leg's scope by choice, not by omission"
+      },
+      "instrument": "trivy image --scanners vuln",
+      "leg": "images"
+    },
+    "tree-secrets": {
+      "acknowledged": [
+        {
+          "acknowledged": {
+            "decodes_to": "wrong-credential-gameday",
+            "encoding": "base64",
+            "expected_in": "scripts/gameday_m6.py",
+            "what": "the M6-S5 gameday's deliberately WRONG MinIO secret",
+            "why_not_a_secret": "it is the value the storage-break scenario PATCHES IN to make MinIO refuse the predictor (403 HeadBucket) so A-5 and A-7 can be watched firing. It has never been a working credential anywhere, and the plaintext it decodes to says so in words"
+          },
+          "author": null,
+          "class": "in-git",
+          "commit": null,
+          "date": null,
+          "entropy": 4.2653193,
+          "file": "scripts/gameday_m6.py",
+          "finding_id": "938836ccbcc9",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/scripts/gameday_m6.py:generic-api-key:699",
+          "proved_decodes_to": "wrong-credential-gameday",
+          "rule": "generic-api-key",
+          "start_line": 699,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "in a file git TRACKS"
+        }
+      ],
+      "blocking": [],
+      "findings_total": 11,
+      "inputs": {
+        "files_git_tracks": 617,
+        "files_on_disk": 63052,
+        "note": "the WHOLE disk tree, gitignored files included \u2014 pointing this at tracked files only would report zero and prove nothing about the hazard anyone actually has",
+        "root": "/home/longt/NYC-taxi-production-with-k8-flavor"
+      },
+      "instrument": "gitleaks dir",
+      "leg": "tree-secrets",
+      "local_only": [
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.6040301,
+          "file": ".env",
+          "finding_id": "3a3ebb4f9d72",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:5",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 5,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.8667293,
+          "file": ".env",
+          "finding_id": "c9aecaa6aba6",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:10",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 10,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.6442475,
+          "file": ".env",
+          "finding_id": "c156d9794478",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:12",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 12,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.6945488,
+          "file": ".env",
+          "finding_id": "4f5fd2d8e4f7",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:14",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 14,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.6792293,
+          "file": ".env",
+          "finding_id": "34726345e6d8",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:16",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 16,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.5778196,
+          "file": ".env",
+          "finding_id": "027048c6edde",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:18",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 18,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.6500134,
+          "file": ".env",
+          "finding_id": "69796cbbe80a",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:20",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 20,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.691428,
+          "file": ".env",
+          "finding_id": "8de689104b8c",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:26",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 26,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.8042293,
+          "file": ".env",
+          "finding_id": "fe5719306316",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:28",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 28,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        },
+        {
+          "author": null,
+          "class": "local-only",
+          "commit": null,
+          "date": null,
+          "entropy": 3.7783055,
+          "file": ".env",
+          "finding_id": "6f37380eae7d",
+          "fingerprint": "/home/longt/NYC-taxi-production-with-k8-flavor/.env:generic-api-key:30",
+          "git_check_ignore": ".gitignore:1:.env\t.env",
+          "rule": "generic-api-key",
+          "start_line": 30,
+          "value": "REDACTED \u2014 recorded nowhere; re-run gitleaks locally to see it",
+          "why": "not tracked by git, and git is told to ignore it"
+        }
+      ],
+      "raw_report": "automation/runs/m9-security/raw/gitleaks-tree.raw (gitignored: it carries the values)",
+      "self_transcript_dropped": 0
+    },
+    "tree-vulns": {
+      "dependencies": {
+        "by_severity": {
+          "CRITICAL": 0,
+          "HIGH": 3,
+          "LOW": 0,
+          "MEDIUM": 2,
+          "UNKNOWN": 0
+        },
+        "critical_findings": [],
+        "fixable_critical_high": 3,
+        "total": 5
+      },
+      "inputs": {
+        "lockfiles_seen": [
+          "uv.lock"
+        ],
+        "note": "skips ~40 GB of parquet, two virtualenvs and the object store \u2014 none of them a lockfile or a manifest, which is what a dependency and IaC scan reads",
+        "root": "/home/longt/NYC-taxi-production-with-k8-flavor",
+        "skipped_dirs": [
+          "data",
+          ".venv",
+          ".venv-feast",
+          ".git",
+          "automation/runs",
+          "node_modules"
+        ]
+      },
+      "instrument": "trivy fs --scanners vuln,misconfig",
+      "leg": "tree-vulns",
+      "misconfiguration": {
+        "by_severity": {
+          "CRITICAL": 0,
+          "HIGH": 17,
+          "LOW": 41,
+          "MEDIUM": 18,
+          "UNKNOWN": 0
+        },
+        "targets": [
+          {
+            "failed": 1,
+            "ids": [
+              "DS-0026"
+            ],
+            "target": "docker/Dockerfile.pipeline"
+          },
+          {
+            "failed": 1,
+            "ids": [
+              "DS-0026"
+            ],
+            "target": "docker/feast-server.Dockerfile"
+          },
+          {
+            "failed": 2,
+            "ids": [
+              "DS-0002",
+              "DS-0026"
+            ],
+            "target": "docker/serving.Dockerfile"
+          },
+          {
+            "failed": 4,
+            "ids": [
+              "KSV-0020",
+              "KSV-0021",
+              "KSV-0030",
+              "KSV-0104"
+            ],
+            "target": "infra/manifests/demo.yaml"
+          },
+          {
+            "failed": 13,
+            "ids": [
+              "KSV-0001",
+              "KSV-0003",
+              "KSV-0004",
+              "KSV-0012",
+              "KSV-0013",
+              "KSV-0014",
+              "KSV-0020",
+              "KSV-0021",
+              "KSV-0030",
+              "KSV-0104",
+              "KSV-0106",
+              "KSV-0118"
+            ],
+            "target": "infra/manifests/feast-server.yaml"
+          },
+          {
+            "failed": 13,
+            "ids": [
+              "KSV-0001",
+              "KSV-0003",
+              "KSV-0004",
+              "KSV-0011",
+              "KSV-0012",
+              "KSV-0014",
+              "KSV-0020",
+              "KSV-0021",
+              "KSV-0030",
+              "KSV-0104",
+              "KSV-0106",
+              "KSV-0118"
+            ],
+            "target": "infra/manifests/flyte-data-stager.yaml"
+          },
+          {
+            "failed": 14,
+            "ids": [
+              "KSV-0001",
+              "KSV-0003",
+              "KSV-0004",
+              "KSV-0011",
+              "KSV-0012",
+              "KSV-0014",
+              "KSV-0020",
+              "KSV-0021",
+              "KSV-0030",
+              "KSV-0104",
+              "KSV-0106",
+              "KSV-0118",
+              "KSV-0125"
+            ],
+            "target": "infra/manifests/metabase.yaml"
+          },
+          {
+            "failed": 13,
+            "ids": [
+              "KSV-0001",
+              "KSV-0003",
+              "KSV-0004",
+              "KSV-0011",
+              "KSV-0012",
+              "KSV-0014",
+              "KSV-0020",
+              "KSV-0021",
+              "KSV-0030",
+              "KSV-0104",
+              "KSV-0106",
+              "KSV-0118"
+            ],
+            "target": "infra/manifests/postgres.yaml"
+          },
+          {
+            "failed": 12,
+            "ids": [
+              "KSV-0001",
+              "KSV-0003",
+              "KSV-0004",
+              "KSV-0012",
+              "KSV-0014",
+              "KSV-0020",
+              "KSV-0021",
+              "KSV-0030",
+              "KSV-0104",
+              "KSV-0106",
+              "KSV-0118"
+            ],
+            "target": "infra/manifests/redis.yaml"
+          },
+          {
+            "failed": 3,
+            "ids": [
+              "KSV-0014",
+              "KSV-0020",
+              "KSV-0021"
+            ],
+            "target": "infra/manifests/serving-runtime-mlserver.yaml"
+          }
+        ],
+        "total": 76
+      },
+      "raw_report": "automation/runs/m9-security/raw/trivy-fs.raw"
+    }
+  },
+  "recorded_at": "2026-08-24T15:13:49Z",
+  "stages_run": [
+    "tree-secrets",
+    "history-secrets",
+    "images",
+    "tree-vulns"
+  ],
+  "story": "M9-S9",
+  "tools": {
+    "gitleaks": "8.30.1",
+    "trivy": "0.74.0"
+  },
+  "verdict": {
+    "publishable": true,
+    "publishable_means": "no unacknowledged secret in any file git tracks and none in any commit reachable from any ref. It says nothing about CVEs, which are recorded below and deliberately not chased",
+    "secrets_acknowledged": 2,
+    "secrets_in_git": 0,
+    "secrets_local_only": 10
+  }
+}

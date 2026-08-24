@@ -182,6 +182,7 @@ def _redact(finding: dict) -> dict:
     identifies the finding across commits without describing it.
     """
     secret = finding.get("Secret") or ""
+    digest = hashlib.sha256(secret.encode()).hexdigest()
     return {
         "rule": finding.get("RuleID"),
         "file": _rel(finding.get("File") or ""),
@@ -191,9 +192,36 @@ def _redact(finding: dict) -> dict:
         "date": finding.get("Date") or None,
         "fingerprint": finding.get("Fingerprint"),
         "entropy": finding.get("Entropy"),
-        "secret_sha256": hashlib.sha256(secret.encode()).hexdigest(),
-        "secret_value": "REDACTED — recorded nowhere; re-run gitleaks locally to see it",
+        # TWELVE characters, and the length is the finding rather than a taste.
+        # The first draft wrote the full 64-hex digest under a field called
+        # `secret_sha256`, and the next run flagged THIS RECORD 13 times: a
+        # keyword-plus-long-high-entropy-string is precisely what
+        # `generic-api-key` is for, and the record is tracked, so the scan would
+        # have blocked on its own output. The scanner was right both times. 48
+        # bits identifies a finding in a repo this size; the full digest is what
+        # ACKNOWLEDGED_SECRETS keys on and it lives in code, where it sits as a
+        # dict key rather than as a value after a credential-shaped name.
+        "finding_id": digest[:12],
+        "_sha256": digest,  # dropped before the record is written; see _for_record
+        "value": "REDACTED — recorded nowhere; re-run gitleaks locally to see it",
     }
+
+
+def _strip_working_fields(node):
+    """Drop every `_`-prefixed working field before anything is written.
+
+    Done at the WRITE boundary rather than per call site: the full digest is
+    genuinely needed while classifying and genuinely unwanted in a tracked file,
+    and a rule enforced in one place cannot be forgotten by the next leg somebody
+    adds. (The keys ACKNOWLEDGED_SECRETS uses stay in code.)
+    """
+    if isinstance(node, dict):
+        return {
+            k: _strip_working_fields(v) for k, v in node.items() if not str(k).startswith("_")
+        }
+    if isinstance(node, list):
+        return [_strip_working_fields(v) for v in node]
+    return node
 
 
 def _acknowledge(item: dict, secret: str) -> dict | None:
@@ -202,7 +230,7 @@ def _acknowledge(item: dict, secret: str) -> dict | None:
     The argument is re-derived from the bytes actually found, never trusted from
     the table. A different value on the same line is a different finding.
     """
-    entry = ACKNOWLEDGED_SECRETS.get(item["secret_sha256"])
+    entry = ACKNOWLEDGED_SECRETS.get(item["_sha256"])
     if entry is None:
         return None
     decoded = base64.b64decode(secret).decode("utf-8", "replace")
@@ -229,30 +257,34 @@ def _ignored_reason(path: str) -> str | None:
 
 
 def _classify(findings: list[dict], *, in_history: bool) -> dict:
-    """Split findings into three classes that are NOT degrees of one another."""
+    """Split findings into three classes that are NOT degrees of one another.
+
+    Location is decided FIRST and the acknowledgement is applied on top of it, so
+    an argued finding still carries an honest statement of where it lives. Doing
+    it the other way round labelled a finding in a gitignored scratch file "in a
+    tracked file, and argued" — correct verdict, wrong reason (gotcha #67's
+    family, and a wrong reason is what somebody acts on at 3am).
+    """
     tracked = _tracked_files()
     blocking: list[dict] = []
     local_only: list[dict] = []
     acknowledged: list[dict] = []
+    self_transcript: list[dict] = []
+    raw_rel = str(RAW_DIR.relative_to(REPO))
+
     for raw in findings:
         item = _redact(raw)
         path = item["file"] or ""
-        ack = _acknowledge(item, raw.get("Secret") or "")
-        if ack is not None:
-            ack["why"] = (
-                "in git history, and argued" if in_history else "in a tracked file, and argued"
-            )
-            acknowledged.append(ack)
-            continue
+
+        # --- location, always ---
         if in_history:
             # Anything gitleaks found while walking commits is, by construction,
             # content git has held. .gitignore is about the future, not the past.
             item["why"] = "present in git history"
-            blocking.append(item)
-            continue
-        if path in tracked:
+            item["class"] = "in-git"
+        elif path in tracked:
             item["why"] = "in a file git TRACKS"
-            blocking.append(item)
+            item["class"] = "in-git"
         else:
             reason = _ignored_reason(path)
             item["git_check_ignore"] = reason or "(untracked and NOT ignored)"
@@ -260,11 +292,44 @@ def _classify(findings: list[dict], *, in_history: bool) -> dict:
                 # Untracked and unignored is the dangerous middle: one `git add -A`
                 # away from being in history. It blocks.
                 item["why"] = "untracked AND NOT ignored — one `git add -A` from history"
-                blocking.append(item)
+                item["class"] = "in-git"
             else:
                 item["why"] = "not tracked by git, and git is told to ignore it"
-                local_only.append(item)
-    return {"blocking": blocking, "local_only": local_only, "acknowledged": acknowledged}
+                item["class"] = "local-only"
+
+        # --- this scan's own transcript ---
+        # The raw reports carry the values verbatim, so a second run finds every
+        # finding of the first one inside them and the count becomes a function of
+        # how often the scan has been run — a measurement that moves because it
+        # was taken. Dropped, COUNTED and named rather than silently skipped; and
+        # the drop is BOUNDED: a file under the raw directory is gitignored, so it
+        # can only ever be local-only, and this branch is asserted unable to
+        # suppress anything that was heading for `blocking`.
+        if not in_history and path.startswith(raw_rel + "/"):
+            if item["class"] != "local-only":
+                sys.exit(
+                    f"[sec-scan] FAIL: {path} is under the scan's own raw directory and "
+                    "is NOT gitignored. The self-transcript exclusion is only safe "
+                    "while that holds — fix the gitignore, do not widen this branch."
+                )
+            self_transcript.append(item)
+            continue
+
+        # --- the argument, on top ---
+        ack = _acknowledge(item, raw.get("Secret") or "")
+        if ack is not None:
+            acknowledged.append(ack)
+        elif item["class"] == "in-git":
+            blocking.append(item)
+        else:
+            local_only.append(item)
+
+    return {
+        "blocking": blocking,
+        "local_only": local_only,
+        "acknowledged": acknowledged,
+        "self_transcript_dropped": len(self_transcript),
+    }
 
 
 def stage_tree_secrets(*, write: bool) -> dict:
@@ -548,7 +613,7 @@ def main() -> int:
     # it. Only asked when a secret leg actually ran — an images-only invocation
     # has not looked, and "did not look" must not read as "is stale".
     if {"tree-secrets", "history-secrets"} & set(stages):
-        matched = {f["secret_sha256"] for f in acknowledged}
+        matched = {f["_sha256"] for f in acknowledged}
         stale = sorted(set(ACKNOWLEDGED_SECRETS) - matched)
         if stale:
             for sha in stale:
@@ -583,8 +648,14 @@ def main() -> int:
         },
         "legs": legs,
     }
+    payload = _strip_working_fields(payload)
 
     print()
+    secret_legs = {"tree-secrets", "history-secrets"} & set(stages)
+    if not secret_legs:
+        # gotcha #78, and it is the direction that matters: "0 secrets" printed by a
+        # run that never looked for one reads exactly like a clean bill of health.
+        print("[sec-scan] secrets: NOT ASKED — no secret leg ran in this invocation")
     print(f"[sec-scan] secrets in git (tracked files + full history): {len(blocking)}")
     for f in blocking:
         print(f"    BLOCKING  {f['rule']}  {f['file']}:{f['start_line']}  {f['why']}")
@@ -592,6 +663,12 @@ def main() -> int:
     for f in acknowledged:
         print(f"    argued    {f['rule']}  {f['file']}:{f['start_line']}  {f['why']}")
         print(f"              decodes to {f['proved_decodes_to']!r} — {f['acknowledged']['what']}")
+    dropped = sum(leg.get("self_transcript_dropped", 0) for leg in legs.values())
+    if dropped:
+        print(
+            f"[sec-scan] dropped {dropped} finding(s) inside this scan's own raw "
+            f"transcript ({RAW_DIR.relative_to(REPO)}/) — gitignored by construction"
+        )
     print(f"[sec-scan] secrets in gitignored local files (expected): {len(local_only)}")
     for f in local_only:
         print(f"    local     {f['rule']}  {f['file']}:{f['start_line']}")
