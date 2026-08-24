@@ -334,7 +334,7 @@ verify-m8-redteam: ## prove `make verify-m8` can go RED: one online value rewrit
 	@bash scripts/verify_m8_redteam.sh
 
 # ---- M9 stretch (demo committed by PO direction 2026-08-12) ----
-.PHONY: demo demo-page demo-page-check deploy-demo demo-accept
+.PHONY: demo demo-page demo-page-check deploy-demo demo-accept verify-m9 verify-m9-redteam
 demo-page: ## M9-S1: regenerate demo/index.html from its template + the TLC zone lookup + transformer.RAW_INPUTS. The page is GENERATED so the zone list cannot be a twin of the CSV
 	@uv run python scripts/build_demo_page.py
 demo-page-check: ## M9-S1: does the committed page still equal what its three sources generate? Writes nothing
@@ -346,6 +346,10 @@ demo-accept: ## M9-S1: the accept check — real requests sent the way the PAGE 
 demo: ## M9-S1: where the stakeholder demo lives
 	@echo "The demo is at http://localhost:8081/demo/ — 'make deploy-demo' puts it there,"
 	@echo "'make demo-accept' proves it answers. Route decision: demo/README.md §1."
+verify-m9: ## M9 gate, the program's last crossing: the generated page, the accept answered line by line, two rules that carry no number, three live questions, and one box that stays OPEN. RE-RUNS NOTHING
+	@bash scripts/verify_m9.sh
+verify-m9-redteam: ## prove `make verify-m9` can go RED: shorten the store's EXPECTED key count by exactly one view's worth, then restore
+	@bash scripts/verify_m9_redteam.sh
 
 # ---- always available ----
 .PHONY: lint test fmt

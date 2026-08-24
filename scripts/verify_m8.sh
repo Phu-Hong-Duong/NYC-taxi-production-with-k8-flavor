@@ -857,15 +857,25 @@ try:
     dbsize = int(re.sub(r"\D", "", dbsize_raw) or 0)
     materialize = json.loads(
         Path("automation/runs/m8-online/materialize.json").read_text())
-    expected = materialize["store"].get("keys") if isinstance(
+    # F-064 (found 2026-08-24 by `verify_m9.sh`'s first run, which copied this
+    # clause): the record spells this `dbsize`, not `keys`. `.get("keys")`
+    # returned None, `expected is None` was the branch that fired, and the
+    # comparison this message CLAIMS to make was never made — the leg tested
+    # `dbsize > 0` alone and would have passed a store holding one key. So the
+    # key name is read from the record and the absence of the field is a FAIL
+    # rather than a licence: #51's question ("could this component tell if it
+    # were false?") asked of a clause that had already shipped green nine times.
+    expected = materialize["store"].get("dbsize") if isinstance(
         materialize.get("store"), dict) else None
-    if dbsize > 0 and (expected is None or dbsize == expected):
-        ok(f"the ONLINE STORE holds {dbsize:,} keys right now — the count the materialization "
-           f"recorded, survived on its PVC. An empty store answers every lookup with null and "
-           f"nothing red anywhere, which is exactly why the gate asks")
+    if dbsize > 0 and expected == dbsize:
+        ok(f"the ONLINE STORE holds {dbsize:,} keys right now — EQUAL to the count the "
+           f"materialization recorded, survived on its PVC. An empty store answers every "
+           f"lookup with null and nothing red anywhere, which is exactly why the gate asks")
     elif dbsize > 0:
-        no(f"the store holds {dbsize:,} keys against the {expected:,} the materialization "
-           f"recorded — something re-wrote or partly lost it")
+        no(f"the store holds {dbsize:,} keys against the "
+           f"{expected if expected is None else format(expected, ',')} the materialization "
+           f"recorded — something re-wrote or partly lost it, or the record no longer carries "
+           f"the field this leg reads (F-064's shape)")
     else:
         no("the online store is EMPTY — every store-backed feature would be null and the "
            "transformer would quote a confident wrong number")
