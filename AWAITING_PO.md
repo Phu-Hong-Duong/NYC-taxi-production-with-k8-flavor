@@ -89,9 +89,9 @@ the silence is a decision, not a crash.
 >    bar), KPI-10 non-regression unchanged. Also recorded on 2026-08-18-1.
 > 6. **libgomp1 (2026-08-17-1) — option A, APPLIED AND VERIFIED 2026-08-24**
 >    (`openmp_status() -> (True, 'system libgomp.so.1')` on the host).
-> 7. **Allowlist (2026-08-16-2) — option A chosen**; the paste stays the PO's own
->    hands (the settings-write guard is honored, not worked around). Status:
->    chosen, not yet applied.
+> 7. **Allowlist (2026-08-16-2) — option A, APPLIED 2026-08-24** by the PO's own
+>    paste (commit `a55801c`; 58 `Bash(...)` entries in
+>    `.claude/settings.local.json`). Takes effect at the next chained session.
 
 **What is yours, in the order they are worth your time:**
 
@@ -715,10 +715,11 @@ sudo apt update && sudo apt install -y libgomp1
 
 ## 2026-08-16-2 · raised by EXEC/Opus (M0-S1) · NON-BLOCKING: the permission allowlist is starter-sized — one paste makes unattended sessions stop tripping
 
-> **ANSWERED 2026-08-24 by the PO: Option A** — the paste below stays the PO's
-> own hands (the settings-write guard is honored, not worked around). Status:
-> **chosen, not yet applied** (flips when `.claude/settings.local.json` carries
-> the extended list in git).
+> **ANSWERED 2026-08-24 by the PO: Option A — APPLIED the same day, by the PO's
+> own paste** (commit `a55801c`; `.claude/settings.local.json` now carries 58
+> `Bash(...)` entries plus `~/.local` as an additional directory — the guard was
+> honored, the paste was the PO's hands). Takes effect at the next chained
+> session.
 
 *(ARCH note 2026-08-16: attempted to apply Option A under the PO's in-chat
 delegation — the harness classifier refused the settings write for ARCH too.
@@ -938,6 +939,11 @@ The three standing entries below/above are unchanged and still non-blocking:
 Watchdog log: automation/logs/watchdog.log
 
 ## 2026-08-24 06:40 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-24 07:40 UTC — watchdog: Chain parked — your decision needed
 The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
 
 Watchdog log: automation/logs/watchdog.log
