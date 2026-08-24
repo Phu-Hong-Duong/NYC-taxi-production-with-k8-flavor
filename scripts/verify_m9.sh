@@ -864,7 +864,33 @@ try:
         no(f"empty-store rider status {rider} against predicted {predicted_status}; keys "
            f"restored {keys_after}; final quote {champ}")
 
-    # (d) F-057's evidence is a NEGATIVE — the regeneration produced no diff, so
+    # (d) THE ONLY WITNESS A HUMAN READS. Every number the write-up quotes about
+    # the store and the drill is compared with the record it comes from — a
+    # rewritten record must contradict something other than itself, and prose is
+    # where a wrong number does its damage (verify-m5/-m6/-m7's rule, inherited).
+    # Compared at the precision the DOCUMENT writes them at, with a one-decimal
+    # floor for the timings (gotcha #90: rendering 13.75 as `14` matched almost
+    # any document and let a planted value through).
+    headroom = json.loads((D.parent / "m9-store-watch" / "headroom.json").read_text())
+    prose = Path("docs/store_watchdog_m9.md").read_text()
+    quoted = {
+        f"{headroom['expected_keys']['total']:,}": "the store's expected key count",
+        f"{headroom['expected_keys']['transformer_dependency_keys']:,}":
+            "the transformer's whole dependency",
+        f"{empty['refill_seconds']:.1f} s": "the refill",
+    }
+    for alert, obs in sorted(fired.items()):
+        quoted[f"{obs['after_seconds']:.1f} s"] = f"{alert}'s time to fire"
+    missing = {n: what for n, what in quoted.items() if n not in prose}
+    if quoted and not missing:
+        ok(f"and all {len(quoted)} number(s) docs/store_watchdog_m9.md quotes about the store "
+           f"and the drill are the records' own ({', '.join(sorted(quoted))}) — the write-up is "
+           f"the only witness a human reads, so a rewritten record has to contradict it too")
+    else:
+        no(f"the write-up quotes no record for: {missing} — either the prose drifted from the "
+           f"records or a record was rewritten and the document was not")
+
+    # (e) F-057's evidence is a NEGATIVE — the regeneration produced no diff, so
     # there is no commit to point at. What is checkable is the PROPERTY of the
     # file the regenerator now reproduces: every name PEP 503-normalised, and
     # the body sorted as LINES (the order a reviewer verifies with `sort -c`).
@@ -883,7 +909,7 @@ try:
         no(f"the pin file is not what the regenerator emits: non-normalised {unnormalised[:4]}, "
            f"line-sorted={lines == sorted(lines)}")
 
-    # (e) F-054, DERIVED across every test file. A leg naming the two known
+    # (f) F-054, DERIVED across every test file. A leg naming the two known
     # offenders would go green the day a third grew one. Decorators only,
     # because this suite discusses the old form in prose (gotcha #99).
     #
@@ -930,7 +956,7 @@ except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the closure check itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 6 "the closure check"
+expect_verdicts 7 "the closure check"
 
 # ------------------------------------ 7. the program's standing invariants ----
 section "7. the standing invariants — the pointer, the lock, the pins, and the finding M9 did NOT fix"
