@@ -4577,3 +4577,68 @@ notice that neither plant touched a number, a verdict or the wire — the whole
 defect is a claim about a human that the human cannot be found saying. Then go
 looking in your own repo for a field only a person may fill, and find out what
 your automation does to it on the next run.
+
+## M9-S6 — the safety check that fired, and the story that stopped
+
+**What happened.** The PO had answered a two-milestone-old fork (F-016: should
+the gate's *incumbent* condition carry a margin, or is non-regression enough?)
+with **option B, ≥0.50%**. An architect chartered it, did the arithmetic against
+three recorded verdicts, and concluded every historical replay survives. The
+story's first chartered leg was to re-verify that live. It did not survive:
+**two recorded PROMOTEs become REFUSEs.** So the edit was never made and the
+whole thing went back to the PO.
+
+That is the field note. A session whose deliverable is *"I did not do the thing
+I was sent to do, here is the measurement, here are four options"* is not a
+failed session — it is the check working. The charter had written the rule down
+in advance (*"if any replay flips, STOP — that is a finding and a PO question,
+never an edit to the replay"*), which is what made the outcome cheap: no
+judgement call under pressure, no temptation to reason my way past it at minute
+fifty.
+
+**Why a correct charter was still short, and this is the reusable half.** The
+architect reasoned about the verdicts a *person* remembers from the milestone
+— M2's transcripts (no incumbent), M3-S5's *winner* (+0.63%), M7-S4's retrain
+(−0.03%). All three were right. But `verify-m3` §5 replays **all five** bake-off
+contenders, and one of the five is the champion scored as a contender; and
+`verify-m2` §2 parses **`docs/promotion_gate_m3.md`** as well as the M2 document.
+**The population a replay leg reads is a property of the leg's code, not of the
+milestone in its name.** Before reasoning about what a check will say, read what
+the check reads.
+
+**The finding underneath is one number.** Both flips sit at exactly **+0.0000%**
+— a challenger whose error is numerically identical to the incumbent's. One is
+literally the champion judged against itself; the other is a re-fit of v1 that
+landed on the incumbent's own value to the four decimals an incumbent exists at.
+Non-regression admits 0.00%; **any** margin above zero refuses it. Re-running the
+probe at 0.001% flips the same two rows — so the PO's 0.50% is not the cause, and
+picking a smaller number is not a route around it. That reframing is what turns
+"your answer breaks two replays" into a question the PO can actually decide.
+
+**Two habits that made the write-up honest rather than alarming.** First, bound
+the stakes by measuring, not by reassuring: *neither flipped verdict ever moved
+an alias* (one run was `--no-promote`, the other's alias went elsewhere), so no
+promotion that actually happened is invalidated — a sentence I could only write
+after checking. Second, say how close the escape is: the nearest *surviving*
+verdict clears the chosen bar by **0.0612 points** and would flip at 0.57%. A
+fork write-up that omits the margin of safety is asking for a decision without
+showing the cliff.
+
+**What to look at.** `scripts/f016_replay_probe.py` — note that it simulates the
+change instead of making it: it takes the real `decide()` verdict for every
+condition *except* the one under test and applies the margin to that one itself,
+so a difference in the answer is attributable to the margin and to nothing else.
+That shape — *ask what the edit would do before doing it* — costs about thirty
+lines and is available for almost any config change with a replay behind it.
+Then `docs/f016_replay_wall_m9.md` §5 and `AWAITING_PO 2026-08-24-4` for the
+four options, and specifically for the rule that the **recommendation must state
+the cost of the honest option**: the cheap option (a) would have landed the PO's
+answer in an afternoon by teaching the replays to tolerate the change, and it
+buys that by blunting the exact instrument the red teams plant against.
+
+**What to try yourself.** Run `uv run python scripts/f016_replay_probe.py
+--margin 0.001` and then `--margin 0.57`, and watch the flip count go 2 → 2 → 3.
+The first pair tells you the chosen number is irrelevant to the failure; the
+third tells you where the next recorded verdict sits. Then find a threshold in
+your own system that some historical decision was taken under, and ask what
+re-deciding that history at today's threshold would say.
