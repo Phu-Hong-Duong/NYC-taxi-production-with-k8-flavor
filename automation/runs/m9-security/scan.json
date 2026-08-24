@@ -1,5 +1,5 @@
 {
-  "git_head": "fd2af50cce7e4c9422d1f70a62327a6719e26bd4",
+  "git_head": "91d692386bd605aac0fdf8220a62cf5fb3a61336",
   "legs": {
     "history-secrets": {
       "acknowledged": [
@@ -29,9 +29,9 @@
       "blocking": [],
       "findings_total": 1,
       "inputs": {
-        "commits_reachable_from_all_refs": 493,
+        "commits_reachable_from_all_refs": 499,
         "first_commit": "d5a40c4 2026-08-16",
-        "head": "fd2af50",
+        "head": "91d6923",
         "note": "--all walks every ref this clone holds, not just HEAD's ancestry: a secret removed from main by a later commit still lives in the objects the old commit points at, and that is what publishing exposes",
         "refs": 16
       },
@@ -913,8 +913,8 @@
       "blocking": [],
       "findings_total": 16,
       "inputs": {
-        "files_git_tracks": 619,
-        "files_on_disk": 63059,
+        "files_git_tracks": 621,
+        "files_on_disk": 63064,
         "note": "the WHOLE disk tree, gitignored files included \u2014 pointing this at tracked files only would report zero and prove nothing about the hazard anyone actually has",
         "root": "/home/longt/NYC-taxi-production-with-k8-flavor"
       },
@@ -1277,7 +1277,7 @@
       "raw_report": "automation/runs/m9-security/raw/trivy-fs.raw"
     }
   },
-  "recorded_at": "2026-08-24T15:20:04Z",
+  "recorded_at": "2026-08-24T15:46:06Z",
   "stages_run": [
     "tree-secrets",
     "history-secrets",
