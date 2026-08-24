@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -47,6 +48,25 @@ def _versions(python: Path) -> dict[str, str]:
     return json.loads(result.stdout)
 
 
+def _normalize(name: str) -> str:
+    """PEP 503's canonical spelling of a distribution name — F-057.
+
+    `importlib.metadata` reports the name a distribution PUBLISHED (`PyYAML`,
+    `typing_extensions`), while the pin file carries the normalized spelling an
+    installer actually matches on. That mismatch is not cosmetic: it meant this
+    module's own `--rewrite-pins` could not reproduce the file it maintains, so
+    M8-S4's two-line addition came back as a fourteen-line diff and a third line
+    could have hidden in it. gotcha #104.
+
+    PEP 503 (`[-_.]+` -> `-`, lowercased) rather than the finding's shorter
+    `lower().replace('_','-')`: the two agree on every name this quarantine holds
+    today, and the difference is only ever a name containing a dot or a run of
+    separators — where the short form would silently emit a spelling no installer
+    canonicalises to.
+    """
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def _freeze(python: Path) -> dict[str, str]:
     result = subprocess.run(
         [str(python), "-m", "pip", "freeze", "--all"], capture_output=True, text=True
@@ -62,13 +82,26 @@ def _freeze(python: Path) -> dict[str, str]:
         result = subprocess.run(
             [str(python), "-c", code], capture_output=True, text=True, check=True
         )
-        return dict(sorted(json.loads(result.stdout).items(), key=lambda kv: kv[0].lower()))
-    pins = {}
-    for line in result.stdout.splitlines():
-        if "==" in line:
-            name, version = line.split("==", 1)
-            pins[name] = version
-    return dict(sorted(pins.items(), key=lambda kv: kv[0].lower()))
+        raw = json.loads(result.stdout)
+    else:
+        raw = {}
+        for line in result.stdout.splitlines():
+            if "==" in line:
+                name, version = line.split("==", 1)
+                raw[name] = version
+
+    pins: dict[str, str] = {}
+    for name, version in raw.items():
+        canonical = _normalize(name)
+        # Two published names canonicalising to one would SILENTLY drop a pin, and
+        # the file's whole claim is that it is the complete transitive set.
+        if canonical in pins and pins[canonical] != version:
+            raise SystemExit(
+                f"[probe] FAIL — {name!r} and another distribution both normalize to "
+                f"{canonical!r} with different versions; the pin file cannot express that"
+            )
+        pins[canonical] = version
+    return dict(sorted(pins.items()))
 
 
 def _pin_header(path: Path) -> list[str]:
@@ -99,8 +132,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.rewrite_pins:
         header = _pin_header(pins_path)
-        body = "\n".join(f"{name}=={version}" for name, version in quarantine.items())
-        pins_path.write_text("\n".join(header) + "\n" + body + "\n")
+        # The body is its own lines, SORTED — not the mapping's key order. The two
+        # differ for hyphenated siblings (`mypy-extensions==…` sorts before
+        # `mypy==…`, because `-` < `=`), and sorting the lines is the version a
+        # reviewer can verify without this script: `sort -c` on the body. It is
+        # also the order the committed file has carried since M8-S2, so the F-057
+        # fix agrees with the artifact that was reviewed rather than rewriting it.
+        body = sorted(f"{name}=={version}" for name, version in quarantine.items())
+        pins_path.write_text("\n".join([*header, *body]) + "\n")
         print(f"[probe] rewrote {args.pins} with {len(quarantine)} pins")
         return 0
 

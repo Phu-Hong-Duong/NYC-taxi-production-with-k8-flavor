@@ -4302,3 +4302,72 @@ command is reused as somebody else's undo, audit what it does to state that
 already exists.** It was visible only because `automation/runs/**/*.json` is
 tracked — F-029's option A, landed at M5-S1 for exactly this reason and paying out
 three milestones later.
+
+
+## M9-S3 — two closures, and the choice between fixing the tool and rewriting the artifact it maintains
+
+**F-057's fix had a fork inside it that the row did not see, and taking the other
+branch is why the finding closes with a zero-line diff.** The defect: the pin
+file's own documented regenerator emitted distribution names as PUBLISHED
+(`PyYAML`, `typing_extensions`) while the committed file carries the normalized
+spelling, so `--rewrite-pins` could not reproduce the file it maintains and
+M8-S4's two real additions arrived as +14/−12. The obvious repair — normalize,
+regenerate, commit the twelve changed lines — was what the kickoff anticipated
+("regenerate in a commit that does NOTHING else"). But when I actually diffed the
+two candidate outputs against the committed file, the naive normalization left
+**three** lines still moving: `mypy-extensions` / `mypy`, `pydantic-core` /
+`pydantic`, `uvicorn-worker` / `uvicorn`. The committed file is sorted **as
+lines** (`-` sorts before `=`, so the hyphenated sibling comes first); today's
+`uv pip freeze` sorts by name. Matching the file made the regeneration a **no-op**
+— sha256 `a700cd6b…` before and after, `git diff` empty.
+
+**That is a stronger closure than the one I was asked for, and the reason is
+about evidence rather than aesthetics.** If I regenerate and commit, the
+round-trip test's claim is *"the regenerator reproduces the file I just wrote
+with it"* — true by construction, and it proves nothing about the twelve
+spellings being the RIGHT ones. By making the tool agree with the artifact, the
+claim becomes *"the regenerator reproduces a file that has been under review
+since M8-S2, untouched"* — the fix is tested against something that predates it.
+**When a tool and the artifact it maintains disagree, ask which one was
+reviewed** — and only rewrite the reviewed thing if the tool's version is
+actually better. Here it was not: sorting the lines is the ordering a reviewer
+can check without running anything (`sort -c`), and this script is the file's only
+producer, so the order was ours to define. Honest cost, written into the row: a
+hand-run `uv pip freeze` now differs from the file on three lines, which is the
+same shape as the defect I was closing, one notch smaller.
+
+**I also refused the fix the finding literally recommended.** The row says
+`name.lower().replace('_','-')`; I used PEP 503 (`[-_.]+` → `-`, lowercased).
+They agree on all 66 names this quarantine holds, so it changes nothing today —
+which is exactly why it was worth doing now rather than the day somebody adds
+`zope.interface` and gets a spelling no installer canonicalises to. The two cases
+where they differ are in the test, so the choice is falsifiable rather than
+asserted. And a normalization can COLLIDE (two published names, one canonical),
+which would silently drop a pin from a file whose entire claim is completeness —
+so it raises instead. **A one-line transform that maps many to one deserves the
+collision branch even when you are confident it cannot fire.**
+
+**F-054 was mechanical, and the interesting part was where the check lives, not
+what it does.** Twelve tests guarded their record reads with `skipif(not
+RECORD.exists())`, which on the host reports "the drill was never run" as a pass.
+Converting them is a search-and-replace. The part worth thinking about is that
+`test_record_marker.py` used to *accept* that form and argue against it in prose
+— so the closure was not just changing twelve decorators, it was moving
+`_skip_guarded` from the coverage check's **subtraction** (accepted) into a new
+test's **refusal**, derived by AST across every test file. Enumerating the two
+known files would have gone green the day a third grew one. **A finding that
+lives as a documented exception in a guard is closed by changing the guard's
+verdict, not by fixing the instances** — the instances are what the guard then
+catches.
+
+**Two small things worth keeping.** The assertion carries its own message
+(`… is a TRACKED record (F-029 option A) — its absence means it was deleted or
+lost, not that this clone lacks local artifacts`) because the default failure is
+a bare `FileNotFoundError` five frames deep, and the whole point of the change is
+that a future reader is told what the absence MEANS. And both red-team proofs
+were the same shape as every other one in this program: plant the exact defect
+being closed (one pin back as `PyYAML`; one record moved aside), watch multiple
+independent tests go red naming it, restore, watch green. Neither took two
+minutes, and without them the two closures would rest on "I changed the code and
+the suite is green", which is what a suite says when a check has quietly stopped
+checking.
