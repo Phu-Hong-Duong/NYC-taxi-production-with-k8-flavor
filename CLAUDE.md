@@ -3352,6 +3352,85 @@ can never disagree (the port-family twins lesson, applied before it bit).
   naming the record and the finding, 12 still passing. Both restored, GREEN,
   clean tree.
 
+## The last gate (M9-S4) — three questions instead of fourteen, and a check that had been reporting a comparison it never made
+- **`make verify-m9` is 45 sub-checks in 7 sections, 4.450 s, and it RE-RUNS
+  NOTHING** — ninth and FINAL inheritance of M1's no-skip-flag rule. M9's
+  evidence is a deployed page, a materialized store and a drill that included a
+  **real total outage of the transformer's dependency** (`FLUSHDB`), so
+  re-provoking any of it would cost an outage per verification, and re-running
+  the demo's own accept would overwrite the record the gate exists to read.
+- **It asks THREE live questions and the interesting decision was subtraction.**
+  One quote through the DEMO's own request path (endpoint, schema and payload
+  read out of `demo/index.html` by the accept script's own helpers, module path
+  DERIVED from the Makefile recipe, posted with **no Host override** — the one
+  thing a browser cannot do and every other client here does), one rules read,
+  one DBSIZE. The champion's wire, the feature server's two-sided answer and the
+  exporter's health belong to `verify-m5` and `verify-m8`, which the boundary
+  runs live as their own evidence. **A gate that re-asks its predecessors'
+  questions is not stricter — its live footprint just grows every milestone**, so
+  the test pins the ABSENCES too (no `client_mod.infer(`, no
+  `get-online-features`, no `/api/v1/query`): a bound that only says "at most
+  three" is satisfiable by three of somebody else's.
+- **A gate that passes BECAUSE something is unfinished.** §9/M9's last accept
+  line needs a human, and every gate in this program renders green. So this one
+  checks the box is recorded HONESTLY — the record says OPEN, AWAITING_PO carries
+  the invitation, the two agree on the URL — and prints it as an **OPEN ITEM in
+  §2 and in its own GREEN banner**, where a reader who skims only the verdict
+  still sees it. Three assertions in `tests/unit/test_verify_m9.py` hold that,
+  banner included, because the failure mode is not a bug but a temptation.
+- **Two rules carry no number, so the gate checks the ABSENCE of one.** A-12a
+  compares a canary claim to `0`; A-12b compares a live key count to an expected
+  count the reader pushes on the same run. Checkable instead: no numeric literal
+  on either side of A-12b, the ONE number in all three rules (A-12's 1800 s
+  freshness clause) argued in §9 **specifically**, and the strongest —
+  **every series the rules SELECT is a series `store_health` PUSHES**, because a
+  rule selecting a series nobody produces does not error, it sits `health=ok` and
+  `inactive` forever (gotcha #92's shape), which is what a healthy store looks
+  like.
+- **The expected key count has three witnesses and the gate asks all three**:
+  the headroom record's per-view counts summing to its own total (263 + 4,383 +
+  46,938 + 6,104 = 57,688), the M8-S4 materialization record, and the live
+  server. `keys < keys_expected` is only honest if the expected side is DERIVED
+  from the store's sources rather than remembered.
+- **Law 4 is checked from git four times** — 133 s · 0 s · 1878 s · 700 s — and
+  it is the tenth inheritance: the demo's EXACT bar before the accept record, the
+  headroom before §9 argues from it, §9 before the first drill record, the
+  prediction before the record that judges it.
+- **All three of its own first RED runs were the gate's defects, and the third is
+  gotcha #50 again.** The F-054 leg asked "does any test skip on a `.exists()`?"
+  and flagged a test skipping on `.venv-feast/bin/python` — a **gitignored build
+  artifact**, absent in CI, where skipping is CORRECT and is this suite's idiom
+  for `ss`/`git`/`make`/`docker`. F-054 is about **records** under
+  `automation/runs`, which are TRACKED, so their absence means deleted-or-lost.
+  Repaired by NARROWING to the right property (each file's record constants
+  resolved from their own assignments), never by widening the bar.
+- **F-064 CLOSED, and it is a clause that had shipped green nine times.**
+  `verify_m8.sh` read `materialize["store"].get("keys")` where the record spells
+  it `dbsize`, so `expected` was always `None`, the `expected is None` branch
+  fired, and the leg tested **`dbsize > 0` alone** while telling its reader "the
+  count the materialization recorded" — it would have passed a store holding ONE
+  key, in the gate whose job on that line is to notice an empty store. Invisible
+  precisely BECAUSE the original was written defensively; found when the M9 gate
+  copied the clause and spelled it strictly. Fixed and `make verify-m8` re-run
+  GREEN with the real comparison. **Gotcha #51's question asked of a PASSING
+  check — and a defensive default in a VERIFIER is a different thing from one in
+  a producer: in a producer it keeps the system running, in a verifier it keeps
+  the verdict green.**
+- **The red team plants a POPULATION, not a measurement**: `expected_keys.total`
+  short by exactly the smallest view's 263 keys (the view chosen from the record,
+  the one holding every centroid), which loosens no rule, leaves every alert
+  inactive and 42 sub-checks green — and describes a store that could lose all
+  its geometry and still satisfy A-12b. **RED with 3 FAILs from three artifacts**
+  (the record's arithmetic, the live DBSIZE + materialization record, and the
+  write-up), the no-number and ordering legs deliberately still GREEN, sha256
+  restore, **GREEN 45/45**, clean tree. The prose witness had to be BUILT for the
+  drill — the usual yield of writing the red team second is that it tells you
+  which witness the gate was missing.
+- **Nothing was fitted, no alias moved, no version created, no wire changed.**
+  `@champion` **2** / `feature_set v2`, versions `['1','2']`, `uv.lock`
+  byte-identical to `m7-closed`, all 5 settled DVC pins up to date, host suite
+  **1204 passed** (was 1171), ruff clean, `verify-m5`/`m6`/`m7`/`m8` all GREEN.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3570,6 +3649,8 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | A-12/A-13's metric source: DBSIZE + a four-claim canary, pushed (M9-S2) | `make store-watch` (`STORE_WATCH_ARGS=--no-push` prints and pushes nothing; `--out <path>` records). A READER — it issues NO verdict and contains no bar | RE-VERIFIED LIVE 2026-08-24 after a host restart: `keys 57688` == `keys expected 57688`, and all four canary claims **1** through the feature server's own `/get-online-features` wire — `store_reachable` · `zone_answers` (132 returns a non-null centroid) · **`nonplace_declines` (264 returns null, and not an error)** · `calendar_answers` (2019-07-04 returns its holiday flags) — then `pushed 7 series -> job/taxi-store-watch/store/feast-online`. **No threshold lives anywhere in it**: the bars are the SELECTORS of three rules, argued in `docs/slo_serving.md` §9. `store_reachable` is REPORTED as a 0 rather than withheld, inverting `push_serving_version.py`'s refusal rule on purpose — an unreadable store IS the measurement. Ephemeral forwards on **6568/9100**, deliberately off every port a running drill owns (#55 has cost this program a session); neither is a route (M9 law 1) |
 | Empty the online store, watch A-12 fire, watch the rider be REFUSED, refill, watch it clear (M9-S2) | `make store-watch-drill` (`DRILL_ARGS=--dry-run` writes the prediction and mutates nothing; `--phase health\|empty\|unreachable`; ~9 min, and the empty phase is a **real total outage of the transformer's dependency**) | VERIFIED 2026-08-23 (M9-S2): **PASSED — 28 checks across three phases, 0 failures** (`health` 5/5 · `empty` 19/19 · `unreachable` 4/4), prediction written to disk before the first mutation, committed in `408b472` and pinned by a test against the drill's own literal. `FLUSHDB` **57,688 -> 0**; the rider's quote came back **HTTP 422 — predicted 422, and the kickoff's superseded 503 is kept beside it in the prediction rather than quietly replaced**; **`OnlineStoreCanaryFailing` and `OnlineStoreIncomplete` both FIRED at T+162.2 s and both reached Alertmanager**, with the failing claims read **per series** (`['calendar_answers','zone_answers']`) and not per rule name (gotcha #93); **all five must-not-fire negatives inactive** (A-13, A-2, A-5, A-11, A-4); **the champion's own wire answered 39.0019 minutes throughout** — the store backs the transformer's raw boundary, not the 24-column wire; refill **57,688 keys in 9.9 s**; both rules cleared 30.0 s / 0.0 s and the real numbers went straight back, so **the board ends carrying the truth** (M7-S3's rule). It calls the refill with **`--no-record`** and a comment saying why — that is **F-063**, found by its own first run |
 | Validate the alert rules, now sixteen (M9-S2) | `make alert-rules` | RE-VERIFIED 2026-08-23 (M9-S2): **16 rules validated across 10 signal ids** (was 13 across 9), the three new ones printed with their `for:` and severity — `A-12 OnlineStoreCanaryFailing for=2m critical` · `A-12 OnlineStoreIncomplete for=2m warning` · `A-13 OnlineStoreWatchdogAbsent for=10m warning`. Every one carries an `annotations.why` or the renderer REFUSES it, which is what stops a threshold shipping without the argument beside it. Read back off the live `prometheus-server` ConfigMap: all three present, **`health=ok`, and NO pod restart** — the configmap-reload sidecar, M6-S1's measurement re-confirmed a fourth time |
+| Gate check M9 — the program's last crossing | `make verify-m9` | VERIFIED 2026-08-24 (M9-S4): **GREEN 45/45 sub-checks in 7 sections, 4.450 s, exit 0** — the demo page (530 `<option>` elements == 2 x the CSV's 265 zones, the request schema equal to `transformer.RAW_INPUTS` on wire name AND datatype AND source field, the default trip a PUBLISHED parity row, TLC's two non-places RENDERED and quotable at 8.2445 min, the served page byte-identical to git by sha256 read three ways, and the page posting to the RAW boundary and never the champion's 24-column wire) · §9/M9's accept answered line by line with the bar **PARSED** out of the section that argues it (`EXACT`, |Δ| 0.000e+00, cross-artifact against the transformer-parity row matched on (at, pu, do)) · **law 4 from git four times** (133 s · 0 s · 1878 s · 700 s) · the watchdog's three rules with **NO NUMBER on either side of A-12b**, the one bar (1800) argued in §9 specifically, and **every series the rules SELECT produced by `store_health`** — a rule selecting a series nobody pushes stays `health=ok`/`inactive` forever · **THREE live questions** (one quote through the DEMO's own request path at 39.00193715359812 stamped with the version the alias resolves to; the three rules LOADED `health=ok` with every `for:` equal to the file's; **57,688 keys with THREE WITNESSES agreeing**) · the drill's 28/0 with its prediction FIELD-EQUAL to the committed file · F-057 and F-054 as **derived** properties · the pointer, the lock, the pins, the nine inherited gates NOT nested, and **F-062 required to be an honest OPEN row**. **RE-RUNS NOTHING**, pinned by `tests/unit/test_verify_m9.py` (33 tests) incl. the three-question count and the absence of its predecessors' questions. No skip flag, no fast mode (M1's rule, **ninth and final** inheritance). **The PO-observed box is printed as an OPEN ITEM in §2 and in the GREEN banner and is never rendered green** — a test pins all three halves. Transcript: `docs/verify_m9_transcripts.md` §1 |
+| Prove the M9 gate can go RED | `make verify-m9-redteam` (`bash scripts/verify_m9_redteam.sh`) | VERIFIED 2026-08-24 (M9-S4): shortens ONE number in `automation/runs/m9-store-watch/headroom.json` — `expected_keys.total` **57,688 -> 57,425**, short by exactly the **263** keys of the view CHOSEN from the record as the smallest (`zone_static`, which holds every centroid the champion's nine geometry features are built from), derived from the record's own fields and leaving `per_view`, `transformer_dependency_keys`, the live_store block and the materialization block untouched. **It is not a lie about a measurement; it is a correct-looking expectation of the WRONG POPULATION** — and because A-12b compares metric-to-metric with no literal on either side, no rule is loosened and every alert stays `inactive`, while the store it describes could lose ALL its geometry and still satisfy the alert that exists to notice. → **RED exit 1 with 3 FAILs from THREE artifacts**: the record's own per-view arithmetic, the live `DBSIZE` beside the M8-S4 materialization record, and `docs/store_watchdog_m9.md` — the only witness a human reads, and **the leg that reads it had to be built for this drill**. **42 sub-check lines still ran and passed**, and the **no-number leg and law 4's ordering leg stayed GREEN by design** — what separates a gate that fails on a wrong number from one that fails on any edit. Restored under an EXIT trap, sha256-verified (`b875049f8289…`), `git status` clean → **GREEN 45/45**. Touches no pod, no image, no Redis key, no MLflow run, no registry version, no alias, no rule, no page and no traffic |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |

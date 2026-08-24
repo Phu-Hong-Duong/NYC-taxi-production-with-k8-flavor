@@ -4371,3 +4371,87 @@ independent tests go red naming it, restore, watch green. Neither took two
 minutes, and without them the two closures would rest on "I changed the code and
 the suite is green", which is what a suite says when a check has quietly stopped
 checking.
+
+
+## M9-S4 — the program's last gate: three questions, not fourteen; and a check that had been reporting a comparison it never made
+
+**The gate asks THREE live questions and the interesting decision was subtraction.**
+`verify-m8` asks five, `verify-m6` and `verify-m7` three each. The tempting shape
+for the *last* gate in a nine-milestone program is the union — ask the champion's
+wire, the feature server, the exporter's health, the store, the rules, the demo,
+everything. That instinct is wrong for a reason worth keeping: **a gate that
+re-asks its predecessors' questions is not stricter, it is a gate whose live
+footprint grows every milestone.** `verify-m5` already asks the champion for a
+prediction and refuses to pass if the served version disagrees with the alias;
+`verify-m8` already asks the feature server two-sidedly and the exporter whether
+it is up. Those gates are *runnable*, and the boundary runs them. So M9's three
+are exactly the three nobody else can ask: one quote through the DEMO's own
+request path (endpoint, schema and payload read out of the committed page, posted
+with no Host override — the one thing a browser cannot do and every other client
+here does), one rules read, one DBSIZE. The count is in the header and pinned by a
+test, and the test also asserts the *absences* — no `client_mod.infer(`, no
+`get-online-features`, no `/api/v1/query`. A bound that only says "no more than
+three" can be satisfied by three of somebody else's.
+
+**A gate that passes BECAUSE something is unfinished.** §9/M9's last accept line
+is "one non-technical person completes a query unassisted, observed". No
+unattended session can watch that, and the whole program has one rule that makes
+this easy to get wrong: gates render green. So this gate is chartered to check
+that the box is recorded *honestly* — the record says OPEN, AWAITING_PO carries
+the invitation, and the two agree on the URL — and to print it as an open item in
+§2 **and in its own GREEN banner**, where a reader who skims only the verdict
+still sees it. Three separate assertions in the test file hold that, including
+the banner one, because the failure mode here is not a bug but a temptation: a
+gate reporting the milestone complete would be describing an observation nobody
+made.
+
+**Two rules that carry no number, and what you check instead.** A-12a compares a
+canary claim to `0` and A-12b compares a live key count to an expected key count
+the reader pushes on the same run. There is no bar to check against a document —
+so the checkable properties are the ABSENCE of a numeric literal on either side
+of the comparison, the ONE number in all three rules (A-12's 1800 s freshness
+clause) being argued in §9 *specifically*, and the strongest of the three:
+**every series the rules SELECT must be a series the reader PUSHES.** That last
+one exists because of gotcha #92's shape — a rule selecting a series nobody
+produces does not error. It sits `health=ok` and `inactive` forever, which is
+precisely what a healthy store looks like.
+
+**The three RED first runs were all the gate's own defects, and the third is the
+one to remember.** The F-054 leg asked "does any test skip on a `.exists()`?" and
+flagged a test that skips on `.venv-feast/bin/python` — a gitignored build
+artifact, absent in CI, where skipping is *correct* and is the idiom this suite
+already uses for `ss`, `git`, `make` and `docker`. F-054 was never about that: it
+is about **records**, paths under `automation/runs`, which are TRACKED, so their
+absence means deleted-or-lost rather than this-clone-lacks-artifacts. **Gotcha
+#50 again, and the repair is narrowing to the right property rather than widening
+the bar** — the leg now resolves each file's record constants from their own
+assignments and counts only skips gated on those. A guard that fires when the
+program behaves correctly teaches the next session to edit assertions, which is
+how a guard becomes a formality.
+
+**F-064: a clause that had shipped green nine times, reporting a comparison it
+never made.** `verify_m8.sh` read `materialize["store"].get("keys")` where the
+record spells the field `dbsize`. `expected` was always `None`, the
+`expected is None` branch fired, and the leg tested `dbsize > 0` alone while
+telling its reader "the count the materialization recorded, survived on its PVC".
+It would have passed a store holding one key — in the gate whose whole job on
+that line is to notice an empty online store. It was invisible **because the
+original was written defensively**: `.get()` plus an `or expected is None` reads
+as care, and degrades toward passing. The M9 gate found it by copying the clause
+and spelling it strictly. Two things generalise. First, gotcha #51's question is
+usually asked of a component that FAILED; ask it of a check that PASSES — *could
+this tell if it were false?* Second, **a defensive default in a verifier is a
+different thing from a defensive default in a producer**: in a producer it keeps
+the system running, in a verifier it keeps the verdict green.
+
+**The red team plants a population, not a measurement.** One number: the store's
+expected key count, short by exactly one view's worth — and the view is chosen
+from the record as the smallest, which is `zone_static`, the 263 rows holding
+every centroid. Nothing about the alerting stack changes (A-12b has no literal to
+loosen; every rule stays inactive and `health=ok`), 42 sub-checks have no reason
+to complain, and the described store could lose all its geometry and still
+satisfy the alert that exists to notice. Three artifacts contradicted it — the
+record's own arithmetic, the live DBSIZE beside the M8-S4 materialization record,
+and the write-up — and **the third had to be built for the drill**, which is the
+usual yield of writing the red team second: it tells you which witness the gate
+was missing.
