@@ -33,6 +33,7 @@ SCRATCH_BRANCH="redteam/m9-s9-planted-secret"
 PLANT_FILE="redteam_planted_credential.txt"
 RECORD="automation/runs/m9-security/scan.json"
 FAILURES=0
+CHECKS=0
 START_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -58,6 +59,7 @@ cleanup() {
 trap cleanup EXIT
 
 check() {  # $1 = description, $2 = 1 for pass
+  CHECKS=$((CHECKS + 1))
   if [[ "$2" == "1" ]]; then
     echo "  ok  $1"
   else
@@ -168,10 +170,11 @@ check "HEAD is back on $START_BRANCH" \
 
 echo
 if [[ $FAILURES -eq 0 ]]; then
-  echo "[sec-redteam] PASSED — the scan named a planted credential in the working tree"
+  echo "[sec-redteam] PASSED — $CHECKS checks, 0 failures. The scan named a planted"
+  echo "[sec-redteam] credential in the working tree"
   echo "[sec-redteam] and in a commit no branch pointed at, redacted both, and came back"
   echo "[sec-redteam] clean once the plant was destroyed."
   exit 0
 fi
-echo "[sec-redteam] FAILED — $FAILURES check(s)" >&2
+echo "[sec-redteam] FAILED — $FAILURES of $CHECKS check(s)" >&2
 exit 1
