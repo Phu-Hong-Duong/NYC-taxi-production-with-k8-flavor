@@ -1,5 +1,132 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (cg) — M9-S2: the online-store watchdog, and two rules that carry no number
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cf) · `docs/milestones/M9_KICKOFF.md` · AWAITING_PO (incl. **2026-08-24-1**, the
+PO's own chain-deadlock fix). **Role block: SRE** — the kickoff's assignment for S2;
+charter read. Refusals in play all session: *no alias move · nothing fitted · no gate
+invocation · no new hostPort · no project dependency (`uv.lock` frozen) · **no Flyte
+trigger for the cadence (F-058, this milestone's §0)** · the champion's wire is not cut
+over* — none was broken.
+
+**M9-S2 is DONE. M9-S3 (F-057/F-054 closure) and M9-S4 (the gate) remain.** One new
+finding is OPEN and routed — **F-062** — and it does NOT block M9-S3 or M9-S4.
+
+**MERGED** — PR **#62**, merge commit `MERGE_SHA`; lineage proved:
+`git branch -r --contains 4ed17ae` -> origin/main. CI `lint-test` pass.
+
+### Reconciliation (the staleness check — and this session inherited an interrupted one)
+**This story was ~90% committed by an earlier session that never got to write it up.**
+Sequence, from the logs and git: the 2026-08-23 13:43 executor built the whole watchdog
+(4 commits, `cedb9e8`..`f3ba64a`) and died before the exit ritual; the **04:16 UTC
+executor was killed by a transient API error** at 04:23 mid-way through the *last*
+accept criterion, and the 04:50 retry died on an HTTP 500. The PO's Windows-side session
+then diagnosed the watchdog's FAILED-branch deadlock, fixed it, acked two stale
+2026-08-20 statuses and resumed the chain (AWAITING_PO 2026-08-24-1) — its two chain
+commits sit on this same branch and merge with it.
+
+So the reconciliation was of the STORY, not just the cluster. Reality checked live
+before touching anything: 3/3 nodes Ready v1.36.1 at 7d2h; both InferenceServices Ready
+(champion 5d1h, transformer 16h); `redis` 1/1 and `feast-server` 1/1 (both restarted
+73m earlier with the host — restart counts 2 and 1, no data lost, the PVC doing its job);
+**`DBSIZE` 57,688** — the drill's refill survived the reboot; all three A-12/A-13 rules
+present in the live `prometheus-server` ConfigMap; `@champion` **2** / `feature_set v2`,
+versions `['1','2']`; `uv.lock` byte-identical to `m7-closed`; no `automation/STOP`.
+**`make store-watch` re-run live today**: keys 57688 == expected 57688, all four canary
+claims 1, 7 series pushed. Nothing needed repair.
+
+### Done — what this session actually added
+The substance was already committed and verified (28/28 drill checks, 0 failures). What
+was missing was the accept criterion the 04:16 session died on, plus block exit:
+- **The residual sentence's last two homes got their dated closure note.** The criterion
+  names three documents; `docs/transformer_m8.md` §6 and ADR-012 landed with the feature
+  commit, and **`docs/feast_side_by_side.md` (row 3 AND §3's R-2 row) and
+  `docs/feast_server_m8.md`** were still standing uncorrected. Both keep the original
+  paragraph with a dated note beside it (F-044/gotcha #91's rule).
+- **And the closure is HALF a closure, said plainly.** R-2 had two halves. The
+  **standing** half is closed — A-12 (SLO-S1) + A-13 (SLO-S2). The **per-request** half
+  (the survey's row 3: F's 404 chosen for a missing entity) is still not adopted, and
+  running the drill is what turned that from a preference into **F-062**: our boundary
+  *does* refuse an emptied store, but it refuses **422** because the calendar lookup
+  raises before the geometry one — an infrastructure outage wearing the caller's status
+  class. Row 3 called that difference "the mechanism"; it is exactly where the accounting
+  goes wrong. `docs/feast_server_m8.md`'s note also records that its paragraph named the
+  right owner for the right reason: **A-12's canary rides that server's own
+  `/get-online-features` wire** and asserts the two-sided property §4b established there,
+  so the consumer that slice added is the instrument the watchdog reads through.
+- **§3's routing table now says which of its three rows moved** — R-2 DONE, R-1 and R-3
+  unchanged and still unscheduled. A survey page whose routing table is never revisited
+  credits itself for work nobody did. It also records that the routing note was *right
+  about the cost and wrong about the shape*: R-2 was deferred because it "needs its own
+  headroom leg", and the headroom leg is what turned an expected key-count threshold into
+  two rules with **no number on either side of the comparison**.
+- **Block exit**: deployments ledger row (both mutations, incl. the deliberate FLUSHDB,
+  state class in both directions), the M9-S2 field note, the CLAUDE.md story section and
+  **four command rows**.
+
+### The story's own numbers, restated for the gate that will read them
+- **Three witnesses agree at 57,688 keys** — derived from `data/feast/*.parquet`, M8-S4's
+  materialization record, the live `DBSIZE`. Nobody typed it, which is why
+  `OnlineStoreIncomplete` is `keys < keys_expected` and **carries no number**.
+- **A key-count bar would have been actively bad**: the transformer's entire dependency
+  is **4,646 keys / 8.054%**, and zone 132's centroid is **one key of 57,688** (lose it
+  and `DBSIZE` moves 0.0017% while every JFK quote breaks). Hence the canary is the
+  load-bearing signal, and it asks about **answers**, not size.
+- **"Stale" was re-asked, not re-numbered.** This store's data is settled, so a clock-age
+  bar on its contents would be a number chosen to avoid paging. *A store is stale when it
+  disagrees with the sources it was filled from.*
+- **The drill: 28 checks, 0 failures.** `FLUSHDB` 57,688 -> 0 · rider **HTTP 422**
+  (predicted 422; the kickoff's superseded **503** is kept beside it) · **A-12a and A-12b
+  both FIRED at T+162.2 s, both at Alertmanager**, failing claims read **per series** ·
+  **five must-not-fire negatives held** · champion's wire **39.0019 min throughout** ·
+  refill **57,688 keys in 9.9 s** · cleared 30.0 s / 0.0 s, real numbers back.
+- **Law 4 from git**: headroom + §9 in `cedb9e8` (1787493474) -> rules `c8290da` ->
+  prediction `408b472` (1787494652) -> first drill record `f3ba64a` (1787495352).
+  **1,878 s between the document that argues the bars and the record that first crosses
+  one.**
+- **F-063 CLOSED same session**: the drill's undo (`feast_materialize.sh`) rewrote
+  M8-S4's *tracked* record. `--no-record`, restored from git, phase re-run. Third
+  occurrence of one shape (gotcha #48, F-053).
+
+### Verification at exit (all on the merged tree, clean)
+`make store-watch` live **57688 == 57688, 4/4 claims** · `make alert-rules` **16 rules /
+10 signal ids validated** · `make verify-m5` **GREEN** · `make verify-m6` **GREEN** ·
+`make verify-m7` **GREEN** · `make verify-m8` **GREEN 51/51** · host suite **1167 passed**
+(+19 from this story's tests) · ruff clean · **`uv.lock` byte-identical to `m7-closed`** ·
+all settled DVC pins `up to date` · **`@champion` 2 / `feature_set v2`, versions
+`['1','2']` — no version 3** · live store **57,688 keys at `noeviction`**.
+
+### Next
+**M9-S3 — closure of F-057 and F-054**, both DECIDED at the M8 boundary (kickoff §0), so
+it is mechanical and carries no fork. Two independent halves; the kickoff's accept list is
+precise, and note the two shapes it asks for:
+- **F-057**: normalize in `feast_probe_record.py::_freeze`, then regenerate
+  `infra/feast/requirements-feast.txt` **in a commit that does nothing else** so the diff
+  is reviewable alone; add the round-trip test; **re-prove the from-pins venv rebuild**
+  (delete `.venv-feast`, `uv pip install --no-deps -r …`, same package set — M8-S2's
+  proof re-earned for the regenerated file). `uv.lock` untouched, asserted.
+- **F-054 option (a)**: the twelve `skipif(not RECORD.exists())` tests become assertions
+  under the F-047 `needs_records` marker; then **delete one record unstaged and paste the
+  RED** to prove the assertion is real, restore, GREEN. Keep `test_record_marker.py`'s
+  guard DERIVED, not enumerated — and its docstring argues against the older form, which
+  after this story is gone.
+
+**F-062 is OPEN and belongs to the program close, not to M9-S3.** It is in
+`ledgers/findings.md` with three costed options and recommendation **(b)**. It is not a
+fork the chain waits on: A-12 already pages, so nothing is silent — the accounting is.
+**Do not fix it inside another story**: it changes what the served boundary returns, which
+means a transformer redeploy and re-measuring three parity records (`transformer-parity`,
+`server-parity`, `online_parity`), and M9 law 3 keeps the wire still.
+
+**Left running deliberately** (M6-S3 shadow / M8-S5 transformer / M9-S1 demo precedent):
+the demo page, both InferenceServices, the feature server, Redis at 57,688 keys and all
+16 alert rules. **M9-S4's gate inherits every one of them live**, plus this story's two
+records and the ordering above — which it should read, never re-run: the empty phase is a
+real total outage of the transformer's dependency.
+
+
 ## Session 2026-08-23 (cf) — M9-S1: the demo page, and a route that claimed less
 
 ### State
