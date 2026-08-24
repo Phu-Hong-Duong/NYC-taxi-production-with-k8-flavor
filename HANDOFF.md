@@ -14,6 +14,8 @@ and the only live traffic this session sent was read-only (one `make demo-accept
 
 **Story: M9-S5, the first of the epilogue's five.** ONE story, as chartered. S6…S9 remain.
 
+**MERGED** — PR **#66**, merge commit `1c7583a`; `git branch -r --contains d3f4550` → `origin/main` (gotcha #20). `make verify-m9` re-run on merged main: **GREEN**.
+
 ### Reconciliation (the staleness check, and it found the charter on the floor)
 The handoff's Next said "nothing is scheduled, on purpose" and the park had LATCHED
 (F-066's fix). Reality had moved twice since:
