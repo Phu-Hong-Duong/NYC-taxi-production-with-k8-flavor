@@ -70,17 +70,55 @@ check() {  # $1 = description, $2 = 1 for pass
 
 # The plant: an AWS-shaped access key id + secret, both generated here. Real
 # shape, never a real key, and never written into a tracked file by this script.
+#
+# GENERATED AGAINST THE PROPERTIES THE SCANNER KEYS ON, because the first version
+# was FLAKY and flaky in the direction that reads as good news — roughly two runs
+# in five reported PASS-shaped output with all six detection checks failing, i.e.
+# "the scanner found nothing", which is exactly the sentence this drill exists to
+# stop anyone believing. Two causes, both about the plant and neither about the
+# scan:
+#   * `generic-api-key` matches `[\w.=-]`, which does NOT include `+` or `/`. A
+#     base64 alphabet puts those anywhere, and one early in the string truncates
+#     the match below the rule's minimum length. Alphabet is alphanumeric now.
+#   * both rules carry an entropy floor, and a short random string clears it only
+#     on average. So the generator RETRIES until it does, and prints the entropy
+#     it settled on, so a future reader can see the property rather than infer it.
 PLANTED="$(python3 - <<'PY'
-import secrets, string
-alnum = string.ascii_uppercase + string.digits
-b64ish = string.ascii_letters + string.digits + "+/"
-print("AKIA" + "".join(secrets.choice(alnum) for _ in range(16)))
-print("".join(secrets.choice(b64ish) for _ in range(40)))
+import collections, math, secrets, string
+
+ALNUM_UPPER = string.ascii_uppercase + string.digits
+ALNUM = string.ascii_letters + string.digits
+
+
+def shannon(value: str) -> float:
+    counts = collections.Counter(value)
+    n = len(value)
+    return -sum(c / n * math.log2(c / n) for c in counts.values())
+
+
+def draw(alphabet: str, length: int, floor: float, prefix: str = "") -> tuple[str, float]:
+    """Entropy is measured over the WHOLE matched string, prefix included — that is
+    what the scanner sees, and measuring the random part alone would set the floor
+    on a quantity nobody keys on."""
+    for _ in range(10_000):
+        candidate = prefix + "".join(secrets.choice(alphabet) for _ in range(length))
+        if (h := shannon(candidate)) >= floor:
+            return candidate, h
+    raise SystemExit("could not draw a high-entropy plant; the floors are wrong")
+
+
+key_id, h_id = draw(ALNUM_UPPER, 16, 3.6, prefix="AKIA")
+secret, h_secret = draw(ALNUM, 40, 4.8)
+print(key_id)
+print(secret)
+print(f"{h_id:.3f} {h_secret:.3f}")
 PY
 )"
 KEY_ID="$(echo "$PLANTED" | sed -n 1p)"
 KEY_SECRET="$(echo "$PLANTED" | sed -n 2p)"
+ENTROPY="$(echo "$PLANTED" | sed -n 3p)"
 echo "[sec-redteam] planted an AWS-shaped pair, id ${KEY_ID:0:8}… (generated this run)"
+echo "[sec-redteam]   shannon entropy id/secret: $ENTROPY — drawn above the rules' floors"
 
 # ---------------------------------------------------------------------------
 echo
