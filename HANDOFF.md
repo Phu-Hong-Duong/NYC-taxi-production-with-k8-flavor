@@ -1,5 +1,123 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (co) — M9-S8: the front door, and the number it caught in its own diff
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cn) · `docs/milestones/M9_EPILOGUE_KICKOFF.md` · AWAITING_PO. **Role block:
+MLOps, DA hat for legibility** — charter read. Refusals in play all session: *no fit ·
+no alias move · no registry version · no wire change · no cluster mutation · no gate
+loosened*. None broken — this story is a document, a reader and a test file; it made
+no cluster call that wrote anything and imports no registry client.
+
+**Story: M9-S8 — README as the portfolio front door.** ONE story, as chartered. S9
+(trivy + commit-history secret scan) remains and is independent.
+
+### Reconciliation (the staleness check)
+Handoff (cn)'s Next pointed at M9-S8 and reality matched: tree clean at `fc2a600`,
+`main == origin/main`, no `automation/runs/*.status` pending for this work.
+**`make verify-m9` GREEN 45/45 recorded as a baseline BEFORE any edit**, and
+`uv run pytest tests/unit -q` at **1220 passed**. AWAITING_PO 2026-08-24-4 (F-068)
+is still the only open ask; this story is independent of it.
+
+### Done
+- **`README.md` rewritten for a public reader** who has never seen the repo: what it
+  is · the loop as one diagram plus one sentence per hop · what is actually running
+  and *the check that proves each layer* · an evidence table where every number cites
+  the record that holds it · three things here that are unusual (the drift signal
+  that correctly did NOT fire, the gate refusing this program's own retrain by
+  0.03%, and predictions-committed-first) · how to run it with the honest
+  requirements (WSL2/Docker, ~40 GB to the VM, hours of first-run pulls, the repo
+  must live inside the Linux fs) · honest limits (one laptop, $0, same-disk backups,
+  restore scratch-rehearsed only, monthly drift grain, the stateful kind cluster, the
+  one accept line a human closed) · how to read the repo in ten minutes.
+- **The Status table and its paragraph are BYTE-IDENTICAL to `HEAD:README.md`**,
+  checked programmatically before anything else was accepted. The front door gained
+  an audience; it did not lose its ledger.
+- **`make readme-check` is the README's twin** (`scripts/readme_check.py`, a READER):
+  **20 `make` targets** named all exist in the Makefile · **28 linked paths** all
+  exist · **29 claims** each read back from the record that holds it at the precision
+  the README renders them at · the Status table's **12 rows** all present.
+- **`tests/unit/test_readme.py`** (7 tests) holds the checker's own laws: it must be
+  GREEN against the committed README; every claim carries a non-digit anchor; every
+  record it cites exists AND is tracked by git (F-029's rule, one artifact along);
+  `--no-collect` stays opt-in (AST) so the test-count leg cannot quietly vanish; the
+  Status rows are named; and the checker stays a reader (one subprocess, `uv run
+  pytest --collect-only`, and no `write_text`/`kubectl`/`helm`/`docker` anywhere).
+
+### Verification
+- **`make readme-check` GREEN** — every target, path and number.
+- **RED-TEAMED**: `13.75 s` → `13.5 s` in the self-heal row (a plausible edit that
+  still reads like a measurement) → **RED naming the claim, the record and the
+  reason**; restored and verified byte-identical by sha256 (`0324aabdbe4f913d`
+  before and after), `git status` clean.
+- **Host suite 1227 passed** (was 1220), **no skips**; `-m 'not needs_records'`
+  deselects **56** (was 53). `uv run ruff check src tests pipelines` clean.
+- **`make verify-m9` GREEN 45/45 · `make verify-m8` GREEN 51/51 · `make verify-m5`
+  GREEN** after the change. No code on any wire moved.
+
+### Defects/Surprises
+- **The checker caught a stale number in the diff that created it, unplanted.** The
+  README shipped `1,220 tests`; adding seven tests of my own made it **1,227** and
+  the checker went RED naming the claim and both values before I thought to look.
+  That is better evidence than the planted drill, which was run anyway.
+- **The anchor rule fired on FOUR of my own claims.** The presence half is a
+  substring search, so `10` is satisfied by the `10` inside `104.226 ms` and `55` by
+  `557,688`; the checker now refuses a claim with no non-digit character, and the
+  fix was to the ARTIFACT (`PSI 0.0217`, `**57,688** keys`, `10 gates · 8 red
+  teams`) rather than to the rule. Gotcha #76 said anchor the needle; this says the
+  artifact must give it something to anchor to.
+- **F-070 (new, CLOSED same session, low):** `CLAUDE.md`'s M9-S2 row says "16 rules
+  across **10** signal ids (was 13 across 9)". The rules file says **13** ids and
+  `git show m8-closed:` says the before-state was **11**. "Ten ids" was true at
+  M7-S3 and was carried forward twice without recounting. Corrected with a dated
+  note beside the original (M4-S2 precedent); the README's copy of that fact is read
+  out of `alerting_rules.yml` on every run and is therefore not inheritable.
+- **Two placeholder-vs-invocation defects in the checker's own legs** (gotcha #99's
+  family): `make verify-mN` is a family, and a lowercase pattern truncates it to
+  `verify-m`, a target this repo never had — the leg now reads the character after
+  the match; and `PROGRAM_CLOSE.md` in the Status table is prose shorthand, so the
+  path leg requires a `/` before resolving against the repo root.
+- **A checker that dies reports nothing**: a resolver raising `KeyError` on a moved
+  record shape used to abort the run at claim five. Every leg is wrapped now and
+  reports *could not read the record* naming the claim.
+- **Three new tests reach records through a SUBPROCESS, which F-047's static guard
+  cannot see.** They carry `needs_records` AND the file names the record directory
+  in a constant it asserts, so the guard agrees rather than the marker sitting
+  unexplained — the honest residual that finding already documents does not grow.
+
+### Decisions
+- **Numbers are sourced only from TRACKED records** (`automation/runs/**/*.json`,
+  `infra/`, the Makefile). The 56,127,878-clean-row figure was left out of the
+  evidence table for exactly this reason: its authority is the DVC-tracked ingest
+  reports, which a fresh clone does not have, and a claim whose check can only pass
+  on this machine is F-054's disease in a new place. The training window
+  (**43,987,422** rows) says the same thing from a tracked record.
+- **The test-count claim is checked by the CLI, not by the suite.** The tests call
+  the checker with `--no-collect` to avoid nesting pytest inside pytest; an AST test
+  pins the flag as opt-in so the leg cannot become skipped-by-default.
+- **`make readme-check` is deliberately NOT wired into any `verify-mN`.** Widening a
+  gate's behaviour late is how a guard goes red for a correct system (gotcha #50);
+  it is a standalone target the way `make board-cards` is.
+
+### Next
+**M9-S9 — trivy + commit-history secret scan** is the next unstarted, unblocked
+story in `docs/milestones/M9_EPILOGUE_KICKOFF.md`, and it is the last one. It pins
+trivy and a secret scanner (gitleaks recommended; probe first — the `DRILL_STAGE`
+idiom) into `~/.local/bin` with sha256s recorded, scans the three OUR images plus
+the tree plus the FULL git history, records tracked JSON under
+`automation/runs/m9-security/`, and **parks at AWAITING_PO if any secret is found**
+(expected: zero — `.env` never entered git by design, so this VERIFIES hygiene
+rather than creates it, and a scan that finds nothing must still prove it looked).
+Its exit writes the AWAITING_PO entry telling the PO the pre-publish pair is DONE
+and **the public flip is their click**. Gotcha #9 (Kaspersky TLS) is the first
+suspect on any network fetch failure.
+
+**Waiting on the PO: `AWAITING_PO 2026-08-24-4` only** (F-016/F-068, answer with a
+letter). Nothing else is blocked. `make verify-m9` remains the one-command health
+read, and `make readme-check` is now the front door's.
+
+
 ## Session 2026-08-24 (cn) — M9-S7: whose fault is a null, and the 404 that punished the next caller
 
 ### State
