@@ -3296,6 +3296,62 @@ can never disagree (the port-family twins lesson, applied before it bit).
   gate-time rather than a watchdog) · the CADENCE, bounded by the freshness
   clause rather than claimed to be small · F-062's billing question.
 
+## Two closures (M9-S3) — the tool made to agree with the reviewed artifact, and a guard whose verdict flipped
+- **F-057 CLOSED, and the pin file did not move: +0/−0, sha256 `a700cd6b…`
+  before and after.** The defect was that `--rewrite-pins` emitted distribution
+  names as PUBLISHED (`PyYAML`, `typing_extensions`) where the file carries the
+  normalized spelling, so the file's own regenerator could not reproduce the file
+  it maintains and M8-S4's two real additions arrived as **+14/−12**. Normalizing
+  fixes twelve spellings and leaves **three** lines still moving — the committed
+  body is sorted **as LINES** (`mypy-extensions==…` before `mypy==…`, because
+  `-` < `=`) while today's `uv pip freeze` name-sorts. **The tool was made to
+  agree with the artifact, not the artifact rewritten to agree with the tool**,
+  so the M9 kickoff's anticipated "regenerate in a commit that does nothing else"
+  has NO CONTENT — and that is the stronger closure: the round trip is proved
+  against a file under review since M8-S2 rather than against one the fix just
+  wrote. Legitimate because this script is the file's ONLY producer
+  (`feast_quarantine.sh --resolve` calls it) and sorting the lines is the order a
+  reviewer verifies with `sort -c`. Honest cost, recorded: a hand-run `uv pip
+  freeze` differs on those three lines.
+- **PEP 503, not the finding's own one-liner** — `[-_.]+ -> -` lowercased,
+  against the row's `lower().replace('_','-')`. They agree on all 66 names the
+  quarantine holds today, which is exactly why it was worth doing before somebody
+  adds a dotted name and gets a spelling no installer canonicalises to; both
+  differing cases are in the test. And the transform maps many to one, so a
+  COLLISION **raises** rather than silently dropping a pin from a file whose whole
+  claim is completeness.
+- **The from-pins rebuild was re-earned, not inherited**: `.venv-feast` deleted
+  and rebuilt with `uv pip install --no-deps -r …` → the **same 66 packages, 0
+  only-before, 0 only-after**, quarantine pandas 2.3.3 / feast 0.66.0 against the
+  project's 3.0.5, feast absent from the project env, `uv.lock` `640154c5…`
+  unchanged throughout. **M8-S2's probe record was deliberately NOT regenerated**
+  — it is that story's tracked artifact and already diverges by design (64 pins,
+  pre-`redis`/`hiredis`); rewriting another milestone's record as a side effect is
+  F-053/F-063's shape (gotcha #48), and `make feast-quarantine` is the command
+  whose job that is.
+- **F-054 CLOSED: zero `skipif`-on-record-existence remain under `tests/`**, and
+  the closure is a GUARD'S VERDICT rather than twelve edits. `test_record_marker.py`
+  used to subtract the older form from its coverage check — i.e. accept it — and
+  argue against it in prose; `_skip_guarded` now feeds a test that REFUSES it,
+  **derived by AST across every test file** because a check naming its two known
+  offenders goes green the day a third grows one. *A finding that lives as a
+  documented exception inside a guard is closed by changing the guard's verdict;
+  the instances are what it then catches.*
+- **The deciding fact was that the records are TRACKED** (F-029 option A, M5-S1),
+  so option (a)'s stated cost — a fresh clone cannot go green until the drills run
+  — is void, and the assertion catches exactly one new thing: a deleted record.
+  Each file carries one `_record()` helper asserting existence with a message that
+  says what the absence MEANS, because the default failure is a bare
+  `FileNotFoundError` five frames deep.
+- **Host suite 1171 passed, NO SKIPS** (was 1167), and `-m 'not needs_records'`
+  now deselects **53** where it deselected 41 — the twelve moved from skipping
+  everywhere to running on the host and being deselected in the ONE place F-047
+  allows. **Both halves red-teamed by planting the exact defect being closed**:
+  one pin back as `PyYAML` → 2 tests RED from two independent angles (the
+  artifact's own property and the round trip); one record moved aside → 3 FAILED
+  naming the record and the finding, 12 still passing. Both restored, GREEN,
+  clean tree.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3478,6 +3534,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Build the Feast QUARANTINE and prove it never touched the project graph (M8-S2) | `make feast-quarantine` (`QUARANTINE_ARGS=--resolve` re-resolves and rewrites the pin file; `--check` builds nothing) | VERIFIED 2026-08-21 (M8-S2): **`uv.lock` byte-identical across the run** (sha256 `640154c5…` before and after — a difference ABORTS the script, so the invariant is in the code and not in the write-up), `feast` **absent from the project environment** (asked of `uv pip list`, never assumed), and the two sides printed side by side: `project pandas 3.0.5` vs `quarantine pandas 2.3.3 feast 0.66.0`. **Reproducible from the committed pins alone**: the venv was DELETED and rebuilt with `uv pip install --no-deps -r infra/feast/requirements-feast.txt` and the same **64 packages** came back. The probe records both columns — **the two sides differ on `['pandas']` and nothing else** (numpy 2.5.2 · pyarrow 25.0.1 · CPython 3.12.14 identical), which is the fact M8-S3's seam argument rests on. Record: `automation/runs/m8-feast/probe.json` |
 | Build the parquet Feast reads, from the SETTLED trees (M8-S2) | `make feast-sources` (`SOURCES_ARGS=--static-only` skips the 43.9M-row fit; `--train-months` is a SMOKE override that labels its own output) | VERIFIED 2026-08-21 (M8-S2), **3m07s**: `zone_static` **263** rows · `calendar_day` **4,383** · `od_window_stats` **248,169** · `pu_hour_window_stats` **35,589**, from 43,987,422 train rows through `aggregates.fit(point_in_time=True)` — the ONE path, never a re-implementation. Six windows, each stamped at its own EXCLUSIVE end (**2019-02-01 … 2019-07-01**, derived from the window's own months and never typed); **2019-01 gets no rows at all**, because it has no history. Writes ONLY into `data/feast/`: all four settled pins read `up to date` afterwards, and `uv.lock` is byte-identical to the `m7-closed` tag. A test asserts exactly ONE writer call exists in the module, so every output path is `OUT_DIR` by construction |
 | Register the git-defined feature repo, and read it back (M8-S2) | `make feast-apply` · `make feast-registry` (the read-back, run INSIDE the quarantine) | VERIFIED 2026-08-21 (M8-S2): 5 entities and 4 feature views applied into a **gitignored, regenerable** local registry (`definitions.py` is the source of truth; a committed registry would be the second home F-013 keeps deleting). The read-back is the `deploy_serving.sh` idiom — never trust the file you submitted — and it caught its own drift on the first run, reporting tags edited minutes earlier. `automation/runs/m8-feast/registry.json` is what `tests/unit/test_feast_repo.py` compares the catalog against |
+| The pin file's ROUND TRIP — the regenerator against the artifact it maintains (M9-S3, **F-057**) | `uv run python scripts/feast_probe_record.py --rewrite-pins` (pinned as a test: `uv run pytest tests/unit/test_feast_repo.py -k reproduces_the_committed`) | VERIFIED 2026-08-24 (M9-S3): the regeneration produced **NO DIFF AT ALL** — sha256 `a700cd6b52dcaaa974ed36b50286161eead2373bd07e38734e99de53d04e4131` before and after, `git diff` silent, 66 pins. `_freeze` canonicalises to **PEP 503** and a name collision REFUSES rather than dropping a pin; the body is written as its own lines SORTED, which is the ordering the committed file has carried since M8-S2 and the one a reviewer checks with `sort -c`. **The tool was made to agree with the reviewed artifact, not the artifact with the tool** — so the round trip is proved against a file that predates the fix. Honest cost: today's `uv pip freeze` name-sorts and so differs on the three hyphenated siblings (`mypy-extensions`/`mypy`, `pydantic-core`/`pydantic`, `uvicorn-worker`/`uvicorn`); this script is the file's only producer. Three tests, two needing no venv (so they run in CI and in the task image); the round trip writes to a **COPY**, never the tracked file (gotcha #48). **RED-TEAMED**: one pin restored to `PyYAML` → **2 tests RED from two independent angles**, restored, GREEN |
+| Rebuild the quarantine from its pins alone — re-earned for the regenerated file (M9-S3) | `rm -rf .venv-feast && uv venv .venv-feast --python 3.12 && uv pip install --python .venv-feast --no-deps -r infra/feast/requirements-feast.txt` (M8-S2's proof, run again) | VERIFIED 2026-08-24 (M9-S3): the venv was DELETED and rebuilt from the committed pins and **the same 66 packages came back — 0 only-before, 0 only-after**. The wall re-read afterwards: `quarantine pandas 2.3.3 feast 0.66.0` vs `project pandas 3.0.5`, `feast in project env: False`, and `uv.lock` `640154c585a5b1e9…` byte-identical throughout. **`make feast-quarantine --check` was deliberately NOT run**: it rewrites `automation/runs/m8-feast/probe.json`, M8-S2's tracked record, and rewriting an earlier milestone's evidence as a side effect is F-053/F-063's shape |
+| No record read may SKIP when its record is missing (M9-S3, **F-054**) | `uv run pytest tests/unit/test_record_marker.py -q` | VERIFIED 2026-08-24 (M9-S3): `test_no_record_read_is_guarded_by_a_skip` walks **every** file under `tests/unit` with `ast` — decorators only, because this suite argues about the old form in prose (gotcha #99) — and refuses `skipif(not RECORD.exists())`. The twelve that carried it (`test_canary_and_rollback.py` 8, `test_shadow_and_spike.py` 4) are assertions now, each through a `_record()` helper whose message says what the absence MEANS. **Host suite 1171 passed, NO SKIPS** (was 1167); `-m 'not needs_records'` deselects **53** (was 41). **RED-TEAMED**: `automation/runs/m6-shadow/disagreement.json` moved aside → **3 FAILED** naming the record and the finding while 12 still passed; restored → 15 passed, clean tree |
 | Ask whether the registry still matches git (M8-S2, **F-055**) | `make feast-plan-check` (`make feast-plan` is the raw output for a human) | VERIFIED 2026-08-21 (M8-S2): **`4 object(s) reported, 4 clock-only, 0 substantive`** → `ok  the registry matches the definitions in git`. It exists because **`feast plan` can never say "no changes"** — Feast re-stamps `DataSource.meta` at import, so all four views report as Updated on a repo where nothing moved (gotcha #78's disease in its worse direction: an always-noisy reading looks like diligence). The checkable statement is that every difference is confined to `("seconds:", "nanos:")`, an allowlist a test pins. **RED-TEAMED live**: `centroid_lat` renamed to `centroid_lat_TAMPERED` in `definitions.py` → **FAIL naming `zone_static` and the field, with the other three views still reading clock-only**, then restored from git, re-applied, GREEN. Record: `automation/runs/m8-feast/plan.json` |
 | The DECLARED row set both M8 seams are measured on (M8-S3) | `make feast-rows` (`ROWS_ARGS=--refresh` REBUILDS it, which changes the set every published number was measured on) | VERIFIED 2026-08-21 (M8-S3): **88 declared row(s)** — `hazard` 16 · `month-boundary` 12 · `ordinary`/`airport`/`no-geometry`/`long-trip` 15 each. The sixteen hazards are **imported from `taxi_mlops.serving.parity.HAZARDS`**, not retyped, so `make parity`'s wire seam and this story's store seam are measured against ONE row set (a test compares them field by field). The boundary twelve are DERIVED from `configs/train.yaml`'s own train months — the last minute of each and the first minute of the next, 120 s apart. The sixty drawn rows are `ORDER BY hash(<the row's own key columns>, 20260821) LIMIT 15`, and the drawer **refuses a short draw**: its first version asked for `USING SAMPLE reservoir(15 ROWS) REPEATABLE (seed)` after a `WHERE` and got **0 airport rows out of 3,237,471**, because DuckDB samples the scan and the filter is applied to what survives it |
 | Retrieval parity + the point-in-time proof (M8-S3) | `make feast-retrieval` (`RETRIEVAL_ARGS=--no-write` prints the verdicts and writes no record; ~4 min, of which the 43.9M-row truth fit is nearly all) | VERIFIED 2026-08-21 (M8-S3): **PASSED.** Parity **`max \|ours − store\| = 0.000e+00` over 14 columns and 88 rows against a bar of EXACT**, with **`one missing` ZERO everywhere** — the store and the feature path agree about which rows have no value at all, not merely about the values. The two-sided no-geometry assertion held (11 PU / 18 DO rows, store returned a row for **none**, our path reports `has_geometry = 0` on 20). PIT: honest vs naive differ on **61/76** OD rows (max **8.2000** min), 53/69 speeds, 62/78 rates; **the naive answer IS our own full-window table (0 mismatches over 88)**; **10 rows the honest join must tell nothing are handed a number by the naive one** (2019-01 has no history); and **all six boundary pairs were served different windows across 120 s** while the naive column sat constant at 8.3500. The truth is re-fitted from `data/processed/`, never rebuilt from the parquet under test. A READER — AST-pinned to make exactly ONE subprocess call (the quarantine crossing) and to name no registry, deploy or materialize verb. Its first run went RED on its own count guard and that is **F-056** |
