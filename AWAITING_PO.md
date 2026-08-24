@@ -824,3 +824,8 @@ The three standing entries below/above are unchanged and still non-blocking:
 'm7-retrain-fulldata' exited 2. The chain is parked because its result never arrived. See automation/runs/m7-retrain-fulldata.log
 
 Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-24 06:40 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
