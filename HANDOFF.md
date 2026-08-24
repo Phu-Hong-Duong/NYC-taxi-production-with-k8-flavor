@@ -18,7 +18,7 @@ logged `chain is DEAD (… no new fork) — healing` and started executor sessio
 into a closed, `m9-closed`-tagged program with no story left to execute. **F-066,
 raised and closed by the session the defect started.** No fork.
 
-**MERGED** — PR **#65**, merge commit `PLACEHOLDER_MERGE`; lineage proved below.
+**MERGED** — PR **#65**, merge commit ``261677b``; lineage proved below.
 
 ### Reconciliation (the staleness check)
 The handoff's Next said "nothing is scheduled, on purpose" — and reality had moved
