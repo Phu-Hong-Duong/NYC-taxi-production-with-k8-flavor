@@ -40,7 +40,7 @@
   "model_name": "nyc-taxi-eta-transformer",
   "model_version": "2",
   "past_horizon": {
-    "error": "the online feature store has no calendar row for ['2031-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holiday' for an uncovered date looks exactly like a correct answer (F-019, on the store's wire instead of the CSV's). Fix it where the table is defined \u2014 `make holidays HOLIDAYS_TO=<year>` then `make feast-sources && make feast-materialize`.",
+    "error": "the online feature store has no calendar row for ['2031-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holiday' for an uncovered date looks exactly like a correct answer (F-019, on the store's wire instead of the CSV's). The store IS answering \u2014 it served the sentinel '2019-01-01' \u2014 so this is a coverage gap and not an outage (F-062's discriminator). Fix ",
     "status": 422
   },
   "route": "http://localhost:8081"

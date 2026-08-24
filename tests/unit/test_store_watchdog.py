@@ -100,15 +100,34 @@ def test_the_prediction_carries_negatives_and_they_are_the_load_bearing_half() -
 
 
 def test_the_prediction_records_the_expectation_it_supersedes() -> None:
-    """The M9 kickoff expected 503 for an emptied store; this predicts 422.
+    """This one number has had three states and all three stay on the record.
 
+    The M9 kickoff expected 503; the 2026-08-23 drill predicted and MEASURED 422,
+    which is F-062 itself; M9-S7 landed the PO's answer (b) and it is 503 again.
     Keeping the superseded expectation beside the new one is the `error_memo_m2`
     §9 precedent: a prediction that silently replaces an earlier one cannot be
-    compared against the decision that was made from it.
+    compared against the decision that was made from it — and here the superseded
+    one is the finding's own evidence.
     """
     rider = _literal(DRILL, "PREDICTION")["empty_store"]["rider_request"]
-    assert "supersedes" in rider and "503" in rider["supersedes"]
-    assert rider["expected_status"] == 422
+    assert "supersedes" in rider and "422" in rider["supersedes"]
+    assert "attempt1-422-era" in rider["supersedes"], (
+        "the superseded RECORDS have to be findable, not just the sentence"
+    )
+    assert rider["expected_status"] == 503
+
+
+def test_f019_s_guarantee_is_predicted_in_BOTH_store_states() -> None:
+    """The regression F-062's discriminator could have caused, pinned as a claim.
+
+    An uncovered date must stay the CALLER's 422 while the store answers, and
+    become OURS the moment it does not. A drill that only predicted the empty
+    case would pass against a deployment that had stopped refusing past-horizon
+    dates altogether.
+    """
+    spec = _literal(DRILL, "PREDICTION")["empty_store"]["uncovered_date_survives"]
+    assert spec["expected_status_when_healthy"] == 422
+    assert spec["expected_status_while_empty"] == 503
 
 
 # --- both sides derived ----------------------------------------------------------

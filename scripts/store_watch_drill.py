@@ -9,11 +9,15 @@ worth more than the pass:
   1. **What does a rider's request do when the store is empty?** Not a rhetorical
      question: an all-null store yields an all-NaN geometry table, and NaN is the
      CORRECT answer for zones 264/265 — so nothing on the geometry path can
-     refuse. The M9 kickoff expected a 503. This drill's prediction says 422,
-     from reading the code: `calendar_from_store` RAISES on an unanswered date
-     (F-019 carried onto the store's wire) and every request carries a date, so
-     the CALENDAR half refuses before the geometry half's silence can matter.
-     Whichever is right, it is measured here rather than assumed.
+     refuse. The CALENDAR half is what refuses, and this number has had three
+     states worth reading in order: the M9 kickoff expected **503**; this drill's
+     2026-08-23 run predicted and measured **422** (correct for the code as it
+     then stood, and that measurement IS F-062 — a dead dependency billed to the
+     caller, outside SLO-A1's error budget); and since M9-S7 landed the PO's
+     answer (b) it is **503** again, restored by a code change rather than by an
+     argument. The superseded prediction and its records are kept beside this one
+     (`attempt1-422-era/`), because a re-run that silently rewrote them would
+     erase the evidence the decision was made from.
   2. **Do A-12's two rules fire, and do they reach Alertmanager?** A rule firing
      only in Prometheus's own UI has not paged anybody.
   3. **Does A-12 stay silent when the SURFACE is deleted rather than the store?**
@@ -61,6 +65,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from taxi_mlops.features.calendar import load_calendar  # noqa: E402
 from taxi_mlops.monitoring.pushgateway import delete_group  # noqa: E402
 from taxi_mlops.monitoring.store_health import PUSH_JOB  # noqa: E402
 from taxi_mlops.serving.client import QuoteRequest  # noqa: E402
@@ -102,6 +107,13 @@ TRANSFORMER_MODEL = "nyc-taxi-eta-transformer"
 QUOTE_ROW = QuoteRequest("2019-07-04T09:15:00", 132, 48, 1.0)
 HEALTHY_MINUTES = 39.00193715359812
 
+#: The same trip, one year past the committed holiday table's horizon. F-019's
+#: typed refusal is the REGRESSION F-062's discriminator could have caused — an
+#: uncovered date must still be the caller's 422 while the store is answering —
+#: so the drill asks for it in both states rather than trusting the argument.
+#: The year is DERIVED from the table (`load_calendar`), never typed.
+UNCOVERED_ROW = QuoteRequest(f"{max(load_calendar().years) + 1}-07-04T09:15:00", 132, 48, 1.0)
+
 #: A PURE LITERAL: `tests/unit/test_store_watchdog.py` reads it with
 #: `ast.literal_eval` rather than by importing this module, so the coverage test
 #: can never be satisfied by a module with a side effect.
@@ -111,24 +123,51 @@ PREDICTION: dict[str, Any] = {
     "empty_store": {
         "rider_request": {
             "claim": (
-                "a quote against an EMPTY store is REFUSED with HTTP 422, not 503 and "
+                "a quote against an EMPTY store is REFUSED with HTTP 503, not 422 and "
                 "not a confident wrong number"
             ),
             "confidence": "high",
             "because": (
-                "every request carries a date and calendar_from_store RAISES "
-                "StoreCoverageError (http_status 422) on an unanswered one — F-019 "
-                "carried onto the store's wire. The geometry half CANNOT refuse: an "
-                "all-null centroid table is exactly what zones 264/265 legitimately "
-                "produce, so the calendar is what stands between an empty store and a "
-                "quote nobody can see is wrong."
+                "F-062 landed at M9-S7 on the PO's answer (b). Every request carries a "
+                "date and calendar_from_store still RAISES on an unanswered one — F-019 "
+                "carried onto the store's wire — but WHOSE failure that is now depends "
+                "on a second question: the store is asked for a date the committed "
+                "holiday table provably covers. An emptied store cannot answer that "
+                "either, so the refusal is FeatureStoreUnavailable (503, ours) and it "
+                "spends SLO-A1's availability budget. The geometry half still CANNOT "
+                "refuse: an all-null centroid table is exactly what zones 264/265 "
+                "legitimately produce, so the calendar is still what stands between an "
+                "empty store and a quote nobody can see is wrong."
             ),
             "supersedes": (
-                "the M9 kickoff's expectation of 503. 503 is what an UNREACHABLE store "
-                "produces (FeatureStoreUnavailable) and that is a different phase of "
-                "this drill."
+                "this drill's own 2026-08-23 prediction of 422, which was CORRECT for "
+                "the code as it then stood and is kept beside this one at "
+                "automation/runs/m9-store-watch/attempt1-422-era/. That measurement IS "
+                "F-062: a totally dead dependency billed to the caller as a 4xx, "
+                "outside the error budget, rendering as riders sending bad requests. "
+                "The M9 kickoff's original expectation of 503 — superseded on "
+                "2026-08-23 and restored here by a code change rather than by an "
+                "argument — is the third state of this one number and all three are on "
+                "the record."
             ),
-            "expected_status": 422,
+            "expected_status": 503,
+        },
+        "uncovered_date_survives": {
+            "claim": (
+                "with the store EMPTY a past-horizon quote is also 503; with the store "
+                "HEALTHY it is still 422 naming the year — F-019's guarantee is the "
+                "regression this change could have caused, so it is asserted rather "
+                "than assumed"
+            ),
+            "confidence": "high",
+            "because": (
+                "the discriminator changes only which side of the wall is blamed. A "
+                "live store answers the sentinel, so an uncovered date stays the "
+                "caller's 422; a dead store answers nothing, and 'this deployment "
+                "cannot establish whether its dependency is up' is ours."
+            ),
+            "expected_status_while_empty": 503,
+            "expected_status_when_healthy": 422,
         },
         "champion_control": {
             "claim": "the champion's own wire answers 39.0019 throughout",
@@ -229,8 +268,9 @@ def say(msg: str) -> None:
     print(f"[store-drill] {msg}", flush=True)
 
 
-def http(host: str, url: str, body: dict[str, Any] | None = None,
-         timeout: float = 30.0) -> tuple[int, str]:
+def http(
+    host: str, url: str, body: dict[str, Any] | None = None, timeout: float = 30.0
+) -> tuple[int, str]:
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Host": host}
     if data is not None:
@@ -259,8 +299,16 @@ def kubectl(*args: str, check: bool = True) -> str:
 
 def port_forward(namespace: str, target: str, local: int, remote: int) -> subprocess.Popen[bytes]:
     process = subprocess.Popen(  # noqa: S603
-        ["kubectl", "--context", "kind-mlops-taxi", "-n", namespace,
-         "port-forward", target, f"{local}:{remote}"],
+        [
+            "kubectl",
+            "--context",
+            "kind-mlops-taxi",
+            "-n",
+            namespace,
+            "port-forward",
+            target,
+            f"{local}:{remote}",
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -306,8 +354,9 @@ def alertmanager_holds(alert: str) -> bool:
     return any(a.get("labels", {}).get("alertname") == alert for a in json.loads(body))
 
 
-def wait_for(predicate: Callable[[], bool], timeout: float,
-             poll: float = 10.0) -> tuple[bool, float]:
+def wait_for(
+    predicate: Callable[[], bool], timeout: float, poll: float = 10.0
+) -> tuple[bool, float]:
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -321,22 +370,44 @@ def wait_for(predicate: Callable[[], bool], timeout: float,
 
 def dbsize() -> int:
     pod = kubectl(
-        "-n", "feast", "get", "pod", "-l", "app=redis",
-        "-o", "jsonpath={.items[0].metadata.name}",
+        "-n",
+        "feast",
+        "get",
+        "pod",
+        "-l",
+        "app=redis",
+        "-o",
+        "jsonpath={.items[0].metadata.name}",
     ).strip()
     return int(kubectl("-n", "feast", "exec", pod, "--", "redis-cli", "DBSIZE").strip())
 
 
-def quote(host: str, model: str = TRANSFORMER_MODEL) -> tuple[int, str]:
-    return http(host, f"{ROUTE}/v2/models/{model}/infer", encode_raw([QUOTE_ROW]))
+def quote(
+    host: str, model: str = TRANSFORMER_MODEL, row: QuoteRequest = QUOTE_ROW
+) -> tuple[int, str]:
+    return http(host, f"{ROUTE}/v2/models/{model}/infer", encode_raw([row]))
 
 
 def champion_quote() -> tuple[bool, str]:
     """The POSITIVE CONTROL: it reads committed tables, so it must be unaffected."""
     out = subprocess.run(  # noqa: S603
-        ["uv", "run", "python", "-m", "taxi_mlops.serving",
-         "--at", "2019-07-04T09:15:00", "--pu", "132", "--do", "48"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+        [
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "taxi_mlops.serving",
+            "--at",
+            "2019-07-04T09:15:00",
+            "--pu",
+            "132",
+            "--do",
+            "48",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     line = (out.stdout or out.stderr).strip().splitlines()[-1] if (out.stdout or out.stderr) else ""
     return out.returncode == 0 and "39.0019" in out.stdout, line
@@ -345,7 +416,10 @@ def champion_quote() -> tuple[bool, str]:
 def run_reader() -> int:
     out = subprocess.run(  # noqa: S603
         ["uv", "run", "python", "scripts/store_watch.py"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     for line in out.stdout.splitlines():
         say(f"  | {line}")
@@ -386,14 +460,33 @@ def phase_health(check: Checks) -> dict[str, Any]:
         status == 200 and minutes is not None and abs(minutes - HEALTHY_MINUTES) < 1e-9,
         f"the TRANSFORMER answers the parity row exactly: HTTP {status}, {minutes} minutes",
     )
+    # F-019's guarantee, asked of a HEALTHY store: it is the regression F-062's
+    # discriminator could have caused, and "it still works" is not a claim a
+    # code-reading can make once the status depends on a second round trip.
+    unc_spec = PREDICTION["empty_store"]["uncovered_date_survives"]
+    unc_status, unc_body = quote(TRANSFORMER_HOST, row=UNCOVERED_ROW)
+    unc_year = UNCOVERED_ROW.pickup_datetime[:4]
+    check(
+        unc_status == unc_spec["expected_status_when_healthy"] and unc_year in unc_body,
+        f"an uncovered date is still the CALLER's refusal while the store is healthy: "
+        f"HTTP {unc_status} naming {unc_year} (predicted "
+        f"{unc_spec['expected_status_when_healthy']}) — F-019 survived F-062",
+    )
     states = {a: rule_state(a) for a in (CANARY_ALERT, INCOMPLETE_ALERT, ABSENT_ALERT)}
     ok_quiet, _ = wait_for(
         lambda: all(rule_state(a) == "inactive" for a in states), timeout=660, poll=15
     )
-    check(ok_quiet, f"all three store rules are inactive to start: "
-                    f"{ {a: rule_state(a) for a in states} }")
-    return {"keys": keys, "minutes": minutes, "champion_ok": ok_champ,
-            "states": {a: rule_state(a) for a in states}}
+    check(
+        ok_quiet,
+        f"all three store rules are inactive to start: { {a: rule_state(a) for a in states} }",
+    )
+    return {
+        "keys": keys,
+        "minutes": minutes,
+        "champion_ok": ok_champ,
+        "uncovered_status_when_healthy": unc_status,
+        "states": {a: rule_state(a) for a in states},
+    }
 
 
 def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
@@ -404,15 +497,24 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
     venv = REPO_ROOT / ".venv-feast" / "bin" / "python"
     sources = sorted((REPO_ROOT / "data" / "feast").glob("*.parquet"))
     staged = venv.exists() and len(sources) == 4
-    check(staged, f"the undo is staged BEFORE the injection: quarantine present={venv.exists()}, "
-                  f"{len(sources)} published source(s) — `make feast-materialize` can refill it")
+    check(
+        staged,
+        f"the undo is staged BEFORE the injection: quarantine present={venv.exists()}, "
+        f"{len(sources)} published source(s) — `make feast-materialize` can refill it",
+    )
     if not staged:
         return {"aborted": "the undo was not available; nothing was broken"}
 
     before = dbsize()
     pod = kubectl(
-        "-n", "feast", "get", "pod", "-l", "app=redis",
-        "-o", "jsonpath={.items[0].metadata.name}",
+        "-n",
+        "feast",
+        "get",
+        "pod",
+        "-l",
+        "app=redis",
+        "-o",
+        "jsonpath={.items[0].metadata.name}",
     ).strip()
     kubectl("-n", "feast", "exec", pod, "--", "redis-cli", "FLUSHDB")
     t0 = time.time()
@@ -427,7 +529,23 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
     check(
         empty_status == predicted,
         f"a quote against the EMPTY store is HTTP {empty_status} — predicted {predicted} "
-        "(the CALENDAR half refuses; the geometry half structurally cannot)",
+        "(the CALENDAR half refuses; the geometry half structurally cannot). At 422 "
+        "this same request spent NO availability budget and rendered as a rider "
+        "sending a bad request — that was F-062, and this is the number that closes it",
+    )
+    # Both refusals collapse onto OURS while the store is dead, and that is right:
+    # with nothing answering, "was that date covered?" is a question this
+    # deployment cannot answer, so it does not get to blame the caller for it.
+    unc_empty_status, _ = quote(TRANSFORMER_HOST, row=UNCOVERED_ROW)
+    unc_predicted = PREDICTION["empty_store"]["uncovered_date_survives"][
+        "expected_status_while_empty"
+    ]
+    check(
+        unc_empty_status == unc_predicted,
+        f"and a PAST-HORIZON quote against the empty store is HTTP {unc_empty_status} "
+        f"— predicted {unc_predicted}: with nothing answering, this deployment cannot "
+        "establish whether that date was covered, and an unanswerable question is not "
+        "the caller's fault",
     )
     check(
         empty_status != 200,
@@ -443,12 +561,18 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
         alert = spec["alert"]
         ok, secs = wait_for(lambda a=alert: rule_state(a) == "firing", timeout=420, poll=10)
         fired[alert] = {"fired": ok, "after_seconds": round(time.time() - t0, 1)}
-        check(ok, f"{alert} ({spec['signal']}) FIRED {fired[alert]['after_seconds']}s after the "
-                  f"flush (predicted ~{spec['after_about_seconds']}s + detection)")
+        check(
+            ok,
+            f"{alert} ({spec['signal']}) FIRED {fired[alert]['after_seconds']}s after the "
+            f"flush (predicted ~{spec['after_about_seconds']}s + detection)",
+        )
         at_am, _ = wait_for(lambda a=alert: alertmanager_holds(a), timeout=180, poll=10)
         fired[alert]["reached_alertmanager"] = at_am
-        check(at_am, f"Alertmanager holds {alert} — a rule firing only in Prometheus's own UI "
-                     "has paged nobody")
+        check(
+            at_am,
+            f"Alertmanager holds {alert} — a rule firing only in Prometheus's own UI "
+            "has paged nobody",
+        )
 
     checks_firing = sorted(c for c in firing_checks(CANARY_ALERT) if c)
     expected = PREDICTION["empty_store"]["must_fire"][0]["expected_failing_checks"]
@@ -462,8 +586,10 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
     for spec in PREDICTION["empty_store"]["must_not_fire"]:
         state = rule_state(spec["alert"])
         quiet[spec["alert"]] = state
-        check(state != "firing", f"{spec['alert']} ({spec['signal']}) stayed {state} — "
-                                 f"{spec['because']}")
+        check(
+            state != "firing",
+            f"{spec['alert']} ({spec['signal']}) stayed {state} — {spec['because']}",
+        )
 
     # ---- the undo, and the board ends carrying the truth ---------------------
     say("re-materializing (the one-command repair the runbook names) …")
@@ -475,14 +601,19 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
     # re-dating somebody else's evidence is not. The drill records its own refill
     # measurement below, where it belongs.
     refill = subprocess.run(  # noqa: S603
-        ["bash", "scripts/feast_materialize.sh", "--no-record"], cwd=REPO_ROOT,
-        capture_output=True, text=True, check=False,
+        ["bash", "scripts/feast_materialize.sh", "--no-record"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     refill_seconds = round(time.time() - t_refill, 1)
     restored = dbsize()
-    check(refill.returncode == 0 and restored == before,
-          f"the store is refilled: {restored:,} keys in {refill_seconds}s wall-clock "
-          f"(the materialize itself is the ~7s the record holds)")
+    check(
+        refill.returncode == 0 and restored == before,
+        f"the store is refilled: {restored:,} keys in {refill_seconds}s wall-clock "
+        f"(the materialize itself is the ~7s the record holds)",
+    )
     run_reader()
     cleared: dict[str, Any] = {}
     for spec in PREDICTION["empty_store"]["must_fire"]:
@@ -493,19 +624,26 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
 
     status, body = quote(TRANSFORMER_HOST)
     minutes = json.loads(body)["outputs"][0]["data"][0] if status == 200 else None
-    check(status == 200 and minutes is not None and abs(minutes - HEALTHY_MINUTES) < 1e-9,
-          f"and the rider's quote is exactly what it was: HTTP {status}, {minutes} minutes")
+    check(
+        status == 200 and minutes is not None and abs(minutes - HEALTHY_MINUTES) < 1e-9,
+        f"and the rider's quote is exactly what it was: HTTP {status}, {minutes} minutes",
+    )
 
     return {
-        "keys_before": before, "keys_after_flush": after, "keys_restored": restored,
+        "keys_before": before,
+        "keys_after_flush": after,
+        "keys_restored": restored,
         # The MEASURED status, captured before any later request could overwrite it.
         # The first draft of this record recorded the PREDICTED one — a record that
         # cannot disagree with its prediction is not evidence about anything.
         "rider_status_while_empty": empty_status,
         "rider_body_while_empty": empty_body[:400],
         "rider_status_predicted": predicted,
+        "uncovered_status_while_empty": unc_empty_status,
         "refill_seconds": refill_seconds,
-        "fired": fired, "cleared": cleared, "must_not_fire_states": quiet,
+        "fired": fired,
+        "cleared": cleared,
+        "must_not_fire_states": quiet,
         "canary_checks_firing": checks_firing,
         "final_minutes": minutes,
     }
@@ -514,62 +652,97 @@ def phase_empty(check: Checks, gateway_url: str) -> dict[str, Any]:
 def phase_unreachable(check: Checks) -> dict[str, Any]:
     """Scale the feature server to zero: a different failure, a different class."""
     say("--- phase 2: the store is UNREACHABLE (a different class from empty) ---")
-    replicas = int(kubectl(
-        "-n", "feast", "get", "deploy", "feast-server", "-o", "jsonpath={.spec.replicas}"
-    ).strip())
-    check(replicas >= 1, f"the undo is staged first: feast-server is at {replicas} replica(s), "
-                         "which is what will be restored")
+    replicas = int(
+        kubectl(
+            "-n", "feast", "get", "deploy", "feast-server", "-o", "jsonpath={.spec.replicas}"
+        ).strip()
+    )
+    check(
+        replicas >= 1,
+        f"the undo is staged first: feast-server is at {replicas} replica(s), "
+        "which is what will be restored",
+    )
     kubectl("-n", "feast", "scale", "deploy/feast-server", "--replicas=0")
-    kubectl("-n", "feast", "wait", "--for=delete", "pod", "-l", "app=feast-server",
-            "--timeout=120s", check=False)
+    kubectl(
+        "-n",
+        "feast",
+        "wait",
+        "--for=delete",
+        "pod",
+        "-l",
+        "app=feast-server",
+        "--timeout=120s",
+        check=False,
+    )
     status, body = quote(TRANSFORMER_HOST)
     say(f"the transformer answered HTTP {status}: {body[:220]}")
     predicted = PREDICTION["unreachable_store"]["expected_status"]
-    check(status == predicted,
-          f"an UNREACHABLE store is HTTP {status} — predicted {predicted}, and the point is "
-          "that it differs from the empty store's refusal: ours vs the caller's")
+    check(
+        status == predicted,
+        f"an UNREACHABLE store is HTTP {status} — predicted {predicted}, and the point is "
+        "that it differs from the empty store's refusal: ours vs the caller's",
+    )
     ok_champ, line = champion_quote()
     check(ok_champ, f"the CHAMPION's wire is still unaffected: {line}")
     kubectl("-n", "feast", "scale", "deploy/feast-server", f"--replicas={replicas}")
     kubectl("-n", "feast", "rollout", "status", "deploy/feast-server", "--timeout=180s")
     ok, secs = wait_for(lambda: quote(TRANSFORMER_HOST)[0] == 200, timeout=180, poll=5)
     check(ok, f"the transformer answers again {round(secs, 1)}s after the server came back")
-    return {"replicas": replicas, "status_while_unreachable": status,
-            "recovered_after_seconds": round(secs, 1)}
+    return {
+        "replicas": replicas,
+        "status_while_unreachable": status,
+        "recovered_after_seconds": round(secs, 1),
+    }
 
 
 def phase_absent(check: Checks, gateway_url: str) -> dict[str, Any]:
     """Delete the SURFACE rather than the store — the negative that justifies A-13."""
     say("--- phase 3: the watchdog's surface is deleted ---")
-    check(rule_state(ABSENT_ALERT) == "inactive",
-          f"A-13 is inactive before the wipe (state={rule_state(ABSENT_ALERT)})")
+    check(
+        rule_state(ABSENT_ALERT) == "inactive",
+        f"A-13 is inactive before the wipe (state={rule_state(ABSENT_ALERT)})",
+    )
     delete_group(url=gateway_url, job=PUSH_JOB, grouping={"store": STORE_LABEL})
     t0 = time.time()
     say("the store-watch group is deleted from the gateway — the STORE itself is untouched")
-    check(dbsize() > 0, f"the store still holds {dbsize():,} keys: this phase breaks the "
-                        "OBSERVATION, not the thing observed")
+    check(
+        dbsize() > 0,
+        f"the store still holds {dbsize():,} keys: this phase breaks the "
+        "OBSERVATION, not the thing observed",
+    )
 
     spec = PREDICTION["deleted_surface"]["must_fire"]
     ok, secs = wait_for(lambda: rule_state(ABSENT_ALERT) == "firing", timeout=900, poll=15)
-    check(ok, f"{ABSENT_ALERT} (A-13) FIRED {round(time.time() - t0, 1)}s after the wipe "
-              f"(predicted ~{spec['after_about_seconds']}s + detection)")
+    check(
+        ok,
+        f"{ABSENT_ALERT} (A-13) FIRED {round(time.time() - t0, 1)}s after the wipe "
+        f"(predicted ~{spec['after_about_seconds']}s + detection)",
+    )
     at_am, _ = wait_for(lambda: alertmanager_holds(ABSENT_ALERT), timeout=180, poll=10)
     check(at_am, f"Alertmanager holds {ABSENT_ALERT}")
 
     negative = rule_state(CANARY_ALERT)
-    check(negative != "firing",
-          f"THE LOAD-BEARING NEGATIVE: A-12 stayed {negative} through a total loss of the "
-          "watchdog's surface — `time() - stamp < 1800` over zero series is zero series, not "
-          "a stale reading, so A-12 cannot see its own absence. That is A-13's whole reason "
-          "to exist, demonstrated rather than asserted")
+    check(
+        negative != "firing",
+        f"THE LOAD-BEARING NEGATIVE: A-12 stayed {negative} through a total loss of the "
+        "watchdog's surface — `time() - stamp < 1800` over zero series is zero series, not "
+        "a stale reading, so A-12 cannot see its own absence. That is A-13's whole reason "
+        "to exist, demonstrated rather than asserted",
+    )
 
     run_reader()
-    cleared, csecs = wait_for(lambda: rule_state(ABSENT_ALERT) == "inactive",
-                              timeout=420, poll=10)
-    check(cleared, f"{ABSENT_ALERT} cleared {round(csecs, 1)}s after the reader pushed again — "
-                   "and the board ends carrying the truth, not a silence")
-    return {"fired_after_seconds": round(time.time() - t0, 1), "reached_alertmanager": at_am,
-            "a12_state_during": negative, "cleared_after_seconds": round(csecs, 1)}
+    cleared, csecs = wait_for(lambda: rule_state(ABSENT_ALERT) == "inactive", timeout=420, poll=10)
+    check(
+        cleared,
+        f"{ABSENT_ALERT} cleared {round(csecs, 1)}s after the reader pushed again — "
+        "and the board ends carrying the truth, not a silence",
+    )
+    return {
+        "fired_after_seconds": round(time.time() - t0, 1),
+        "reached_alertmanager": at_am,
+        "a12_state_during": negative,
+        "cleared_after_seconds": round(csecs, 1),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -579,8 +752,9 @@ def main(argv: list[str] | None = None) -> int:
         default="all",
         choices=("predict", "health", "empty", "unreachable", "absent", "all"),
     )
-    parser.add_argument("--dry-run", action="store_true",
-                        help="write the prediction and inject nothing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="write the prediction and inject nothing"
+    )
     args = parser.parse_args(argv)
 
     RECORD_DIR.mkdir(parents=True, exist_ok=True)
@@ -592,9 +766,7 @@ def main(argv: list[str] | None = None) -> int:
 
     check = Checks()
     am = port_forward("monitoring", "svc/prometheus-alertmanager", ALERTMANAGER_PORT, 9093)
-    gw = port_forward(
-        "monitoring", "svc/prometheus-prometheus-pushgateway", GATEWAY_PORT, 9091
-    )
+    gw = port_forward("monitoring", "svc/prometheus-prometheus-pushgateway", GATEWAY_PORT, 9091)
     gateway_url = f"http://localhost:{GATEWAY_PORT}"
     observed: dict[str, Any] = {}
     try:

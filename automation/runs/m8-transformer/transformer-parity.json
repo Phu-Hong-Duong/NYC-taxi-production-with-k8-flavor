@@ -30,7 +30,7 @@
   "hazards": 16,
   "lookup_sources": "airport_constant=committed-code,borough_dictionary=committed-table,calendar=feature-store,centroids=feature-store",
   "max_abs_delta_minutes": 0.0,
-  "measured_at": "2026-08-23T12:08:36Z",
+  "measured_at": "2026-08-24T14:05:26Z",
   "model_version": {
     "champion": "2",
     "transformer": "2"
