@@ -229,14 +229,24 @@ def _handler(transform: Transform, model_name: str) -> type[BaseHTTPRequestHandl
             self._send(404, {"error": f"no such path {self.path!r}"}, {})
 
         def do_POST(self) -> None:  # noqa: N802
+            # THE BODY IS READ BEFORE ANY BRANCH, AND THAT ORDER IS LOAD-BEARING
+            # (F-069). `protocol_version = "HTTP/1.1"` means keep-alive, so a
+            # response sent while the request's body is still in the socket leaves
+            # those bytes to be parsed as the NEXT request's request-line. The
+            # 404-on-a-wrong-path branch below used to return without reading, and
+            # ingress-nginx pools upstream connections — so the caller who was
+            # PUNISHED was the next one, with a perfectly good request answered
+            # `400 Bad request syntax` and its own body echoed back at it. Found
+            # when this story's parity run followed the deploy accept's
+            # ADR-011-condition-2 negative check onto the same pooled connection.
+            length = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(length) if length else b""
             if self.path != infer_path:
                 # The model name is in the PATH — ADR-011 condition 2's lesson.
                 # A 404 here is the correct, loud answer; answering anyway would
                 # make two differently-named endpoints indistinguishable.
                 self._send(404, {"error": f"no such path {self.path!r}; try {infer_path}"}, {})
                 return
-            length = int(self.headers.get("Content-Length") or 0)
-            raw = self.rfile.read(length) if length else b""
             try:
                 requests = decode_raw(json.loads(raw))
                 response, sources = transform.predict(requests)

@@ -16,7 +16,10 @@ malformed request would be counted in the wrong half of every 4xx/5xx panel.
 from __future__ import annotations
 
 import ast
+import http.client
+import json
 import sys
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -274,6 +277,70 @@ def test_the_transformer_moves_no_alias_and_loads_no_model() -> None:
         "log_model",
     }
     assert not (called & forbidden)
+
+
+# --------------------------------------------------------- F-069: the socket --
+def test_a_404_does_not_poison_the_next_request_on_the_same_connection() -> None:
+    """The body must be READ before any branch answers — keep-alive is the reason.
+
+    `protocol_version = "HTTP/1.1"`, so a response sent while the request's body
+    is still unread in the socket leaves those bytes to be parsed as the NEXT
+    request's request-line. The victim is the next caller, whose perfectly good
+    request comes back `400 Bad request syntax` with its own body echoed at it —
+    and ingress-nginx pools upstream connections, so "the next caller" is a
+    different client entirely. Observed live: the deploy accept's
+    ADR-011-condition-2 negative check (a POST to the champion's model name, 404)
+    followed immediately by this story's parity run, over one pooled connection.
+
+    The second request is deliberately a coverage REFUSAL (**422**) and not a
+    malformed body: a malformed body is a legitimate **400**, which is the same
+    status a poisoned connection produces, so it could not tell the two apart.
+    It needs no predictor — the refusal is raised while the lookups are built.
+    """
+    from http.server import ThreadingHTTPServer
+
+    blank = REQUESTS[0].pickup_datetime[:10]
+    handler = tf._handler(
+        tf.Transform(
+            server=FakeServer(blank_dates=(blank,)),
+            predictor_url="http://127.0.0.1:1",
+            features_cfg=_features_cfg(),
+        ),
+        "nyc-taxi-eta",
+    )
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection(*httpd.server_address, timeout=5)
+        conn.request(
+            "POST",
+            "/v2/models/somebody-elses-name/infer",
+            body=json.dumps(tf.encode_raw(REQUESTS[:1])),
+            headers={"Content-Type": "application/json"},
+        )
+        first = conn.getresponse()
+        first.read()
+        assert first.status == 404
+
+        conn.request(
+            "POST",
+            "/v2/models/nyc-taxi-eta/infer",
+            body=json.dumps(tf.encode_raw(REQUESTS[:1])),
+            headers={"Content-Type": "application/json"},
+        )
+        second = conn.getresponse()
+        payload = second.read()
+        assert second.status == 422, (
+            "the second request on the same connection was answered "
+            f"{second.status} ({payload!r}) — the 404 above left its body in "
+            "the socket (F-069)"
+        )
+        conn.close()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
 
 
 def _features_cfg() -> dict:
