@@ -1,5 +1,119 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (ck) — POST-CLOSE: the watchdog healed a decision, and the fix had a trap in it
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cj) · `docs/milestones/PROGRAM_CLOSE.md` (the terminal kickoff-equivalent) ·
+AWAITING_PO. **Role block: SRE** — the automation is the chain's own reliability
+surface; charter read. Refusals in play all session: *no alias move · nothing fitted ·
+no gate run or edited · no cluster mutation · no threshold change · no change to any
+closed milestone's artifact* — none was broken.
+
+**This session should not have existed, and that is the finding.** The program closed
+at (cj) and parked DELIBERATELY — no successor scheduled, `AWAITING_PO 2026-08-24-2`
+written precisely so the silence would read as a decision. `automation/watchdog.sh`
+detected that park correctly at **06:40 UTC**, alarmed once, and then at **07:00 UTC**
+logged `chain is DEAD (… no new fork) — healing` and started executor session **#7** —
+into a closed, `m9-closed`-tagged program with no story left to execute. **F-066,
+raised and closed by the session the defect started.** No fork.
+
+**MERGED** — PR **#65**, merge commit `PLACEHOLDER_MERGE`; lineage proved below.
+
+### Reconciliation (the staleness check)
+The handoff's Next said "nothing is scheduled, on purpose" — and reality had moved
+*against* it, which is the one direction a staleness check rarely looks. Tree clean at
+`c129a2a` apart from one modification: `AWAITING_PO.md`, which the **watchdog itself**
+had appended its 06:40 alarm to. Committed unmodified as `4f09a84` before anything else,
+so the diagnosis has its artifact. All ten `*.status` files DONE or FAILED-ACKED (the
+two M7 landmines were acked by the PO-side session at 04:47). `@champion` version 2 /
+`feature_set v2` — read, never written. **No cluster call was made this session at all.**
+
+### Done — the diagnosis, which is worth more than the patch
+Step 5 asked *"did AWAITING_PO.md's hash change since the last pass?"* — an EVENT, where
+the header's own contract ("may restart an ACCIDENT, must never restart a DECISION")
+needs a STATE. **"No change since the last pass" had been left to stand for "no
+unanswered fork."** So a park survived exactly as long as the hash kept moving, and the
+close-park's hash settled after two passes.
+
+**Underneath it was a feedback loop, and that is the part that matters.** `red()` alarms
+*by appending to `AWAITING_PO.md`* — so the alarm channel IS the park sensor, and every
+alarm manufactured a FALSE park on the following pass. That was not latent folklore: the
+existing `test_an_acked_failure_stops_blocking_the_heal_path` **docstring described it as
+the expected trace** ("pass 2 reads red()'s own AWAITING_PO append as a fork"). Somebody
+had seen it, understood it exactly, and written it down as the design.
+
+**Which makes the obvious fix a trap.** Latching alone would have wedged the chain
+permanently shut on any FAILED run — the exact deadlock the PO's Windows-side session
+had repaired at 04:00 the same morning (2026-08-24-1). Real parks had to decay *because*
+false parks existed; the decay was the price of the loop, and the close-park is what
+paid it. **Neither half is correct alone**, so both landed together.
+
+### Done — the fix, in three parts, each naming the others
+1. **`red()` re-stamps the AWAITING_PO baseline after its own append** — the watchdog can
+   no longer read its own handwriting as a session's fork. This is what makes (2) safe.
+2. **A park LATCHES** (`automation/logs/watchdog_parked`) and is cleared by exactly one
+   thing: `automation/next_session.sh` — the resume command every AWAITING_PO entry
+   already names, so **answering IS the clear**. No new ritual for the PO to learn.
+3. **The heal path cannot hold the eraser** — `WATCHDOG_HEAL=1` makes the scheduler refuse
+   to clear a latch, *and* step 5 exits before the heal path is reachable. Two independent
+   guards, because the failure they prevent (a heal that silently un-parks a fork) is
+   exactly the one that leaves no trace.
+
+**Both properties got STRICTER at once**, which is the signature of having fixed a cause
+rather than balanced two symptoms: the real park became permanent, and the FAILED-run
+recovery dropped from **4 passes to 2** — because the two extra passes *were* the false
+park.
+
+### Verification
+- `tests/unit/test_watchdog.py` **19 passed** · with `test_chain_script.py` **24 passed** ·
+  ruff clean · host suite **1155 passed**, 53 `needs_records` deselected (1151 at the
+  close + the 4 new tests).
+- **The tests were red-teamed against the pre-fix code: 5 FAILED, 14 passed** — the four
+  new ones plus the strengthened FAILED-run test. A test written for a bug you just fixed
+  is a sentence until you have watched it fail.
+- `test_a_park_survives_the_pass_that_detected_it` loops **five** passes and asserts no
+  `HEAL —`: **one pass proves nothing about a latch**, since the first pass is exactly
+  where an edge detector and a latch agree. The old test asserted one pass and passed
+  throughout the incident.
+- The interaction is pinned in the other direction too: the FAILED-run test asserts **no
+  latch is created**, so this repair cannot recreate the deadlock it was careful about.
+- **Verified in production, not only in the sandbox**: latch armed, `running_session`
+  moved aside so the real watchdog would reach step 5, `bash automation/watchdog.sh` run
+  against this repo → `RED parked-on-fork … still parked; only 'automation/next_session.sh
+  <role>' clears it`, **no `pending_successor` created**, toast correctly suppressed by
+  rationing (so no duplicate inbox note). `watchdog.log` now carries `HEAL — … session #7`
+  and `still parked` four lines apart.
+
+### Decisions
+- **Fixed rather than reported, and that is a craft call I should justify.** It is not a
+  direction/scope/taste/money/destruction/threshold fork: it restores the script's *own*
+  documented contract, touches only `automation/` + `tests/` + docs, and has a verified
+  undo. The alternative — write it to AWAITING_PO and park — would have had my park
+  steamrolled within 20 minutes by the very defect being reported, and handed the next
+  resurrected executor a closed program to improvise against. **Reporting a fault to a
+  channel the fault overwrites is not reporting it.**
+- **Scope held to one thing.** No story exists to execute (the program is closed), so this
+  is a repair, not a story; I did not sweep gates, touch findings other than raising
+  F-066, or improve anything the close left standing.
+
+### Defects/Surprises
+- **F-066 (raised + CLOSED, HIGH)** — full row in `ledgers/findings.md`; gotcha **#112**;
+  field note appended to `docs/LEARNING_GUIDE.md`.
+- The surprise worth carrying: **the only trace of automation overriding a human decision
+  was one log line reading `chain is DEAD`** — about a chain that had never been more
+  deliberately alive.
+
+### Next
+**Nothing is scheduled, on purpose — the park is now enforced rather than hoped for.**
+The latch is armed (`automation/logs/watchdog_parked`); the watchdog will nag hourly and
+will not restart anything. Every outstanding item is still the PO's and is UNCHANGED:
+**AWAITING_PO 2026-08-24-2** (the observed demo run · F-062's letter · publish-the-repo ·
+the standing four), with **2026-08-24-3** added only to report this override and its fix —
+it asks nothing. The chain resumes, if ever, through `automation/next_session.sh
+architect 120`, which now also clears the latch. The platform stays up and serving;
+`make verify-m9` is the one-command health read.
+
 ## Session 2026-08-24 (cj) — PROGRAM CLOSE: ten gates, one repair, one box left honestly open
 
 ### State
