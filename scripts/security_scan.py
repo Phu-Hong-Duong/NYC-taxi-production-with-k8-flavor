@@ -53,7 +53,7 @@ import json
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -149,7 +149,7 @@ def _run(argv: list[str], *, allow_rc: tuple[int, ...] = (0,)) -> subprocess.Com
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _git(*args: str) -> str:
@@ -675,7 +675,9 @@ def main() -> int:
             # whose COMMIT an operator cannot see is a fact with no next action —
             # the remedy (rewrite, rotate) is per-commit, and "somewhere in 489
             # commits" is not where.
-            print(f"              commit {f['commit']}  {f.get('author') or ''} {f.get('date') or ''}")
+            who = f.get("author") or ""
+            when = f.get("date") or ""
+            print(f"              commit {f['commit']}  {who} {when}")
     print(f"[sec-scan] acknowledged, argument re-proved from the bytes found: {len(acknowledged)}")
     for f in acknowledged:
         print(f"    argued    {f['rule']}  {f['file']}:{f['start_line']}  {f['why']}")

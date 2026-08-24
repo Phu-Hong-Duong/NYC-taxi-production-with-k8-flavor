@@ -142,7 +142,7 @@ import json, subprocess, sys, datetime
 record = sys.argv[1]
 payload = {
     "story": "M9-S9",
-    "recorded_at": datetime.datetime.now(datetime.timezone.utc)
+    "recorded_at": datetime.datetime.now(datetime.UTC)
         .strftime("%Y-%m-%dT%H:%M:%SZ"),
     "bin_dir": "$BIN_DIR",
     "checksum_verification_limit": (
