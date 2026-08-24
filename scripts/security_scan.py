@@ -659,6 +659,12 @@ def main() -> int:
     print(f"[sec-scan] secrets in git (tracked files + full history): {len(blocking)}")
     for f in blocking:
         print(f"    BLOCKING  {f['rule']}  {f['file']}:{f['start_line']}  {f['why']}")
+        if f.get("commit"):
+            # The red team asked for this and it was missing: a finding in history
+            # whose COMMIT an operator cannot see is a fact with no next action —
+            # the remedy (rewrite, rotate) is per-commit, and "somewhere in 489
+            # commits" is not where.
+            print(f"              commit {f['commit']}  {f.get('author') or ''} {f.get('date') or ''}")
     print(f"[sec-scan] acknowledged, argument re-proved from the bytes found: {len(acknowledged)}")
     for f in acknowledged:
         print(f"    argued    {f['rule']}  {f['file']}:{f['start_line']}  {f['why']}")
