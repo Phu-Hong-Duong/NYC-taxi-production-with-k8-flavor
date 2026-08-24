@@ -66,6 +66,33 @@ deliberately PARKED — no successor is scheduled** — because everything that
 remains needs your hands or your word. This entry is what tells the watchdog
 the silence is a decision, not a crash.
 
+> **ANSWERED 2026-08-24 by the PO** (decisions collected option-by-option via the
+> PO's Windows-side session and recorded here verbatim, so the next ARCH touch can
+> charter directly; the demo route was verified HTTP 200 from both WSL and the
+> Windows browser before these were written):
+>
+> 1. **Observed demo run — the PO is doing it now.** The observation will be
+>    appended to 2026-08-23-3 when done; until then the box stays honestly open.
+> 2. **F-062 — option (b).** `calendar_from_store` is to distinguish *this date
+>    is not covered* (422, F-019's case) from *the store answered nothing for any
+>    date* (503, ours). Accepted cost, eyes open: one chartered story that touches
+>    the wire — transformer redeploy, the three parity records re-measured, gates
+>    re-run.
+> 3. **Publish the repo publicly — YES, after the pre-publish pair.** Charter menu
+>    items 1–2 from 2026-08-23-2 (README as portfolio front door · trivy +
+>    commit-history secret-scan) first; the public flip happens only after both
+>    land and is the PO's click.
+> 4. **Stretch beyond the pair — NONE.** CI-nightly-on-kind and Ray/KubeRay are
+>    DECLINED (both outlive a closed program; Ray is a milestone's platform work
+>    for an artifact that moves no champion).
+> 5. **F-016 — option B.** Incumbent KPI-09 margin **≥0.50%** (DR-02's own keep
+>    bar), KPI-10 non-regression unchanged. Also recorded on 2026-08-18-1.
+> 6. **libgomp1 (2026-08-17-1) — option A chosen**; the sudo one-liner stays the
+>    PO's to run. Status: chosen, not yet applied.
+> 7. **Allowlist (2026-08-16-2) — option A chosen**; the paste stays the PO's own
+>    hands (the settings-write guard is honored, not worked around). Status:
+>    chosen, not yet applied.
+
 **What is yours, in the order they are worth your time:**
 
 1. **The observed demo run (~5 minutes) — the one §9/M9 accept line only you
@@ -185,6 +212,10 @@ pick it up.
 **No answer is needed for the chain to continue.**
 
 ## 2026-08-23-2 · raised by ARCH/Fable (M8 boundary triage) · NOT BLOCKING — the M9 stretch opt-in menu, and one date you will be asked for
+
+> **ANSWERED 2026-08-24 by the PO: items 1–2 YES** — chartered as the pre-publish
+> pair for the publish decision (2026-08-24-2, answer 3). **Items 3–4 NO** —
+> declined, this entry's own cost arguments accepted as stated.
 
 **M8 is closed** (tag `m8-closed`, `verify-m8` GREEN 51/51 re-run at the boundary,
 M9 kickoff §0 has the full triage). **The chain continues on M9's committed
@@ -523,6 +554,12 @@ incumbent margin, still yours and still not blocking until M7; 2026-08-17-1's ho
 
 ## 2026-08-18-1 · raised by ARCH/Fable (M3 boundary triage, from REV finding F-016) · NON-BLOCKING until M7: should the serving pointer be allowed to move on 1.2 seconds?
 
+> **ANSWERED 2026-08-24 by the PO: Option B** — add the transition-cost margin:
+> incumbent KPI-09 margin **≥0.50%** (DR-02's own smallest pre-registered
+> materiality bar), KPI-10 non-regression unchanged. The gate edit is now
+> PO-sanctioned; chartering the landing is ARCH's at the next touch. Chosen with
+> the stated cost accepted: a model genuinely 0.3–0.4% better will not ship.
+
 **The fork in plain language.** The promotion gate has two conditions. The
 FLOOR condition demands a challenger beat the group-median baseline by
 **≥2.00%** KPI-09 — a maintenance-cost bar you approved by construction (~4 s
@@ -603,6 +640,11 @@ unanswered by the M6→M7 boundary, M7 proceeds with the gate AS PRE-REGISTERED
 
 ## 2026-08-17-1 · raised by EXEC/Opus (M2-S2) · NON-BLOCKING: one apt package would delete a workaround from the training path
 
+> **ANSWERED 2026-08-24 by the PO: Option A** — the sudo one-liner stays the PO's
+> own hands and is queued for their next WSL terminal. Status: **chosen, not yet
+> applied** (this line flips when `openmp_status()` reads `system libgomp.so.1`
+> on the host).
+
 *(EXEC note 2026-08-18, M4-S3 — **debt D-004 is now CLOSED and this entry is
 still open and still yours.** The M4 task image installs `libgomp1` as a real apt
 package, and `make image-smoke` proves the shim never fires inside it —
@@ -663,6 +705,12 @@ sudo apt update && sudo apt install -y libgomp1
 ---
 
 ## 2026-08-16-2 · raised by EXEC/Opus (M0-S1) · NON-BLOCKING: the permission allowlist is starter-sized — one paste makes unattended sessions stop tripping
+
+> **ANSWERED 2026-08-24 by the PO: Option A** — the paste below stays the PO's
+> own hands (the settings-write guard is honored, not worked around). Status:
+> **chosen, not yet applied** (flips when `.claude/settings.local.json` carries
+> the extended list in git).
+
 *(ARCH note 2026-08-16: attempted to apply Option A under the PO's in-chat
 delegation — the harness classifier refused the settings write for ARCH too.
 The guard is correct and is not being worked around: this paste is genuinely
