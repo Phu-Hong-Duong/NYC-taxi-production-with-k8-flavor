@@ -1,0 +1,113 @@
+{
+  "margin_pct": 0.5,
+  "gate_on_disk": {
+    "min_improvement_pct": 2.0,
+    "floor": "baseline-group-median-od-fallback",
+    "holdout_split": "test",
+    "require_no_kpi10_regression": true,
+    "incumbent_min_improvement_pct": null
+  },
+  "replayed": 9,
+  "flips": 2,
+  "rows": [
+    {
+      "leg": "verify-m3 \u00a75",
+      "source": "automation/runs/m3s5/bakeoff.json",
+      "label": "floor",
+      "name": "baseline-group-median-od-fallback",
+      "recorded": "REFUSE",
+      "under_margin": "REFUSE",
+      "vs_incumbent_pct": -2.7907262021589716,
+      "challenger_mae": 3.351759301862344,
+      "incumbent_mae": 3.2608
+    },
+    {
+      "leg": "verify-m3 \u00a75",
+      "source": "automation/runs/m3s5/bakeoff.json",
+      "label": "champion v1",
+      "name": "lightgbm-v1",
+      "recorded": "PROMOTE",
+      "under_margin": "REFUSE",
+      "vs_incumbent_pct": 0.0,
+      "challenger_mae": 3.260828400795599,
+      "incumbent_mae": 3.2608
+    },
+    {
+      "leg": "verify-m3 \u00a75",
+      "source": "automation/runs/m3s5/bakeoff.json",
+      "label": "artisan v2",
+      "name": "artisan-v2",
+      "recorded": "PROMOTE",
+      "under_margin": "PROMOTE",
+      "vs_incumbent_pct": 0.5612119725220799,
+      "challenger_mae": 3.242513399356197,
+      "incumbent_mae": 3.2608
+    },
+    {
+      "leg": "verify-m3 \u00a75",
+      "source": "automation/runs/m3s5/bakeoff.json",
+      "label": "auto-on-v1",
+      "name": "auto-xgboost-v1",
+      "recorded": "REFUSE",
+      "under_margin": "REFUSE",
+      "vs_incumbent_pct": -7.452158979391557,
+      "challenger_mae": 3.5038422819518478,
+      "incumbent_mae": 3.2608
+    },
+    {
+      "leg": "verify-m3 \u00a75",
+      "source": "automation/runs/m3s5/bakeoff.json",
+      "label": "auto-on-v2",
+      "name": "auto-lgbm-v2",
+      "recorded": "PROMOTE",
+      "under_margin": "PROMOTE",
+      "vs_incumbent_pct": 0.6286800785083472,
+      "challenger_mae": 3.2402793988736875,
+      "incumbent_mae": 3.2608
+    },
+    {
+      "leg": "verify-m2 \u00a72",
+      "source": "docs/promotion_gate_m2.md",
+      "label": "lightgbm-v1-hobbled-shuffled-target",
+      "name": "lightgbm-v1-hobbled-shuffled-target",
+      "recorded": "REFUSE",
+      "under_margin": "REFUSE",
+      "vs_incumbent_pct": null,
+      "challenger_mae": 7.6667,
+      "incumbent_mae": null
+    },
+    {
+      "leg": "verify-m2 \u00a72",
+      "source": "docs/promotion_gate_m2.md",
+      "label": "lightgbm-v1",
+      "name": "lightgbm-v1",
+      "recorded": "PROMOTE",
+      "under_margin": "PROMOTE",
+      "vs_incumbent_pct": null,
+      "challenger_mae": 3.2608,
+      "incumbent_mae": null
+    },
+    {
+      "leg": "verify-m2 \u00a72",
+      "source": "docs/promotion_gate_m3.md",
+      "label": "lightgbm-v1",
+      "name": "lightgbm-v1",
+      "recorded": "PROMOTE",
+      "under_margin": "REFUSE",
+      "vs_incumbent_pct": 0.0,
+      "challenger_mae": 3.2608,
+      "incumbent_mae": 3.2608
+    },
+    {
+      "leg": "verify-m2 \u00a72",
+      "source": "docs/promotion_gate_m3.md",
+      "label": "champion-v1-plus-0.06min",
+      "name": "champion-v1-plus-0.06min",
+      "recorded": "REFUSE",
+      "under_margin": "REFUSE",
+      "vs_incumbent_pct": -0.18093719332679145,
+      "challenger_mae": 3.2667,
+      "incumbent_mae": 3.2608
+    }
+  ]
+}
