@@ -144,6 +144,22 @@ So the thing standing between an empty store and a confident wrong number is a
 guard written for a different reason two stories earlier. **503 is what an
 UNREACHABLE store produces**, and that is a different phase of this drill.
 
+> **DATED NOTE 2026-08-24 (M9-S7). This section's headline number is now 503, and
+> the 422 above is left standing because it is the finding.** The paragraphs above
+> describe the code as it stood on 2026-08-23, and everything they say about
+> WHICH HALF protects a rider is unchanged and still correct — the geometry half
+> still structurally cannot refuse, the calendar half still does. What was wrong
+> was whose fault the refusal was recorded as. That 422 put a **totally dead
+> dependency outside SLO-A1's error budget** (SLO-R1: *a 4xx is a guard working*),
+> so an outage rendered as riders sending bad requests. Raised as **F-062**,
+> answered by the PO with option **(b)** on 2026-08-24, landed by M9-S7:
+> `calendar_from_store` now asks the store for a date the committed holiday table
+> provably covers before it picks a status, so an empty store is **503
+> `FeatureStoreUnavailable`** and an uncovered date with a live store is still
+> **422**. The re-run's records are in `automation/runs/m9-store-watch/`; the
+> 422-era records are kept unedited at `attempt1-422-era/` with their own README,
+> because they are the evidence the decision was made from.
+
 ### The measured run
 
 | observation | measured |
@@ -205,3 +221,12 @@ It was visible at all only because `automation/runs/**/*.json` is tracked
   error budget. A-12 pages, so it is not silent; the status class is **F-062**,
   open and routed to the program close, because changing what the served
   boundary returns is a behaviour change with three parity records behind it.
+  > **DATED NOTE 2026-08-24 (M9-S7): CLOSED, and it cost exactly what the bullet
+  > above priced it at.** The PO answered (b); the transformer was rebuilt and
+  > redeployed, and all three parity records were re-measured at their committed
+  > EXACT bars and came back **0.000e+00** — the change touches the error path
+  > only, so a nonzero delta would have been a story-stopping finding rather than
+  > a bar to widen. An emptied store is **503** now and spends the availability
+  > budget. What this bullet correctly did NOT price is the defect the re-measure
+  > flushed out: **F-069**, a 404 that left the request body unread and poisoned
+  > the next caller on a pooled keep-alive connection.
