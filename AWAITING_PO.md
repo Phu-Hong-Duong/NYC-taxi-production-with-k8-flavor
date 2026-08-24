@@ -71,8 +71,8 @@ the silence is a decision, not a crash.
 > charter directly; the demo route was verified HTTP 200 from both WSL and the
 > Windows browser before these were written):
 >
-> 1. **Observed demo run — the PO is doing it now.** The observation will be
->    appended to 2026-08-23-3 when done; until then the box stays honestly open.
+> 1. **Observed demo run — DONE 2026-08-24.** Recorded verbatim on 2026-08-23-3;
+>    the §9/M9 box closes there.
 > 2. **F-062 — option (b).** `calendar_from_store` is to distinguish *this date
 >    is not covered* (422, F-019's case) from *the store answered nothing for any
 >    date* (503, ours). Accepted cost, eyes open: one chartered story that touches
@@ -87,8 +87,8 @@ the silence is a decision, not a crash.
 >    for an artifact that moves no champion).
 > 5. **F-016 — option B.** Incumbent KPI-09 margin **≥0.50%** (DR-02's own keep
 >    bar), KPI-10 non-regression unchanged. Also recorded on 2026-08-18-1.
-> 6. **libgomp1 (2026-08-17-1) — option A chosen**; the sudo one-liner stays the
->    PO's to run. Status: chosen, not yet applied.
+> 6. **libgomp1 (2026-08-17-1) — option A, APPLIED AND VERIFIED 2026-08-24**
+>    (`openmp_status() -> (True, 'system libgomp.so.1')` on the host).
 > 7. **Allowlist (2026-08-16-2) — option A chosen**; the paste stays the PO's own
 >    hands (the settings-write guard is honored, not worked around). Status:
 >    chosen, not yet applied.
@@ -164,6 +164,14 @@ longer recur). 15 watchdog + chain tests GREEN. Both stale statuses acked by
 hand; the chain resumes on the next cron tick.
 
 ## 2026-08-23-3 · raised by EXEC/Opus (M9-S1) · NOT A FORK, NOT BLOCKING — the demo is live, and the one accept box only you can close
+
+> **THE OBSERVED RUN HAPPENED — 2026-08-24, recorded verbatim.** The PO ran the
+> live page (route verified HTTP 200 from the Windows browser the same hour) and
+> reported in their own words: *"This is okay, I get the gist of it. Improvement
+> can be done later."* No specific label confusion was filed, so no legibility
+> finding opens; improvements stay ordinary future work, not an accept condition.
+> The §9/M9 box closes on this note — the next ARCH touch should flip
+> `automation/runs/m9-demo/accept.json` (`po_observed_run.status`) to cite it.
 
 **Nothing here blocks the chain.** M9-S1 is done and merged; M9-S2 (the
 online-store watchdog) is the next story and does not wait on this.
@@ -640,10 +648,11 @@ unanswered by the M6→M7 boundary, M7 proceeds with the gate AS PRE-REGISTERED
 
 ## 2026-08-17-1 · raised by EXEC/Opus (M2-S2) · NON-BLOCKING: one apt package would delete a workaround from the training path
 
-> **ANSWERED 2026-08-24 by the PO: Option A** — the sudo one-liner stays the PO's
-> own hands and is queued for their next WSL terminal. Status: **chosen, not yet
-> applied** (this line flips when `openmp_status()` reads `system libgomp.so.1`
-> on the host).
+> **ANSWERED 2026-08-24 by the PO: Option A — APPLIED AND VERIFIED the same day.**
+> The PO ran the one-liner (`libgomp1 16-20260322-1ubuntu1` installed clean) and
+> the host now reads `openmp_status() -> (True, 'system libgomp.so.1')` — the
+> exact string this entry named as the flip condition. The shim never executes on
+> this machine again; it stays in the code as the fresh-clone path, as designed.
 
 *(EXEC note 2026-08-18, M4-S3 — **debt D-004 is now CLOSED and this entry is
 still open and still yours.** The M4 task image installs `libgomp1` as a real apt
