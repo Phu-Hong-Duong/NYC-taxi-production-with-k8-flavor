@@ -20,6 +20,9 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 ## Environment facts
 - Machine: Windows 11 + WSL2 (Ubuntu) + Docker Desktop, 64 GB RAM (user-stated
   2026-08-12; grant ~48 GB to WSL via .wslconfig — VERIFY at M0 with `free -h`).
+  **Amended 2026-08-24 (program close): the PO re-granted WSL to 40 GB on
+  2026-08-22 (`free -h` reads 39Gi live); the full platform runs inside it.
+  Gotcha #2 carries the same dated note.**
 - Repo location: must be inside WSL2 fs (`/home/...`). Check `pwd` before anything.
 - Canonical execution home (2026-08-16): `/home/longt/NYC-taxi-production-with-k8-flavor`
   (WSL Ubuntu, user `longt`; pre-staged by bootstrap). The Windows clone

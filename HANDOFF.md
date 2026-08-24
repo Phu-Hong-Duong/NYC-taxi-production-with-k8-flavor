@@ -1,5 +1,76 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (cj) — PROGRAM CLOSE: ten gates, one repair, one box left honestly open
+
+### State
+**ARCHITECT, `claude-fable-5` (stated first line — a boundary session on any other
+model is void).** Boot per the ritual: CLAUDE.md · HANDOFF (ci) · BLUEPRINT §9/M9
+(accept-when quoted verbatim into the close) · ledgers (all four) · AWAITING_PO ·
+`docs/milestones/M9_KICKOFF.md`. M9 carries no ◆, and M9 is §9's last milestone —
+so this boundary closes the PROGRAM. **M9 CLEANLY CLOSED, tagged `m9-closed`.
+The chain is deliberately PARKED: no successor scheduled, AWAITING_PO 2026-08-24-2
+is the entry that makes the park legible to the watchdog.**
+
+### Reconciliation
+3/3 nodes Ready v1.36.1 at 7d3h · tree clean at `b0652b8` · no `automation/STOP` ·
+every M9 artifact live (demo, both isvcs, feature server, Redis 57,688 keys) ·
+lineage: `git branch -r --contains bf2d553` → origin/main · `free -h` **39Gi** —
+the PO's 40 GB re-grant confirmed live, so CLAUDE.md's env facts and gotcha #2
+gained their dated amendments in this commit (they had said 48 GB since
+2026-08-12).
+
+### Done — the program-close sweep: ALL TEN gates, live, one session
+`verify-m9` **GREEN 45/45** (OPEN ITEM in its own banner, as chartered) · then
+m0 · m1 (rebuild-proof leg included) · m3 · m4 · m5 · m6 · m7 · m8 all GREEN —
+**and `verify-m2` was RED.** Its §9 root-stray allowlist predates M8-S2's
+`.venv-feast`, so the gate had been red-on-run over a correct clone since
+2026-08-21 and nothing knew, because nothing re-runs a closed milestone's gate
+until a boundary sweeps it. **F-065, raised and closed this triage** — one
+`EXPECTED` entry with its dated reason (the check's distrust-gitignore design
+untouched), `verify-m2` GREEN 55/55, gate tests 15 passed, host suite 1151
+passed. Gotcha #50's shape, and the strongest argument the close sweep could
+have produced for its own existence: a named allowlist in a long-lived verifier
+is a twin of every later milestone's legislation, and nothing forces the
+reconciliation until someone runs the old gate. Landed by ARCH at the boundary
+(the F-029-mechanics / gotcha-#26 precedent); one more executor session for one
+line was priced and declined — said in the ledger row, not hidden.
+
+### Done — the close artifacts, one commit
+`docs/milestones/PROGRAM_CLOSE.md` (the terminal kickoff-equivalent: §0 triage,
+the ten-gate table, the inventory, what remains and with whom, how the chain
+resumes) · README Status: M9 → closed + a PROGRAM CLOSE row that names its own
+open box · signoffs ledger: the M9 gate + program-close row (verdict **PASS —
+with §9/M9's one human accept line recorded OPEN, not green**) · findings:
+F-065 raised+closed; **F-062 routed onward to the PO** (AWAITING_PO
+2026-08-24-2 — options (a)/(b)/(c), recommendation (b); a live-wire behaviour
+change with three parity records behind it is a PO call, and no executor
+session follows this one) · AWAITING_PO 2026-08-24-2 (the close entry: the
+observed-run box first, F-062, publish-the-repo surfaced as §12 promised, the
+standing four, and the resume command) · tag `m9-closed` pushed.
+
+### Dispositions (none silent — full table in PROGRAM_CLOSE.md §0)
+F-062 → PO fork (2026-08-24-2) · PO-observed demo box → OPEN at 2026-08-23-3,
+stated as "complete on every machine-verifiable term, unfinished on the one
+term only the PO can close" · F-065 → CLOSED (evidence above) · F-016 →
+standing, doubly-informed, dormant · stretch menu → standing (2026-08-23-2) ·
+publish-the-repo → formally with the PO · error memo §7 row 2 → documented
+future work with its named candidate reader · D-001's deferral → stands,
+conditional on a PO-sanctioned rebuild · debt register → CLOSED (D-001…D-004).
+
+### Verification at exit
+All ten gates GREEN this session (m2 after repair) · host suite 1151 passed
+(53 `needs_records` deselected) · `tests/unit/test_verify_m2.py` 15 passed ·
+`@champion` **2** / `feature_set v2`, versions `['1','2']`, none created after
+`m7-closed` · `uv.lock` byte-identical to `m7-closed` · tree committed, tagged,
+pushed.
+
+### Next
+**Nothing is scheduled, on purpose.** Every remaining item is the PO's
+(AWAITING_PO 2026-08-24-2, ranked by worth-your-time). The chain resumes, if
+ever, through `automation/next_session.sh architect 120` — an ARCH touch
+charters any PO-answered work first. The platform stays up and serving;
+`make verify-m9` is the one-command health read.
+
 ## Session 2026-08-24 (ci) — M9-S4: the program's last gate, three questions instead of fourteen
 
 ### State

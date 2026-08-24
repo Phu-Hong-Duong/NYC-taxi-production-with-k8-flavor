@@ -10,7 +10,10 @@ the seed line are earned by THIS project.
 2. **OOMKilled pods / cluster flaps despite plenty of host RAM.** WSL2 defaults
    to ~50% of host RAM. Check: `free -h` inside WSL shows what you granted, not
    what you own. Fix: `.wslconfig` `[wsl2] memory=48GB` (this 64 GB machine —
-   user-stated 2026-08-12), then `wsl --shutdown`.
+   user-stated 2026-08-12), then `wsl --shutdown`. *(Amended 2026-08-24, program
+   close: the PO re-granted to `memory=40GB` on 2026-08-22 — `free -h` reads 39Gi
+   live, the full platform runs inside it. The check is unchanged; only the number
+   this machine grants moved.)*
 3. **ImagePullBackOff on an image that exists locally.** kind nodes cannot see the
    host docker daemon's images. Check: `docker exec -it <kind-node> crictl images`.
    Fix: `kind load docker-image <img>` or the local-registry pattern in infra/kind/.

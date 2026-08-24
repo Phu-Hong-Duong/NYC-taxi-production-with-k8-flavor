@@ -1,5 +1,61 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-24-2 · raised by ARCH/Fable (PROGRAM CLOSE) · THE CLOSE: the chain is parked, one accept box and two decisions are yours
+
+**The program is closed on every term a machine can verify.** M9 is tagged
+`m9-closed`; the close sweep ran **all ten gates M0…M9 live in one session and
+every one is GREEN** (verify-m2 needed a one-line stale-allowlist repair first —
+F-065, raised and closed at the boundary; the RED is part of the record).
+Full verdict and inventory: `docs/milestones/PROGRAM_CLOSE.md`. **The chain is
+deliberately PARKED — no successor is scheduled** — because everything that
+remains needs your hands or your word. This entry is what tells the watchdog
+the silence is a decision, not a crash.
+
+**What is yours, in the order they are worth your time:**
+
+1. **The observed demo run (~5 minutes) — the one §9/M9 accept line only you
+   can close.** Everything you need is in **2026-08-23-3** below (URL, the two
+   conditional commands, what to expect). Until you do it, the program is
+   honestly "complete, one box open" — and every artifact says exactly that
+   rather than rounding it up.
+
+2. **F-062 — a genuine fork: when the online store is EMPTY, a rider's quote
+   comes back HTTP 422, so a dead dependency is billed to the CALLER and
+   consumes zero availability error budget.** A-12 pages, so nothing is
+   silent — the ACCOUNTING is. Options, from `ledgers/findings.md` F-062:
+   **(a)** leave it, document the accounting gap in SLO-R1 — free, budget
+   stays blind; **(b)** make `calendar_from_store` distinguish *this date is
+   not covered* (422, F-019's case) from *the store answered nothing for any
+   date* (503, ours) — a few lines, but it changes what a live boundary
+   returns, needs a transformer redeploy and the three parity records
+   re-measured; **(c)** amend SLO-R1's argument without a wire change — needs
+   a label the metric does not carry. **Recommendation: (b)**, and its honest
+   cost is exactly why it waits here: it is the only option that touches the
+   wire, and the wire's stillness is what three parity records currently
+   certify. Answer with a letter; an ARCH session charters the landing.
+
+3. **Publish the repo publicly?** — your §12 question, now formally surfaced
+   at the close as promised. If yes: menu items 1–2 in **2026-08-23-2**
+   (README polish · trivy + commit-history secret-scan) are the recommended
+   pre-publish pair, and honestly cheap. If no or not yet: nothing to do.
+
+4. **Standing, unchanged:** the stretch opt-in menu (2026-08-23-2) · F-016's
+   gate-margin fork (2026-08-18-1, now observed deciding in both directions)
+   · the `libgomp1` one-liner (2026-08-17-1) · the allowlist paste
+   (2026-08-16-2).
+
+**To resume the chain on any answer:**
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+automation/next_session.sh architect 120
+```
+(An ARCH touch charters the work first — never an executor improvising. If the
+machine restarted: Docker Desktop, then everything self-heals — gotcha #34.)
+
+**What is parked:** everything — by design, at the program's end. **What
+continues meanwhile:** nothing autonomous; the platform stays up and serving
+(the cluster is stateful; `make verify-m9` is the one-command health read).
+
 ## 2026-08-24-1 · written by the PO's Windows-side session (Claude) · NOT A FORK, NO ACTION NEEDED — the chain deadlock is diagnosed, fixed and resumed
 
 **What died:** the 04:16 UTC executor was killed at 04:23 by a transient API

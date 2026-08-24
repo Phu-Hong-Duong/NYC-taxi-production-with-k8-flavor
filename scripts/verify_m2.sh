@@ -766,8 +766,12 @@ def no(m): print(f"FAIL|{m}")
 
 # Untracked things that BELONG at the root of a working clone. Everything else
 # is a stray until somebody commits it or deletes it.
-EXPECTED = {".git", ".venv", ".env", ".pytest_cache", ".ruff_cache", ".mypy_cache",
-            ".idea", ".vscode", ".DS_Store"}
+# .venv-feast joined the working clone at M8-S2 (the Feast quarantine venv,
+# rebuilt from infra/feast/requirements-feast.txt); this list learned it at the
+# program close (F-065, 2026-08-24) — gotcha #50's shape, latent since 2026-08-21
+# because nothing re-ran this gate after the venv was created.
+EXPECTED = {".git", ".venv", ".venv-feast", ".env", ".pytest_cache", ".ruff_cache",
+            ".mypy_cache", ".idea", ".vscode", ".DS_Store"}
 try:
     tracked = {p.split("/")[0] for p in
                subprocess.run(["git", "ls-files"], capture_output=True, text=True,
