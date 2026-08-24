@@ -99,12 +99,24 @@ installed; `automation/runs/m9-security/` did not exist. AWAITING_PO 2026-08-24-
   correction belongs in the record, not the document.
 
 ### Next
-**The epilogue's five stories are DONE (S5–S9).** No unstarted story remains in
-`docs/milestones/M9_EPILOGUE_KICKOFF.md`. Its Exit section charters the boundary to
-**ARCH**: re-run the affected gates, close the epilogue with tag
-**`m9-epilogue-closed`**, flip the README row, and RE-PARK the chain with the
-publish-flip entry as the standing item. Scheduling `architect` accordingly (ritual
-(c) — the epilogue carries no ◆).
+**The epilogue's chartered work is DONE (S5, S7, S8, S9; S6 is PARKED on the PO —
+`2026-08-24-4`/F-068 — and was never landed).** No unstarted, unblocked story
+remains in `docs/milestones/M9_EPILOGUE_KICKOFF.md`.
+
+**THE CHAIN IS PARKED AND I SCHEDULED NOTHING.** I intended ritual (c) — the
+epilogue's Exit section charters an ARCH touch to re-run the affected gates, close
+with tag **`m9-epilogue-closed`**, flip the README row and re-park with the
+publish-flip entry — and ran `automation/next_session.sh architect 120`. It
+REFUSED: `[chain] STOP file present — not scheduling.` The latch was created
+**during this session**, at `2026-08-24 22:39:09 +07`, by `chain_park.sh`, and it
+is not mine to erase (F-066: a park latches, and `next_session.sh` is the only
+eraser). So this ends as ritual **(d)** — parked, with two inbox entries saying
+what is needed. Nothing was left half-done by the park: the story merged green
+(PR #70, `fe0fca2` on `origin/main`) before it was noticed.
+
+**What the next session should do, whoever starts it:** the ARCH boundary above,
+unchanged. It needs no decision from the PO to run — the two open entries are
+about what happens *after* the epilogue closes, not about closing it.
 
 **Waiting on the PO, two entries, neither blocking the boundary:**
 - **`2026-08-24-5`** (new) — the pre-publish pair is DONE and the public flip is
