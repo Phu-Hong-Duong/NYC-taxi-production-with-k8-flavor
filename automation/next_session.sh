@@ -23,6 +23,22 @@ DELAY="${2:-120}"
 
 if [ -f automation/STOP ]; then echo "[chain] STOP file present — not scheduling."; exit 0; fi
 
+# --- answering a fork is what un-parks the chain ------------------------------
+# Every AWAITING_PO entry ends with this command, so running it IS the PO's
+# answer, and it is the only thing that clears the watchdog's park latch
+# (2026-08-24, F-066). WATCHDOG_HEAL=1 is set only by watchdog.sh's heal path:
+# a heal must never un-park a decision, which is the bug the latch exists to
+# stop, so the eraser is deliberately out of the watchdog's reach.
+PARK_STATE="automation/logs/watchdog_parked"
+if [ -f "${PARK_STATE}" ]; then
+  if [ "${WATCHDOG_HEAL:-0}" = "1" ]; then
+    echo "[chain] refusing to clear the park latch on a watchdog heal — a decision is not an accident."
+    exit 0
+  fi
+  rm -f "${PARK_STATE}"
+  echo "[chain] park latch cleared (was: the chain was waiting on a fork) — resuming."
+fi
+
 TODAY="$(date +%F)"
 COUNT_FILE="automation/logs/count_${TODAY}"
 mkdir -p automation/logs
