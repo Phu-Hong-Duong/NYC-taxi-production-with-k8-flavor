@@ -1687,3 +1687,24 @@ the seed line are earned by THIS project.
     demo's origin and its 404 is asserted, so the demo cannot quietly end up
     talking to the 24-column wire. ADR-011 condition 2, third occurrence
     (M9-S1).
+
+112. **A guard whose alarm channel is also its sensor cannot tell its own
+    handwriting from the world's — and the cure it forces is worse than the
+    disease.** `watchdog.sh` detected "a session parked on a fork" by watching
+    AWAITING_PO.md's sha change, and `red()` ALARMS BY APPENDING TO
+    AWAITING_PO.md. So every alarm manufactured a false park on the next pass.
+    That feedback loop was not a cosmetic wart: because false parks existed,
+    REAL parks had to be allowed to expire after a couple of passes, or one
+    FAILED run would have wedged the chain shut forever. The expiry is what let
+    the program-close park — correctly detected and alarmed at 06:40 — be
+    HEALED at 07:00, starting an executor session into a closed, tagged
+    program. Two rules. (a) **A condition a human must clear is a STATE, so
+    latch it**; "no change since the last pass" is not "nobody is waiting on
+    me", and any test of a latch must exercise the SECOND pass, because the
+    first is where an edge detector and a latch agree. (b) When a guard has
+    been made lenient to work around its own noise, **fix the noise at the
+    source and the leniency becomes unnecessary** — here killing the false park
+    let the FAILED-run recovery drop from four passes to two while the real
+    park became permanent, i.e. both properties got STRICTER at once. The tell
+    that this had been normalised: the existing test's docstring described the
+    false park as the expected trace (F-066, M9 post-close).
