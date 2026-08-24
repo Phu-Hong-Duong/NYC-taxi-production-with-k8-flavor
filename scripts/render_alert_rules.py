@@ -52,8 +52,12 @@ RULES_FILE = REPO_ROOT / "infra" / "monitoring" / "alerting_rules.yml"
 # (A-8 input drift, A-9 volume collapse, A-10 drift-job staleness) and A-11,
 # which M8-S1 adds for F-050: the drift SURFACE being absent, which A-10 is
 # structurally unable to see because `time() - max(X)` over no series is no
-# series. Every rule must claim exactly one of these.
-KNOWN_SIGNALS = {f"A-{n}" for n in range(1, 12)}
+# series. M9-S2 adds the online store's pair on exactly the same shape — A-12
+# (the store stopped answering what its sources define) and A-13 (the store
+# watchdog's surface is gone, which A-12's freshness clause cannot see, for the
+# same structural reason A-10 cannot see A-11's).
+# Every rule must claim exactly one of these.
+KNOWN_SIGNALS = {f"A-{n}" for n in range(1, 14)}
 
 # The signals this stack CAN alert on, and therefore must.
 #

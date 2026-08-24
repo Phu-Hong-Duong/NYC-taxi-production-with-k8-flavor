@@ -226,7 +226,7 @@ probe-mlserver-metrics: ## ask the live predictor where its /metrics really is (
 	@uv run python scripts/probe_mlserver_metrics.py
 
 # ---- M7-S3 drift detection (role:SRE) ----
-.PHONY: drift-headroom drift drift-drill drift-witness drift-monotonicity drift-persistence-drill push-serving-version
+.PHONY: drift-headroom drift drift-drill drift-witness drift-monotonicity drift-persistence-drill push-serving-version store-watch-headroom store-watch store-watch-drill
 drift-headroom: ## the held-out 2019 months against the train reference — the input to §8's bar, 2019 data ONLY (M7-S3)
 	@uv run python -m taxi_mlops.monitoring headroom
 drift: ## compute drift for scoring months; add --push to send it to the gateway (M7-S3). Issues NO verdict
@@ -241,6 +241,12 @@ drift-persistence-drill: ## F-050's pair: the store survives a pod delete, and A
 	@uv run python scripts/drift_persistence_drill.py $(PERSISTENCE_ARGS)
 push-serving-version: ## A-4's two series: what the wire serves vs what @champion resolves to (M7-S3, F-035)
 	@uv run python scripts/push_serving_version.py $(A4_ARGS)
+store-watch-headroom: ## the online store's key composition and refill cost — the input to §9's bars, measured BEFORE them (M9-S2)
+	@uv run python scripts/store_watch_headroom.py $(HEADROOM_ARGS)
+store-watch: ## A-12/A-13's source: DBSIZE + a four-claim canary through the feature server, pushed (M9-S2). Issues NO verdict
+	@uv run python scripts/store_watch.py $(STORE_WATCH_ARGS)
+store-watch-drill: ## empty the store, watch A-12 fire and the transformer refuse, re-materialize, watch it clear (M9-S2; prediction FIRST)
+	@uv run python scripts/store_watch_drill.py $(DRILL_ARGS)
 canary-deploy: ## the challenger PATH carrying the champion's own bytes; proves ADR-011 condition 2 (M6-S4; DRY_RUN=1 previews, TEARDOWN=1 removes)
 	@bash scripts/deploy_canary.sh
 canary: ## shift 10% -> 100% -> revert under sustained load, split observed from COUNTERS (M6-S4; DRILL_ARGS=--dry-run)

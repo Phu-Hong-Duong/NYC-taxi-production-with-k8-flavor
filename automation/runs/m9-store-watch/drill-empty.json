@@ -1,0 +1,231 @@
+{
+  "story": "M9-S2",
+  "phase": "empty",
+  "recorded_at": "2026-08-23T14:27:53Z",
+  "prediction": {
+    "written_before": "the first FLUSHDB, and committed before the drill ran",
+    "bars_argued_in": "docs/slo_serving.md \u00a79, committed before this file",
+    "empty_store": {
+      "rider_request": {
+        "claim": "a quote against an EMPTY store is REFUSED with HTTP 422, not 503 and not a confident wrong number",
+        "confidence": "high",
+        "because": "every request carries a date and calendar_from_store RAISES StoreCoverageError (http_status 422) on an unanswered one \u2014 F-019 carried onto the store's wire. The geometry half CANNOT refuse: an all-null centroid table is exactly what zones 264/265 legitimately produce, so the calendar is what stands between an empty store and a quote nobody can see is wrong.",
+        "supersedes": "the M9 kickoff's expectation of 503. 503 is what an UNREACHABLE store produces (FeatureStoreUnavailable) and that is a different phase of this drill.",
+        "expected_status": 422
+      },
+      "champion_control": {
+        "claim": "the champion's own wire answers 39.0019 throughout",
+        "confidence": "high",
+        "because": "it builds its matrix from committed tables and never reads the store"
+      },
+      "must_fire": [
+        {
+          "alert": "OnlineStoreCanaryFailing",
+          "signal": "A-12",
+          "confidence": "high",
+          "after_about_seconds": 120,
+          "because": "three of four canary checks go to 0 and the rule sustains 2m",
+          "must_reach_alertmanager": true,
+          "expected_failing_checks": [
+            "zone_answers",
+            "calendar_answers"
+          ]
+        },
+        {
+          "alert": "OnlineStoreIncomplete",
+          "signal": "A-12",
+          "confidence": "high",
+          "after_about_seconds": 120,
+          "because": "0 keys against 57,688 the sources define",
+          "must_reach_alertmanager": true
+        }
+      ],
+      "must_not_fire": [
+        {
+          "alert": "OnlineStoreWatchdogAbsent",
+          "signal": "A-13",
+          "because": "the surface is present and fresh \u2014 it is the store that is gone"
+        },
+        {
+          "alert": "ServingEdge5xxRateHigh",
+          "signal": "A-2",
+          "because": "a 422 is a 4xx and the champion's wire is untouched"
+        },
+        {
+          "alert": "PredictorNoAvailableReplica",
+          "signal": "A-5",
+          "because": "no pod moved"
+        },
+        {
+          "alert": "DriftMetricsAbsent",
+          "signal": "A-11",
+          "because": "a different job's series, untouched by this drill"
+        },
+        {
+          "alert": "ServedVersionNotChampion",
+          "signal": "A-4",
+          "because": "no alias moves and no deploy happens"
+        }
+      ],
+      "clears": {
+        "claim": "re-materializing clears both A-12 rules",
+        "confidence": "high",
+        "refill_seconds_below": 60,
+        "expected_keys_after": 57688
+      }
+    },
+    "unreachable_store": {
+      "claim": "with the feature server scaled to 0 the transformer answers HTTP 503",
+      "confidence": "high",
+      "because": "FeatureStoreUnavailable is a distinct type precisely so a dependency outage does not look like a malformed quote \u2014 503 ours, 422 the caller's",
+      "expected_status": 503
+    },
+    "deleted_surface": {
+      "must_fire": {
+        "alert": "OnlineStoreWatchdogAbsent",
+        "signal": "A-13",
+        "confidence": "high",
+        "after_about_seconds": 600,
+        "because": "the rule sustains 10m and absent() is true within a scrape",
+        "must_reach_alertmanager": true
+      },
+      "must_not_fire": {
+        "alert": "OnlineStoreCanaryFailing",
+        "signal": "A-12",
+        "confidence": "high",
+        "because": "THE LOAD-BEARING NEGATIVE. `time() - stamp < 1800` over zero series is zero series, not a stale reading \u2014 so A-12 cannot see its own surface disappear, and a stack with only A-12 would render a wiped board exactly like a healthy store. That blind spot is A-13's whole reason to exist and it is demonstrated here rather than asserted."
+      }
+    },
+    "never_touched": [
+      "@champion (not read and not written by this drill)",
+      "any registry version, any MLflow run",
+      "the champion's InferenceService, its pod and its wire",
+      "every threshold in infra/monitoring/alerting_rules.yml",
+      "the settled data pins and data/feast/*.parquet"
+    ]
+  },
+  "observed": {
+    "empty": {
+      "keys_before": 57688,
+      "keys_after_flush": 0,
+      "keys_restored": 57688,
+      "rider_status_while_empty": 422,
+      "rider_body_while_empty": "{\"error\": \"the online feature store has no calendar row for ['2019-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holiday' for an uncovered date looks exactly like a correct answer (F-019, on the store's wire instead of the CSV's). Fix it where the table is defined \\u2014 `make holidays HOLIDAYS_TO=<year>` then `make feast-sources && make feast-materializ",
+      "rider_status_predicted": 422,
+      "refill_seconds": 9.9,
+      "fired": {
+        "OnlineStoreCanaryFailing": {
+          "fired": true,
+          "after_seconds": 162.2,
+          "reached_alertmanager": true
+        },
+        "OnlineStoreIncomplete": {
+          "fired": true,
+          "after_seconds": 162.2,
+          "reached_alertmanager": true
+        }
+      },
+      "cleared": {
+        "OnlineStoreCanaryFailing": {
+          "cleared": true,
+          "after_seconds": 40.0
+        },
+        "OnlineStoreIncomplete": {
+          "cleared": true,
+          "after_seconds": 0.0
+        }
+      },
+      "must_not_fire_states": {
+        "OnlineStoreWatchdogAbsent": "inactive",
+        "ServingEdge5xxRateHigh": "inactive",
+        "PredictorNoAvailableReplica": "inactive",
+        "DriftMetricsAbsent": "inactive",
+        "ServedVersionNotChampion": "inactive"
+      },
+      "canary_checks_firing": [
+        "calendar_answers",
+        "zone_answers"
+      ],
+      "final_minutes": 39.00193715359812
+    }
+  },
+  "checks": [
+    {
+      "ok": true,
+      "claim": "the undo is staged BEFORE the injection: quarantine present=True, 4 published source(s) \u2014 `make feast-materialize` can refill it"
+    },
+    {
+      "ok": true,
+      "claim": "the store is empty (57,688 -> 0 keys)"
+    },
+    {
+      "ok": true,
+      "claim": "a quote against the EMPTY store is HTTP 422 \u2014 predicted 422 (the CALENDAR half refuses; the geometry half structurally cannot)"
+    },
+    {
+      "ok": true,
+      "claim": "and it is NOT a confident wrong number \u2014 the thing an all-NaN geometry table alone would have produced"
+    },
+    {
+      "ok": true,
+      "claim": "the CHAMPION's wire is unaffected throughout: [quote] 2019-07-04T09:15:00  zone 132 -> 48, 1 passenger(s)  ->  39.0019 minutes"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreCanaryFailing (A-12) FIRED 162.2s after the flush (predicted ~120s + detection)"
+    },
+    {
+      "ok": true,
+      "claim": "Alertmanager holds OnlineStoreCanaryFailing \u2014 a rule firing only in Prometheus's own UI has paged nobody"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreIncomplete (A-12) FIRED 162.2s after the flush (predicted ~120s + detection)"
+    },
+    {
+      "ok": true,
+      "claim": "Alertmanager holds OnlineStoreIncomplete \u2014 a rule firing only in Prometheus's own UI has paged nobody"
+    },
+    {
+      "ok": true,
+      "claim": "A-12a names WHICH claims failed: ['calendar_answers', 'zone_answers'] (predicted at least ['zone_answers', 'calendar_answers']) \u2014 the per-series read, never the name-level one (gotcha #93)"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreWatchdogAbsent (A-13) stayed inactive \u2014 the surface is present and fresh \u2014 it is the store that is gone"
+    },
+    {
+      "ok": true,
+      "claim": "ServingEdge5xxRateHigh (A-2) stayed inactive \u2014 a 422 is a 4xx and the champion's wire is untouched"
+    },
+    {
+      "ok": true,
+      "claim": "PredictorNoAvailableReplica (A-5) stayed inactive \u2014 no pod moved"
+    },
+    {
+      "ok": true,
+      "claim": "DriftMetricsAbsent (A-11) stayed inactive \u2014 a different job's series, untouched by this drill"
+    },
+    {
+      "ok": true,
+      "claim": "ServedVersionNotChampion (A-4) stayed inactive \u2014 no alias moves and no deploy happens"
+    },
+    {
+      "ok": true,
+      "claim": "the store is refilled: 57,688 keys in 9.9s wall-clock (the materialize itself is the ~7s the record holds)"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreCanaryFailing cleared 40.0s after the reader saw a healthy store"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreIncomplete cleared 0.0s after the reader saw a healthy store"
+    },
+    {
+      "ok": true,
+      "claim": "and the rider's quote is exactly what it was: HTTP 200, 39.00193715359812 minutes"
+    }
+  ],
+  "failures": 0
+}

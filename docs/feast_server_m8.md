@@ -241,3 +241,17 @@ transformer seam, and the p95 at M5-S4's shape. Leg 3 inherits:
 puts a reader in front of the store**: there is no alert on an empty or stale
 online store. This slice adds a second consumer of that store and does not close
 it.
+
+> **CLOSED 2026-08-23 (M9-S2), by the story this paragraph predicted.** The
+> signal is **A-12** (`OnlineStoreCanaryFailing` + `OnlineStoreIncomplete`,
+> SLO-S1) and **A-13** (`OnlineStoreWatchdogAbsent`, SLO-S2) — argued in
+> `docs/slo_serving.md` §9, watched firing end to end in
+> `docs/store_watchdog_m9.md`. And the sentence above turned out to name the
+> right owner for the right reason: A-12's canary is a request over **this
+> server's own `/get-online-features` wire**, asserting the two-sided property
+> §4b established here — zone 132 must answer, zone **264 must decline** — so
+> the consumer this slice added is also the instrument the watchdog reads
+> through. What it does **not** close is the per-request half: an emptied store
+> makes the transformer refuse with **HTTP 422**, and the class is wrong (an
+> infrastructure outage billed to the caller) — **F-062, OPEN**, routed to the
+> program close with three costed options.

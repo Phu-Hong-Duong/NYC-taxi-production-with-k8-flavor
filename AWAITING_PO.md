@@ -1,5 +1,30 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-24-1 · written by the PO's Windows-side session (Claude) · NOT A FORK, NO ACTION NEEDED — the chain deadlock is diagnosed, fixed and resumed
+
+**What died:** the 04:16 UTC executor was killed at 04:23 by a transient API
+error (`The response stopped arriving`) — an ACCIDENT, exactly the case the
+watchdog's HEAL path exists for.
+
+**Why it could not re-heal:** the watchdog's step 4 scans
+`automation/runs/*.status` BEFORE the heal step, and its FAILED branch exits on
+every pass with no ack — unlike the KILLED branch, which rewrites its corpse
+and parks only once. Two STALE `FAILED 2` statuses from 2026-08-20
+(`m7-retrain-fulldata`, `m7-s4-retrain-rerun` — the second a CORRECT refusal
+that `make` collapsed to exit 2, gotcha #97's own example; both runs' records
+arrived long ago, `verify-m7` GREEN) were a permanent landmine: armed since
+08-20, first stepped on today, the first time since then the chain actually
+needed healing. The 04:30 RED below cites a run resolved four days ago.
+
+**The fix (committed on this branch):** the FAILED branch now acks its status
+(`FAILED-ACKED`, original line kept inside, field 2 still the exit code) after
+alarming once — the KILLED branch's exact shape — so one failure = one alarm +
+~30 min of park, then the chain heals itself. `tests/unit/test_watchdog.py`
+updated: the ack pinned, the full alarm→ack→fork-settle→HEAL sequence pinned,
+the toast-rationing test moved onto the daily cap (the FAILED condition can no
+longer recur). 15 watchdog + chain tests GREEN. Both stale statuses acked by
+hand; the chain resumes on the next cron tick.
+
 ## 2026-08-23-3 · raised by EXEC/Opus (M9-S1) · NOT A FORK, NOT BLOCKING — the demo is live, and the one accept box only you can close
 
 **Nothing here blocks the chain.** M9-S1 is done and merged; M9-S2 (the
@@ -738,3 +763,8 @@ and continues normally; no PO action is required for this entry.
 
 The three standing entries below/above are unchanged and still non-blocking:
 **2026-08-18-1 (F-016)**, **2026-08-17-1**, **2026-08-16-2**.
+
+## 2026-08-24 04:30 UTC — watchdog: Chain: detached run FAILED
+'m7-retrain-fulldata' exited 2. The chain is parked because its result never arrived. See automation/runs/m7-retrain-fulldata.log
+
+Watchdog log: automation/logs/watchdog.log

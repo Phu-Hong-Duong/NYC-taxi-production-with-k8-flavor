@@ -234,6 +234,19 @@ the v1 shadow running: M8-S5's gate is the next story, it will want to ask a liv
 system the same kind of question `verify-m5` §2 asks, and standing it back up
 costs a `make deploy-transformer`.
 
+> **CLOSED 2026-08-23 (M9-S2).** The paragraph below is left unedited because it
+> is what the next story was handed, and one of its predictions was wrong in an
+> instructive way. The signal is **A-12** (SLO-S1) and **A-13** (SLO-S2), argued
+> in `docs/slo_serving.md` §9 and watched firing in `docs/store_watchdog_m9.md`.
+> **The prediction that did not hold:** "the transformer would quote confidently
+> from nine NaN geometry features". Measured, with the store emptied for real,
+> the transformer answers **HTTP 422** — because every request also carries a
+> DATE, and `calendar_from_store` refuses an unanswered one (F-019 on the store's
+> wire). The geometry analysis below is exactly right and it is not the half that
+> decides: the calendar refuses first, on every request, and that is why an
+> emptied store is a refusal rather than a wrong number. What the store watchdog
+> adds is the part no client can do — noticing at all.
+
 **What is NOT closed, and it now has a third consumer.** There is still no alert
 on an empty or stale online store. Leg 1 named it, leg 2 repeated it, and this leg
 is the one that puts *rider-shaped traffic* behind it: if Redis were emptied, the

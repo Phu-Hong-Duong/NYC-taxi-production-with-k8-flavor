@@ -90,7 +90,7 @@ settled trees, and `make feast-materialize` rebuilds it in **7 seconds**. So:
   the materialization instead. Measured working set: **57,688 keys / 14.32 MiB**,
   read off the server after materializing, so the margin is a number.
 
-## The residual, recorded rather than netted out
+## The residual, recorded rather than netted out — CLOSED 2026-08-23 (M9-S2)
 
 **There is no alert on an empty or stale online store.** Nothing reads it on the
 request path yet — leg 2 is what puts a reader in front of it — so the signal
@@ -99,6 +99,24 @@ would be setting a bar before the thing it watches exists (M8 law 4's family).
 What exists today instead: `make feast-materialize` REFUSES to report success
 against a store that is empty afterwards, which catches the failure at the moment
 it is created rather than at the moment a rider meets it.
+
+> **CLOSED 2026-08-23 (M9-S2), and the paragraph above is left standing because
+> its reasoning is why the signal waited.** The exposure now exists (M8-S4 leg 3's
+> transformer, M9-S1's demo page), so the signal landed with it: **A-12**
+> (`OnlineStoreCanaryFailing` + `OnlineStoreIncomplete`, SLO-S1) and **A-13**
+> (`OnlineStoreWatchdogAbsent`, SLO-S2), argued in `docs/slo_serving.md` §9 and
+> watched firing end to end in `docs/store_watchdog_m9.md`. Two things this ADR
+> predicted are now measured rather than argued: the store's **57,688 keys** turn
+> out to be exactly the sum of distinct entity keys across the published sources,
+> which is what let A-12b compare the store against its own sources and hold **no
+> threshold at all**; and the failure mode this ADR names — *the transformer
+> builds a NaN feature and the model quotes a confident wrong number with nothing
+> red anywhere* — was measured and does **not** happen, for a reason worth
+> knowing: the geometry half cannot refuse (an all-null centroid table is exactly
+> what zones 264/265 legitimately produce) but the CALENDAR half does, so an
+> emptied store comes back **HTTP 422** rather than a wrong number. The thing
+> standing between an empty store and a confident wrong quote is F-019's guarantee,
+> carried onto the store's wire two stories earlier for a different reason.
 
 ## Consequences
 

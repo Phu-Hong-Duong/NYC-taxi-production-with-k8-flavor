@@ -123,7 +123,16 @@ if compgen -G "automation/runs/*.status" > /dev/null; then
         RC="$(awk '{print $2}' "${st}")"
         red "run-failed-${NAME}" \
             "Chain: detached run FAILED" \
-            "'${NAME}' exited ${RC}. The chain is parked because its result never arrived. See automation/runs/${NAME}.log"
+            "'${NAME}' exited ${RC} and never delivered its result. Alarmed once; the chain heals on a later pass. Read the RECORD, not the code — a refusal writes a record, a crash writes nothing (gotcha #97). Log: automation/runs/${NAME}.log"
+        # Ack it, exactly as the KILLED branch above rewrites its corpse: ONE
+        # failure alarms ONCE and then stops blocking the heal path. Before
+        # this (2026-08-24) a FAILED status was a permanent landmine — a
+        # 4-day-old 'FAILED 2' from M7-S4 (a run whose record HAD arrived;
+        # make collapses every CLI code to 2, gotcha #97) made every pass exit
+        # here, so an executor killed by a transient API error could never be
+        # healed. The original line is kept inside the ack for the record.
+        OLD_LINE="$(cat "${st}" 2>/dev/null)"
+        echo "FAILED-ACKED ${RC} $(date -u +%FT%TZ) (was: ${OLD_LINE})" > "${st}"
         exit 0
         ;;
     esac

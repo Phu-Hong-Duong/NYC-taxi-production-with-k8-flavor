@@ -556,3 +556,176 @@ groups:
             missing. What runs the pusher on a cadence lands with M7-S4's
             scheduler. Until then `verify-m5` §2 remains the check that actually
             runs, at every gate, and asks the endpoint directly.
+
+  # ===========================================================================
+  # M9-S2 · the ONLINE STORE. R-2, restated by three M8-S4 legs and closed here.
+  #
+  # WHY THIS STORE NEEDS A WATCHDOG AND THE OTHER DEPENDENCIES DO NOT. Its
+  # failure is silent BY CONSTRUCTION: an all-null store yields an all-NaN
+  # geometry table, and NaN is the CORRECT answer for TLC zones 264/265 (no
+  # centroid by design, DR-04 condition 1, ~1% of every split). The same value
+  # that means "this zone is not a place" also means "the store is empty", so no
+  # client can refuse it on sight. gotcha #78 with the panel removed entirely.
+  #
+  # Every argument for what follows is docs/slo_serving.md section 9, measured
+  # first in automation/runs/m9-store-watch/headroom.json.
+  # ===========================================================================
+  - name: crosstown-online-store
+    rules:
+      # --- A-12a · the store stopped answering correctly ---------------------
+      # SLO-S1, and this is the LOAD-BEARING half of the signal.
+      #
+      # WHY A CANARY WHEN THERE IS ALREADY A KEY COUNT (A-12b). Because the
+      # count cannot see the failure that reaches a rider. Measured: the
+      # transformer depends on 4,646 of 57,688 keys (8.054%), and zone 132's
+      # centroid is ONE key — losing exactly the key that breaks every JFK quote
+      # moves DBSIZE by 0.0017%. So the count is coarse by construction and the
+      # claim that matters is about an ANSWER (gotcha #59, applied to a store).
+      #
+      # `== 0` IS A PROPERTY, NOT A THRESHOLD. There is no number to choose:
+      # each check either held or did not. $labels.check names which, which is
+      # why these are four series and not one boolean.
+      - alert: OnlineStoreCanaryFailing
+        expr: |
+          (taxi_online_store_canary{job="taxi-store-watch"} == 0)
+          and on()
+          (time() - taxi_online_store_last_run_timestamp_seconds{job="taxi-store-watch"} < 1800)
+        for: 2m
+        labels:
+          severity: critical
+          signal: A-12
+          slo: SLO-S1
+        annotations:
+          summary: "The online store failed canary check {{ $labels.check }} — quotes built on it are refused or wrong"
+          why: >-
+            docs/slo_serving.md section 9. Four claims, one of them negative:
+            store_reachable (DBSIZE was readable at all), zone_answers (zone 132
+            returns a centroid), nonplace_declines (zone 264 returns NULL and not
+            an error — a store that answered for a non-place would be inventing a
+            location, and a presence-only check passes against a server that
+            answers every question with the same row), calendar_answers
+            (2019-07-04 returns its holiday flags — the half whose failure the
+            transformer converts into a 422). Critical because the failure is
+            silent: the store's null is indistinguishable from the correct null
+            of TLC's two non-places.
+          sustain: >-
+            for 2m. This condition has no transient form except one: `feast
+            materialize` writes into an empty store over ~7 seconds (recorded in
+            automation/runs/m8-online/materialize.json), and a reader that ran
+            mid-write would see a partial store. 2m is an order of magnitude over
+            the only benign cause — A-11's argument about a pod replacement.
+          freshness: >-
+            The `and on() (time() - ..._last_run_timestamp_seconds < 1800)` is
+            load-bearing and its cost is named rather than netted out. This
+            reader has NO SCHEDULER (M9 legislates no new Flyte trigger, F-058;
+            the story adds no image and no CronJob), so it runs when
+            `make store-watch` is run — by the drill, by `make verify-m9`, by an
+            operator. A reading older than 30 minutes therefore makes this rule
+            INACTIVE rather than falsely green. What bounds the gap: A-13 fires
+            whether or not anybody is pushing, `verify-m9` asks the store live at
+            every crossing, and the fault is not fast-moving (noeviction plus a
+            settled source means a lost store stays lost).
+          runbook: >-
+            Look at $labels.check first. `store_reachable` 0 means the redis pod
+            or the operator's kubectl — `kubectl -n feast get pod,pvc`. Any other
+            check 0 with store_reachable 1 means the store is up and wrong or
+            empty: `kubectl -n feast exec deploy/redis -- redis-cli DBSIZE`, then
+            the one-command repair is `make feast-materialize` (~7 s, and it
+            reads the window back off the sources). The CHAMPION's own wire is
+            unaffected by any of this — it reads committed tables and never the
+            store.
+
+      # --- A-12b · the store holds less than its sources define --------------
+      # SLO-S1, the coarse half — and the one that closes "stale".
+      #
+      # THERE IS NO NUMBER ON EITHER SIDE OF THIS COMPARISON, and that is the
+      # point. Feast writes one key per distinct entity key per view, so the
+      # expected count is derivable from data/feast/*.parquet — three witnesses
+      # agreed at 57,688 (the derivation, the M8-S4 materialization record, the
+      # live server). The reader pushes both sides on the same run, so the rule
+      # self-updates when `make feast-sources` legitimately changes the sources,
+      # and the window between a source change and the next `make
+      # feast-materialize` is EXACTLY the stale state this rule exists to catch.
+      #
+      # WHY "STALE" IS NOT A CLOCK HERE. The data is settled — 2019 windows, a
+      # 2019 shapefile, a holiday table to 2030 — so a store filled in August
+      # 2026 is exactly as correct in 2027. A clock-age bar on its contents would
+      # be a number chosen to avoid paging rather than to catch anything.
+      - alert: OnlineStoreIncomplete
+        expr: |
+          (
+            taxi_online_store_keys{job="taxi-store-watch"}
+            < on(store) group_left()
+            taxi_online_store_keys_expected{job="taxi-store-watch"}
+          )
+          and on()
+          (time() - taxi_online_store_last_run_timestamp_seconds{job="taxi-store-watch"} < 1800)
+        for: 2m
+        labels:
+          severity: warning
+          signal: A-12
+          slo: SLO-S1
+        annotations:
+          summary: "The online store holds fewer keys than its published sources define"
+          why: >-
+            docs/slo_serving.md section 9.3. A store is stale when it disagrees
+            with the sources it was filled from. Warning and not critical because
+            A-12a is the half that can see a rider-visible loss: the
+            transformer's whole dependency is 8.054% of the key count, so this
+            rule can be silent while every JFK quote is broken. It catches the
+            complementary case — a partial or interrupted materialization, and a
+            sources change that was never materialized.
+          sustain: >-
+            for 2m, A-12a's argument exactly: the only benign transient is a
+            reader that ran during the ~7 second refill.
+          blind_spot: >-
+            A store materialized from the WRONG sources has the right key count
+            and passes both rules while every value is wrong. Nothing cheap
+            catches that; `make feast-online-parity` (100 declared pairs, bar
+            EXACT) is the instrument that does, and it is a gate-time check
+            rather than a watchdog.
+
+      # --- A-13 · the watchdog's surface is gone -----------------------------
+      # SLO-S2, and it is A-11's argument transferred whole, one board along.
+      #
+      # A-12's freshness clause is STRUCTURALLY UNABLE to see its own series
+      # disappear: `time() - stamp < 1800` over zero series is zero series, not a
+      # stale reading. So a gateway that lost its store makes A-12 go quiet and
+      # the panel go blank — which is what a healthy store looks like. F-050
+      # measured that exact event on this machine three times in 24 hours.
+      #
+      # THIS RULE IS ONLY HONEST BECAUSE THE GATEWAY HAS A VOLUME, and the
+      # precondition is RE-CHECKED rather than inherited: the headroom leg reads
+      # the live pushgateway's args for --persistence.file and its PVC for Bound.
+      # On an emptyDir this fires on every ordinary host reboot and teaches its
+      # reader to ignore it.
+      - alert: OnlineStoreWatchdogAbsent
+        expr: |
+          absent(taxi_online_store_last_run_timestamp_seconds{job="taxi-store-watch"})
+        for: 10m
+        labels:
+          severity: warning
+          signal: A-13
+          slo: SLO-S2
+        annotations:
+          summary: "No online-store watchdog series exist at all — the surface is gone, not quiet"
+          why: >-
+            docs/slo_serving.md section 9 / SLO-S2. The gateway is a bulletin
+            board: a pushed metric persists until it is overwritten or the store
+            is lost. A-12 watches the ANSWERS and therefore requires the answers
+            to exist; this rule watches the existence. Without it, losing the
+            gateway's volume silences the store watchdog completely and renders
+            identically to a store nobody has had to worry about.
+          sustain: >-
+            for 10m, A-11's number with its argument re-checked rather than
+            assumed. A pod replacement re-serves the same series as soon as it is
+            Ready — measured at ~13 s in
+            automation/runs/m8-drift/persistence.json — so 10m is roughly an
+            order of magnitude of headroom over the only benign cause.
+          runbook: >-
+            `kubectl -n monitoring get pod,pvc | grep pushgateway` first. If the
+            volume survived and the pod is Ready, the series were deleted and
+            that is worth understanding. The repair is to re-run the reader:
+            `make store-watch` against a port-forwarded gateway. Do NOT silence
+            this by deleting the rule — an absent board and a healthy store
+            render identically.

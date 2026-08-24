@@ -1,0 +1,54 @@
+{
+  "story": "M9-S2",
+  "leg": "headroom \u2014 measured BEFORE docs/slo_serving.md \u00a79 argues any bar",
+  "recorded_at": "2026-08-23T13:55:26Z",
+  "expected_keys": {
+    "per_view": {
+      "zone_static": 263,
+      "calendar_day_flags": 4383,
+      "od_window_stats": 46938,
+      "pu_hour_window_stats": 6104
+    },
+    "total": 57688,
+    "transformer_dependency_keys": 4646,
+    "transformer_dependency_share": 0.08053668007211205,
+    "derived_from": "count(distinct <entity keys>) over data/feast/*.parquet"
+  },
+  "live_store": {
+    "pod": "redis-586db48584-sfd97",
+    "dbsize": 57688,
+    "maxmemory_policy": "noeviction",
+    "maxmemory_bytes": 536870912
+  },
+  "materialization": {
+    "recorded_at": "2026-08-21T07:52:13Z",
+    "dbsize": 57688,
+    "elapsed_seconds": 7,
+    "used_memory_human": "14.32M",
+    "window": {
+      "start": "2019-01-01T00:00:00",
+      "end": "2019-07-01T00:00:01",
+      "derived_from": "max/min event_timestamp across data/feast/*.parquet"
+    }
+  },
+  "three_witnesses_agree": true,
+  "reader_in_front": {
+    "healthy_minutes": 39.00193715359812,
+    "healthy_model_version": "2",
+    "uncovered_date_status": 422,
+    "uncovered_date_error_class": "StoreCoverageError (QuoteRefused, http_status 422)",
+    "unreachable_store_status": 503,
+    "unreachable_error_class": "FeatureStoreUnavailable",
+    "source": "automation/runs/m8-transformer/transformer-deploy.json + src/taxi_mlops/serving/{feature_store,transformer}.py"
+  },
+  "gateway": {
+    "pushgateway_args": "[\"--persistence.file=/data/pushgateway.data\",\"--persistence.interval=10s\"]",
+    "persistence_file_flag": true,
+    "monitoring_pvcs": "prometheus-prometheus-pushgateway=Bound prometheus-server=Bound"
+  },
+  "gateway_persistence_drill": {
+    "record": "automation/runs/m8-drift/persistence.json",
+    "survived_pod_delete": true
+  },
+  "issues_no_verdict": "This leg measures. Every bar argued from it lives in docs/slo_serving.md \u00a79, and every rule implementing one lives in infra/monitoring/alerting_rules.yml."
+}

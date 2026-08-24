@@ -717,3 +717,198 @@ month it is asked for, and the drift memo cites months by name.
   follow the world, so a legitimately-changed world keeps alerting until someone
   retrains and re-declares it. That is intended. An alert that silences itself by
   redefining normal is the drift-monitoring failure mode.
+
+## 9. The online-store targets (M9-S2) — argued from the store's own sources, before the drill
+
+M8-S4's three legs each ended with the same residual sentence, and none of them
+closed it: **there is no alert on an empty or stale online store.** This section
+is the argument; `infra/monitoring/alerting_rules.yml` is where it becomes true.
+
+The order is M8 law 4, ninth inheritance and checkable from git rather than
+asserted here: `automation/runs/m9-store-watch/headroom.json` was measured
+first, this section was written from it, both were committed, and only then did
+the drill run that first crosses a bar.
+
+### 9.1 What makes this store different from every other thing this stack watches
+
+The Feast online store is the only dependency on the quote path whose failure is
+**silent by construction**. An all-null store yields an all-NaN geometry table,
+and **NaN is the correct answer for TLC zones 264/265** — they have no centroid
+by design (DR-04 condition 1), they are ~1% of every split, and `264 -> 264` is
+the largest single OD "route" in the data. So no client can refuse a null on
+sight: the same value that means *this zone is not a place* also means *the store
+is empty*. That is gotcha #78's disease with the panel removed entirely, and it
+is why the signal has to be a watchdog and not a guard in the request path.
+
+Two facts bound how bad that can get, and both are measured:
+
+* the store's **only rider-facing reader** is the transformer (M8-S4 leg 3), and
+  it reads **two** of the four views — `zone_static` and `calendar_day_flags`
+  (F-059 keeps the borough dictionary and the airport constant on the committed
+  side of the wall);
+* the champion's own wire never touches the store at all. A store failure cannot
+  reach the rider path of record.
+
+### 9.2 The headroom, measured before any bar was written
+
+`automation/runs/m9-store-watch/headroom.json`, 2026-08-23. Feast writes one
+Redis key per distinct entity key per view, so the store's size has a source of
+truth that is not itself:
+
+| view | distinct entity keys | share | read by the transformer |
+|---|---:|---:|---|
+| `zone_static` | 263 | 0.46% | **yes** |
+| `calendar_day_flags` | 4,383 | 7.60% | **yes** |
+| `od_window_stats` | 46,938 | 81.37% | no |
+| `pu_hour_window_stats` | 6,104 | 10.58% | no |
+| **total (derived from `data/feast/*.parquet`)** | **57,688** | | |
+
+**Three witnesses agree at 57,688**: the count derived from the published
+sources, the count `automation/runs/m8-online/materialize.json` recorded on
+2026-08-21, and the live `DBSIZE` read off the running server. The derivation is
+`count(distinct <entity keys>)` per view — no number in this table is typed.
+
+Two consequences decide the whole design.
+
+**(a) The key count cannot see the loss that would actually hurt a rider.** The
+transformer's entire dependency is **4,646 keys, 8.054% of the store**. A store
+that lost `zone_static` and `calendar_day_flags` completely still reads 53,042
+keys — 92% of normal — and every quote it backs is refused or wrong. Worse: zone
+132's centroid is **one key of 57,688**, so losing exactly the key that breaks
+every JFK quote moves the count by 0.0017%. Any bar on the count is therefore a
+*coarse* signal by construction, and something else has to be the load-bearing
+one.
+
+**(b) There is no partial-loss mechanism.** `maxmemory-policy` is `noeviction`
+(ADR-012 — a correctness setting, not tuning), the store uses 14.32 MiB of a
+512 MB cap, and `feast materialize` either completes or fails. So the realistic
+population is bimodal — full, or gone — and a bar placed anywhere strictly inside
+the gap catches the same events. That is an argument for **not choosing a number
+at all**.
+
+### 9.3 "Stale" does not mean what it means everywhere else in this document
+
+SLO-D3 asks whether the drift *job* has run recently, and 40 days is argued from
+a monthly cadence. Applied here that question has no answer, because **the data
+in this store is settled**: the materialized windows are 2019-01..2019-07, the
+zone centroids are TLC's 2019 shapefile, and the holiday table runs to 2030. A
+store filled in August 2026 is exactly as correct in 2027. A clock-age bar on its
+*contents* would be a number chosen to avoid paging rather than to catch anything.
+
+So this section defines stale differently, and the definition is the useful part:
+
+> **A store is stale when it disagrees with the sources it was filled from.**
+
+That is a comparison between two quantities the watchdog can both measure — the
+live `DBSIZE` and the count derived from `data/feast/*.parquet` — and it needs
+**no threshold whatsoever**. It self-updates: a legitimate `make feast-sources`
+that grows or shrinks the sources moves both sides together as soon as
+`make feast-materialize` runs, and the window in between — sources changed, store
+not refilled — is *exactly* the stale state this rule exists to catch.
+
+### SLO-S1 · integrity — *the online store answers what its sources say it holds*
+
+**Two rules, one signal (A-12)**, the A-5 precedent (a signal whose failure has
+two shapes that need two expressions). Neither carries a bar on a measured
+quantity.
+
+**A-12a `OnlineStoreCanaryFailing` — the load-bearing half.** Four claims about
+what the store answers, checked on every run of the reader and pushed as
+`taxi_online_store_canary{check=...}`:
+
+| check | claim | why this one |
+|---|---|---|
+| `store_reachable` | `DBSIZE` was readable at all | see below — this is the one that is reported rather than withheld |
+| `zone_answers` | zone **132** returns a non-null centroid | a *place* must have a location. This is the JFK zone the whole program's records quote — `39.0019` minutes is measured on a trip out of it |
+| `nonplace_declines` | zone **264** returns **null**, and not an error | the negative half. A store that answered for a non-place would be inventing a location, and a check that only asserted presence would pass against a server answering every question with the same row |
+| | | **and its measured limit:** on a *totally empty* store this check reads **1**, because "correctly declines" and "has nothing to decline with" are the same answer. Measured in the drill, and it is why the two POSITIVE checks are the ones that fire — a canary of negatives alone would be silent on the emptiest possible store |
+| `calendar_answers` | **2019-07-04** returns its holiday flags | the half that actually refuses the rider: `calendar_from_store` RAISES on an unanswered date (F-019 carried onto the store's wire), so this is the claim whose failure the transformer converts into a 422 |
+
+The expression is `== 0` — a property, not a threshold. `$labels.check` names
+which claim failed, which is why the four are four series and not one boolean.
+
+**Why `store_reachable` is a reported 0 and not a refusal to push.**
+`scripts/push_serving_version.py` refuses to push when either side is unreadable,
+and it is right to: an unknown served version is not a mismatch, so a placeholder
+would page an on-call for an unreadable endpoint. **The rule inverts here.** If
+the Redis pod is gone, *"I could not read `DBSIZE`"* is not a gap in the
+measurement — it **is** the measurement. A reader that withheld it would leave
+the last healthy reading on the board to go quietly stale, which is precisely the
+failure this signal exists to prevent. The honest cost, named rather than netted
+out: a broken `kubectl` on the operator's own laptop reads the same as a broken
+store. That is acceptable because the reader is operator-invoked (below) — a
+laptop that cannot reach the cluster is not silently running this in a loop.
+
+**A-12b `OnlineStoreIncomplete` — the coarse half, and the one that closes
+"stale".** `taxi_online_store_keys < taxi_online_store_keys_expected`: the store
+holds fewer keys than its own sources define. Both sides are measured by the same
+reader on the same run; the right-hand side is derived from the committed parquet
+by `count(distinct <entity keys>)`. **There is no number on either side of that
+comparison**, which is the strongest form §9.2(b) permits.
+
+**Both rules sustain `for: 2m`, and both carry a freshness clause of `1800`
+seconds** (A-4's window, §8.5). The sustain is not the usual "don't page for a
+transient" — this condition has no transient form in the sense A-4 means, but it
+has exactly one: `feast materialize` writes into an empty store over ~7 seconds
+(recorded), and a reader that ran mid-write would see a partial count. 2m is an
+order of magnitude over the only benign cause, which is the same argument A-11's
+10m makes about a pod replacement.
+
+**The freshness clause, and the honest cost it buys.** Neither rule may fire on a
+reading older than 30 minutes. That is A-4's landed shape and it is here for
+A-4's reason: **this reader has no scheduler.** M9 legislates no new Flyte
+trigger (F-058), the store watchdog adds no image and no CronJob, so the reader
+runs when `make store-watch` is run — by the drill, by `make verify-m9`, and by
+an operator. A pushed reading therefore goes stale, and the clause makes a stale
+reading **inactive** rather than falsely green.
+
+That is a real gap and it is named rather than netted out: *while nobody runs the
+reader, A-12 cannot fire.* Three things bound it, and none of them is a promise
+that the gap is small:
+
+1. **A-13 (below) still fires** — the surface disappearing is caught whether or
+   not anybody is pushing;
+2. **`make verify-m9` asks the store the same question live at every crossing**,
+   which is the check that actually runs (the same complement `verify-m6` is to
+   A-3's client half);
+3. **the failure is not fast-moving.** A store that lost its keys stays lost —
+   `noeviction` and a settled source mean nothing refills it by accident — so a
+   reading taken hours late still reports the same fault.
+
+**Deliberately NOT shipped: a staleness rule on the store's reading.** A
+staleness bar can only be argued from a cadence. This reader has none by design,
+so any number would be chosen to avoid paging rather than to catch anything — and
+shipping one would put a page on the calendar for the design instead of for a
+fault. The absence is recorded here rather than left to be inferred.
+
+### SLO-S2 · existence — *the watchdog's surface is there at all* (A-13)
+
+**`OnlineStoreWatchdogAbsent`**:
+`absent(taxi_online_store_last_run_timestamp_seconds{job="taxi-store-watch"})`,
+**`for: 10m`**, and it exists for the reason F-050 measured on this machine three
+times in twenty-four hours: **A-12's freshness clause is structurally unable to
+see its own series disappear.** `time() - stamp < 1800` over zero series is zero
+series, not a stale reading — so a gateway that lost its store makes A-12 go
+quiet and the panel go blank, which is what a healthy store looks like. A-10 and
+A-11 are the same pair one board along, and the argument transfers whole.
+
+**The sustain, 10m, is A-11's number and it is inherited with its precondition
+re-checked, not assumed.** The headroom leg reads the live pushgateway back:
+`--persistence.file` is present in its args and its PVC is `Bound`. On an
+emptyDir this rule would fire on every ordinary host reboot and teach its reader
+to ignore it; on the volume it fires when somebody *deleted* something.
+
+### 9.4 What these targets deliberately do not cover
+
+* **A wrong store rather than an empty one.** A store materialized from the wrong
+  sources has the right key count and answers every canary correctly while every
+  *value* is wrong. Nothing here catches that, and nothing cheap can:
+  `make feast-online-parity` (100 declared pairs, bar EXACT) is the instrument
+  that would, and it is a gate-time check, not a watchdog.
+* **The champion's wire.** It reads committed tables and cannot be affected by
+  any of this. Said out loud because an on-call reading A-12 at 3am needs to know
+  the rider path of record is not down.
+* **Redis itself.** No native `/metrics` exporter was added (the costed option
+  (i) in the M9 kickoff). The reader asks the questions an exporter cannot —
+  `DBSIZE` is one of them, but *does zone 132 still have a location* is not a
+  quantity Redis exports about itself.

@@ -25,8 +25,20 @@
 # the source stamps already follow. A typed `2019-07-01` would silently stop
 # materializing the day `make feast-sources` gains a seventh window.
 #
+# WHY THERE IS A --no-record FLAG (M9-S2). This command is also the UNDO for the
+# store watchdog's drill, and an undo that rewrites a tracked record belonging to
+# an earlier milestone is a side effect nobody asked for: the first run of that
+# drill re-dated `automation/runs/m8-online/materialize.json` from 2026-08-21 to
+# the drill's own minute, while `docs/slo_serving.md` §9 and the M9 headroom
+# record both CITE that file's 2026-08-21 reading. The refill is right; writing
+# M8's evidence over it is not. Same family as gotcha #48 (a launcher truncating
+# the log of the run it was resuming) and F-053 (a backup running a restore
+# drill) — when a command is reused as somebody else's repair, audit what it
+# does to state that already exists.
+#
 #   scripts/feast_materialize.sh              apply, forward, materialize, record
 #   scripts/feast_materialize.sh --dry-run    print the derived window, write NOTHING
+#   scripts/feast_materialize.sh --no-record  refill, and leave the record alone
 #
 # It touches no registry, no alias, no data tree, and no settled byte: its only
 # mutation is the content of a store whose whole state class is REGENERABLE.
@@ -45,8 +57,10 @@ RECORD_DIR="automation/runs/m8-online"
 RECORD="$RECORD_DIR/materialize.json"
 
 DRY_RUN=0
+WRITE_RECORD=1
 case "${1:-}" in
   --dry-run) DRY_RUN=1 ;;
+  --no-record) WRITE_RECORD=0 ;;
   "") ;;
   *) echo "unknown argument: $1" >&2; exit 2 ;;
 esac
@@ -112,6 +126,12 @@ if [[ "$KEYS" -eq 0 ]]; then
   echo "[materialize]        An empty online store answers every lookup with null, which is" >&2
   echo "[materialize]        indistinguishable from a feature that has no value (F-050's shape)." >&2
   exit 1
+fi
+
+if [[ "$WRITE_RECORD" == "0" ]]; then
+  echo "[materialize] --no-record: the store is refilled and $RECORD is untouched"
+  echo "[materialize] DONE"
+  exit 0
 fi
 
 mkdir -p "$RECORD_DIR"

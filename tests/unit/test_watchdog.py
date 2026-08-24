@@ -184,15 +184,52 @@ def test_a_fork_parks_the_chain_and_is_never_auto_resumed(tmp_path):
 def test_a_failed_detached_run_wakes_someone(tmp_path):
     tmp_path, env = _sandbox(tmp_path)
     _prime_po_hash(tmp_path, env)
-    (tmp_path / "automation" / "runs" / "confirmation.status").write_text(
-        "FAILED 2 2026-08-17T15:10:00Z\n"
-    )
+    status = tmp_path / "automation" / "runs" / "confirmation.status"
+    status.write_text("FAILED 2 2026-08-17T15:10:00Z\n")
 
     _run(tmp_path, env)
 
     assert "RED run-failed-confirmation" in _wlog(tmp_path)
     assert "FAILED" in _toasts(tmp_path)
     assert not (tmp_path / "automation" / "logs" / "pending_successor").exists()
+    # The ack mirrors the KILLED branch's corpse-rewrite: without it, this one
+    # status file blocks the heal path on EVERY future pass — which is exactly
+    # how a 4-day-old 'FAILED 2' from M7-S4 turned a transient API-error death
+    # into a permanently dead chain on 2026-08-24. The original line survives
+    # inside the ack, and field 2 is still the exit code for anything reading
+    # it (retrain_prediction_check.py does, loosely).
+    acked = status.read_text()
+    assert acked.startswith("FAILED-ACKED 2 "), "one alarm, then stop blocking the heal path"
+    assert "FAILED 2 2026-08-17T15:10:00Z" in acked, "the original line must survive the ack"
+
+
+def test_an_acked_failure_stops_blocking_the_heal_path(tmp_path):
+    """The 2026-08-24 deadlock, replayed: alarm once, then the chain comes back.
+
+    The full sequence after a FAILED run is the KILLED branch's exact trace:
+    pass 1 alarms and acks; pass 2 reads red()'s own AWAITING_PO append as a
+    fork and alarms that; pass 3 sees the fork hash settle (toast suppressed);
+    pass 4 heals. Four passes = ~30 minutes of park on the real cadence, then
+    the chain is alive again — against FOREVER before the ack existed.
+    """
+    tmp_path, env = _sandbox(tmp_path)
+    _prime_po_hash(tmp_path, env)
+    (tmp_path / "automation" / "runs" / "confirmation.status").write_text(
+        "FAILED 2 2026-08-17T15:10:00Z\n"
+    )
+
+    for _ in range(4):
+        _run(tmp_path, env)
+
+    # red() writes two log lines per firing (the message, then "toast
+    # delivered"), so the alarm count is the toast record's, not the log's.
+    assert _toasts(tmp_path).count("Chain: detached run FAILED") == 1, (
+        "one failure must alarm exactly once, not once per pass"
+    )
+    assert "HEAL — [chain] scheduled executor" in _wlog(tmp_path)
+    assert (tmp_path / "automation" / "logs" / "pending_successor").exists(), (
+        "an acked failure kept blocking the heal path — the 2026-08-24 deadlock is back"
+    )
 
 
 def test_a_killed_detached_run_is_noticed_and_not_silently_forgotten(tmp_path):
@@ -237,19 +274,26 @@ def test_restarting_something_that_keeps_dying_stops_and_asks_for_help(tmp_path)
 
 
 def test_the_same_red_does_not_toast_every_ten_minutes(tmp_path):
-    """A notifier that repeats itself gets muted, and a muted alarm is none."""
+    """A notifier that repeats itself gets muted, and a muted alarm is none.
+
+    This used to hold a FAILED status in front of the watchdog twice — a
+    condition that no longer recurs, because a failure acks itself after one
+    alarm (the 2026-08-24 fix). The recurring condition here is the daily cap,
+    which persists exactly as long as the count file does, with the toast
+    state primed to say this key rang five minutes ago.
+    """
     tmp_path, env = _sandbox(tmp_path)
     _prime_po_hash(tmp_path, env)
-    (tmp_path / "automation" / "runs" / "c.status").write_text("FAILED 2 x\n")
+    today = time.strftime("%Y-%m-%d")
+    (tmp_path / "automation" / "logs" / f"count_{today}").write_text("40\n")
+    (tmp_path / "automation" / "logs" / "watchdog_toast_state").write_text(
+        f"daily-cap {int(time.time()) - 300}\n"
+    )
 
     _run(tmp_path, env)
-    first = _toasts(tmp_path).count("FAILED")
-    _run(tmp_path, env)
-    second = _toasts(tmp_path).count("FAILED")
 
-    assert first == 1
-    assert second == 1, "the second look at the same failure rang the alarm again"
     assert "toast suppressed" in _wlog(tmp_path)
+    assert _toasts(tmp_path) == "", "the second look at the same condition rang the alarm again"
 
 
 # --------------------------------------------------------------------------
