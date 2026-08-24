@@ -37,6 +37,24 @@ ROLLBACK_RECORD = REPO / "automation/runs/m6-rollback/alias_rollback.json"
 ATTEMPT1 = REPO / "automation/runs/m6-canary/attempt1-ingress-name-collision/release_drill.json"
 
 
+def _record(path: Path) -> dict:
+    """Read a tracked drill record, and REFUSE if it is not there — F-054.
+
+    These reads used to sit under `skipif(not RECORD.exists())`, which made the
+    in-image run green by SKIPPING. On the host that is the weaker answer: an
+    absent record means the drill was never run, and a silent skip is how a check
+    stops being one. The records are git-tracked from M5-S1 (F-029 option A), so
+    a fresh clone has them and the only thing this assertion can catch is a
+    deleted or lost record — loudly. Where a test can run is now the marker's job
+    (`needs_records`, F-047); whether it must pass is not negotiable.
+    """
+    assert path.exists(), (
+        f"{path.relative_to(REPO)} is a TRACKED record (F-029 option A) — its absence "
+        "means it was deleted or lost, not that this clone lacks local artifacts"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _calls(path: Path) -> set[str]:
     names: set[str] = set()
     for node in ast.walk(ast.parse(path.read_text())):
@@ -235,14 +253,14 @@ def test_neither_manifest_carries_a_usable_placeholder() -> None:
 # ------------------------------------------------------- derived, not typed --
 
 
-@pytest.mark.skipif(not DRILL_RECORD.exists(), reason="the release drill has not been run")
+@pytest.mark.needs_records
 def test_the_recorded_split_agrees_with_the_weight_the_drill_applied() -> None:
     """The record must reconcile with the code that produced it, not with a number.
 
     The applied weights are read out of the drill's own events and the tolerance
     out of the module on disk, so loosening either shows up here.
     """
-    record = json.loads(DRILL_RECORD.read_text())
+    record = _record(DRILL_RECORD)
     tolerance = float(
         re.search(r"^SHARE_TOLERANCE_POINTS\s*=\s*([\d.]+)", DRILL.read_text(), re.M).group(1)
     )
@@ -262,10 +280,10 @@ def test_the_recorded_split_agrees_with_the_weight_the_drill_applied() -> None:
     assert record["phases"]["reverted"]["ingress"]["canary_share_pct"] == 0.0
 
 
-@pytest.mark.skipif(not DRILL_RECORD.exists(), reason="the release drill has not been run")
+@pytest.mark.needs_records
 def test_the_two_witnesses_agree_in_the_record() -> None:
     """A split claimed by the router and denied by the pods is not a measurement."""
-    record = json.loads(DRILL_RECORD.read_text())
+    record = _record(DRILL_RECORD)
     for phase in ("canary_10", "canary_100"):
         ingress = record["phases"][phase]["ingress"]["canary_share_pct"]
         pods = record["phases"][phase]["pods"]["canary_share_pct"]
@@ -275,9 +293,9 @@ def test_the_two_witnesses_agree_in_the_record() -> None:
         )
 
 
-@pytest.mark.skipif(not DRILL_RECORD.exists(), reason="the release drill has not been run")
+@pytest.mark.needs_records
 def test_the_revert_is_inside_the_budget_the_drill_declares() -> None:
-    record = json.loads(DRILL_RECORD.read_text())
+    record = _record(DRILL_RECORD)
     budget = float(
         re.search(r"^REVERT_BUDGET_SECONDS\s*=\s*([\d.]+)", DRILL.read_text(), re.M).group(1)
     )
@@ -288,10 +306,10 @@ def test_the_revert_is_inside_the_budget_the_drill_declares() -> None:
     )
 
 
-@pytest.mark.skipif(not ATTEMPT1.exists(), reason="the failed first attempt is not kept")
+@pytest.mark.needs_records
 def test_the_failed_first_attempt_is_kept_with_its_cause() -> None:
     """The M5-S4 `attempt1-at-the-ceiling` precedent, third milestone running."""
-    record = json.loads(ATTEMPT1.read_text())
+    record = _record(ATTEMPT1)
     assert record["verdict"] == "FAIL"
     assert "F-039" in record["why_this_run_is_kept"]["cause"]
     assert record["phases"]["canary_10"]["ingress"]["canary_share_pct"] == 0.0, (
@@ -300,9 +318,9 @@ def test_the_failed_first_attempt_is_kept_with_its_cause() -> None:
     )
 
 
-@pytest.mark.skipif(not ROLLBACK_RECORD.exists(), reason="the rollback has not been rehearsed")
+@pytest.mark.needs_records
 def test_the_rollback_record_ends_where_it_started() -> None:
-    record = json.loads(ROLLBACK_RECORD.read_text())
+    record = _record(ROLLBACK_RECORD)
     end = record["end_state"]
     assert end["alias_version"] == "2" and end["features_version"] == "v2"
     assert end["configs_train_yaml_sha_before"] == end["configs_train_yaml_sha_after"], (
@@ -312,7 +330,7 @@ def test_the_rollback_record_ends_where_it_started() -> None:
     assert record["verdict"] == "PASS"
 
 
-@pytest.mark.skipif(not ROLLBACK_RECORD.exists(), reason="the rollback has not been rehearsed")
+@pytest.mark.needs_records
 def test_the_coherence_check_was_green_at_BOTH_states() -> None:
     """The point of the whole rehearsal, as a test.
 
@@ -320,7 +338,7 @@ def test_the_coherence_check_was_green_at_BOTH_states() -> None:
     `configs/train.yaml: features.version`. Green at v2 alone is satisfiable by a
     literal; green at v1 as well is what makes it a coherence check (F-017).
     """
-    record = json.loads(ROLLBACK_RECORD.read_text())
+    record = _record(ROLLBACK_RECORD)
     assert record["at_the_half_way_state"]["coherence_green"]
     assert record["at_the_end_state"]["coherence_green"]
     assert record["at_the_half_way_state"]["exit_code"] != 0, (
@@ -347,7 +365,7 @@ def test_the_runbook_declares_the_rollback_rehearsed_and_cites_a_record() -> Non
     )
 
 
-@pytest.mark.skipif(not ROLLBACK_RECORD.exists(), reason="the rollback has not been rehearsed")
+@pytest.mark.needs_records
 def test_every_rollback_number_the_runbook_quotes_is_in_the_record() -> None:
     """The M5-S5 shape: a document quoting a number no record holds is fiction.
 
@@ -356,7 +374,7 @@ def test_every_rollback_number_the_runbook_quotes_is_in_the_record() -> None:
     the comparison is on whole TOKENS, because a bare substring search would find
     `14` inside `14.53`.
     """
-    record = json.loads(ROLLBACK_RECORD.read_text())
+    record = _record(ROLLBACK_RECORD)
     body = re.search(r"##\s*4\..*?(?=\n---|\n##\s*5\.)", RUNBOOK.read_text(), re.S).group(0)
     tokens = set(re.findall(r"\d+\.\d+", body))
     for label, value in (
@@ -372,9 +390,9 @@ def test_every_rollback_number_the_runbook_quotes_is_in_the_record() -> None:
         )
 
 
-@pytest.mark.skipif(not DRILL_RECORD.exists(), reason="the release drill has not been run")
+@pytest.mark.needs_records
 def test_every_canary_number_the_runbook_quotes_is_in_the_record() -> None:
-    record = json.loads(DRILL_RECORD.read_text())
+    record = _record(DRILL_RECORD)
     body = re.search(r"###\s*4\.5.*?(?=\n---|\n##\s*5\.)", RUNBOOK.read_text(), re.S).group(0)
     tokens = set(re.findall(r"\d+\.\d+", body))
     for label, value in (

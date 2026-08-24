@@ -23,14 +23,17 @@ this suite (`REPO / "automation/runs/x.json"` and `REPO / "automation" / "runs"`
 and the first version of this check saw only one of them (gotcha #46's family,
 found by running it).
 
-**A second, older answer is accepted and it is not endorsed here.** Twelve tests
-across `test_canary_and_rollback.py` and `test_shadow_and_spike.py` guard their
-record reads with `skipif(not RECORD.exists())`, which also makes the in-image run
-green — by skipping. That is the weaker shape: on the HOST an absent record means
-a drill was never run, and a silent skip is how a check stops being one (F-029
-converted exactly such a skip into an assertion at M5-S1). Rewriting twelve tests
-belonging to M6's stories is not this leg's diff, so the guard accepts the older
-form and the inconsistency is recorded as **F-054** rather than blessed by silence.
+**The second, older answer is GONE — F-054, closed at M9-S3.** Twelve tests
+across `test_canary_and_rollback.py` and `test_shadow_and_spike.py` used to guard
+their record reads with `skipif(not RECORD.exists())`, which also makes the
+in-image run green — by skipping. That is the weaker shape: on the HOST an absent
+record means a drill was never run, and a silent skip is how a check stops being
+one (F-029 converted exactly such a skip into an assertion at M5-S1, and the
+deciding fact here is the same one — those records are git-tracked, so a fresh
+clone HAS them and the assertion can only catch a deleted or lost record). This
+module used to ACCEPT that form and argue against it; it now REFUSES it, and the
+refusal is derived from the AST across every test file rather than enumerated
+against the two that happened to carry it.
 """
 
 from __future__ import annotations
@@ -120,8 +123,11 @@ def _record_reading_tests(path: Path) -> set[str]:
 def _skip_guarded(path: Path) -> set[str]:
     """Tests whose record read is guarded by a `skipif` on that record's existence.
 
-    The older answer to the same problem — accepted by the coverage check, argued
-    against in this module's docstring, and recorded as F-054.
+    The older answer to the same problem. It used to be subtracted from the
+    coverage check — i.e. accepted — and is now what `test_no_record_read_is_
+    guarded_by_a_skip` refuses (F-054). Decorators only: this suite discusses the
+    old form in prose, and a needle matching words would match the argument
+    against it (gotcha #99).
     """
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -155,12 +161,32 @@ def test_every_test_that_reads_a_tracked_record_carries_the_marker() -> None:
     unmarked = {
         path.name: sorted(missing)
         for path in TEST_FILES
-        if (missing := _record_reading_tests(path) - _marked(path) - _skip_guarded(path))
+        if (missing := _record_reading_tests(path) - _marked(path))
     }
     assert not unmarked, (
         "these tests read a tracked record under automation/runs/ but carry no "
         "@pytest.mark.needs_records, so they will fail inside the task image where "
         f"those records correctly do not exist: {unmarked}"
+    )
+
+
+def test_no_record_read_is_guarded_by_a_skip() -> None:
+    """F-054: the marker names WHERE a test runs; it may not decide whether it passes.
+
+    `skipif(not RECORD.exists())` and `@pytest.mark.needs_records` both make the
+    in-image run green, and they are not the same answer. On the host an absent
+    record means the drill was never run, and the skip form reports that as a
+    pass. The records are tracked (F-029 option A), so the assertion form costs a
+    fresh clone nothing and catches exactly one new thing: a deleted record.
+
+    Derived across every test file rather than enumerated against the two that
+    carried the old form — a check listing its own known offenders goes green the
+    day a third file grows one.
+    """
+    guarded = {path.name: sorted(found) for path in TEST_FILES if (found := _skip_guarded(path))}
+    assert not guarded, (
+        "these tests skip when their record is missing instead of failing, which on the "
+        f"host is a drill that was never run reported as a pass (F-054): {guarded}"
     )
 
 
