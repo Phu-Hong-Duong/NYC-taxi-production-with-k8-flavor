@@ -49,14 +49,22 @@ class FakeServer(fs.FeatureServer):
     different question and it needs a real store.
     """
 
-    def __init__(self, *, blank_dates: tuple[str, ...] = ()) -> None:
+    def __init__(self, *, blank_dates: tuple[str, ...] = (), empty: bool = False) -> None:
         super().__init__(url="http://fake")
         self.blank_dates = blank_dates
+        #: `empty=True` is the store M9-S2's drill produced with `FLUSHDB`: it is
+        #: REACHABLE and answers every question with `null`. That is the case
+        #: F-062 is about — indistinguishable, byte for byte, from a date past
+        #: the horizon unless a second question is asked.
+        self.empty = empty
         self.calls: list[tuple[list[str], dict]] = []
 
     def get(self, features, entities):  # type: ignore[override]
         self.calls.append((list(features), dict(entities)))
         names = [f.split(":", 1)[1] for f in features]
+        if self.empty:
+            width = len(next(iter(entities.values())))
+            return {name: [None] * width for name in names}
         if fs.ZONE_KEY in entities:
             table = zones_mod.load_zone_table()
             out: dict[str, list] = {name: [] for name in names}
@@ -141,12 +149,68 @@ def test_only_the_two_permitted_zone_columns_are_ever_requested() -> None:
 
 
 def test_the_calendar_refuses_a_date_the_store_cannot_answer() -> None:
-    """F-019's guarantee is a property of the DEPLOYMENT, not of the CSV."""
+    """F-019's guarantee is a property of the DEPLOYMENT, not of the CSV.
+
+    And, since F-062, it is a 422 only once the store has been SHOWN to be
+    answering — here by the sentinel probe, which is the second call.
+    """
     server = FakeServer(blank_dates=("2019-07-04",))
     with pytest.raises(fs.StoreCoverageError) as caught:
         fs.calendar_from_store(server, [pd.Timestamp("2019-07-04T09:15:00")])
     assert caught.value.http_status == 422
     assert "2019-07-04" in str(caught.value)
+    assert len(server.calls) == 2, "the failure path must ask the liveness question"
+    assert server.calls[1][1][fs.DATE_KEY] == [fs._liveness_sentinel()]
+
+
+# ------------------------------------------------- F-062: whose failure is it? --
+def test_a_wholly_dead_calendar_is_ours_and_not_the_callers() -> None:
+    """The finding, in one assertion: an EMPTY store is a 503, never a 422.
+
+    Before this landed, an emptied store answered `null` for every date and the
+    caller got the 422 an uncovered date earns — so a totally dead dependency
+    spent ZERO of SLO-A1's availability budget and rendered as riders sending bad
+    requests (F-062, measured by `make store-watch-drill`'s empty phase).
+    """
+    server = FakeServer(empty=True)
+    with pytest.raises(fs.FeatureStoreUnavailable) as caught:
+        fs.calendar_from_store(server, [pd.Timestamp("2019-07-04T09:15:00")])
+    # The class is the status: `FeatureStoreUnavailable` is deliberately NOT a
+    # `QuoteRefused`, which is what the transformer's two except-blocks read.
+    assert not isinstance(caught.value, QuoteRefused)
+    assert "sentinel" in str(caught.value) and "F-062" in str(caught.value)
+
+
+def test_the_liveness_sentinel_is_derived_from_the_committed_table() -> None:
+    """A typed date would be a second definition of the store's own horizon.
+
+    The store's `calendar_day_flags` view is built as
+    `date_range(f"{years[0]}-01-01", …)` over this same table, so the sentinel is
+    the twin of that expression's LEFT edge — the earliest covered day, chosen
+    because the far end is where a legitimate horizon extension leaves a store one
+    materialization behind.
+    """
+    years = sorted(calendar_mod.load_calendar().years)
+    assert fs._liveness_sentinel() == f"{years[0]}-01-01"
+    assert pd.Timestamp(fs._liveness_sentinel()).year in years
+
+
+def test_the_discriminator_costs_the_happy_path_and_a_partial_batch_nothing() -> None:
+    """The probe runs on the failure path only, and not even always there.
+
+    A batch in which ANY date answered has already proved the store is alive, so
+    no second call is made — which matters because the p50 of the moved boundary
+    is a measured number (`automation/runs/m8-transformer/transformer-load.json`)
+    and a probe on the happy path would move it.
+    """
+    happy = FakeServer()
+    fs.calendar_from_store(happy, [pd.Timestamp("2019-07-04")])
+    assert len(happy.calls) == 1
+
+    partial = FakeServer(blank_dates=("2019-07-05",))
+    with pytest.raises(fs.StoreCoverageError):
+        fs.calendar_from_store(partial, [pd.Timestamp("2019-07-04"), pd.Timestamp("2019-07-05")])
+    assert len(partial.calls) == 1, "a batch with a live witness needs no sentinel"
 
 
 def test_the_calendar_does_not_fetch_a_flag_our_code_derives() -> None:
