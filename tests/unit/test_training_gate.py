@@ -618,3 +618,54 @@ def test_nothing_in_the_registry_module_deletes():
             f"{forbidden} in the promotion path: a champion that was replaced is "
             "exactly what a rollback needs to find. Destroying is `make destroy`'s job."
         )
+
+
+# ------------------------- F-068: the identity case under any incumbent margin ---
+# These pin the ARITHMETIC of a finding, not a behaviour: `gate.decide` has NO
+# incumbent margin today and this story did not give it one (the replay wall
+# fired first — F-068, AWAITING_PO 2026-08-24-4). They exist so that whoever
+# lands F-016 option B cannot land it without meeting the case that stopped it.
+def test_a_challenger_identical_to_the_incumbent_passes_today_by_exactly_zero():
+    """The pre-registered rule, and the number the whole finding turns on.
+
+    M3-S1 re-fitted v1 on full data and measured 3.2608 — the incumbent's own
+    recorded value — and M3-S5's bake-off scored the serving champion as one of
+    its five contenders, so both carry a challenger judged against ITSELF. Under
+    non-regression-with-no-margin that is a PASS at +0.0000%, and both are
+    RECORDED as PROMOTE. Any margin above zero refuses them.
+    """
+    same = metrics("lightgbm-v1", mae=V1_TEST_MAE, within=V1_TEST_WITHIN)
+    decision = gate.decide(same, floor(), GATE_CFG, incumbent=incumbent())
+    assert decision.passed, "today the incumbent condition is non-regression, so 0.00% passes"
+    assert gate.improvement_pct(same.mae, incumbent().mae) == 0.0
+
+
+def test_the_identity_case_is_refused_by_ANY_positive_incumbent_margin():
+    """Why F-016 option B's number is not the thing that stopped it.
+
+    0.50% was the PO's choice, but the two flipped replays sit at exactly
+    +0.0000% — so a margin of one ten-thousandth of a percent refuses them too.
+    The identity case must be answered by whatever lands, at whatever bar; a
+    smaller number is not a way around it.
+    """
+    same = metrics("lightgbm-v1", mae=V1_TEST_MAE, within=V1_TEST_WITHIN)
+    observed = gate.improvement_pct(same.mae, incumbent().mae)
+    for margin in (0.001, 0.10, 0.50, 2.00):
+        assert observed < margin, (
+            f"a challenger identical to the incumbent clears a {margin}% margin — "
+            "then F-068's premise is wrong and the finding should be re-read"
+        )
+
+
+def test_the_nearest_surviving_recorded_verdict_has_six_hundredths_of_a_point_of_daylight():
+    """`artisan v2` is the row that says how close 0.50% runs to history.
+
+    M3-S5 recorded it PROMOTE at 3.2425 against incumbent v1's 3.2608 —
+    +0.5612%. It survives 0.50% and dies at 0.57%. That margin of safety is a
+    number the PO's answer is entitled to see, so it is asserted rather than
+    remembered.
+    """
+    artisan = metrics("artisan-v2", mae=3.2425, within=81.582)
+    observed = gate.improvement_pct(artisan.mae, incumbent().mae)
+    assert 0.50 <= observed < 0.57
+    assert round(observed, 4) == 0.5612

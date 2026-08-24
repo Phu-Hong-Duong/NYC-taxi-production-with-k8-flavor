@@ -122,7 +122,13 @@ def _bakeoff_rows(cfg: dict, margin: float) -> list[dict]:
             source=f"the bake-off record in {BAKEOFF}",
         )
         verdict, pct = under_margin(
-            _metrics(contender["name"], contender["test_mae"], contender["test_within_rate"], n, holdout),
+            _metrics(
+                contender["name"],
+                contender["test_mae"],
+                contender["test_within_rate"],
+                n,
+                holdout,
+            ),
             _metrics(floor["name"], floor["test_mae"], floor["test_within_rate"], n, holdout),
             dict(cfg, floor=floor["name"]),
             incumbent,
@@ -224,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         f"[f016] simulating an incumbent KPI-09 margin of >= {args.margin:.2f}% against every "
         f"RECORDED verdict the live replay legs feed through gate.decide."
     )
-    print(f"[f016] nothing is edited; configs/train.yaml: gate is read, never written.\n")
+    print("[f016] nothing is edited; configs/train.yaml: gate is read, never written.\n")
     last_leg = None
     for row in rows:
         if row["leg"] != last_leg or row["source"] != last_leg:

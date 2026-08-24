@@ -1,5 +1,105 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-24-4 · raised by EXEC/Opus (M9-S6) · A FORK, AND IT IS SMALL BUT REAL — your F-016 answer (option B) cannot land as chartered; four options, recommendation (b)
+
+**One sentence.** You chose **option B** for F-016 — a **≥0.50%** margin on the
+gate's incumbent condition — the M9 epilogue chartered it as story S6, and the
+charter's own safety check *fired*: applying B makes **two recorded verdicts
+flip from PROMOTE to REFUSE**, so under the rule the charter itself wrote
+(*"if any replay flips, STOP — that is a finding and a PO question, never an
+edit to the replay"*) **the edit was not made** and I am handing it to you.
+
+**Nothing moved.** `configs/train.yaml` is byte-identical to main, `gate.decide`
+carries no margin, `@champion` is version 2 / `feature_set v2`, no fit, no
+registry version, no cluster call that wrote anything. `make verify-m2` (55/55),
+`make verify-m3` (46/46) and `make verify-m7` (62/62) were run GREEN before the
+work and are unaffected by it. What this session added is a **reader**, its
+record, four tests and two documents.
+
+**What flipped, and the part that matters.** Three of this program's gates
+replay historical verdicts through the gate as it exists on disk — that is how a
+loosened bar is caught. The charter checked three numbers against B and all
+three hold. Asked of **every** verdict those legs actually read, 2 of 9 flip:
+the `champion v1` row of the M3-S5 bake-off, and the `lightgbm-v1` transcript in
+`docs/promotion_gate_m3.md`. **Both are the same fact — a challenger whose error
+is numerically IDENTICAL to the incumbent's (+0.0000%).** One is the serving
+champion scored against itself as a bake-off contender; the other is a re-fit of
+v1 that landed on the incumbent's own number to four decimals.
+
+**So 0.50% is not what stopped it, and that is the single most useful thing
+here.** Re-run at a margin of **0.001%**, the same two rows flip. *Any* margin
+above zero refuses a challenger identical to the incumbent — so the identity
+case has to be answered by whatever version of B lands, at whatever number you
+pick. Choosing a smaller bar is not a way around it.
+
+**Two things that bound the stakes, both measured rather than assumed.**
+(1) **Neither flipped verdict ever moved an alias** — the M3-S1 run was
+`--no-promote`, and M3-S5's alias went to `auto-on-v2`. **No promotion that
+actually happened is invalidated by B.** (2) The nearest *surviving* recorded
+verdict, `artisan v2`, clears your bar by **0.0612 percentage points**
+(+0.5612%) and would flip at 0.57% — that is how much daylight the number you
+chose has against history.
+
+**The options.**
+
+- **(a) Land B; teach both replay legs to accept a verdict whose only differing
+  condition is the new margin.** Two small edits, B lands the same day. This is
+  the cheapest to demonstrate and it is the one the charter forbids: it makes
+  those legs admit *any* future incumbent-margin change silently, and admitting
+  a gate change without noticing is precisely what `verify-m2-redteam` and
+  `verify-m3-redteam` exist to plant against. **Not recommended.**
+- **(b) Land B; replay each verdict against the incumbent margin that was IN
+  FORCE when it was taken, plus a new, unweakened check that the margin on disk
+  never decreases.** — **RECOMMENDED.** It has direct precedent in this repo:
+  when the floor legitimately changed at M3-S1, `verify-m2` §2 was made to
+  replay each verdict against the floor **recorded in its own block** (*"a
+  verdict is replayed against the bar it was actually taken against, or it is
+  not a replay"*) with a *separate* check that the floor only ever got harder.
+  Same shape, one knob along. **Its honest cost, stated because it is the reason
+  (a) looks attractive:** the historical records carry no incumbent margin —
+  there was none — so the in-force value has to be read from an **absence**,
+  which is exactly the permissive default this program distrusts elsewhere
+  (F-048's rule: an unset value must fail loudly, not resolve to something
+  convenient). Mitigating that is real work, not a sentence: the margin becomes
+  a RECORDED field on every future verdict so the inference is confined to a
+  frozen, enumerated set of nine — already written down in
+  `automation/runs/m9-f016/replay-wall.json`. Budget it as a full story, not a
+  config line.
+- **(c) Land B with the identity case carved out explicitly** (refuse below the
+  margin *unless* the challenger is the incumbent version). Tidy-looking, and it
+  only half-works: it resolves the bake-off row and does **not** resolve the
+  M3-S1 transcript, whose challenger was a *fresh fit* that happened to score
+  identically and is not the incumbent version by any test the numbers support.
+- **(d) Decline B; keep non-regression as pre-registered, and record that as the
+  decision.** Free, and F-016's ledger row already allows this closure shape.
+  Cost: the asymmetry F-016 named stays open — the alias can still move on a
+  delta smaller than the program's own keep bar. Worth knowing before you weigh
+  it: nothing has actually churned on that asymmetry, M7-S4's retrain having
+  refused at −0.03% under the existing condition.
+
+**My recommendation is (b), and I want to be plain that it is the expensive
+one.** (a) would let me land your answer in an afternoon; it buys that by
+blunting the instrument that would catch the next unsanctioned gate change,
+which is a bad trade for a program whose gates are its main claim. (d) is
+perfectly defensible and costs nothing — if your read is that the churn F-016
+described is theoretical, saying so on the record is a real answer and closes
+the finding honestly.
+
+**Detail, if you want it:** `docs/f016_replay_wall_m9.md` (the measurement, the
+table of all nine verdicts, where the charter's population was short, and the
+options with costs) · ledger row **F-068** · re-runnable in seconds with
+`uv run python scripts/f016_replay_probe.py`.
+
+**Answer with a letter.** Meanwhile the chain continues: **M9-S7** (F-062 option
+(b), the wire change) is independent of this and is next; S8 (README front door)
+and S9 (trivy + secret scan) follow. Nothing else waits on you.
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+automation/next_session.sh executor 120   # resumes the chain (and clears the park latch)
+```
+
+
 ## 2026-08-24-3 · raised by EXEC/Opus (post-close, unscheduled session) · NOT A FORK, NO ACTION NEEDED — your close-park was overridden by the watchdog; that is fixed, and nothing about the closed program moved
 
 **What happened.** You parked the chain at the program close on purpose
