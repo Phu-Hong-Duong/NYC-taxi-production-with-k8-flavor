@@ -1,0 +1,329 @@
+{
+  "story": "M9-S2",
+  "phase": "all",
+  "recorded_at": "2026-08-24T14:23:03Z",
+  "prediction": {
+    "written_before": "the first FLUSHDB, and committed before the drill ran",
+    "bars_argued_in": "docs/slo_serving.md \u00a79, committed before this file",
+    "empty_store": {
+      "rider_request": {
+        "claim": "a quote against an EMPTY store is REFUSED with HTTP 503, not 422 and not a confident wrong number",
+        "confidence": "high",
+        "because": "F-062 landed at M9-S7 on the PO's answer (b). Every request carries a date and calendar_from_store still RAISES on an unanswered one \u2014 F-019 carried onto the store's wire \u2014 but WHOSE failure that is now depends on a second question: the store is asked for a date the committed holiday table provably covers. An emptied store cannot answer that either, so the refusal is FeatureStoreUnavailable (503, ours) and it spends SLO-A1's availability budget. The geometry half still CANNOT refuse: an all-null centroid table is exactly what zones 264/265 legitimately produce, so the calendar is still what stands between an empty store and a quote nobody can see is wrong.",
+        "supersedes": "this drill's own 2026-08-23 prediction of 422, which was CORRECT for the code as it then stood and is kept beside this one at automation/runs/m9-store-watch/attempt1-422-era/. That measurement IS F-062: a totally dead dependency billed to the caller as a 4xx, outside the error budget, rendering as riders sending bad requests. The M9 kickoff's original expectation of 503 \u2014 superseded on 2026-08-23 and restored here by a code change rather than by an argument \u2014 is the third state of this one number and all three are on the record.",
+        "expected_status": 503
+      },
+      "uncovered_date_survives": {
+        "claim": "with the store EMPTY a past-horizon quote is also 503; with the store HEALTHY it is still 422 naming the year \u2014 F-019's guarantee is the regression this change could have caused, so it is asserted rather than assumed",
+        "confidence": "high",
+        "because": "the discriminator changes only which side of the wall is blamed. A live store answers the sentinel, so an uncovered date stays the caller's 422; a dead store answers nothing, and 'this deployment cannot establish whether its dependency is up' is ours.",
+        "expected_status_while_empty": 503,
+        "expected_status_when_healthy": 422
+      },
+      "champion_control": {
+        "claim": "the champion's own wire answers 39.0019 throughout",
+        "confidence": "high",
+        "because": "it builds its matrix from committed tables and never reads the store"
+      },
+      "must_fire": [
+        {
+          "alert": "OnlineStoreCanaryFailing",
+          "signal": "A-12",
+          "confidence": "high",
+          "after_about_seconds": 120,
+          "because": "three of four canary checks go to 0 and the rule sustains 2m",
+          "must_reach_alertmanager": true,
+          "expected_failing_checks": [
+            "zone_answers",
+            "calendar_answers"
+          ]
+        },
+        {
+          "alert": "OnlineStoreIncomplete",
+          "signal": "A-12",
+          "confidence": "high",
+          "after_about_seconds": 120,
+          "because": "0 keys against 57,688 the sources define",
+          "must_reach_alertmanager": true
+        }
+      ],
+      "must_not_fire": [
+        {
+          "alert": "OnlineStoreWatchdogAbsent",
+          "signal": "A-13",
+          "because": "the surface is present and fresh \u2014 it is the store that is gone"
+        },
+        {
+          "alert": "ServingEdge5xxRateHigh",
+          "signal": "A-2",
+          "because": "a 422 is a 4xx and the champion's wire is untouched"
+        },
+        {
+          "alert": "PredictorNoAvailableReplica",
+          "signal": "A-5",
+          "because": "no pod moved"
+        },
+        {
+          "alert": "DriftMetricsAbsent",
+          "signal": "A-11",
+          "because": "a different job's series, untouched by this drill"
+        },
+        {
+          "alert": "ServedVersionNotChampion",
+          "signal": "A-4",
+          "because": "no alias moves and no deploy happens"
+        }
+      ],
+      "clears": {
+        "claim": "re-materializing clears both A-12 rules",
+        "confidence": "high",
+        "refill_seconds_below": 60,
+        "expected_keys_after": 57688
+      }
+    },
+    "unreachable_store": {
+      "claim": "with the feature server scaled to 0 the transformer answers HTTP 503",
+      "confidence": "high",
+      "because": "FeatureStoreUnavailable is a distinct type precisely so a dependency outage does not look like a malformed quote \u2014 503 ours, 422 the caller's",
+      "expected_status": 503
+    },
+    "deleted_surface": {
+      "must_fire": {
+        "alert": "OnlineStoreWatchdogAbsent",
+        "signal": "A-13",
+        "confidence": "high",
+        "after_about_seconds": 600,
+        "because": "the rule sustains 10m and absent() is true within a scrape",
+        "must_reach_alertmanager": true
+      },
+      "must_not_fire": {
+        "alert": "OnlineStoreCanaryFailing",
+        "signal": "A-12",
+        "confidence": "high",
+        "because": "THE LOAD-BEARING NEGATIVE. `time() - stamp < 1800` over zero series is zero series, not a stale reading \u2014 so A-12 cannot see its own surface disappear, and a stack with only A-12 would render a wiped board exactly like a healthy store. That blind spot is A-13's whole reason to exist and it is demonstrated here rather than asserted."
+      }
+    },
+    "never_touched": [
+      "@champion (not read and not written by this drill)",
+      "any registry version, any MLflow run",
+      "the champion's InferenceService, its pod and its wire",
+      "every threshold in infra/monitoring/alerting_rules.yml",
+      "the settled data pins and data/feast/*.parquet"
+    ]
+  },
+  "observed": {
+    "health": {
+      "keys": 57688,
+      "minutes": 39.00193715359812,
+      "champion_ok": true,
+      "uncovered_status_when_healthy": 422,
+      "states": {
+        "OnlineStoreCanaryFailing": "inactive",
+        "OnlineStoreIncomplete": "inactive",
+        "OnlineStoreWatchdogAbsent": "inactive"
+      }
+    },
+    "empty": {
+      "keys_before": 57688,
+      "keys_after_flush": 0,
+      "keys_restored": 57688,
+      "rider_status_while_empty": 503,
+      "rider_body_while_empty": "{\"error\": \"the online feature store answered no calendar row for any of ['2019-07-04'], and none for the sentinel '2019-01-01' that data/reference/us_federal_holidays.csv provably covers \\u2014 so the store's calendar is not serving. Reported as 503 and NOT as the 422 an uncovered date earns: a dead dependency is ours, it belongs in SLO-A1's availability budget, and billing it to the caller made a",
+      "rider_status_predicted": 503,
+      "uncovered_status_while_empty": 503,
+      "refill_seconds": 11.6,
+      "fired": {
+        "OnlineStoreCanaryFailing": {
+          "fired": true,
+          "after_seconds": 162.5,
+          "reached_alertmanager": true
+        },
+        "OnlineStoreIncomplete": {
+          "fired": true,
+          "after_seconds": 162.5,
+          "reached_alertmanager": true
+        }
+      },
+      "cleared": {
+        "OnlineStoreCanaryFailing": {
+          "cleared": true,
+          "after_seconds": 30.0
+        },
+        "OnlineStoreIncomplete": {
+          "cleared": true,
+          "after_seconds": 0.0
+        }
+      },
+      "must_not_fire_states": {
+        "OnlineStoreWatchdogAbsent": "inactive",
+        "ServingEdge5xxRateHigh": "inactive",
+        "PredictorNoAvailableReplica": "inactive",
+        "DriftMetricsAbsent": "inactive",
+        "ServedVersionNotChampion": "inactive"
+      },
+      "canary_checks_firing": [
+        "calendar_answers",
+        "zone_answers"
+      ],
+      "final_minutes": 39.00193715359812
+    },
+    "unreachable": {
+      "replicas": 1,
+      "status_while_unreachable": 503,
+      "recovered_after_seconds": 15.1
+    },
+    "absent": {
+      "fired_after_seconds": 662.2,
+      "reached_alertmanager": true,
+      "a12_state_during": "inactive",
+      "cleared_after_seconds": 30.0
+    }
+  },
+  "checks": [
+    {
+      "ok": true,
+      "claim": "the store holds 57,688 keys before anything is broken"
+    },
+    {
+      "ok": true,
+      "claim": "the reader ran and pushed a fresh reading"
+    },
+    {
+      "ok": true,
+      "claim": "the CHAMPION's wire answers (the positive control): [quote] 2019-07-04T09:15:00  zone 132 -> 48, 1 passenger(s)  ->  39.0019 minutes"
+    },
+    {
+      "ok": true,
+      "claim": "the TRANSFORMER answers the parity row exactly: HTTP 200, 39.00193715359812 minutes"
+    },
+    {
+      "ok": true,
+      "claim": "an uncovered date is still the CALLER's refusal while the store is healthy: HTTP 422 naming 2031 (predicted 422) \u2014 F-019 survived F-062"
+    },
+    {
+      "ok": true,
+      "claim": "all three store rules are inactive to start: {'OnlineStoreCanaryFailing': 'inactive', 'OnlineStoreIncomplete': 'inactive', 'OnlineStoreWatchdogAbsent': 'inactive'}"
+    },
+    {
+      "ok": true,
+      "claim": "the undo is staged BEFORE the injection: quarantine present=True, 4 published source(s) \u2014 `make feast-materialize` can refill it"
+    },
+    {
+      "ok": true,
+      "claim": "the store is empty (57,688 -> 0 keys)"
+    },
+    {
+      "ok": true,
+      "claim": "a quote against the EMPTY store is HTTP 503 \u2014 predicted 503 (the CALENDAR half refuses; the geometry half structurally cannot). At 422 this same request spent NO availability budget and rendered as a rider sending a bad request \u2014 that was F-062, and this is the number that closes it"
+    },
+    {
+      "ok": true,
+      "claim": "and a PAST-HORIZON quote against the empty store is HTTP 503 \u2014 predicted 503: with nothing answering, this deployment cannot establish whether that date was covered, and an unanswerable question is not the caller's fault"
+    },
+    {
+      "ok": true,
+      "claim": "and it is NOT a confident wrong number \u2014 the thing an all-NaN geometry table alone would have produced"
+    },
+    {
+      "ok": true,
+      "claim": "the CHAMPION's wire is unaffected throughout: [quote] 2019-07-04T09:15:00  zone 132 -> 48, 1 passenger(s)  ->  39.0019 minutes"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreCanaryFailing (A-12) FIRED 162.5s after the flush (predicted ~120s + detection)"
+    },
+    {
+      "ok": true,
+      "claim": "Alertmanager holds OnlineStoreCanaryFailing \u2014 a rule firing only in Prometheus's own UI has paged nobody"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreIncomplete (A-12) FIRED 162.5s after the flush (predicted ~120s + detection)"
+    },
+    {
+      "ok": true,
+      "claim": "Alertmanager holds OnlineStoreIncomplete \u2014 a rule firing only in Prometheus's own UI has paged nobody"
+    },
+    {
+      "ok": true,
+      "claim": "A-12a names WHICH claims failed: ['calendar_answers', 'zone_answers'] (predicted at least ['zone_answers', 'calendar_answers']) \u2014 the per-series read, never the name-level one (gotcha #93)"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreWatchdogAbsent (A-13) stayed inactive \u2014 the surface is present and fresh \u2014 it is the store that is gone"
+    },
+    {
+      "ok": true,
+      "claim": "ServingEdge5xxRateHigh (A-2) stayed inactive \u2014 a 422 is a 4xx and the champion's wire is untouched"
+    },
+    {
+      "ok": true,
+      "claim": "PredictorNoAvailableReplica (A-5) stayed inactive \u2014 no pod moved"
+    },
+    {
+      "ok": true,
+      "claim": "DriftMetricsAbsent (A-11) stayed inactive \u2014 a different job's series, untouched by this drill"
+    },
+    {
+      "ok": true,
+      "claim": "ServedVersionNotChampion (A-4) stayed inactive \u2014 no alias moves and no deploy happens"
+    },
+    {
+      "ok": true,
+      "claim": "the store is refilled: 57,688 keys in 11.6s wall-clock (the materialize itself is the ~7s the record holds)"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreCanaryFailing cleared 30.0s after the reader saw a healthy store"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreIncomplete cleared 0.0s after the reader saw a healthy store"
+    },
+    {
+      "ok": true,
+      "claim": "and the rider's quote is exactly what it was: HTTP 200, 39.00193715359812 minutes"
+    },
+    {
+      "ok": true,
+      "claim": "the undo is staged first: feast-server is at 1 replica(s), which is what will be restored"
+    },
+    {
+      "ok": true,
+      "claim": "an UNREACHABLE store is HTTP 503 \u2014 predicted 503, and the point is that it differs from the empty store's refusal: ours vs the caller's"
+    },
+    {
+      "ok": true,
+      "claim": "the CHAMPION's wire is still unaffected: [quote] 2019-07-04T09:15:00  zone 132 -> 48, 1 passenger(s)  ->  39.0019 minutes"
+    },
+    {
+      "ok": true,
+      "claim": "the transformer answers again 15.1s after the server came back"
+    },
+    {
+      "ok": true,
+      "claim": "A-13 is inactive before the wipe (state=inactive)"
+    },
+    {
+      "ok": true,
+      "claim": "the store still holds 57,688 keys: this phase breaks the OBSERVATION, not the thing observed"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreWatchdogAbsent (A-13) FIRED 630.7s after the wipe (predicted ~600s + detection)"
+    },
+    {
+      "ok": true,
+      "claim": "Alertmanager holds OnlineStoreWatchdogAbsent"
+    },
+    {
+      "ok": true,
+      "claim": "THE LOAD-BEARING NEGATIVE: A-12 stayed inactive through a total loss of the watchdog's surface \u2014 `time() - stamp < 1800` over zero series is zero series, not a stale reading, so A-12 cannot see its own absence. That is A-13's whole reason to exist, demonstrated rather than asserted"
+    },
+    {
+      "ok": true,
+      "claim": "OnlineStoreWatchdogAbsent cleared 30.0s after the reader pushed again \u2014 and the board ends carrying the truth, not a silence"
+    }
+  ],
+  "failures": 0
+}

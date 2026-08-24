@@ -10,7 +10,7 @@ The design, the declared pair set and the bar are argued in
 * offline half retrieved as of: **2019-07-01T00:00:01** (after the last window closed —
   the online store keeps the latest row per key and has no history)
 * bar: **EXACT (tolerance 0.0)**
-* measured: **2026-08-21T08:01:25.682012+00:00**
+* measured: **2026-08-24T14:05:37.922350+00:00**
 
 ## (1) The seam materialization creates — online vs offline
 

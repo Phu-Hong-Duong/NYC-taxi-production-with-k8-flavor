@@ -144,12 +144,61 @@ So the thing standing between an empty store and a confident wrong number is a
 guard written for a different reason two stories earlier. **503 is what an
 UNREACHABLE store produces**, and that is a different phase of this drill.
 
-### The measured run
+> **DATED NOTE 2026-08-24 (M9-S7). This section's headline number is now 503, and
+> the 422 above is left standing because it is the finding.** The paragraphs above
+> describe the code as it stood on 2026-08-23, and everything they say about
+> WHICH HALF protects a rider is unchanged and still correct — the geometry half
+> still structurally cannot refuse, the calendar half still does. What was wrong
+> was whose fault the refusal was recorded as. That 422 put a **totally dead
+> dependency outside SLO-A1's error budget** (SLO-R1: *a 4xx is a guard working*),
+> so an outage rendered as riders sending bad requests. Raised as **F-062**,
+> answered by the PO with option **(b)** on 2026-08-24, landed by M9-S7:
+> `calendar_from_store` now asks the store for a date the committed holiday table
+> provably covers before it picks a status, so an empty store is **503
+> `FeatureStoreUnavailable`** and an uncovered date with a live store is still
+> **422**. The re-run's records are in `automation/runs/m9-store-watch/`; the
+> 422-era records are kept unedited at `attempt1-422-era/` with their own README,
+> because they are the evidence the decision was made from.
+
+### The measured run — 2026-08-24 (M9-S7), the records this document's gate reads
+
+Four phases in one invocation, **36 checks, 0 failures**, against a prediction
+committed at `b89eea4` before the first `FLUSHDB`. This run supersedes the
+2026-08-23 one below; both are kept because the difference between them IS
+F-062, and only this one is checked against by `make verify-m9`.
 
 | observation | measured |
 |---|---|
 | store emptied | 57,688 → **0** keys (`FLUSHDB`) |
-| rider's quote while empty | **HTTP 422**, predicted 422 |
+| **rider's quote while empty** | **HTTP 503**, predicted 503 — the finding closed. The refusal names the sentinel it probed and the file that covers it |
+| a PAST-HORIZON quote while empty | **HTTP 503** — with nothing answering, "was that date covered?" is a question this deployment cannot answer, so it does not blame the caller for it |
+| a PAST-HORIZON quote while HEALTHY | **HTTP 422** naming the year — F-019's typed refusal SURVIVED the change, asserted rather than argued |
+| champion's own wire, throughout | **39.0019 minutes** — unaffected |
+| `OnlineStoreCanaryFailing` (A-12) | **FIRED at T+162.5 s**, reached **Alertmanager** |
+| `OnlineStoreIncomplete` (A-12) | **FIRED at T+162.5 s**, reached **Alertmanager** |
+| which claims failed | `['calendar_answers', 'zone_answers']` — the per-series read |
+| must-not-fire (A-13, A-2, A-5, A-11, A-4) | all **inactive**, as predicted |
+| refill | **57,688 keys back**, **11.6 s** wall-clock |
+| both rules cleared | 30.0 s / 0.0 s after the reader saw a healthy store |
+| unreachable store (feast-server → 0 replicas) | **HTTP 503**, and answering again **15.1 s** after it came back |
+| surface deleted | **A-13 FIRED at T+630.7 s**, reached Alertmanager, **A-12 stayed inactive** — the load-bearing negative, and the first time this drill has run its fourth phase |
+| rider's quote after | **HTTP 200, 39.00193715359812 minutes** |
+
+**The two 503s above are different failures and it matters that they are not one
+row.** The empty store's is `StoreCoverageError`'s replacement — the calendar
+view answered `null` for the request *and* for a sentinel the committed table
+covers. The unreachable store's is `FeatureStoreUnavailable` raised at the
+transport (`ConnectionRefusedError`). They arrive at the same status by different
+evidence, which is what makes the status honest rather than a catch-all.
+
+### The measured run — 2026-08-23 (M9-S2), superseded, kept because it is the evidence
+
+Records at `automation/runs/m9-store-watch/attempt1-422-era/`.
+
+| observation | measured |
+|---|---|
+| store emptied | 57,688 → **0** keys (`FLUSHDB`) |
+| rider's quote while empty | **HTTP 422**, predicted 422 — *and this row is F-062* |
 | champion's own wire, throughout | **39.0019 minutes** — unaffected, as predicted |
 | `OnlineStoreCanaryFailing` (A-12) | **FIRED at T+162.2 s**, reached **Alertmanager** |
 | `OnlineStoreIncomplete` (A-12) | **FIRED at T+162.2 s**, reached **Alertmanager** |
@@ -205,3 +254,12 @@ It was visible at all only because `automation/runs/**/*.json` is tracked
   error budget. A-12 pages, so it is not silent; the status class is **F-062**,
   open and routed to the program close, because changing what the served
   boundary returns is a behaviour change with three parity records behind it.
+  > **DATED NOTE 2026-08-24 (M9-S7): CLOSED, and it cost exactly what the bullet
+  > above priced it at.** The PO answered (b); the transformer was rebuilt and
+  > redeployed, and all three parity records were re-measured at their committed
+  > EXACT bars and came back **0.000e+00** — the change touches the error path
+  > only, so a nonzero delta would have been a story-stopping finding rather than
+  > a bar to widen. An emptied store is **503** now and spends the availability
+  > budget. What this bullet correctly did NOT price is the defect the re-measure
+  > flushed out: **F-069**, a 404 that left the request body unread and poisoned
+  > the next caller on a pooled keep-alive connection.

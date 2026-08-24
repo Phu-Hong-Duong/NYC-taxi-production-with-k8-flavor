@@ -3,18 +3,11 @@
   "bars_argued_in": "docs/slo_serving.md \u00a79, committed before this file",
   "empty_store": {
     "rider_request": {
-      "claim": "a quote against an EMPTY store is REFUSED with HTTP 503, not 422 and not a confident wrong number",
+      "claim": "a quote against an EMPTY store is REFUSED with HTTP 422, not 503 and not a confident wrong number",
       "confidence": "high",
-      "because": "F-062 landed at M9-S7 on the PO's answer (b). Every request carries a date and calendar_from_store still RAISES on an unanswered one \u2014 F-019 carried onto the store's wire \u2014 but WHOSE failure that is now depends on a second question: the store is asked for a date the committed holiday table provably covers. An emptied store cannot answer that either, so the refusal is FeatureStoreUnavailable (503, ours) and it spends SLO-A1's availability budget. The geometry half still CANNOT refuse: an all-null centroid table is exactly what zones 264/265 legitimately produce, so the calendar is still what stands between an empty store and a quote nobody can see is wrong.",
-      "supersedes": "this drill's own 2026-08-23 prediction of 422, which was CORRECT for the code as it then stood and is kept beside this one at automation/runs/m9-store-watch/attempt1-422-era/. That measurement IS F-062: a totally dead dependency billed to the caller as a 4xx, outside the error budget, rendering as riders sending bad requests. The M9 kickoff's original expectation of 503 \u2014 superseded on 2026-08-23 and restored here by a code change rather than by an argument \u2014 is the third state of this one number and all three are on the record.",
-      "expected_status": 503
-    },
-    "uncovered_date_survives": {
-      "claim": "with the store EMPTY a past-horizon quote is also 503; with the store HEALTHY it is still 422 naming the year \u2014 F-019's guarantee is the regression this change could have caused, so it is asserted rather than assumed",
-      "confidence": "high",
-      "because": "the discriminator changes only which side of the wall is blamed. A live store answers the sentinel, so an uncovered date stays the caller's 422; a dead store answers nothing, and 'this deployment cannot establish whether its dependency is up' is ours.",
-      "expected_status_while_empty": 503,
-      "expected_status_when_healthy": 422
+      "because": "every request carries a date and calendar_from_store RAISES StoreCoverageError (http_status 422) on an unanswered one \u2014 F-019 carried onto the store's wire. The geometry half CANNOT refuse: an all-null centroid table is exactly what zones 264/265 legitimately produce, so the calendar is what stands between an empty store and a quote nobody can see is wrong.",
+      "supersedes": "the M9 kickoff's expectation of 503. 503 is what an UNREACHABLE store produces (FeatureStoreUnavailable) and that is a different phase of this drill.",
+      "expected_status": 422
     },
     "champion_control": {
       "claim": "the champion's own wire answers 39.0019 throughout",

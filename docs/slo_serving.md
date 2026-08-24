@@ -241,6 +241,34 @@ let F-030 run forever. `for: 2m` and not 5m because a malformed body is a
 client-version or encoding defect — it does not self-heal, so the sustain window
 only has to outlast a probe.
 
+> **DATED CORRECTION 2026-08-24 (M9-S7, F-062 CLOSED on the PO's answer (b)).**
+> The row above says *a 4xx is the request's fault*, and for a year of this
+> program's life one whole class of 4xx was not. M9-S2's drill emptied the online
+> store and measured **HTTP 422** on every quote through the transformer: the
+> calendar lookup refused an unanswered date exactly as F-019 requires, and the
+> status it refused with billed a **totally dead dependency to the caller**. Under
+> the sentence above that 422 was outside SLO-A1's error budget, so a complete
+> outage of the feature store spent **zero** of it and rendered, in every panel
+> that splits 4xx from 5xx, as riders sending bad requests. A-12 paged, so the
+> failure was never silent; the ACCOUNTING was.
+>
+> **What changed is the code, not this bar.** `serving.feature_store` now asks a
+> second question before it picks a status — see its "THE DISCRIMINATOR"
+> docstring: the store is asked for a date the committed holiday table provably
+> covers, so *this date is not covered* stays a 422 and *the store answered
+> nothing for any date* becomes a **503 `FeatureStoreUnavailable`**. **A
+> store-dead 503 therefore SPENDS SLO-A1's availability budget, which is the
+> entire point of the change.** No target moved, no threshold moved, and SLO-R1's
+> 1% bar and its argument are unaltered — what moved is which requests are inside
+> it. Measured both ways by `make store-watch-drill`
+> (`automation/runs/m9-store-watch/drill-empty.json`, with the superseded 422-era
+> records kept beside it at `attempt1-422-era/`).
+>
+> **The half that had to survive is asserted rather than argued:** a past-horizon
+> quote against a HEALTHY store is still **422** naming the year. F-019's typed
+> refusal is the regression this change could have caused, so the drill asks for
+> it in both store states and the year is derived from the table.
+
 ### SLO-C1 · saturation — *not a user-facing SLO; an operating limit*
 
 | | |

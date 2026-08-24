@@ -4642,3 +4642,68 @@ The first pair tells you the chosen number is irrelevant to the failure; the
 third tells you where the next recorded verdict sits. Then find a threshold in
 your own system that some historical decision was taken under, and ask what
 re-deciding that history at today's threshold would say.
+
+## M9-S7 — whose fault is a null? and the 404 that punished the next caller
+
+**The finding, in one line.** An emptied online feature store answered every
+rider's quote with **HTTP 422**. The refusal was right — the champion eats
+holiday flags and a silent "not a holiday" is a wrong number nobody can see —
+but 4xx is *the caller's* class, and `docs/slo_serving.md` SLO-R1 puts 4xx
+outside the availability error budget on the argument that *a 4xx is a guard
+working*. So a **totally dead dependency spent zero error budget** and rendered,
+in every panel that splits 4xx from 5xx, as riders sending bad requests. A-12
+paged, so nothing was silent; the *accounting* was.
+
+**The generalisable shape: two different facts wearing one value.** For the
+requested date, an empty store and a date past the horizon return the same
+bytes — `null`. Nothing in the response can tell them apart: Feast's per-result
+`statuses` say `NOT_FOUND` for both. When an answer cannot discriminate, **ask a
+second question rather than widening the first one's interpretation**. Here it is
+a sentinel: on the failure path only, ask the store for a date the committed
+holiday table *provably* covers. Answered → the store is alive and the caller's
+date really is uncovered (422). Also null → the calendar view is not serving
+(503, ours). The sentinel is **derived** from the committed table — it is the
+twin of the left edge of the `date_range` the store's own view is generated
+from — because a typed date would be a second definition of the store's horizon.
+
+**Three properties worth copying, and the third is the one people skip.**
+(1) It costs the happy path nothing: the probe runs only after a lookup has
+already failed, and is skipped entirely when any date in the batch answered, so
+the boundary's measured ~18 ms p50 is untouched. (2) It refuses to make the
+easy fallback: when the *discriminator itself* cannot be built, that is reported
+as ours (503) rather than defaulting to the caller's status — an unresolvable
+value fails loudly, it does not resolve to something convenient. (3) **The
+guarantee this could have destroyed is asserted, not argued.** Once a status
+depends on a second round trip, "F-019 still refuses past-horizon dates" stops
+being something a code-reading can establish, so the drill asks for an uncovered
+date in *both* store states: 422 while the store answers, 503 while it does not.
+
+**And then the re-measure found something that had nothing to do with any of
+it.** `make transformer-parity` died with `HTTP 400 Bad request syntax` — and
+the error text contained *its own request body followed by its own next request
+line*. That signature is unambiguous once you have seen it: a keep-alive
+connection where somebody answered a request without reading its body. The
+culprit was the transformer's wrong-path **404** — the deliberate negative check
+this repo added in M8-S4 leg 3 to prove the champion's model name does not answer
+on the transformer's host. It returned before reading the body; ingress-nginx
+pools upstream connections; the next caller inherited the leftover bytes.
+**F-069**, latent for a day, and the near-miss is the lesson: the poison was
+planted by a check we added on purpose and paid for by the measurement that
+check exists to protect.
+
+**What to look at.** `src/taxi_mlops/serving/feature_store.py`'s "THE
+DISCRIMINATOR" docstring — note that it records the *rejected* alternatives as
+weaker rather than merely different (the zone half cannot discriminate, because
+zones 264/265 legitimately have no row, so "every zone came back null" is a legal
+answer). Then
+`tests/unit/test_transformer.py::test_a_404_does_not_poison_the_next_request_on_the_same_connection`:
+its second request is a **422** and not a malformed body, because a malformed
+body is a legitimate **400** — the same status a poisoned connection returns, so
+that version of the test could not have told them apart. Choosing the assertion
+that can *distinguish* is most of the work in a regression test.
+
+**What to try yourself.** Take any client of yours that turns a dependency's
+answer into an HTTP status, and list the distinct *causes* that reach each
+status. Wherever two causes with different owners share one status, you have this
+finding. Then check the cheapest available discriminator — usually a second
+question with a known answer — and price it on the failure path only.

@@ -855,6 +855,17 @@ try:
     records = {p.stem.split("-", 1)[1]: json.loads(p.read_text())
                for p in sorted(D.glob("drill-*.json"))}
     committed = json.loads((D / "prediction.json").read_text())
+    # A PHASE's observations, asked for BY PHASE and never by filename. The drill
+    # can legitimately be run one phase at a time (`--phase empty`, which is how
+    # M9-S2 recorded it) or in one invocation (`--phase all`, the make target's
+    # default) — the first writes `drill-empty.json`, the second writes
+    # `drill-all.json` holding every phase's block. A gate keyed on the file name
+    # goes RED for the DEFAULT invocation of the command it is checking, which is
+    # gotcha #50's shape; what it actually wants is "what did the empty phase
+    # observe?".
+    phases = {name: block
+              for record in records.values()
+              for name, block in record.get("observed", {}).items()}
 
     # (a) The drill's verdict, summed across its phases from the records
     # themselves.
@@ -863,8 +874,8 @@ try:
     if records and checks and not failures:
         detail = ", ".join(f"{k} {len(v['checks'])}/{len(v['checks'])}"
                            for k, v in sorted(records.items()))
-        ok(f"the store-watch drill: {checks} check(s) across {len(records)} phase(s), "
-           f"{failures} failure(s) — {detail}")
+        ok(f"the store-watch drill: {checks} check(s) across {len(phases)} phase(s) in "
+           f"{len(records)} record(s), {failures} failure(s) — {detail}")
     else:
         no(f"the drill records report {failures} failure(s) across {checks} check(s)")
 
@@ -884,7 +895,7 @@ try:
     # the write-up: both A-12 rules fired and REACHED ALERTMANAGER, the five
     # negatives held, the champion's own wire answered throughout, and the board
     # ends carrying the truth.
-    empty = records.get("empty", {}).get("observed", {}).get("empty", {})
+    empty = phases.get("empty", {})
     fired = empty.get("fired", {})
     reached = [a for a, v in fired.items() if v.get("fired") and v.get("reached_alertmanager")]
     negatives = empty.get("must_not_fire_states", {})
@@ -906,12 +917,33 @@ try:
     champ = empty.get("final_minutes")
     if keys_after and rider == predicted_status and champ:
         ok(f"the rider's request against an EMPTY store came back HTTP {rider} — the status "
-           f"the prediction named, and the kickoff's superseded 503 is KEPT beside it rather "
-           f"than quietly replaced. The store was refilled to {keys_after:,} keys and the "
-           f"board ends carrying the truth, not a silence")
+           f"the prediction named, with every expectation this one number has SUPERSEDED "
+           f"kept beside it rather than quietly replaced. The store was refilled to "
+           f"{keys_after:,} keys and the board ends carrying the truth, not a silence")
     else:
         no(f"empty-store rider status {rider} against predicted {predicted_status}; keys "
            f"restored {keys_after}; final quote {champ}")
+
+    # (c2) F-062's discriminator did not cost F-019 its guarantee. This is the
+    # REGRESSION the change could have caused, so it is asserted in BOTH store
+    # states from the records rather than argued from the code: a past-horizon
+    # date is the CALLER's refusal while the store answers, and OURS when it does
+    # not. Both predicted sides are read from the committed prediction, so the
+    # leg carries no status literal of its own.
+    unc = committed["empty_store"].get("uncovered_date_survives", {})
+    healthy_seen = phases.get("health", {}).get("uncovered_status_when_healthy")
+    empty_seen = empty.get("uncovered_status_while_empty")
+    if (unc and healthy_seen == unc.get("expected_status_when_healthy")
+            and empty_seen == unc.get("expected_status_while_empty")):
+        ok(f"and F-019's typed refusal SURVIVED F-062: a past-horizon quote is HTTP "
+           f"{healthy_seen} (the caller's) while the store answers and HTTP {empty_seen} "
+           f"(ours) while it does not — measured in both states, because a change that "
+           f"decides blame by asking a second question could have stopped refusing "
+           f"altogether and every other check here would still be green")
+    else:
+        no(f"F-019's guarantee across the two store states: healthy {healthy_seen} vs "
+           f"predicted {unc.get('expected_status_when_healthy')}; empty {empty_seen} vs "
+           f"predicted {unc.get('expected_status_while_empty')}")
 
     # (d) THE ONLY WITNESS A HUMAN READS. Every number the write-up quotes about
     # the store and the drill is compared with the record it comes from — a

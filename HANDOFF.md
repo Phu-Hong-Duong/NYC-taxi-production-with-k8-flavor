@@ -1,5 +1,115 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (cn) — M9-S7: whose fault is a null, and the 404 that punished the next caller
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cm) · `docs/milestones/M9_EPILOGUE_KICKOFF.md` · AWAITING_PO. **Role block:
+SRE, MLE hat on the client** — charter read. Refusals in play all session: *no fit ·
+no alias move · no registry version · no threshold change · no gate loosened · no
+cluster rebuild · no new Flyte trigger*. None broken: `@champion` is version **2** /
+`feature_set v2`, versions `['1','2']` (no version 3), `uv.lock` byte-identical to
+`m7-closed`, all five DVC pins up to date.
+
+**Story: M9-S7 — F-062 option (b), the epilogue's ONLY wire change.** ONE story, as
+chartered. S8 (README front door) and S9 (trivy + secret scan) remain.
+
+### Reconciliation (the staleness check)
+Handoff (cm)'s Next pointed at M9-S7 and reality matched: tree clean at `f61c281`,
+`main == origin/main`, cluster 3/3 Ready v1.36.1, both InferenceServices Ready,
+`make verify-m9` GREEN **45/45** as a baseline recorded BEFORE any edit. No status
+file was pending. AWAITING_PO 2026-08-24-4 (F-068) is still the only open ask and
+this story is independent of it.
+
+### Done — the discriminator
+An unanswered date and an EMPTIED store return the same bytes (`null`), and Feast's
+per-result `statuses` say `NOT_FOUND` for both — so the status cannot be decided from
+the answer. It is decided by a second **question**: on the failure path only, the
+store is asked for a date the committed holiday table provably covers (a sentinel
+DERIVED from that table's first year, the twin of the left edge of the `date_range`
+`build_calendar_day` generates the store's view with). Answered -> the caller's
+**422**, F-019 untouched. Null too -> **503 `FeatureStoreUnavailable`**, ours, and it
+spends SLO-A1's availability budget.
+
+- **Costs the happy path nothing** — failure path only, and skipped entirely when any
+  date in the batch answered, so the boundary's ~18 ms p50 is untouched.
+- **When the discriminator itself cannot be built, that is ours too** (503), not a
+  fallback to the caller's status — F-048's rule.
+- **The rejected alternatives are recorded as WEAKER, not merely different**: the
+  zone half cannot discriminate, because 264/265 legitimately have no row.
+
+### Verification
+- **`make store-watch-drill` PASSED — 36 checks across FOUR phases, 0 failures**,
+  prediction committed at `b89eea4` **before** the first `FLUSHDB` (git-checkable).
+  Empty store **HTTP 503** (predicted 503). **F-019's guarantee asserted in BOTH
+  states**: past-horizon quote **422** naming the year while the store answers,
+  **503** while it does not. A-12a/A-12b **FIRED at T+162.5 s**, both at
+  Alertmanager, failing claims per series; five negatives inactive; refill **57,688
+  keys in 11.6 s**; cleared 30.0/0.0 s. **The fourth phase ran for the first time** —
+  surface deleted, **A-13 FIRED at T+630.7 s while A-12 stayed inactive**.
+- **The three parity records re-measured at their committed EXACT bars, all
+  `0.000e+00`**: `transformer-parity` (16 hazards) · `server-parity` (6 columns /
+  108 comparisons, `one missing` 0) · `online_parity` (16 columns / 100 pairs,
+  `UNEXPLAINED` 0). An error-path change touched the error path and nothing else.
+- **`make verify-m5` · `m6` · `m7` · `m8` · `m9` all GREEN**; host suite **1220
+  passed** (was 1204); ruff clean.
+- Image rebuilt twice and read back on all 3 nodes with each node's own `crictl`
+  (`taxi-mlops-pipeline:8b6d5c0` then `:4e5dd66`); transformer redeployed, accept
+  GREEN 6/6. The F-026 guard fired on this story's own commits — image rebuilt, guard
+  never narrowed (third occurrence).
+
+### Defects/Surprises
+- **F-069 (raised and CLOSED this session, medium).** `make transformer-parity` died
+  with `HTTP 400 Bad request syntax` whose text contained *its own request body
+  followed by its own next request line*. Cause: `do_POST`'s wrong-path 404 answered
+  without reading the request body; `protocol_version = "HTTP/1.1"` plus
+  ingress-nginx's upstream pooling means the leftover bytes are parsed as the NEXT
+  caller's request-LINE. Latent since M8-S4 leg 3. **The poison was planted by a
+  check this program added on purpose** — F-060's negative half, the POST to the
+  champion's model name — and paid for by the measurement that check exists to
+  protect. Body is read before any branch now; the regression test drives two
+  requests down one connection and was demonstrated RED against the pre-fix module.
+- **The regression test's assertion had to be chosen, not just written**: its second
+  request is a **422** and not a malformed body, because a malformed body is a
+  legitimate **400** — the same status a poisoned connection returns.
+- **`verify-m9`'s drill leg went RED for the DEFAULT invocation of the command it
+  checks.** It keyed records on `drill-<phase>.json`; `--phase all` (the make
+  target's default) writes one `drill-all.json` holding every phase. Re-derived to
+  ask for a PHASE rather than a filename — gotcha #50, and the gate now reads either
+  shape.
+- **Observation, not a defect, left for whoever touches it**: `verify-m9` §3's
+  prediction-ordering leg reports `86784 s` because it reads the FIRST add of
+  `automation/runs/m9-store-watch/prediction.json` (2026-08-23), not this run's
+  re-commit. The property it asserts (prediction before record) holds for both runs;
+  the interval quoted is the older pair's.
+
+### Decisions
+- **The drill was run as `--phase all` rather than three separate invocations.** It is
+  the make target's default, it exercises the fourth phase M9-S2 never ran, and the
+  honest response to the gate not reading it was to fix the GATE's question (phase,
+  not filename) rather than to change how the command is invoked.
+- **F-069 fixed inside this story rather than parked.** It is on the error path of the
+  boundary this story is chartered to make correct, it blocked the chartered parity
+  re-measurement, and the fix is three lines with a two-request regression test. Not a
+  fork: no direction, scope, taste, money or threshold question in it.
+- **The 422-era records were MOVED, not overwritten** (`attempt1-422-era/`, with a
+  README). That 422 is F-062's evidence; a re-run that erased it would be
+  F-063/gotcha #48 a fourth time.
+
+### Next
+**M9-S8 — README as the portfolio front door** is the next unstarted, unblocked story
+in `docs/milestones/M9_EPILOGUE_KICKOFF.md`. It is a doc session: no code, no wire,
+and its accept-when is that every `make` target the README names exists in the
+Makefile and every number cites the record that holds it. **S9** (trivy +
+commit-history secret scan) follows and is also independent; S9's exit writes the
+AWAITING_PO entry telling the PO the pre-publish pair is done and the public flip is
+their click.
+
+**Waiting on the PO: `AWAITING_PO 2026-08-24-4` only** (F-016/F-068, answer with a
+letter). Nothing else is blocked; F-062's entry now carries its LANDED note.
+`make verify-m9` remains the one-command health read.
+
+
 ## Session 2026-08-24 (cm) — M9-S6: the charter's own safety check fired, so the edit was not made
 
 ### State
