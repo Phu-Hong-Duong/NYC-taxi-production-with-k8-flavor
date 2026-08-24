@@ -4760,3 +4760,87 @@ it: *which file would I read to check this, and what would go red if it were
 wrong?* Every number with no answer to the second half is decoration. Then write
 the twenty-line script that reads them back — mine found a stale number in the
 same commit that created it.
+
+---
+
+## M9-S9 — the scan that flagged its own record, and the drill that lied in the nice direction
+
+**The story in one line.** Two pinned scanners were pointed at this repository
+before it goes public; the secrets verdict is zero, and almost everything worth
+writing down came from the two times an instrument was aimed at itself.
+
+**The framing that decides the design.** `.env` never entered git by design, so
+this audit *verifies* hygiene rather than creating it. That means the expected
+answer is "nothing" — which is also precisely what a broken scanner says. Every
+leg therefore records the inputs it looked at, and a red team plants a real
+credential and watches the scan name it. Gotcha #59, one domain along: assert on
+the positive artifact, and where the artifact is an absence, prove first that
+presence was findable.
+
+**The triage is a classification, not a threshold.** Point a secret scanner at
+this working tree and it finds `.env` ten times — correctly, because that file
+holds the credentials the platform runs on. What makes it fine is a different
+fact: git has never seen it. So findings are split by *where they live* —
+**in git** (tracked, in history, or untracked-and-unignored, which is one
+`git add -A` away) versus **gitignored on this disk**, each of the latter
+carrying `git check-ignore -v`'s own answer beside it. The tempting alternative
+— scan only tracked files, report zero — is technically true and proves nothing
+about the hazard anyone actually has, which is a developer committing the `.env`
+they have been editing all week.
+
+**The suppression that is a derivation.** One tracked file legitimately contains
+a credential-shaped string: the M6 gameday's *deliberately wrong* MinIO secret,
+the value injected to make storage refuse the predictor. A credential designed
+not to work is the one string in this repo that must look exactly like a
+credential. It is not in a `.gitleaksignore` — a suppression nobody can read is
+how the next real one hides behind it. It is acknowledged in a table keyed on
+the sha256 of the found bytes, and the scan **decodes the bytes it actually
+found** and requires them to spell `wrong-credential-gameday`. The table fails
+in both directions: an entry matching nothing is a stale suppression and is
+itself a failure.
+
+**Then the scan flagged its own record, thirteen times.** The first run wrote
+each finding's identity as a 64-hex digest under a field called `secret_sha256`.
+`generic-api-key` fires on a long high-entropy value under a credential-shaped
+key — both halves present — and the record is *tracked*, so the next audit would
+have blocked on its own output. The scanner was right twice. The fix was the
+artifact: a twelve-character `finding_id` in the record, the full digest kept in
+code where it sits as a dict key rather than as a value after a credential-shaped
+name. A second, quieter version of the same recursion: the tree scan read its own
+previous raw report, so the finding count became a function of how often the scan
+had been run — a measurement that moves because it was taken.
+
+**The best lesson came from the red team being wrong in the comfortable
+direction.** Roughly two runs in five, `make security-scan-redteam` reported all
+six detection checks failing — *the scanner found nothing* — while the scan was
+working perfectly. Both causes were about the plant: gitleaks' `generic-api-key`
+matches `[\w.=-]`, which excludes `+` and `/`, so a base64-alphabet secret with a
+`+` near its start was truncated below the rule's minimum length; and both rules
+carry an entropy floor a short random string clears only on average (a 20-char
+AWS-shaped id measured 3.15–4.22 bits across 2,000 draws). **A randomly generated
+plant must be drawn against the properties the detector keys on**, or the drill is
+flaky exactly where flakiness reads as good news. A red team that sometimes says
+PASS is worse than one that always fails, because nobody investigates a pass.
+
+**The number that turns into a decision.** CVE counts alone are wallpaper — 201,
+196, 879 for the three images we build. The record splits the ones **our own
+lockfile pins** (trivy's `Class: lang-pkgs`) from the ones a base image ships,
+because an OS package in a Debian base is Debian's to fix and ours to pin, while
+a Python package in `uv.lock` is a line we wrote. There is exactly one such
+cluster — `sqlparse` 0.5.5, three HIGH, fix available — and it is not bumped here
+because `uv.lock` is asserted byte-identical to a tag by a green gate. That makes
+it a PO fork with a stated cost rather than a quiet edit, and it is in the inbox.
+
+**Two smaller ones.** A README claim of "489 commits" can never be right, because
+fixing it adds a commit — a number that invalidates its own correction does not
+belong in a document, it belongs in the record. And a checker's guard firing on
+correct data is still a guard to re-derive, not to widen: my own test forbade
+long hex in the record and tripped on commit shas and image ids, which are
+identifiers and not credentials; the real property was always *a long value under
+a credential-shaped key*.
+
+**What to try yourself.** Run a secret scanner over your repo's **full history**,
+not its working tree — `--all`, every ref — and then read the findings it gives
+you for files that are supposed to contain secrets. The interesting question is
+never "how many"; it is "which of these is git holding, and which is just my
+laptop". Then plant one and check the scanner still says so.

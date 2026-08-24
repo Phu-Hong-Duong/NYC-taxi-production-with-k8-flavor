@@ -351,6 +351,17 @@ verify-m9: ## M9 gate, the program's last crossing: the generated page, the acce
 verify-m9-redteam: ## prove `make verify-m9` can go RED: shorten the store's EXPECTED key count by exactly one view's worth, then restore
 	@bash scripts/verify_m9_redteam.sh
 
+# ---- M9-S9: the pre-publish audit (PO answer 3, 2026-08-24) ----
+.PHONY: security-tools security-tools-check security-scan security-scan-redteam
+security-tools: ## M9-S9: pin trivy + gitleaks into ~/.local/bin at the versions this file names, verify + RECORD their sha256s. DRY_RUN=1 installs nothing; FORCE=1 re-downloads
+	@bash scripts/security_tools.sh
+security-tools-check: ## M9-S9: read the installed scanner versions back off the binaries. Writes nothing
+	@bash scripts/security_tools.sh --check
+security-scan: ## M9-S9: the pre-publish audit — secrets in the WORKING TREE and in the FULL git history, CVEs in the three images we build and in the tree. SCAN_ARGS=--no-write records nothing; --stage picks one leg
+	@uv run python scripts/security_scan.py $(SCAN_ARGS)
+security-scan-redteam: ## M9-S9: prove the secret scan can FIND one — plant a real-shaped credential in a scratch commit, watch gitleaks name it, then destroy the branch
+	@bash scripts/security_scan_redteam.sh
+
 # ---- always available ----
 .PHONY: lint test fmt readme-check
 readme-check: ## M9-S8: every `make` target, path and number in README.md, read back from the record that holds it

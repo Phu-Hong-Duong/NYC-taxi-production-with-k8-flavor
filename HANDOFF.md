@@ -1,5 +1,119 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (cp) — M9-S9: the pre-publish audit, and two instruments aimed at themselves
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (co) · `docs/milestones/M9_EPILOGUE_KICKOFF.md` · AWAITING_PO. **Role block:
+SRE** — charter read. Refusals in play all session: *no fit · no alias move · no
+registry version · no wire change · no cluster mutation · no gate loosened*. None
+broken — this story added two pinned host binaries, a reader, a drill, a test file
+and documents. It made **no cluster call at all** and imports no registry client.
+
+**Story: M9-S9 — trivy + commit-history secret scan.** ONE story, as chartered, and
+it is the LAST story in the epilogue.
+
+### Reconciliation (the staleness check)
+Handoff (co)'s Next pointed at M9-S9 and reality matched: tree clean at `bad1e30`,
+`main == origin/main`, no pending `automation/runs/*.status`. Neither scanner was
+installed; `automation/runs/m9-security/` did not exist. AWAITING_PO 2026-08-24-4
+(F-016/F-068) was the only open ask and this story is independent of it.
+
+### Done
+- **`make security-tools`** pins **trivy 0.74.0** and **gitleaks 8.30.1** into
+  `~/.local/bin` (the M0-S1 precedent), verifies each tarball against the
+  publisher's `*_checksums.txt`, records both installed sha256s, and reads the
+  versions BACK off the binaries. The record states in its own field what that
+  checksum check does *not* prove — same origin, same TLS session, so corruption
+  and not tampering; sigstore attestations unverified for want of `cosign`, a third
+  binary this program is not adding.
+- **`make security-scan`** — four legs, one record. Secrets in the whole disk tree
+  and in **every commit on every ref**; CVEs in the three images we build and in
+  `uv.lock` + the hand-written manifests. Findings are classified by WHERE they
+  live: **in git** (tracked, in history, or untracked-and-unignored) blocks;
+  **gitignored** is reported with `git check-ignore -v`'s own answer beside it.
+  Exit **1** on a blocking finding, **2** on a stale acknowledgement.
+- **`make security-scan-redteam`** plants a run-time-generated AWS-shaped pair in an
+  untracked file and in a commit on a scratch branch HEAD does not point at, then
+  destroys it (branch, reflog, `gc --prune=now`) and ASKS `git cat-file -e` whether
+  the object is gone.
+- **`docs/security_audit_m9.md`**, `tests/unit/test_security_scan.py` (17 tests),
+  the README's evidence table gains the pre-publish verdict, **F-071** filed and
+  closed, and **AWAITING_PO 2026-08-24-5** hands the PO the publish flip.
+
+### Verification
+- **`make security-scan`: 0 secrets in git · `publishable: true`** · 1 acknowledged
+  (argument re-derived from the bytes found) · 10 local-only (all `.env`). CVEs
+  recorded: **201 · 196 · 879** for the three images, **5** dependency + **76**
+  misconfiguration for the tree.
+- **`make security-scan-redteam` PASSED — 16 checks, 0 failures**, re-run four times
+  consecutively after the flake fix, one draw at the entropy floor.
+- **`make verify-m9` GREEN 45/45 · `make verify-m8` GREEN · `make verify-m5` GREEN ·
+  `make readme-check` GREEN.** Host suite **1244 passed** (was 1227), no skips;
+  `-m 'not needs_records'` deselects **63** (was 56). `uv run ruff check src tests
+  pipelines scripts` clean.
+- Exit state: `@champion` **2** / `feature_set v2`, `uv.lock` byte-identical to
+  `m7-closed` (asserted by verify-m8), all 5 DVC pins `up to date`, no wire touched.
+
+### Defects/Surprises
+- **The scan flagged its own tracked record, thirteen times, and was right.** The
+  first draft wrote each finding's identity as a 64-hex digest under a field called
+  `secret_sha256`; `generic-api-key` fires on a long high-entropy value under a
+  credential-shaped key, and the record is tracked, so the next audit would have
+  blocked on its own output. Fixed in the ARTIFACT — a 12-character `finding_id`,
+  the full digest kept in code as a dict key — with `_`-prefixed working fields
+  stripped at the write boundary so a later leg cannot leak one.
+- **The tree scan read its own previous raw report**, making the finding count a
+  function of how often the scan had been run. Dropped, COUNTED and named, and
+  bounded: the code EXITS rather than dropping anything heading for `blocking`.
+- **F-071 — the red team was flaky in the comfortable direction.** Two runs in five
+  reported all six detection checks failing (*the scanner found nothing*) while the
+  scan was perfect. Causes were both about the plant: `generic-api-key` matches
+  `[\w.=-]`, which excludes `+` and `/`; and both rules carry an entropy floor a
+  short random string clears only on average. The generator now draws against those
+  properties and prints the entropy it settled on. **A red team that sometimes says
+  PASS is worse than one that always fails.**
+- **The drill found a real gap on its first run**: a blocking HISTORY finding
+  printed no commit, and the remedy for a secret in history is per-commit. Fixed on
+  the artifact.
+- **My own new test fired on correct data** — it forbade long hex in the record and
+  tripped on commit shas and image ids, which are identifiers. Re-derived to the
+  property that actually caused the defect (*a long value under a credential-shaped
+  key*), never widened. Gotcha #50.
+- **F-047's marker guard was right twice**: once about a test that reads a source
+  file and not a record, once about a record constant built from another constant
+  (spelled in full now).
+
+### Decisions
+- **The one credential-shaped string in a tracked file is ACKNOWLEDGED, not
+  suppressed.** No `.gitleaksignore`; a table keyed on the sha256 of the found
+  bytes, with the argument re-derived by decoding them. Fails in both directions.
+- **`sqlparse` 0.5.5 (three HIGH, fix in 0.6.0) was NOT bumped.** `uv.lock` is
+  asserted byte-identical to `m7-closed` by `verify-m8` §1, so a bump turns a green
+  gate red by design. Routed as a PO fork with the honest cost, recommendation (b),
+  at AWAITING_PO 2026-08-24-5. Exposure bounded and stated: nothing here parses SQL
+  from an untrusted party.
+- **No pre-commit hook.** A hook lives in `.git/hooks`, which is not tracked and no
+  gate can verify — it would be a claim this repo could not check.
+- **No commit-count claim in the README.** A number that invalidates its own
+  correction belongs in the record, not the document.
+
+### Next
+**The epilogue's five stories are DONE (S5–S9).** No unstarted story remains in
+`docs/milestones/M9_EPILOGUE_KICKOFF.md`. Its Exit section charters the boundary to
+**ARCH**: re-run the affected gates, close the epilogue with tag
+**`m9-epilogue-closed`**, flip the README row, and RE-PARK the chain with the
+publish-flip entry as the standing item. Scheduling `architect` accordingly (ritual
+(c) — the epilogue carries no ◆).
+
+**Waiting on the PO, two entries, neither blocking the boundary:**
+- **`2026-08-24-5`** (new) — the pre-publish pair is DONE and the public flip is
+  their click; plus the `sqlparse` fork (a/b/c, recommendation (b)).
+- **`2026-08-24-4`** — F-016/F-068, answer with a letter.
+
+`make verify-m9` remains the one-command health read; `make readme-check` is the
+front door's; `make security-scan` is now the pre-publish one.
+
 ## Session 2026-08-24 (co) — M9-S8: the front door, and the number it caught in its own diff
 
 ### State

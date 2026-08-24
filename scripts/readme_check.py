@@ -374,6 +374,16 @@ CLAIMS: tuple[Claim, ...] = (
         "the floor condition's bar",
     ),
     Claim(
+        "zero unacknowledged",
+        "automation/runs/m9-security/scan.json",
+        lambda: (
+            "zero unacknowledged"
+            if _json("automation/runs/m9-security/scan.json")["verdict"]["secrets_in_git"] == 0
+            else "SECRETS IN GIT"
+        ),
+        "the pre-publish secret verdict (M9-S9)",
+    ),
+    Claim(
         "~932 MiB",
         "automation/runs/m4-image/image.json",
         lambda: f"~{_json('automation/runs/m4-image/image.json')['content_bytes'] / 2**20:.0f} MiB",
@@ -393,7 +403,7 @@ COMMAND_CLAIMS: tuple[Claim, ...] = (
 )
 
 TEST_COUNT_CLAIM = Claim(
-    "1,227 tests",
+    "1,244 tests",
     "uv run pytest tests/unit -q",
     lambda: f"{_collected_tests():,} tests",
     "the host suite",
