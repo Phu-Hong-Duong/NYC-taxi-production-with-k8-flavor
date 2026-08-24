@@ -32,6 +32,7 @@ role interplay are the product.**
 | M8 Feast & side-by-side (DE/MLE) | **closed 2026-08-23** | tag `m8-closed` · `verify-m8` 51/51 · M9 kickoff §0 |
 | M9 Stretch: demo page (committed) + boundary closure; Ray/CI/security = PO opt-in | **closed 2026-08-24** | tag `m9-closed` · `verify-m9` 45/45 · `docs/milestones/PROGRAM_CLOSE.md` §0 |
 | **PROGRAM CLOSE** — all ten gates M0…M9 run live and GREEN at the close | **closed 2026-08-24, one box open by design** | `PROGRAM_CLOSE.md` — §9/M9's observed demo run waits on the PO (AWAITING_PO 2026-08-23-3); F-062 + publish-the-repo are the PO's (2026-08-24-2); the chain is parked deliberately |
+| **M9 Epilogue** — the PO's answered close inbox: S5 observed-box lands in the record · S6 F-016(B) incumbent margin · S7 F-062(b) · S8 README front door · S9 trivy + secret-scan; the public flip stays the PO's click | **in progress 2026-08-24** | `docs/milestones/M9_EPILOGUE_KICKOFF.md` §0 · AWAITING_PO 2026-08-24-2 (all seven answers recorded; the observed run happened 2026-08-24 and S5 lands it) |
 
 Per-milestone direction lives in the ARCH-authored `docs/milestones/M*_KICKOFF.md`
 — one per milestone, and each kickoff's §0 is the closure verdict of the
