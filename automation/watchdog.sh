@@ -12,6 +12,17 @@
 # ADR-010 exists to enforce. The tell is AWAITING_PO.md: a session that parks
 # deliberately writes to it, a session that dies does not.
 #
+# That rule was stated here from the first day and broken anyway on 2026-08-24
+# (F-066), because it was implemented as an edge detector on a hash while the
+# thing it must express is a STATE. A park now LATCHES
+# (automation/logs/watchdog_parked) and is cleared by exactly one thing: the
+# `automation/next_session.sh` command every AWAITING_PO entry names as the
+# resume. Two facts make that safe, and neither is optional:
+#   - red() re-stamps the AWAITING_PO baseline after appending, so the watchdog
+#     cannot latch on its OWN alarm and wedge the chain shut;
+#   - the heal path cannot clear the latch (WATCHDOG_HEAL=1), so the one actor
+#     with a motive to un-park a fork does not hold the eraser.
+#
 # Escalation, in order:
 #   GREEN  something is alive (session / pending successor / detached run) -> silent
 #   HEAL   nothing alive, nothing was decided, budget remains -> restart, log only
@@ -28,6 +39,7 @@ WLOG="${LOGS}/watchdog.log"
 TOAST_STATE="${LOGS}/watchdog_toast_state"
 HEAL_STATE="${LOGS}/watchdog_heal_state"
 PO_HASH="${LOGS}/watchdog_awaiting_po.sha"
+PARK_STATE="${LOGS}/watchdog_parked"   # a park persists until a human resumes
 
 PENDING_GRACE="${WATCHDOG_PENDING_GRACE:-900}"    # a queued session has 15 min to appear
 HEAL_WINDOW="${WATCHDOG_HEAL_WINDOW:-900}"        # two heals inside this = not working
@@ -68,6 +80,17 @@ red() {
     echo ""
     echo "Watchdog log: automation/logs/watchdog.log"
   } >> AWAITING_PO.md
+
+  # The alarm channel IS the park sensor, so the watchdog must not read its own
+  # handwriting as a session's fork. Re-stamp the baseline with the file as it
+  # now stands (2026-08-24, F-066): before this, every red() left a change that
+  # the NEXT pass reported as "a session parked on a fork". That false park was
+  # not harmless bookkeeping — it is the reason a real park had to be allowed to
+  # DECAY (a latch would otherwise have wedged the chain shut on any FAILED
+  # run), and the decay is what let the program-close park be healed 20 minutes
+  # after it was correctly detected. Killing the false park is what makes the
+  # latch in step 5 safe.
+  sha256sum AWAITING_PO.md 2>/dev/null | awk '{print $1}' > "${PO_HASH}" || true
 }
 
 # Any green observation means the last heal worked; forget the failure streak.
@@ -140,13 +163,33 @@ if compgen -G "automation/runs/*.status" > /dev/null; then
 fi
 
 # --- 5. Did the last session PARK on a fork? Then it is working as designed. ---
+# A park is a STATE, not an event, and that distinction cost a real park. Until
+# 2026-08-24 this was an edge detector on a hash: it fired on the pass where
+# AWAITING_PO.md changed and forgot by the next one, so the program-close park
+# was correctly detected at 06:40, alarmed, and then HEALED at 07:00 — the one
+# thing the header says this script must never do. "No change since the last
+# pass" is not "no unanswered fork".
+#
+# So the park LATCHES, and only the resume command every AWAITING_PO entry
+# names can clear it (next_session.sh, run by a human who has answered). The
+# watchdog itself never clears it: healing a park is the bug, so the heal path
+# must not hold the eraser.
+PARK_MSG="The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor"
+
+if [ -f "${PARK_STATE}" ]; then
+  # Rationed, so a long park nags hourly and appends to the inbox once, rather
+  # than growing a note every ten minutes forever.
+  red "parked-on-fork" "Chain parked — your decision needed" "${PARK_MSG}"
+  log "parked since $(awk '{print $2}' "${PARK_STATE}" 2>/dev/null) — still parked; only 'automation/next_session.sh <role>' clears it"
+  exit 0
+fi
+
 PO_NOW="$(sha256sum AWAITING_PO.md 2>/dev/null | awk '{print $1}' || echo 'none')"
 PO_WAS="$(cat "${PO_HASH}" 2>/dev/null || echo '')"
 echo "${PO_NOW}" > "${PO_HASH}"
 if [ -n "${PO_WAS}" ] && [ "${PO_NOW}" != "${PO_WAS}" ]; then
-  red "parked-on-fork" \
-      "Chain parked — your decision needed" \
-      "The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor"
+  echo "parked $(date -u +%FT%TZ) ${PO_NOW}" > "${PARK_STATE}"
+  red "parked-on-fork" "Chain parked — your decision needed" "${PARK_MSG}"
   exit 0
 fi
 
@@ -187,7 +230,11 @@ fi
 log "chain is DEAD (no session, no successor, no detached run, no new fork) — healing, attempt ${STREAK}"
 echo "${STREAK} ${NOW}" > "${HEAL_STATE}"
 
-if OUT="$(automation/next_session.sh executor 15 2>&1)"; then
+# WATCHDOG_HEAL=1 stops the scheduler clearing a park latch on the watchdog's
+# behalf. Step 5 already exits before this line whenever a latch exists, so this
+# is the second of two independent guards — the failure it prevents (a heal that
+# silently un-parks a fork) is exactly the one that leaves no trace.
+if OUT="$(WATCHDOG_HEAL=1 automation/next_session.sh executor 15 2>&1)"; then
   log "HEAL — ${OUT}"
 else
   log "HEAL FAILED — ${OUT}"

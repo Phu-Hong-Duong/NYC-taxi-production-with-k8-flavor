@@ -4455,3 +4455,57 @@ record's own arithmetic, the live DBSIZE beside the M8-S4 materialization record
 and the write-up — and **the third had to be built for the drill**, which is the
 usual yield of writing the red team second: it tells you which witness the gate
 was missing.
+
+## POST-CLOSE — the watchdog that healed a decision (2026-08-24, role:SRE)
+
+**What was built.** Not a story: a repair, made by the session the defect itself
+started. The program closed on 2026-08-24 and parked deliberately — no successor
+scheduled, `AWAITING_PO 2026-08-24-2` written so the silence would read as a
+decision. Twenty minutes later `automation/watchdog.sh` logged `chain is DEAD (…
+no new fork) — healing` and launched an executor into a closed, tagged program
+with no story to execute. That executor was me. The repair makes a park a latched
+state, cleared only by the resume command the inbox already names.
+
+**Why this way.** The watchdog's own header has said since the day it was written
+that it "may restart an ACCIDENT and must never restart a DECISION." The rule was
+never wrong; the *implementation* expressed it as an edge — fire on the pass where
+`AWAITING_PO.md`'s hash changed — and an edge cannot express "somebody is still
+waiting on me." The tempting fix is to latch and stop. That fix is a trap, and
+finding out why is the whole value of the session: `red()` alarms *by appending to
+AWAITING_PO.md*, so the sensor sees the alarm, and latching would have wedged the
+chain permanently shut on any FAILED run — the exact deadlock the PO's own session
+had repaired eight hours earlier. So both halves had to land together: stop the
+watchdog reading its own handwriting, *then* latch. Having done the first, the
+second became free, and the FAILED-run recovery got faster (four passes to two)
+while the park became permanent. **Two properties got stricter at once, which is
+the signature of having fixed a cause rather than balanced two symptoms.**
+
+**The concept underneath.** *A guard whose alarm channel is also its sensor is
+measuring itself.* The feedback loop is invisible in normal operation because both
+readings are "something changed"; it only surfaces as a leniency someone added
+later to stop the false alarms — and that leniency is where the real failure gets
+in. The archaeology is worth copying: the old test's *docstring* described the
+false park as the expected trace ("pass 2 reads red()'s own AWAITING_PO append as
+a fork"). Somebody had already seen this behaviour, understood it exactly, and
+written it down as the design. **A comment explaining why a system does something
+strange is evidence about the system, not absolution for it** — read the ones that
+sound resigned.
+
+**What to look at.** `automation/watchdog.sh` §5 (the latch) and `red()`'s
+re-stamp — the two halves, each with the other named in its comment, because
+neither is correct alone. `tests/unit/test_watchdog.py::test_a_park_survives_the_pass_that_detected_it`
+loops **five** passes: one pass proves nothing about a latch, since that is
+precisely where an edge detector and a latch agree. And
+`test_an_acked_failure_stops_blocking_the_heal_path`, which asserts the *absence*
+of a latch — the interaction check that stops this repair from recreating the
+deadlock it was careful not to recreate.
+
+**What to try yourself.** Run the new tests against the old code:
+`git checkout <pre-fix> -- automation/watchdog.sh automation/next_session.sh &&
+uv run pytest tests/unit/test_watchdog.py`. Five fail, fourteen pass. Do this
+*before* believing any test you wrote for a bug you just fixed — a test that
+passes against both versions is a sentence, not a check. Then ask the question
+this session was started by: **when your automation overrides a human decision,
+does anything anywhere record that it did?** Here the only trace was one line in
+`watchdog.log` reading `chain is DEAD`, about a chain that had never been more
+deliberately alive.

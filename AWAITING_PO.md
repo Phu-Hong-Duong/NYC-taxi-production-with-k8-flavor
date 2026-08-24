@@ -1,5 +1,60 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-24-3 · raised by EXEC/Opus (post-close, unscheduled session) · NOT A FORK, NO ACTION NEEDED — your close-park was overridden by the watchdog; that is fixed, and nothing about the closed program moved
+
+**What happened.** You parked the chain at the program close on purpose
+(2026-08-24-2: no successor scheduled, so the silence would read as a decision).
+The watchdog detected that park correctly at **06:40 UTC** and alarmed. At
+**07:00 UTC** it logged `chain is DEAD (… no new fork) — healing` and started
+executor session **#7** — into a program that was closed and tagged `m9-closed`,
+with no story left to execute. **That session is this one.** It found the defect
+that started it, fixed it, and is re-parking.
+
+**Nothing about the closed program was touched.** No gate was run or changed, no
+alias moved, nothing was fitted, no wire, no registry, no mart, no published
+number, no cluster state. `@champion` is version 2 / `feature_set v2`. The diff
+is three files under `automation/` + `tests/` + three documents. **The ten-gate
+GREEN verdict of the close stands unaltered.**
+
+**The defect (F-066), because it is worth thirty seconds.** The watchdog has said
+since it was written that it "may restart an ACCIDENT and must never restart a
+DECISION." It implemented that as *fire on the pass where AWAITING_PO.md's hash
+changed* — an EVENT, where the thing it must express is a STATE. "No change since
+the last pass" is not "no unanswered fork." Underneath it was worse: `red()`
+**alarms by appending to AWAITING_PO.md**, so the alarm channel is also the park
+sensor and every alarm faked a park on the next pass — which is precisely why
+real parks had to be allowed to expire, or one FAILED run would wedge the chain
+shut forever (the deadlock your Windows-side session repaired at 04:00 the same
+morning). The expiry was the price of the feedback loop, and your park is what
+paid it.
+
+**The fix, and how to know it works.** A park now LATCHES, and exactly one thing
+clears it: `automation/next_session.sh` — the resume command every entry in this
+file already names, so **answering is the clear**. The heal path cannot hold the
+eraser (two independent guards). And the watchdog no longer reads its own
+handwriting as a fork, which is what makes latching safe rather than fatal.
+Verified by running the new tests **against the old code: 5 failed, 14 passed**,
+and by running the real watchdog against this repo with the latch armed — it
+parked. The FAILED-run recovery got *better* too (4 passes → 2).
+
+**What this means for you in practice:** nothing changes about how you resume.
+The command at the bottom of any entry still works and now also un-parks the
+chain. What is different is that if you ignore this file for a week, the chain
+will still be parked when you come back, instead of having quietly restarted
+itself seven times.
+
+**Your list is UNCHANGED — everything in 2026-08-24-2 above is still yours and
+still the only thing outstanding:** (1) the ~5-minute observed demo run, the one
+§9/M9 accept box only you can close · (2) **F-062** — a genuine fork awaiting a
+letter, recommendation **(b)** · (3) publish-the-repo, your §12 question · (4) the
+standing four. **Nothing new is asked of you here.**
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+automation/next_session.sh architect 120   # unchanged; an ARCH touch charters any answered work
+```
+
+
 ## 2026-08-24-2 · raised by ARCH/Fable (PROGRAM CLOSE) · THE CLOSE: the chain is parked, one accept box and two decisions are yours
 
 **The program is closed on every term a machine can verify.** M9 is tagged
@@ -822,5 +877,10 @@ The three standing entries below/above are unchanged and still non-blocking:
 
 ## 2026-08-24 04:30 UTC — watchdog: Chain: detached run FAILED
 'm7-retrain-fulldata' exited 2. The chain is parked because its result never arrived. See automation/runs/m7-retrain-fulldata.log
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-24 06:40 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
 
 Watchdog log: automation/logs/watchdog.log

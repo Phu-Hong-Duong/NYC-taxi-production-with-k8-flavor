@@ -166,18 +166,111 @@ def test_a_detached_run_in_flight_owns_the_handoff(tmp_path):
 # --------------------------------------------------------------------------
 # RED: the human is the only one who can clear these. No restart, one alarm.
 # --------------------------------------------------------------------------
+def _park(tmp_path: Path, env: dict) -> None:
+    """Park the sandbox chain on a fork the way a real session does: write, stop."""
+    _prime_po_hash(tmp_path, env)
+    (tmp_path / "AWAITING_PO.md").write_text("# inbox\n\n## a genuine fork\noptions...\n")
+    _run(tmp_path, env)
+
+
 def test_a_fork_parks_the_chain_and_is_never_auto_resumed(tmp_path):
     """The load-bearing refusal: a DECISION is not an accident."""
     tmp_path, env = _sandbox(tmp_path)
-    _prime_po_hash(tmp_path, env)
-    (tmp_path / "AWAITING_PO.md").write_text("# inbox\n\n## a genuine fork\noptions...\n")
-
-    _run(tmp_path, env)
+    _park(tmp_path, env)
 
     assert "RED parked-on-fork" in _wlog(tmp_path)
     assert "decision needed" in _toasts(tmp_path)
     assert not (tmp_path / "automation" / "logs" / "pending_successor").exists(), (
         "the watchdog auto-proceeded past a fork — ADR-010's whole point"
+    )
+
+
+def test_a_park_survives_the_pass_that_detected_it(tmp_path):
+    """F-066, replayed: the park that was healed twenty minutes after it worked.
+
+    On 2026-08-24 the program-close park was detected correctly at 06:40,
+    alarmed, and then HEALED at 07:00 — because the sensor was an edge detector
+    on AWAITING_PO.md's hash and "no change since the last pass" had been left
+    to stand for "no unanswered fork". Two passes of park, then a resurrected
+    executor booting into a closed, tagged program with no story to execute.
+
+    This is the test that would have caught it: the SECOND pass is where the old
+    code went wrong, and every pass after it is the same wrong. One pass proves
+    nothing about a latch.
+    """
+    tmp_path, env = _sandbox(tmp_path)
+    _park(tmp_path, env)
+
+    for _ in range(5):
+        _run(tmp_path, env)
+
+    log = _wlog(tmp_path)
+    assert (tmp_path / "automation" / "logs" / "watchdog_parked").exists(), (
+        "the park must latch — a decision does not expire because time passed"
+    )
+    assert "chain is DEAD" not in log, "a parked chain is not a dead one"
+    assert "HEAL —" not in log, (
+        "the watchdog healed a deliberate park — F-066, the exact 2026-08-24 defect"
+    )
+    assert not (tmp_path / "automation" / "logs" / "pending_successor").exists()
+    # Rationed: a long park nags, it does not grow the inbox a note per pass.
+    assert _toasts(tmp_path).count("Chain parked") == 1
+    assert (tmp_path / "AWAITING_PO.md").read_text().count("watchdog: Chain parked") == 1
+
+
+def test_answering_the_fork_is_what_resumes_the_chain(tmp_path):
+    """The latch must be openable, or the fix is just a nicer way to be dead."""
+    tmp_path, env = _sandbox(tmp_path)
+    _park(tmp_path, env)
+    latch = tmp_path / "automation" / "logs" / "watchdog_parked"
+    assert latch.exists()
+
+    # The command every AWAITING_PO entry names as the resume. Running it IS
+    # the answer, so it is what clears the latch.
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "automation" / "next_session.sh"), "executor", "15"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "park latch cleared" in proc.stdout
+    assert not latch.exists()
+    assert (tmp_path / "automation" / "logs" / "pending_successor").exists()
+
+    _run(tmp_path, env)
+    assert "GREEN" in _wlog(tmp_path).splitlines()[-1], "an answered fork must stop parking"
+
+
+def test_a_heal_may_not_un_park_a_decision(tmp_path):
+    """The one actor with a motive to clear the latch must not hold the eraser."""
+    tmp_path, env = _sandbox(tmp_path)
+    _park(tmp_path, env)
+    latch = tmp_path / "automation" / "logs" / "watchdog_parked"
+
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "automation" / "next_session.sh"), "executor", "15"],
+        cwd=tmp_path, env={**env, "WATCHDOG_HEAL": "1"},
+        capture_output=True, text=True, timeout=60,
+    )
+
+    assert "refusing to clear the park latch" in proc.stdout
+    assert latch.exists(), "a heal cleared a park — the fork policy is walked through again"
+    assert not (tmp_path / "automation" / "logs" / "pending_successor").exists()
+
+
+def test_a_session_running_does_not_mean_the_fork_was_answered(tmp_path):
+    """GREEN is an observation about liveness, never about a decision."""
+    tmp_path, env = _sandbox(tmp_path)
+    _park(tmp_path, env)
+    (tmp_path / "automation" / "logs" / "running_session").write_text(
+        f"{os.getpid()} executor 2026-08-24T07:00:16Z\n"
+    )
+
+    _run(tmp_path, env)
+
+    assert "GREEN — session alive" in _wlog(tmp_path)
+    assert (tmp_path / "automation" / "logs" / "watchdog_parked").exists(), (
+        "a session that happens to be alive did not answer the PO's question"
     )
 
 
@@ -206,11 +299,16 @@ def test_a_failed_detached_run_wakes_someone(tmp_path):
 def test_an_acked_failure_stops_blocking_the_heal_path(tmp_path):
     """The 2026-08-24 deadlock, replayed: alarm once, then the chain comes back.
 
-    The full sequence after a FAILED run is the KILLED branch's exact trace:
-    pass 1 alarms and acks; pass 2 reads red()'s own AWAITING_PO append as a
-    fork and alarms that; pass 3 sees the fork hash settle (toast suppressed);
-    pass 4 heals. Four passes = ~30 minutes of park on the real cadence, then
-    the chain is alive again — against FOREVER before the ack existed.
+    Pass 1 alarms and acks; pass 2 heals. It used to take four, and the two
+    extra passes were the watchdog reading its OWN alarm append as a session's
+    fork — a false park it then had to be allowed to forget. That decay is what
+    let a REAL park be healed (F-066), so red() now re-stamps the baseline and
+    the false park is gone at the source rather than waited out.
+
+    The second assertion is the load-bearing one and it is about the LATCH:
+    latching a false park would wedge the chain shut on any FAILED run forever,
+    which is this deadlock again and worse. Neither half of F-066's fix is
+    correct without the other, and this is where that is checked.
     """
     tmp_path, env = _sandbox(tmp_path)
     _prime_po_hash(tmp_path, env)
@@ -218,8 +316,12 @@ def test_an_acked_failure_stops_blocking_the_heal_path(tmp_path):
         "FAILED 2 2026-08-17T15:10:00Z\n"
     )
 
-    for _ in range(4):
+    for _ in range(2):
         _run(tmp_path, env)
+
+    assert not (tmp_path / "automation" / "logs" / "watchdog_parked").exists(), (
+        "the watchdog latched a park on its own alarm — the chain can never resume"
+    )
 
     # red() writes two log lines per firing (the message, then "toast
     # delivered"), so the alarm count is the toast record's, not the log's.
