@@ -4229,3 +4229,76 @@ session cannot do that. It is recorded as OPEN in the accept record itself
 the one command, and `make verify-m9` is chartered to assert the entry exists and
 is honest. **A demo that marked its own human-observation box green would be the
 only dishonest artifact in the program.**
+
+## M9-S2 — the online-store watchdog: a bar you don't need, a canary that must decline, and the guard that saved us was written for something else
+
+**The headroom leg didn't calibrate the threshold — it deleted it.** I went in
+expecting to argue a key-count bar: the store holds 57,688 keys, so page below
+some fraction of that. The measurement made the whole idea look silly. Feast
+writes one Redis key per distinct entity key per view, so the count has a source
+of truth *that is not itself* — and three witnesses agreed at 57,688 (the
+derivation from `data/feast/*.parquet`, M8-S4's materialization record, the live
+`DBSIZE`). Once the right-hand side of the comparison is measurable on the same
+run as the left, the rule is `keys < keys_expected` and there is **no number on
+either side**. Two other numbers then told me a bar would have been actively bad:
+the transformer's entire dependency is **4,646 keys, 8.054%** of the store, so a
+store that lost every feature the rider's path needs still reads 92% of normal;
+and zone 132's centroid is **one key of 57,688**, so the failure that breaks
+every JFK quote moves `DBSIZE` by 0.0017%. **A quantity can be perfectly accurate
+and structurally unable to see the event you care about.** That is gotcha #59
+arriving in an aggregate rather than in a status code, and the way I found it was
+computing the composition before writing the rule instead of after.
+
+**"Stale" needed redefining before it could be alerted on at all.** SLO-D3 asks
+whether the drift *job* ran recently and argues 40 days from a monthly cadence.
+That question has no answer for this store: its data is settled — 2019 windows, a
+2019 shapefile, a holiday table to 2030 — so a store filled in August 2026 is
+exactly as correct in 2027, and any clock-age bar on its *contents* would be a
+number chosen to avoid paging. **A store is stale when it disagrees with the
+sources it was filled from.** Same words, different question, and the second one
+is checkable with no threshold. When a monitoring vocabulary transplants badly,
+suspect the question rather than the number.
+
+**The negative check I was proudest of turned out to be the one that cannot
+fire.** The canary asserts four claims and one is negative: zone **264 must
+decline**, because a store answering for TLC's non-places would be inventing a
+location, and a presence-only check passes against a server that answers every
+question with the same row. Correct, and load-bearing at M8-S4 leg 2. But
+`nonplace_declines` read **1 through the entire outage** — `null` is the right
+answer for 264 *and* what a totally empty store returns, so the negative claim
+cannot distinguish "correctly declines" from "has nothing to decline with". It is
+in the record and in §9's table rather than left for somebody to rediscover.
+**A negative assertion is strongest where presence is possible** — which is
+F-060's lesson (gotcha #105) meeting its own boundary: there, an absence assertion
+passed for free because the system was absent; here, it passes for free because
+the absence it asserts is also the symptom.
+
+**The prediction was wrong in the most useful direction.** The kickoff, ADR-012
+and two M8 write-ups all expected an emptied store to produce a **confident wrong
+number** — nine NaN geometry features and a plausible quote with nothing red
+anywhere. Measured, with the store really empty, the transformer answers **HTTP
+422**. The reason is worth the whole story: the **geometry** half structurally
+*cannot* refuse, because an all-null centroid table is exactly what zones 264/265
+legitimately produce — but every request also carries a **date**, and
+`calendar_from_store` raises on an unanswered one. So the thing standing between
+an empty store and a wrong quote is **F-019's horizon guarantee, carried onto the
+store's wire two stories earlier for an entirely different reason**. Then the
+sting: 422 is the *caller's* status class, and SLO-R1 puts 4xx outside the
+availability error budget on the argument that a 4xx is a guard working — so a
+totally dead dependency currently spends **zero** error budget and renders as
+riders sending bad requests (**F-062**, open, routed with three costed options).
+The 503 path exists and is correct; it is simply not the path an *empty* store
+takes, because empty and unreachable fail in different halves of the client.
+**Two failure modes of one dependency can exit through two different status
+classes, and only one of them is billed to the right party.**
+
+**And the drill's undo rewrote another milestone's evidence.** The one-command
+repair the runbook names is `scripts/feast_materialize.sh`, which unconditionally
+writes `automation/runs/m8-online/materialize.json` — a *tracked* record belonging
+to M8-S4 and cited by this story's own headroom leg. The drill's first run
+re-dated it to its own minute. The refill was right; writing M8's evidence over it
+was not. Third occurrence of one shape (gotcha #48, F-053, now F-063): **when a
+command is reused as somebody else's undo, audit what it does to state that
+already exists.** It was visible only because `automation/runs/**/*.json` is
+tracked — F-029's option A, landed at M5-S1 for exactly this reason and paying out
+three milestones later.

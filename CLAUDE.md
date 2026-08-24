@@ -3196,6 +3196,106 @@ can never disagree (the port-family twins lesson, applied before it bit).
   demo that marked its own human-observation box green would be the only
   dishonest artifact in this program.
 
+## The online-store watchdog (M9-S2) — R-2 closed, with two rules carrying no number
+- **The headroom leg did not calibrate a bar, it DELETED one.** Feast writes one
+  Redis key per distinct entity key per view, so the store's size has a source of
+  truth **that is not itself** — and **three witnesses agree at 57,688** (derived
+  from `data/feast/*.parquet`, M8-S4's materialization record, the live `DBSIZE`;
+  nobody typed it). So `OnlineStoreIncomplete` is `keys < keys_expected` with
+  **no number on either side**, both measured by one reader on one run; it
+  self-updates when `make feast-sources` legitimately changes the sources, and
+  the window between a source change and the next materialize IS the stale state.
+  Two other measurements made a count bar look actively bad: **the transformer's
+  entire dependency is 4,646 keys, 8.054%** (a store that lost every feature the
+  rider's path needs still reads 92% of normal), and **zone 132's centroid is ONE
+  key of 57,688** — lose exactly the key that breaks every JFK quote and `DBSIZE`
+  moves 0.0017%. **A quantity can be perfectly accurate and structurally unable
+  to see the event it is watched for** — gotcha #59 arriving in an aggregate.
+- **"Stale" had to be REDEFINED before it could be alerted on.** SLO-D3 asks
+  whether the drift JOB ran recently and argues 40 days from a monthly cadence;
+  that question has no answer here, because this store's data is SETTLED (2019
+  windows, a 2019 shapefile, a holiday table to 2030) and a store filled in
+  August 2026 is exactly as correct in 2027. A clock-age bar on its contents
+  would be a number chosen to avoid paging. **A store is stale when it disagrees
+  with the sources it was filled from.**
+- **A-12a asks about ANSWERS, not size, and one of its four claims is negative.**
+  The canary rides the feature server's own `/get-online-features` wire — the
+  same one the transformer uses: zone 132 must answer, zone **264 must DECLINE**,
+  2019-07-04 must return its holiday flags, and `DBSIZE` must have been readable.
+  Expression `== 0`, a property. **A-13** is `absent(...)`, A-11's argument one
+  board along: A-12's freshness clause is structurally unable to see its own
+  series disappear, because `time() - stamp < 1800` over zero series is zero
+  series. **The one number in any of the three expressions is A-4's `1800`**, and
+  its cost is named rather than netted out — this reader has NO scheduler (M9
+  legislates no new Flyte trigger — F-058 — and the story adds no image and no
+  CronJob), so a reading older than 30 minutes makes A-12 **INACTIVE rather than
+  falsely green**.
+- **`store_reachable` is REPORTED as a 0, which inverts A-4's refusal rule on
+  purpose.** `push_serving_version.py` refuses to push when a side is unreadable
+  and is right to — an unknown served version is not a mismatch. Here it
+  inverts: if the Redis pod is gone, *"I could not read DBSIZE"* is not a gap in
+  the measurement, it **is** the measurement, and a reader that withheld it would
+  leave the last healthy reading to go quietly stale. Honest cost: a broken
+  `kubectl` on the operator's laptop reads the same as a broken store.
+- **The prediction everyone had written for two milestones was WRONG, in the
+  useful direction.** The kickoff, ADR-012 and two M8 write-ups all expected an
+  emptied store to produce a **confident wrong number** from nine NaN geometry
+  features. Measured with the store really empty: **HTTP 422**. The geometry half
+  structurally CANNOT refuse (an all-null centroid table is exactly what zones
+  264/265 legitimately produce) but every request also carries a DATE and
+  `calendar_from_store` RAISES on an unanswered one — so **the thing standing
+  between an empty store and a wrong quote is F-019's horizon guarantee, carried
+  onto the store's wire two stories earlier for a different reason.** **503 is
+  what an UNREACHABLE store produces** — a different phase of the same drill.
+- **F-062 (new, OPEN, routed to the program close): a dead dependency is billed
+  to the CALLER.** 422 is a 4xx, and SLO-R1 puts 4xx outside SLO-A1's
+  availability budget on the argument that *a 4xx is a guard working* — so a
+  totally dead store spends **zero** error budget and renders, in every panel
+  that splits 4xx from 5xx, as riders sending bad requests. A-12 pages, so it is
+  not silent; the ACCOUNTING is. Three costed options in the ledger row,
+  recommendation (b): make `calendar_from_store` distinguish *this date is not
+  covered* (422, F-019's case) from *the store answered nothing for any date*
+  (503, ours). Not fixed here because changing what the served boundary returns
+  is a behaviour change with three parity records behind it and M9 law 3 keeps
+  the wire still.
+- **The drill PASSED 28/28 across three phases with its prediction committed
+  first** (`automation/runs/m9-store-watch/prediction.json`, pinned by a test
+  against the drill's own literal). `FLUSHDB` 57,688 -> 0; **A-12a AND A-12b both
+  FIRED at T+162.2 s and both reached Alertmanager**; the failing claims were
+  read **per series** (`['calendar_answers','zone_answers']`) and not per rule
+  name (gotcha #93); **all five must-not-fire negatives held** (A-13, A-2, A-5,
+  A-11, A-4); the champion's own wire answered **39.0019 minutes throughout**;
+  refill **57,688 keys in 9.9 s**; both rules cleared 30.0 s / 0.0 s and **the
+  board ends carrying the truth, not a silence** (M7-S3's rule).
+- **A measured limit of the negative check, recorded rather than left to be
+  rediscovered:** `nonplace_declines` read **1 through the whole outage**. Zone
+  264 returning `null` is the correct answer AND what a totally empty store
+  returns, so that claim cannot distinguish "correctly declines" from "has
+  nothing to decline with" — which is why the two POSITIVE checks are the ones
+  that fire. **A negative assertion is strongest where presence is possible**
+  (F-060/gotcha #105 meeting its own boundary).
+- **F-063 (new, closed the same session): the drill's UNDO rewrote another
+  milestone's tracked evidence.** `scripts/feast_materialize.sh` is the
+  one-command repair the runbook names and it unconditionally writes
+  `automation/runs/m8-online/materialize.json` — M8-S4's record, cited by §9 and
+  by this story's own headroom leg — so the first run re-dated it from
+  `2026-08-21T07:52:13Z` to its own minute. Fixed with `--no-record`, M8's record
+  restored from git, the phase RE-RUN so every committed record was produced by
+  the committed code, and the drill keeps its own `refill_seconds` where it
+  belongs. Third occurrence of one shape (gotcha #48, F-053): **when a command is
+  reused as somebody else's undo, audit what it does to state that already
+  exists.** Visible only because `automation/runs/**/*.json` is tracked — F-029's
+  option A, landed at M5-S1 and paying out three milestones later.
+- **The order of work is the evidence and it is checkable from git** (M8 law 4,
+  ninth inheritance): headroom recorded -> `docs/slo_serving.md` §9 argued FROM
+  that record (both in `cedb9e8`) -> reader and rules (`c8290da`) -> the
+  prediction committed (`408b472`) -> the drill ran and first crossed a bar.
+- **What it deliberately does not cover, named in §6**: a store filled from the
+  WRONG sources has the right key count and passes every canary (that instrument
+  is `make feast-online-parity`, 100 declared pairs at bar EXACT, and it is
+  gate-time rather than a watchdog) · the CADENCE, bounded by the freshness
+  clause rather than claimed to be small · F-062's billing question.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3407,6 +3507,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | The stakeholder demo page (M9-S1) | `make demo-page` regenerates it from its three sources · `make demo-page-check` is the write-nothing twin | VERIFIED 2026-08-23 (M9-S1): **265 zones** from `data/reference/taxi_zone_lookup.csv`, **4 raw inputs** from `transformer.RAW_INPUTS`, and a default trip that is a PUBLISHED parity row — so the first thing a stakeholder sees is checkable against a record. `--check` regenerates in memory and diffs against git; a unit test runs it, and a second asserts regeneration is deterministic. **Its first run substituted the template's own explanatory comment** and shipped 795 `<option>` elements instead of 530 — gotcha **#110**, now guarded by an occurrence COUNT (`TOKEN_COUNTS`), because every one of the three copies matched the CSV |
 | Deploy the demo + its route (M9-S1) | `make deploy-demo` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` removes its four objects and touches nothing else) | VERIFIED 2026-08-23 (M9-S1): ConfigMap rendered FROM `demo/index.html` (the file in git is the only copy), a `busybox:1.38.0` httpd Deployment at the digest the data stager already pins, a ClusterIP Service and ONE **host-less** Ingress. **Three wait legs**: `rollout status`, then the pod template's page-sha256 == the committed file's, then **the ROUTE itself** under the origin the browser will use (F-037/F-060, gotcha #106). It then asserts the two invariants it shares a server block with — **`/healthz` 200 and `/` 404** — rather than leaving the next `make deploy-serving` to discover them. F-039's precondition is asked of the CLUSTER: it refuses to write to any of its four names that carries `ownerReferences`. `DRY_RUN=1` verified to leave the namespace with no demo object. Deploys no model and cannot name the registry in code (AST-tested) |
 | THE demo accept — real requests, sent the way the PAGE sends them (M9-S1) | `make demo-accept` (`DEMO_ACCEPT_ARGS=--no-write` records nothing). A READER | VERIFIED 2026-08-23 (M9-S1): **PASSED 9/9.** The endpoint, the request schema and the payload are READ OUT of `demo/index.html` and posted with **no Host header override** — the one thing a browser cannot do and every other client here does. Bar **EXACT**, argued in `demo/README.md` §4 and committed BEFORE the record existed: **39.00193715359812 vs the recorded 39.00193715359812, |delta| = 0.000e+00** against `automation/runs/m8-transformer/transformer-parity.json`'s `federal-holiday` row (matched on `(at, pu, do)`, never typed) · `model_version` **'2'** read off the ANSWER · `X-Taxi-Lookups` equal to the recorded string · the served page **byte-identical to git by sha256** (47,147 bytes, fetched back through the route) · a **2031** quote **422**-refused naming the date · the no-geometry path 264 -> 264 **quoted at 8.2445 min, not broken** · and the CHAMPION's own model name **404** on this origin, asserted only after a real quote succeeded (F-060). The PO-observed box is recorded **OPEN** in the record itself |
+| The online store's key composition and refill cost — the input to §9's bars, measured BEFORE them (M9-S2) | `make store-watch-headroom` (`HEADROOM_ARGS=--out <path>`). A READER — it reads, it records, it argues nothing | VERIFIED 2026-08-23 (M9-S2): **three witnesses agree at 57,688 keys** — `count(distinct <entity keys>)` over `data/feast/*.parquet`, the count `automation/runs/m8-online/materialize.json` recorded on 2026-08-21, and the live `DBSIZE` off the running server. Per view: `zone_static` 263 (0.46%) · `calendar_day_flags` 4,383 (7.60%) · `od_window_stats` 46,938 (81.37%) · `pu_hour_window_stats` 6,104 (10.58%). **The transformer's ENTIRE dependency is 4,646 keys — 8.054%**, and zone 132's centroid is **one key of 57,688**, which is what killed the key-count bar before it was written: lose exactly the key that breaks every JFK quote and `DBSIZE` moves 0.0017%. Also read live: `maxmemory-policy noeviction`, 14.32 MiB against a 512 MB cap — so there is **no partial-loss mechanism** and the realistic population is bimodal. It ran BEFORE `docs/slo_serving.md` §9 existed and both landed in `cedb9e8`, which is what makes M8 law 4 checkable from git here |
+| A-12/A-13's metric source: DBSIZE + a four-claim canary, pushed (M9-S2) | `make store-watch` (`STORE_WATCH_ARGS=--no-push` prints and pushes nothing; `--out <path>` records). A READER — it issues NO verdict and contains no bar | RE-VERIFIED LIVE 2026-08-24 after a host restart: `keys 57688` == `keys expected 57688`, and all four canary claims **1** through the feature server's own `/get-online-features` wire — `store_reachable` · `zone_answers` (132 returns a non-null centroid) · **`nonplace_declines` (264 returns null, and not an error)** · `calendar_answers` (2019-07-04 returns its holiday flags) — then `pushed 7 series -> job/taxi-store-watch/store/feast-online`. **No threshold lives anywhere in it**: the bars are the SELECTORS of three rules, argued in `docs/slo_serving.md` §9. `store_reachable` is REPORTED as a 0 rather than withheld, inverting `push_serving_version.py`'s refusal rule on purpose — an unreadable store IS the measurement. Ephemeral forwards on **6568/9100**, deliberately off every port a running drill owns (#55 has cost this program a session); neither is a route (M9 law 1) |
+| Empty the online store, watch A-12 fire, watch the rider be REFUSED, refill, watch it clear (M9-S2) | `make store-watch-drill` (`DRILL_ARGS=--dry-run` writes the prediction and mutates nothing; `--phase health\|empty\|unreachable`; ~9 min, and the empty phase is a **real total outage of the transformer's dependency**) | VERIFIED 2026-08-23 (M9-S2): **PASSED — 28 checks across three phases, 0 failures** (`health` 5/5 · `empty` 19/19 · `unreachable` 4/4), prediction written to disk before the first mutation, committed in `408b472` and pinned by a test against the drill's own literal. `FLUSHDB` **57,688 -> 0**; the rider's quote came back **HTTP 422 — predicted 422, and the kickoff's superseded 503 is kept beside it in the prediction rather than quietly replaced**; **`OnlineStoreCanaryFailing` and `OnlineStoreIncomplete` both FIRED at T+162.2 s and both reached Alertmanager**, with the failing claims read **per series** (`['calendar_answers','zone_answers']`) and not per rule name (gotcha #93); **all five must-not-fire negatives inactive** (A-13, A-2, A-5, A-11, A-4); **the champion's own wire answered 39.0019 minutes throughout** — the store backs the transformer's raw boundary, not the 24-column wire; refill **57,688 keys in 9.9 s**; both rules cleared 30.0 s / 0.0 s and the real numbers went straight back, so **the board ends carrying the truth** (M7-S3's rule). It calls the refill with **`--no-record`** and a comment saying why — that is **F-063**, found by its own first run |
+| Validate the alert rules, now sixteen (M9-S2) | `make alert-rules` | RE-VERIFIED 2026-08-23 (M9-S2): **16 rules validated across 10 signal ids** (was 13 across 9), the three new ones printed with their `for:` and severity — `A-12 OnlineStoreCanaryFailing for=2m critical` · `A-12 OnlineStoreIncomplete for=2m warning` · `A-13 OnlineStoreWatchdogAbsent for=10m warning`. Every one carries an `annotations.why` or the renderer REFUSES it, which is what stops a threshold shipping without the argument beside it. Read back off the live `prometheus-server` ConfigMap: all three present, **`health=ok`, and NO pod restart** — the configmap-reload sidecar, M6-S1's measurement re-confirmed a fourth time |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |
