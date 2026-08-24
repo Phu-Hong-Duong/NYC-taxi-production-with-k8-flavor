@@ -160,12 +160,45 @@ UNREACHABLE store produces**, and that is a different phase of this drill.
 > 422-era records are kept unedited at `attempt1-422-era/` with their own README,
 > because they are the evidence the decision was made from.
 
-### The measured run
+### The measured run — 2026-08-24 (M9-S7), the records this document's gate reads
+
+Four phases in one invocation, **36 checks, 0 failures**, against a prediction
+committed at `b89eea4` before the first `FLUSHDB`. This run supersedes the
+2026-08-23 one below; both are kept because the difference between them IS
+F-062, and only this one is checked against by `make verify-m9`.
 
 | observation | measured |
 |---|---|
 | store emptied | 57,688 → **0** keys (`FLUSHDB`) |
-| rider's quote while empty | **HTTP 422**, predicted 422 |
+| **rider's quote while empty** | **HTTP 503**, predicted 503 — the finding closed. The refusal names the sentinel it probed and the file that covers it |
+| a PAST-HORIZON quote while empty | **HTTP 503** — with nothing answering, "was that date covered?" is a question this deployment cannot answer, so it does not blame the caller for it |
+| a PAST-HORIZON quote while HEALTHY | **HTTP 422** naming the year — F-019's typed refusal SURVIVED the change, asserted rather than argued |
+| champion's own wire, throughout | **39.0019 minutes** — unaffected |
+| `OnlineStoreCanaryFailing` (A-12) | **FIRED at T+162.5 s**, reached **Alertmanager** |
+| `OnlineStoreIncomplete` (A-12) | **FIRED at T+162.5 s**, reached **Alertmanager** |
+| which claims failed | `['calendar_answers', 'zone_answers']` — the per-series read |
+| must-not-fire (A-13, A-2, A-5, A-11, A-4) | all **inactive**, as predicted |
+| refill | **57,688 keys back**, **11.6 s** wall-clock |
+| both rules cleared | 30.0 s / 0.0 s after the reader saw a healthy store |
+| unreachable store (feast-server → 0 replicas) | **HTTP 503**, and answering again **15.1 s** after it came back |
+| surface deleted | **A-13 FIRED at T+630.7 s**, reached Alertmanager, **A-12 stayed inactive** — the load-bearing negative, and the first time this drill has run its fourth phase |
+| rider's quote after | **HTTP 200, 39.00193715359812 minutes** |
+
+**The two 503s above are different failures and it matters that they are not one
+row.** The empty store's is `StoreCoverageError`'s replacement — the calendar
+view answered `null` for the request *and* for a sentinel the committed table
+covers. The unreachable store's is `FeatureStoreUnavailable` raised at the
+transport (`ConnectionRefusedError`). They arrive at the same status by different
+evidence, which is what makes the status honest rather than a catch-all.
+
+### The measured run — 2026-08-23 (M9-S2), superseded, kept because it is the evidence
+
+Records at `automation/runs/m9-store-watch/attempt1-422-era/`.
+
+| observation | measured |
+|---|---|
+| store emptied | 57,688 → **0** keys (`FLUSHDB`) |
+| rider's quote while empty | **HTTP 422**, predicted 422 — *and this row is F-062* |
 | champion's own wire, throughout | **39.0019 minutes** — unaffected, as predicted |
 | `OnlineStoreCanaryFailing` (A-12) | **FIRED at T+162.2 s**, reached **Alertmanager** |
 | `OnlineStoreIncomplete` (A-12) | **FIRED at T+162.2 s**, reached **Alertmanager** |
