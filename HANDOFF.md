@@ -1,5 +1,112 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (cm) — M9-S6: the charter's own safety check fired, so the edit was not made
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cl) · `docs/milestones/M9_EPILOGUE_KICKOFF.md` · AWAITING_PO. **Role block:
+MLE** — charter read. Refusals in play all session: *no fit · no alias move · no
+registry version · no wire change · no cluster mutation · **no gate edited in either
+direction*** — none broken. `configs/train.yaml`, `src/taxi_mlops/training/gate.py`
+and all three replay legs are **byte-identical to `origin/main`** (`git diff
+origin/main -- configs/ src/ scripts/verify_m{2,3,7}.sh` → empty).
+
+**Story: M9-S6, executed to its own chartered stopping rule.** ONE story. S7…S9 remain.
+
+**MERGED** — PR **#67**, merge commit `692dbb2`; `git branch -r --contains d791d80` →
+`origin/main` (gotcha #20). CI `lint-test` pass 1m31s.
+
+### Reconciliation (the staleness check)
+Handoff (cl)'s Next pointed at M9-S6 and at its replay wall. Reality matched: tree
+clean at `951f972`, `main == origin/main`, cluster 3/3 Ready v1.36.1 (7d11h), all ten
+`*.status` files pre-existing and untouched, `@champion` version **2** /
+`feature_set v2`. Baseline recorded BEFORE any file was added, because everything
+below is a claim about gates: **`make verify-m2` GREEN · `make verify-m3` GREEN ·
+`make verify-m7` GREEN**, all unedited.
+
+### Done — the wall was asked, and it fired
+The charter's rule, quoted because it is what made this cheap: *"If any replay flips,
+STOP — that is a finding and a PO question, never an edit to the replay."* Written in
+advance, so there was no judgement call under pressure at minute fifty.
+
+`scripts/f016_replay_probe.py` (a READER — it takes the real `decide()` verdict for
+every condition **except** the incumbent KPI-09 one and applies the simulated margin
+to that one itself, so a difference is attributable to the margin and to nothing
+else; it edits no config, calls no registry, fits nothing, runs in seconds):
+
+**2 of 9 recorded verdicts FLIP PROMOTE → REFUSE** under option B —
+`champion v1` in `automation/runs/m3s5/bakeoff.json` and `lightgbm-v1` in
+`docs/promotion_gate_m3.md`. Raised as **F-068**, parked at **AWAITING_PO
+2026-08-24-4** with four costed options; **F-016 stays OPEN** with a note.
+
+Three things worth carrying forward:
+
+- **The charter's arithmetic was right on all three numbers it checked and short on
+  the POPULATION.** `verify-m3` §5 replays **all five** bake-off contenders (one of
+  which is the champion scored as a contender), and `verify-m2` §2 parses
+  **`docs/promotion_gate_m3.md`** as well as the M2 document. *The population a replay
+  leg reads is a property of the leg's code, not of the milestone in its name.*
+- **0.50% is not the cause.** Both flips sit at **+0.0000%** — a challenger
+  numerically identical to the incumbent — so the probe at `--margin 0.001` flips the
+  same two rows. **The identity case must be answered by any version of B at any
+  bar**; a smaller number is not a route around it. Pinned as arithmetic in four
+  tests so the next attempt meets it rather than rediscovering it.
+- **The stakes are bounded, and that is measured rather than reassuring.** Neither
+  flipped verdict ever moved an alias (M3-S1 ran `--no-promote`; M3-S5's alias went to
+  `auto-on-v2`), so **no promotion that actually happened is invalidated**. Nearest
+  *surviving* verdict `artisan v2` clears the chosen bar by **0.0612 points**
+  (+0.5612%) and would flip at 0.57% — the cliff is shown, not just the decision.
+
+### Verification
+- **`make verify-m2` GREEN · `make verify-m3` GREEN** re-run AFTER the additions;
+  `make verify-m7` GREEN at baseline and structurally unaffected (its retrain leg
+  reads the record's frozen check list via `retrain_prediction_check.
+  _structural_incumbent_only`, not a live `decide()` call — checked, not assumed).
+- Host suite **1162 passed**, 53 `needs_records` deselected; ruff clean.
+- The probe is deterministic: re-run after a formatting fix, `replay-wall.json`
+  byte-identical (`git diff` silent).
+- `git diff origin/main -- configs/ src/ scripts/verify_m2.sh scripts/verify_m3.sh
+  scripts/verify_m7.sh` → **empty**, which is the falsifiable form of "no gate moved".
+
+### Defects/Surprises
+- **F-068** (raised, OPEN, medium) — ledger row, `docs/f016_replay_wall_m9.md`, field
+  note in `docs/LEARNING_GUIDE.md`, record `automation/runs/m9-f016/replay-wall.json`.
+- No defect in any system. The gate, the replays and the records all behaved exactly
+  as designed; what failed was a plan, and it failed in the place built to catch it.
+
+### Decisions
+- **Merged rather than held.** The standing rule holds a PR carrying an undecided
+  fork. This PR carries the ARTIFACT THAT ENABLES the decision and makes **no** change
+  that depends on its answer — holding it would have left the PO's own inbox entry
+  visible only on a branch, which defeats the entry. Recorded here because it is a
+  judgement call against the letter of the rule.
+- **One story, not two.** S7/S8/S9 are independent and unblocked, but S6 was executed
+  to its chartered stopping rule rather than abandoned early, so the fork policy's
+  "park and take the next independent story" is discharged by scheduling the successor
+  (ritual a) rather than by starting S7 badly with a wire change and a 3-attempt wall.
+- **Recommended (b), the expensive option, and said so.** (a) would land the PO's
+  answer in an afternoon by teaching the replays to tolerate the change — and buys
+  that by blunting the instrument `verify-m2-redteam`/`verify-m3-redteam` plant
+  against. The recommendation states that cost explicitly (ADR-010's rule).
+
+### Next
+**M9-S7 — F-062 option (b)** is the next unstarted, unblocked story in
+`docs/milestones/M9_EPILOGUE_KICKOFF.md`, and it is **independent of F-068** — the
+fork parked here blocks nothing. Read its §risks 2 and 3 first: the sentinel-date
+discriminator is named in the charter so it is not rediscovered at minute forty, the
+three parity bars are **EXACT and stay EXACT** (a nonzero delta after an error-path-only
+change is a story-stopping finding, not a bar to widen), and the drill needs a NEW
+prediction committed FIRST predicting **503**, with the 422-era records kept as
+`automation/runs/m9-store-watch/attempt1-422-era/` (F-063/gotcha #48). It is the
+epilogue's largest story and the only one touching the wire — it deserves a fresh
+session, which is why this one did not start it. S8 (README front door) and S9
+(trivy + secret scan) follow and are also independent.
+
+**Waiting on the PO: `AWAITING_PO 2026-08-24-4` only** (F-016/F-068, answer with a
+letter). Nothing else was added to the inbox and nothing else is blocked.
+`make verify-m9` remains the one-command health read.
+
+
 ## Session 2026-08-24 (cl) — M9-S5 (epilogue): the box a machine may not close, closed by a human and cited
 
 ### State
