@@ -178,6 +178,16 @@ the silence is a decision, not a crash.
 >    date* (503, ours). Accepted cost, eyes open: one chartered story that touches
 >    the wire — transformer redeploy, the three parity records re-measured, gates
 >    re-run.
+>    **LANDED 2026-08-24 (M9-S7). F-062 CLOSED.** An emptied store now answers
+>    **503** and spends SLO-A1's availability budget; a past-horizon date with a
+>    healthy store is still **422**, asserted in both states rather than argued.
+>    The accepted cost was paid exactly as written: one redeploy, all three parity
+>    records re-measured at **0.000e+00**, and verify-m5/m6/m7/m8/m9 re-run GREEN.
+>    It also flushed out **F-069** (a 404 that left the request body unread
+>    poisoned the next caller on a pooled keep-alive connection), fixed in the same
+>    session. Evidence: `automation/runs/m9-store-watch/drill-all.json` (36 checks,
+>    0 failures), with the superseded 422-era records kept at
+>    `attempt1-422-era/`. **No action needed.**
 > 3. **Publish the repo publicly — YES, after the pre-publish pair.** Charter menu
 >    items 1–2 from 2026-08-23-2 (README as portfolio front door · trivy +
 >    commit-history secret-scan) first; the public flip happens only after both

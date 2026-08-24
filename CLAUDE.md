@@ -3447,6 +3447,79 @@ can never disagree (the port-family twins lesson, applied before it bit).
   byte-identical to `m7-closed`, all 5 settled DVC pins up to date, host suite
   **1204 passed** (was 1171), ruff clean, `verify-m5`/`m6`/`m7`/`m8` all GREEN.
 
+## Whose fault is a null? (M9-S7) — the epilogue's one wire change, and the 404 that punished the next caller
+- **An emptied online store answers HTTP 503 now, and that one number is the whole
+  of F-062.** The refusal was always right — the champion eats holiday flags and a
+  silent "not a holiday" is a wrong number nobody can see — but 4xx is the
+  CALLER's class and SLO-R1 puts 4xx outside SLO-A1's error budget on the argument
+  that *a 4xx is a guard working*. So a **totally dead dependency spent zero error
+  budget** and rendered, in every panel that splits 4xx from 5xx, as riders sending
+  bad requests. A-12 paged, so nothing was silent; the ACCOUNTING was. PO answer
+  **(b)**, landed; SLO-R1's target and its 1% bar are UNALTERED — what moved is
+  which requests are inside the budget.
+- **Two different facts wore one value, so the fix asks a second QUESTION rather
+  than reinterpreting the first answer.** For the requested date an empty store and
+  a date past the horizon both return `null`, and Feast's per-result `statuses` say
+  `NOT_FOUND` for both — the response cannot discriminate. On the failure path
+  only, the store is asked for a date the committed holiday table **provably
+  covers**: a sentinel DERIVED from that table's first year, which is the twin of
+  the left edge of the `date_range` `build_calendar_day` generates the store's view
+  with. Answered -> the caller's **422**. Null too -> **503
+  `FeatureStoreUnavailable`**, ours. The rejected alternatives are recorded as
+  WEAKER rather than merely different: the ZONE half cannot discriminate, because
+  zones 264/265 legitimately have no row, so "every zone came back null" is a legal
+  answer for a request naming only TLC's two non-places.
+- **Three properties, and the third is the one that is usually skipped.** It costs
+  the happy path nothing (failure path only, and skipped entirely when any date in
+  the batch answered — the boundary's measured ~18 ms p50 is untouched). When the
+  DISCRIMINATOR ITSELF cannot be built that is reported as ours too, not as the
+  caller's (F-048's rule: an unresolvable value fails loudly rather than resolving
+  to something convenient). And **the guarantee this could have destroyed is
+  ASSERTED, not argued**: once a status depends on a second round trip, "F-019
+  still refuses past-horizon dates" stops being something a code-reading can
+  establish, so the drill asks in BOTH store states — **422 naming the year while
+  the store answers, 503 while it does not**, with the year derived from the table.
+- **The drill PASSED 36/36 across FOUR phases** against a prediction committed at
+  `b89eea4` **before** the first `FLUSHDB` (checkable from git). A-12a/A-12b fired
+  at **T+162.5 s** and reached Alertmanager, failing claims read per series; all
+  five negatives inactive; refill **57,688 keys in 11.6 s**; both cleared 30.0/0.0 s
+  and the board ends carrying the truth. **The fourth phase ran for the first time
+  in this drill's life** — surface deleted, **A-13 FIRED at T+630.7 s while A-12
+  stayed inactive**, the load-bearing negative. The 422-era records are kept
+  unedited at `automation/runs/m9-store-watch/attempt1-422-era/` with a README:
+  **that 422 IS the finding's evidence**, and a re-run that overwrote it would have
+  been F-063/gotcha #48's shape a fourth time.
+- **All three parity records came back 0.000e+00 at their committed EXACT bars**
+  (`transformer-parity` 16 hazards · `server-parity` 6 columns/108 comparisons,
+  `one missing` 0 · `online_parity` 16 columns/100 pairs, `UNEXPLAINED` 0). That is
+  the assertion that an error-path change touched the error path and nothing else —
+  a nonzero delta would have been a story-stopping finding, never a bar to widen.
+- **F-069, found by the re-measurement and unrelated to the accounting: a 404 that
+  leaves the request body unread poisons the NEXT caller.** `protocol_version =
+  "HTTP/1.1"`, so a response sent while the body is still in the socket leaves those
+  bytes to be parsed as the next request's request-LINE — and ingress-nginx pools
+  upstream connections, so the victim is a different client entirely: a perfectly
+  good quote answered **400 Bad request syntax** with its own JSON echoed back
+  inside an HTML error page. The poison was planted by `do_POST`'s wrong-path 404 —
+  **the deliberate negative check M8-S4 leg 3 added to prove the champion's model
+  name does not answer here** — and paid for by the parity run that check exists to
+  protect. Body is read BEFORE any branch now. The regression test drives two
+  requests down ONE connection and its second request is a **422 and not a
+  malformed body**, because a malformed body is a legitimate **400** — the same
+  status a poisoned connection returns, so that version could not have told them
+  apart. RED against the pre-fix module, restored, GREEN.
+- **`verify-m9`'s drill leg was re-derived to ask for a PHASE, not a filename.** It
+  keyed records on `drill-<phase>.json`, which is what `--phase empty` writes — but
+  `--phase all`, the make target's DEFAULT, writes one `drill-all.json` holding
+  every phase's block, so the gate went RED for the default invocation of the
+  command it checks (gotcha #50's shape). One added sub-check too: F-019's
+  guarantee across both store states, with both predicted sides read from the
+  committed prediction so the leg carries no status literal of its own.
+- Exit state: `@champion` **2** / `feature_set v2`, versions `['1','2']` — no
+  version 3, nothing fitted, no alias moved · `uv.lock` byte-identical to
+  `m7-closed` · all 5 settled DVC pins up to date · host suite **1220 passed** (was
+  1204) · ruff clean · **`verify-m5`/`m6`/`m7`/`m8`/`m9` all GREEN**.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
