@@ -4707,3 +4707,56 @@ answer into an HTTP status, and list the distinct *causes* that reach each
 status. Wherever two causes with different owners share one status, you have this
 finding. Then check the cheapest available discriminator — usually a second
 question with a known answer — and price it on the failure path only.
+
+## M9-S8 — the front door, and the number nobody re-derives
+
+**The finding, in one line.** The README is the first artifact a stranger reads
+and the *only* one nobody runs — so it is the one place in this repository where
+a number can go stale for a milestone and a half with every gate GREEN. This
+story rewrote it for a public reader and, in the same breath, gave it the thing
+every other published number here already had: **a twin that re-derives it**
+(`make readme-check`, the `error_memo_numbers.py` / `drift_memo_numbers.py`
+idiom, one audience out).
+
+**The evidence that the twin was needed arrived unplanted, from this story's own
+diff.** The README shipped `1,220 tests` — correct when the sentence was
+written, that morning. Adding seven tests of my own made it `1,227`, and the
+checker went RED naming the claim, the record and both values before I had
+thought to look. A red team plants a plausible edit *to see whether the check
+notices*; here the check noticed a real one first. (The plant was run afterwards
+anyway — `13.75 s` → `13.5 s` in the self-heal row, RED naming the row, restored
+byte-identically by sha256.)
+
+**The generalisable rule: a claim needs an anchor, or its presence check is
+vacuous.** The checker compares a rendered string against the document and then
+against the record. The *second* half is the interesting one, but the first half
+is where the trap is: `10` is a substring of `104.226`, and `55` of `557,688`, so
+a claim rendered as a bare number goes green against a README that no longer
+makes it. The checker now **refuses** a claim with no non-digit character in it —
+and that refusal fired on four of my own claims, which is how the numbers ended
+up rendered as `PSI 0.0217` and `**57,688** keys` rather than as digits. Gotcha
+#76 said anchor the needle; this says the *artifact* must give it something to
+anchor to.
+
+**And the drift the method caught in passing.** `CLAUDE.md` recorded M9-S2 as
+"16 rules validated across 10 signal ids (was 13 across 9)". The rules file says
+**16 rules across 13 signal ids**, and the tag `m8-closed` says the before-state
+was **13 across 11**. Nothing was broken — "ten ids" was true at M7-S3 and was
+carried forward twice without recounting, which is exactly how a number survives
+being wrong. It is corrected with a dated note beside the original, and the
+README's version of the same fact is now read out of `alerting_rules.yml` on
+every run instead of being copied from working memory.
+
+**A smaller one worth keeping.** Three of the new tests reach tracked records
+through a *subprocess*, which F-047's static marker guard cannot see — it reads
+the test file, not the checker's claim table. Rather than mark them and leave the
+marker unexplained (or leave them unmarked and let `make image-smoke` discover
+them a milestone later), the file names the record directory in a constant and
+asserts it, so the guard agrees and the honest residual that finding already
+documents does not grow by one more instance.
+
+**What to try yourself.** Open your project's README and ask, of each number in
+it: *which file would I read to check this, and what would go red if it were
+wrong?* Every number with no answer to the second half is decoration. Then write
+the twenty-line script that reads them back — mine found a stale number in the
+same commit that created it.

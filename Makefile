@@ -352,7 +352,9 @@ verify-m9-redteam: ## prove `make verify-m9` can go RED: shorten the store's EXP
 	@bash scripts/verify_m9_redteam.sh
 
 # ---- always available ----
-.PHONY: lint test fmt
+.PHONY: lint test fmt readme-check
+readme-check: ## M9-S8: every `make` target, path and number in README.md, read back from the record that holds it
+	@uv run python scripts/readme_check.py
 lint: ## ruff check
 	uv run ruff check src tests pipelines
 fmt: ## ruff format
