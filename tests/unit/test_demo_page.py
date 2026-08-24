@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import ast
 import csv
+import importlib.util
 import json
 import re
 import subprocess
@@ -401,9 +402,98 @@ def test_the_three_error_classes_render_differently() -> None:
     assert "payload.error" in text, "the page invents its own error text"
 
 
-def test_the_readme_records_the_route_decision_and_the_open_po_box() -> None:
+def test_the_readme_records_the_route_decision_and_the_po_box() -> None:
     text = README.read_text()
     assert "host-less" in text.lower()
     assert "CORS" in text
-    assert "unassisted" in text, "the PO-observed box must be named as open, not implied"
+    assert "unassisted" in text, "the PO-observed box must be named, not implied"
     assert "EXACT" in text, "§4 must state the accept's bar"
+
+
+# --------------------------------------------------------------------------
+# F-067 — the accept may not close the human box, and may not re-open it.
+# --------------------------------------------------------------------------
+
+def test_the_accept_can_never_close_the_human_box() -> None:
+    """It writes OPEN or it carries a closure forward; it never authors one.
+
+    The asymmetry is the whole point: closing §9/M9's last accept line requires
+    a person, so the only CLOSED status this script may ever put in a record is
+    one it read out of the record it is overwriting.
+
+    Asked of the AST, and asked NARROWLY: a search for the word finds the
+    script comparing against it (`startswith("CLOSED")`) and the field name it
+    prints (`closed_on`), which is the code RECOGNISING a closure — the opposite
+    of authoring one, and gotcha #99 for the third time in this file. The
+    question is whether any dict this script builds carries a `status` whose
+    value it wrote itself and which reads as closed.
+    """
+    tree = ast.parse(ACCEPT.read_text())
+    authored = {
+        value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Dict)
+        for key, value in zip(node.keys, node.values)
+        if isinstance(key, ast.Constant) and key.value == "status"
+        and isinstance(value, ast.Constant) and isinstance(value.value, str)
+        and value.value.upper().startswith("CLOSED")
+    }
+    assert not authored, (
+        f"demo_accept.py AUTHORS a closed status {authored} — an unattended "
+        "check must never be able to write the one verdict that needs a human; "
+        "the only CLOSED block it may hold is one it read out of the record it "
+        "is replacing"
+    )
+
+
+def _human_box():
+    """`scripts/` is not a package; load the one decision under test by path."""
+    spec = importlib.util.spec_from_file_location("demo_accept_under_test", ACCEPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module.human_box
+
+
+def test_the_accept_carries_a_human_closure_forward_rather_than_re_opening_it(
+    tmp_path: Path,
+) -> None:
+    """F-067, exercised rather than asserted about.
+
+    The record is rewritten in full on every run, so before M9-S5 a second
+    `make demo-accept` would have deleted the PO's closure and left the M9 gate
+    correctly reporting a box that had just silently re-opened — the failure
+    with no symptom, since the re-opened record is internally perfect.
+    """
+    human_box = _human_box()
+    url = "http://localhost:8081/demo/"
+    closed = {
+        "status": "CLOSED — observed 2026-08-24, cited at AWAITING_PO 2026-08-23-3",
+        "cites": "2026-08-23-3",
+        "closed_on": "2026-08-24",
+        "po_note": "This is okay, I get the gist of it. Improvement can be done later.",
+        "box": "BLUEPRINT §9/M9: … completes a query unassisted, observed",
+        "url": url,
+    }
+    prior = tmp_path / "accept.json"
+    prior.write_text(json.dumps({"po_observed_run": closed}))
+    assert human_box(prior, url) == closed, (
+        "a human's closure did not survive the run that rewrote the record — "
+        "every field must be carried VERBATIM, since the citation is what makes "
+        "the closure honest and a rebuilt block is the accept authoring one"
+    )
+
+    # Every other state produces the OPEN block: no record (a fresh clone),
+    # an unreadable one, and an already-open one.
+    for name, body in (
+        ("absent.json", None),
+        ("torn.json", "{not json at all"),
+        ("open.json", json.dumps({"po_observed_run": {"status": "OPEN — …"}})),
+    ):
+        path = tmp_path / name
+        if body is not None:
+            path.write_text(body)
+        assert human_box(path, url)["status"].startswith("OPEN"), (
+            f"{name}: the accept did not fall back to the OPEN block, so a run "
+            "against a damaged or missing record would say nothing about the box"
+        )
