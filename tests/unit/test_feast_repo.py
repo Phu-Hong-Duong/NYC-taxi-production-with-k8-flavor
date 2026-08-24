@@ -102,6 +102,92 @@ def test_the_pin_file_is_exact_and_complete() -> None:
     assert "feast==0.66.0" in lines
 
 
+# ------------------------------------------------- F-057: the round trip ---
+#
+# The pin file's whole job is to be REVIEWED, and until this story its own
+# documented regenerator could not reproduce it: `importlib.metadata` reports the
+# name a distribution published (`PyYAML`, `typing_extensions`) where the file
+# carries the normalized spelling, so M8-S4's two real additions arrived as a
+# +14/-12 diff and a third line could have hidden in it. gotcha #104.
+
+
+def _pin_body(text: str) -> list[str]:
+    return [line for line in text.splitlines() if "==" in line and not line.startswith("#")]
+
+
+def test_the_pin_file_is_normalized_and_sorted_as_its_own_lines() -> None:
+    """The two properties the regenerator now emits — asked of the artifact itself.
+
+    This half needs no quarantine venv, so it runs in CI and inside the task
+    image. The venv-gated test below proves the regenerator really emits them;
+    this one proves the committed file has them, which is the half that would go
+    red if somebody hand-added a pin in the published spelling again.
+    """
+    import feast_probe_record as probe
+
+    body = _pin_body(PINS.read_text(encoding="utf-8"))
+    for line in body:
+        name = line.split("==", 1)[0]
+        assert name == probe._normalize(name), (
+            f"{name!r} is not the PEP 503 spelling ({probe._normalize(name)!r}) — a pin "
+            "added in a distribution's published name is exactly F-057"
+        )
+    assert body == sorted(body), (
+        "the body must be its own lines sorted, which is the ordering a reviewer can "
+        "check with `sort -c` and the one --rewrite-pins emits"
+    )
+
+
+def test_normalize_is_pep_503_and_not_the_shorter_form() -> None:
+    """The names F-057 actually named, plus the case the short form gets wrong."""
+    import feast_probe_record as probe
+
+    for published, canonical in (
+        ("PyYAML", "pyyaml"),
+        ("typing_extensions", "typing-extensions"),
+        ("prometheus_client", "prometheus-client"),
+        ("SQLAlchemy", "sqlalchemy"),
+        ("ast_serialize", "ast-serialize"),
+        ("zope.interface", "zope-interface"),  # `lower().replace('_','-')` leaves the dot
+        ("a__b", "a-b"),  # ...and leaves a double hyphen
+    ):
+        assert probe._normalize(published) == canonical
+
+
+@pytest.mark.skipif(
+    not (REPO / ".venv-feast" / "bin" / "python").exists(),
+    reason="the quarantine venv is a build artifact, gitignored and absent in CI",
+)
+def test_rewriting_the_pins_reproduces_the_committed_file_exactly(tmp_path) -> None:
+    """Generate twice, diff empty; regenerated == committed — and uv.lock untouched.
+
+    It writes to a COPY, never to the tracked file: a test that regenerated the
+    artifact in place would leave the tree dirty on its own failure, and rewriting
+    state that already exists is the shape F-053/F-063 keep finding (gotcha #48).
+    """
+    import feast_probe_record as probe
+
+    committed = PINS.read_text(encoding="utf-8")
+    lock_before = (REPO / "uv.lock").read_bytes()
+
+    target = tmp_path / "requirements-feast.txt"
+    target.write_text(committed, encoding="utf-8")
+    first = None
+    for _ in range(2):
+        assert probe.main(["--rewrite-pins", "--pins", str(target)]) == 0
+        written = target.read_text(encoding="utf-8")
+        if first is None:
+            first = written
+        assert written == first, "two regenerations of the same venv disagree"
+
+    assert first == committed, (
+        "--rewrite-pins no longer reproduces the committed pin file. That is F-057: a "
+        "two-line change would arrive as a diff nobody can read, and a third line could "
+        "hide in it"
+    )
+    assert (REPO / "uv.lock").read_bytes() == lock_before, "the quarantine reached uv.lock"
+
+
 def test_the_gitignore_says_out_loud_what_is_generated() -> None:
     """uv writes a .gitignore inside a venv it creates; that is not review-visible."""
     body = GITIGNORE.read_text(encoding="utf-8")
