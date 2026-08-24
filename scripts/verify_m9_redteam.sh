@@ -151,6 +151,14 @@ fi
 # "Others still counted": every section that does not read this field must still
 # have RUN and passed. A suite that stops at the first failure reports one
 # problem and hides forty.
+#
+# Each needle is the STABLE half of its leg's sentence, never a fact about the
+# state of the thing the leg judges. M9-S5 paid for that rule: the human box's
+# needle used to be "recorded OPEN and honestly", so the day the PO closed the
+# box — the gate correctly re-derived, correctly GREEN, the plant correctly
+# RED — this drill reported `collateral damage` on a leg that had passed. A
+# red team whose control list encodes today's state fails on tomorrow's correct
+# system, which is gotcha #50 arriving one layer out from the gate it checks.
 red_oks="$(printf '%s\n' "$red_log" | grep -ac 'ok  ')"
 if [[ "$red_oks" -ge 38 ]]; then
   ok "$red_oks sub-check line(s) still passed — the gate reports everything, not the first thing"
@@ -159,7 +167,7 @@ else
 fi
 for still_green in "<option> elements" \
                    "PUBLISHED trip" \
-                   "recorded OPEN and honestly" \
+                   "last accept line is recorded" \
                    "BEFORE the accept record" \
                    "compares a claim to 0" \
                    "series the rules SELECT are produced by" \

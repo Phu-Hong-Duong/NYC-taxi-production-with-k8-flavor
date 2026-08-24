@@ -153,6 +153,42 @@ def anchor_for(trip: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def human_box(record_path: Path, url: str) -> dict[str, Any]:
+    """§9/M9's human box, for the record this run is about to overwrite.
+
+    This check can never CLOSE the box — no unattended run can watch a person
+    use a page — and from M9-S5 it must not silently RE-OPEN one either. The
+    record is rewritten in full on every run, so a literal OPEN block here would
+    delete a human's closure and the M9 gate would then report the box open
+    again: correctly, about a record that had just lost the fact, with nothing
+    anywhere saying a closure had been overwritten (F-067 — F-063's shape in a
+    producer: when a command rewrites state somebody else's decision lives in,
+    audit what it does to what is already there).
+
+    So a CLOSED block is carried forward VERBATIM, and every other state — no
+    record, an unreadable one, an OPEN one — produces the OPEN block. The only
+    CLOSED status this script can ever put in a record is one it read out of the
+    record it is replacing.
+    """
+    prior: dict[str, Any] = {}
+    if record_path.is_file():
+        try:
+            prior = json.loads(record_path.read_text()).get("po_observed_run") or {}
+        except (OSError, ValueError):
+            prior = {}
+    if str(prior.get("status", "")).upper().startswith("CLOSED"):
+        return prior
+    return {
+        "status": "OPEN — cannot be closed by an unattended session",
+        "box": (
+            "BLUEPRINT §9/M9: one non-technical person (the PO counts) completes a "
+            "query unassisted, observed"
+        ),
+        "url": url,
+        "raised_in": "AWAITING_PO.md",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--route", default=ROUTE)
@@ -331,15 +367,18 @@ def main() -> int:
     record["checks"] = [{"ok": ok, "claim": line} for ok, line in checks]
     record["failures"] = failures
     record["verdict"] = "PASSED" if not failures else "FAILED"
-    record["po_observed_run"] = {
-        "status": "OPEN — cannot be closed by an unattended session",
-        "box": (
-            "BLUEPRINT §9/M9: one non-technical person (the PO counts) completes a "
-            "query unassisted, observed"
-        ),
-        "url": args.route + PAGE_PATH,
-        "raised_in": "AWAITING_PO.md",
-    }
+    # §9/M9's human box. This check can never CLOSE it — no unattended run can
+    # watch a person use a page — and from M9-S5 it must not silently RE-OPEN
+    # one either. The record is rewritten in full on every run, so a literal
+    # OPEN block here deletes a human's closure and the M9 gate then reports the
+    # box open again: correctly, about a record that had just lost the fact,
+    # with nothing anywhere saying a closure had been overwritten. Carried
+    # forward unedited instead (F-067 — F-063's shape in a producer: when a
+    # command rewrites state somebody else's decision lives in, audit what it
+    # does to what is already there).
+    prior = human_box(Path(args.record), args.route + PAGE_PATH)
+    carried = str(prior.get("status", "")).upper().startswith("CLOSED")
+    record["po_observed_run"] = prior
 
     if not args.no_write:
         out = Path(args.record)
@@ -351,7 +390,12 @@ def main() -> int:
         print(f"[demo-accept] FAILED — {len(failures)} check(s)")
         return 1
     print(f"[demo-accept] PASSED — {len(checks)}/{len(checks)} checks")
-    print(f"[demo-accept] the PO-observed box stays OPEN by design: {args.route + PAGE_PATH}")
+    if carried:
+        print(f"[demo-accept] the PO-observed box was CLOSED by a human on "
+              f"{prior.get('closed_on')} (AWAITING_PO {prior.get('cites')}) and is carried "
+              f"forward unedited — this check can neither close it nor re-open it")
+    else:
+        print(f"[demo-accept] the PO-observed box stays OPEN by design: {args.route + PAGE_PATH}")
     return 0
 
 

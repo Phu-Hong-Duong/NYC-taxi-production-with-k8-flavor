@@ -240,3 +240,90 @@ recorded`. The generalisable form is #51's question asked of a *passing* check:
 *could this component tell if it were false?* A branch that treats a missing
 field as "no expectation was recorded" answers no, and reads exactly like a
 check.
+
+## §5. M9-S5 (epilogue) — the box changed state, so the assertion had to change shape
+
+The PO completed the observed run on 2026-08-24. §2's box leg had been written
+against the literal `OPEN`, so the honest flip of the record would have turned
+the gate RED for a program behaving correctly — gotcha #50, in the check whose
+entire job is to stop this one box being rounded up. It was re-derived to the
+property that holds in **both** states.
+
+**The pre-flip state, unchanged (this is still what a fresh OPEN record gets):**
+
+```
+  ok   §9/M9's last accept line is recorded OPEN and honestly: … AWAITING_PO
+       carries the invitation with the same URL … and THIS GATE DOES NOT RENDER
+       IT GREEN
+       OPEN ITEM (by design, not by omission): BLUEPRINT §9/M9: …
+```
+
+**The post-flip state, live:**
+
+```
+  ok   §9/M9's last accept line is recorded CLOSED and CITED — closed 2026-08-24
+       against AWAITING_PO 2026-08-23-3, an entry this inbox really holds, and
+       the observer's note is quoted there VERBATIM rather than paraphrased
+       here. The gate still renders nothing green on its own authority: a CLOSED
+       status with no citation, or one the inbox does not carry, is RED
+       CLOSED BY A HUMAN (AWAITING_PO 2026-08-23-3, 2026-08-24): This is okay, I
+       get the gist of it. Improvement can be done later.
+
+[verify-m9] GREEN — every M9 sub-check passed.
+            CLOSED BY A HUMAN, 2026-08-24: §9/M9's last accept line — one
+            non-technical person completing a query unassisted, OBSERVED — was
+            closed by the PO and is cited at AWAITING_PO 2026-08-23-3, where
+            their note is quoted verbatim. No gate closed it; this one checks
+            the citation.
+```
+
+**45 sub-checks before and after.** The leg was re-derived, not removed, and the
+banner's paragraph is now read out of the record §2 just judged rather than
+typed underneath it — otherwise the last four lines a skimmer reads would keep
+saying "open by design" about a box a human had closed.
+
+### The two plants, because a flip is one keystroke and reads as housekeeping
+
+Both derived from the record, both leaving the verdict, the URL and every other
+field intact — the edit somebody makes with no bad intent at all:
+
+```
+# (1) status flipped, citation absent
+  FAIL the PO-observed box is not honestly recorded: it is CLOSED and cites no
+       AWAITING_PO entry; it is CLOSED and quotes no note from the observer
+[verify-m9] RED — 1 sub-check(s) failed.          ← 44 sub-checks still passed
+
+# (2) the more plausible lie: an entry id one day off, and a paraphrase
+  FAIL the PO-observed box is not honestly recorded: it cites AWAITING_PO
+       2026-08-23-9, an entry this inbox does not hold; the note it quotes
+       appears nowhere in AWAITING_PO
+[verify-m9] RED — 1 sub-check(s) failed.          ← 44 sub-checks still passed
+```
+
+Restored from a byte copy and verified by sha256 (`ceec3ca26dbea2d9…` before the
+first plant and after the last), `git status --porcelain` clean, **GREEN 45/45**.
+
+### The first run went RED on an honest record, and the repair is the lesson
+
+The citation leg's first version asked `note in awaiting` — a raw substring.
+`AWAITING_PO.md` is markdown: the PO's note lives inside a blockquote and is
+wrapped at the column the file is written to, so it is **never contiguous
+there**. A perfectly honest citation failed. Both sides are flattened now
+(blockquote markers dropped, whitespace runs collapsed): the claim under test is
+that the inbox holds these **words**, never that it holds these **bytes** — the
+same distinction #76 drew for prose-vs-record checks, arriving through wrapping
+instead of through rounding.
+
+### F-067, which this story found by asking what else touches the field
+
+`scripts/demo_accept.py` rewrites the whole record on every run and wrote
+`po_observed_run` as a literal `OPEN` block. Correct for four days. The instant
+the closure was recorded, that literal became a deletion: the next
+`make demo-accept` — the demo's own acceptance test, which anyone is encouraged
+to re-run — would have dropped the citation, the date and the PO's words, and
+this gate would then have reported the box OPEN again, **correctly, about a
+record that had just lost the fact**. The decision is `human_box()` now: a
+CLOSED block is carried forward verbatim, everything else produces OPEN, and an
+AST test asks whether the script ever *authors* a closed status — narrowly,
+because searching for the word finds `startswith("CLOSED")` and `closed_on`,
+which is the code recognising a closure and the opposite of writing one.

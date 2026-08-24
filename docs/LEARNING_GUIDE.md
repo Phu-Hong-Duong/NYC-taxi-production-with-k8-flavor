@@ -4509,3 +4509,71 @@ this session was started by: **when your automation overrides a human decision,
 does anything anywhere record that it did?** Here the only trace was one line in
 `watchdog.log` reading `chain is DEAD`, about a chain that had never been more
 deliberately alive.
+
+---
+
+## M9-S5 (epilogue) — the assertion that was true, and had to change shape anyway
+
+**The situation.** §9/M9's last accept line — *one non-technical person completes
+a query unassisted, observed* — is the only thing in this program a machine may
+not close. M9-S4 wrote the gate accordingly: `verify-m9` §2 asserted the record
+said **OPEN**, printed it as an open item, and repeated it in the GREEN banner. A
+test pinned all three halves. That was exactly right, and on 2026-08-24 the PO
+did the run, so it became exactly wrong: the honest flip of the record would have
+turned a milestone gate RED for a program behaving correctly.
+
+**The move, and it is the one this repo has now made seven times.** A guard that
+fires when the system behaves correctly teaches the next session to edit
+assertions — so it is re-derived to the property that holds in *every* state,
+never widened to admit the new one. The box is now **OPEN and honest** (the
+record says OPEN and AWAITING_PO carries the live invitation) **or CLOSED and
+CITED** (the record says CLOSED and names an inbox entry that exists and contains
+the observer's own words). The gate still cannot close the box; what it can do is
+refuse a closure nobody can trace. `verify-m9` stayed at 45 sub-checks — the leg
+changed shape, not existence.
+
+**What the re-derivation is actually worth.** A status flip is one keystroke and
+reads as housekeeping, so the drill planted two of them: a `CLOSED` with the
+citation fields simply removed, and — the more plausible lie — a `CLOSED` citing
+an entry id one day off and quoting a *paraphrase* of the PO. Both took the gate
+RED naming precisely what was missing, with 44 sub-checks still passing each
+time. The second is the one to sit with: it is what an honest, tired person
+produces when they remember the gist of what somebody said.
+
+**The first run went RED on a perfectly honest record.** The citation check asked
+`note in awaiting` — a raw substring — and `AWAITING_PO.md` is markdown, so the
+quoted note lives inside a blockquote *wrapped at the file's column* and is never
+contiguous there. Gotcha #50 arriving inside the check written to prevent gotcha
+#50. Both sides are flattened now: the claim under test is that the inbox holds
+these **words**, not these **bytes** — #76's distinction, reached through
+wrapping instead of through rounding.
+
+**F-067, which is the part worth stealing.** Writing the flip, the question was:
+*what else touches this field?* `scripts/demo_accept.py` rewrites the whole
+record on every run and wrote `po_observed_run` as a literal `OPEN` block —
+correct for four days, and a **deletion** the instant a human's closure existed.
+The next ordinary `make demo-accept` would have dropped the citation, the date
+and the PO's words, and `verify-m9` would then have reported the box open again:
+correctly, about a record that had just lost the fact, with nothing anywhere
+saying so. Third occurrence of one shape in this program (gotcha #48, F-053,
+F-063): **when a command rewrites state somebody else's decision lives in, audit
+what it does to what is already there.** The rule that fixes it is asymmetric —
+the script may carry a CLOSED block forward verbatim and may never author one.
+
+**What to look at.** `scripts/verify_m9.sh` §2 leg (f): two states, one failure
+path that says *which* obligation was missed, and a banner derived from the
+record it just judged rather than typed underneath it — otherwise the last four
+lines a skimmer reads keep saying "open by design" about a closed box.
+`scripts/demo_accept.py::human_box` and its two tests: one **exercises** all four
+input states, the other asks the **AST** whether the script authors a closed
+status — narrowly, because searching for the word `CLOSED` finds
+`startswith("CLOSED")` and `closed_on`, which is the code *recognising* a closure
+and the exact opposite of writing one (gotcha #99, third time in that file).
+
+**What to try yourself.** Open `automation/runs/m9-demo/accept.json`, delete the
+`cites` and `po_note` fields, and run `make verify-m9`. Then put back a `cites`
+pointing at an entry that does not exist. Watch which sentence each produces, and
+notice that neither plant touched a number, a verdict or the wire — the whole
+defect is a claim about a human that the human cannot be found saying. Then go
+looking in your own repo for a field only a person may fill, and find out what
+your automation does to it on the next run.

@@ -241,7 +241,7 @@ PY
 expect_verdicts 6 "the page check"
 
 # ------------------------------------------------- 2. the accept, line by line
-section "2. §9/M9's accept — answered line by line, including the box that must stay OPEN"
+section "2. §9/M9's accept — answered line by line, including the human box: OPEN and honest, or CLOSED and CITED"
 consume < <(uv run python - 2>/dev/null <<'PY'
 import json
 import re
@@ -341,25 +341,74 @@ try:
         no(f"the past-horizon request returned {ref['http_status']} and its text "
            f"{'names' if year in ref['error'] else 'does NOT name'} the date")
 
-    # (f) THE BOX THAT MUST STAY OPEN. The gate is chartered to assert that it
-    # is recorded honestly and never to render it green. Both artifacts are
-    # asked, and they must agree on the URL — a record claiming an entry exists
-    # is not the entry.
+    # (f) THE HUMAN BOX, in the only two states it may honestly be in. The gate
+    # is chartered to assert that it is recorded honestly and never to render it
+    # green on its own authority — so it has no opinion about WHICH state is
+    # right, and a hard opinion about what each one owes.
+    #
+    #   OPEN   — the record says OPEN and AWAITING_PO carries the live
+    #            invitation, so a reader can go and close it.
+    #   CLOSED — the record says CLOSED and CITES an AWAITING_PO entry that
+    #            EXISTS and CONTAINS the observer's note verbatim.
+    #
+    # A CLOSED status with no citation, or a citation the inbox does not hold,
+    # is RED. That is the whole check: this box can only be closed by a human,
+    # so the only evidence a gate can ask for is the human's own words in the
+    # inbox they were written into — and a claim that an entry exists is not
+    # the entry (M9-S4's rule, re-derived here rather than a literal OPEN,
+    # gotcha #50: the state legitimately changed, so the assertion must be the
+    # property that holds in both).
     box = accept["po_observed_run"]
     awaiting = Path("AWAITING_PO.md").read_text()
-    url = box.get("url", "")
-    entry = url and url in awaiting
-    open_here = str(box.get("status", "")).upper().startswith("OPEN")
-    if open_here and entry and str(box.get("box", "")).lower().count("observed"):
+    url = str(box.get("url", ""))
+    state = str(box.get("status", "")).upper()
+    invitation = bool(url) and url in awaiting
+    is_the_box = "observed" in str(box.get("box", "")).lower()
+    cites = str(box.get("cites", "")).strip()
+    note = str(box.get("po_note", "")).strip()
+    cited = bool(cites) and f"## {cites}" in awaiting
+    # The inbox is markdown: a quoted note lives inside a blockquote and is
+    # wrapped at the column the file is written to, so it is never a contiguous
+    # string there. The claim being checked is that the inbox holds these WORDS,
+    # not that it holds these bytes — so both sides are flattened (blockquote
+    # markers dropped, whitespace runs collapsed) before the comparison. Asked
+    # the naive way this leg goes RED on a perfectly honest citation, which is
+    # gotcha #50 in the check that exists to stop this box being rounded up.
+    flat = re.sub(r"\s+", " ", " ".join(ln.lstrip("> ") for ln in awaiting.splitlines()))
+    quoted = bool(note) and re.sub(r"\s+", " ", note).strip() in flat
+    if is_the_box and invitation and state.startswith("OPEN"):
         ok(f"§9/M9's last accept line is recorded OPEN and honestly: the record says "
            f"{box['status'].split('—')[0].strip()!r}, AWAITING_PO carries the invitation with "
            f"the same URL ({url}), and THIS GATE DOES NOT RENDER IT GREEN — an unattended "
            f"session cannot watch a human use a page, and a demo that marked its own "
            f"human-observation box green would be the one dishonest artifact in this program")
         print(f"       OPEN ITEM (by design, not by omission): {box['box']}")
+    elif is_the_box and invitation and state.startswith("CLOSED") and cited and quoted:
+        ok(f"§9/M9's last accept line is recorded CLOSED and CITED — closed "
+           f"{box.get('closed_on')} against AWAITING_PO {cites}, an entry this inbox really "
+           f"holds, and the observer's note is quoted there VERBATIM rather than paraphrased "
+           f"here. The gate still renders nothing green on its own authority: a CLOSED status "
+           f"with no citation, or one the inbox does not carry, is RED")
+        print(f"       CLOSED BY A HUMAN (AWAITING_PO {cites}, {box.get('closed_on')}): "
+              f"{note}")
     else:
-        no(f"the PO-observed box is not honestly recorded: status={box.get('status')!r}, "
-           f"AWAITING_PO names the URL={bool(entry)}")
+        why = []
+        if not is_the_box:
+            why.append("the record's `box` is not §9/M9's observed-run line")
+        if not invitation:
+            why.append(f"AWAITING_PO does not carry the URL {url!r}")
+        if state.startswith("CLOSED"):
+            if not cites:
+                why.append("it is CLOSED and cites no AWAITING_PO entry")
+            elif not cited:
+                why.append(f"it cites AWAITING_PO {cites}, an entry this inbox does not hold")
+            if not note:
+                why.append("it is CLOSED and quotes no note from the observer")
+            elif not quoted:
+                why.append("the note it quotes appears nowhere in AWAITING_PO")
+        elif not state.startswith("OPEN"):
+            why.append(f"status={box.get('status')!r} is neither OPEN nor CLOSED")
+        no("the PO-observed box is not honestly recorded: " + "; ".join(why))
 
     # (g) The route decision is RECORDED (§9/M9 asks for exactly this), and the
     # property it rests on is asserted off the committed manifest rather than
@@ -1106,10 +1155,25 @@ if [[ "$FAILS" -eq 0 ]]; then
   printf '            Show: the demo      http://localhost:8081/demo/  (demo/README.md)\n'
   printf '                  the accept    automation/runs/m9-demo/accept.json\n'
   printf '                  the watchdog  docs/store_watchdog_m9.md · slo_serving.md §9\n'
-  printf '            OPEN BY DESIGN: §9/M9 asks for one non-technical person to complete a\n'
-  printf '            query unassisted, OBSERVED. No unattended session can close that box;\n'
-  printf '            it waits at AWAITING_PO and this gate only ever checks that it is\n'
-  printf '            recorded honestly.\n'
+  # §9/M9's human box, DERIVED from the record §2 just judged rather than typed
+  # here. A banner that hardcoded either state would be a second home for the
+  # fact (F-013's shape in prose) and — in the OPEN direction — the one place a
+  # skimmer would still be told the box was open after a human had closed it.
+  python3 - <<'PY'
+import json
+from pathlib import Path
+box = json.loads(Path("automation/runs/m9-demo/accept.json").read_text())["po_observed_run"]
+if str(box.get("status", "")).upper().startswith("CLOSED"):
+    print(f"            CLOSED BY A HUMAN, {box.get('closed_on')}: §9/M9's last accept line — one")
+    print( "            non-technical person completing a query unassisted, OBSERVED — was closed")
+    print(f"            by the PO and is cited at AWAITING_PO {box.get('cites')}, where their note")
+    print( "            is quoted verbatim. No gate closed it; this one checks the citation.")
+else:
+    print("            OPEN BY DESIGN: §9/M9 asks for one non-technical person to complete a")
+    print("            query unassisted, OBSERVED. No unattended session can close that box;")
+    print("            it waits at AWAITING_PO and this gate only ever checks that it is")
+    print("            recorded honestly.")
+PY
   exit 0
 fi
 printf '\033[31m[verify-m9] RED — %d sub-check(s) failed.\033[0m\n' "$FAILS" >&2

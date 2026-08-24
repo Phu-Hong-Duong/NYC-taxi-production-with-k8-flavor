@@ -296,24 +296,85 @@ def test_the_gate_cannot_render_the_po_observed_box_green(gate_text: str,
 
     The failure mode this forbids is not a bug, it is a temptation: a gate that
     reported the milestone complete would be describing an observation nobody
-    made. So the gate must (a) require the record to say OPEN, and (b) print the
-    item as open in its own output — including in the GREEN banner, where a
-    reader who skims only the last lines still sees it.
+    made. The PO made it on 2026-08-24, so the box is now legitimately CLOSED —
+    and the assertion is re-derived to the property that holds in BOTH states
+    rather than widened to admit the new one (gotcha #50, which is exactly the
+    move this test exists to make somebody argue for).
+
+    The gate must therefore (a) accept OPEN only with the live invitation in the
+    inbox, (b) accept CLOSED only WITH A CITATION the inbox really holds — a
+    CLOSED status the gate takes on trust is the same dishonest artifact as a
+    gate that closed the box itself — and (c) print the box's state in its own
+    output including the GREEN banner, DERIVED from the record rather than typed
+    there, so a skimmer is never told the opposite of what §2 just judged.
     """
-    assert 'startswith("OPEN")' in gate_code, (
-        "the gate does not require the PO-observed box to be recorded OPEN — it "
-        "could pass over a record that quietly claimed the box was closed"
+    assert 'startswith("OPEN")' in gate_code and 'startswith("CLOSED")' in gate_code, (
+        "the gate does not judge the PO-observed box in both of its honest "
+        "states — one of them is being taken on trust"
     )
-    assert "OPEN ITEM" in gate_code, (
-        "the gate does not print the PO-observed box as an open item"
+    for needle, why in (
+        ('box.get("cites"', "a CLOSED box must name the AWAITING_PO entry that closed it"),
+        ('f"## {cites}" in awaiting',
+         "the gate does not check that the cited entry EXISTS — a claim that an "
+         "entry exists is not the entry"),
+        ('box.get("po_note"',
+         "the gate does not require the observer's own words, so a CLOSED status "
+         "could cite an entry that says nothing about the box"),
+    ):
+        assert needle in gate_code, f"{why} (missing: {needle})"
+    assert "OPEN ITEM" in gate_code and "CLOSED BY A HUMAN" in gate_code, (
+        "the gate does not print the PO-observed box's state in its own output"
     )
     banner = gate_text.split("GREEN — every M9 sub-check passed")[-1]
-    assert "OPEN BY DESIGN" in banner, (
-        "the GREEN banner does not name the box that is still open — a reader "
-        "who skims the verdict would take the milestone for finished"
+    assert "OPEN BY DESIGN" in banner and "CLOSED BY A HUMAN" in banner, (
+        "the GREEN banner does not name the box in both states — a reader who "
+        "skims the verdict must see which one holds"
+    )
+    assert 'accept.json").read_text())["po_observed_run"]' in banner, (
+        "the GREEN banner types the box's state instead of deriving it from the "
+        "record §2 just judged — a second home for the one fact this gate is "
+        "chartered never to assert on its own authority"
     )
     assert "AWAITING_PO" in gate_code, (
         "the gate does not check that the invitation to the observed run exists"
+    )
+
+
+def test_a_closed_box_without_a_citation_is_red(gate_code: str) -> None:
+    """The one edit this box will ever tempt somebody into.
+
+    Flipping a status is one keystroke and reads as housekeeping. What makes it
+    honest is the citation, so the gate's failure path must be able to SAY that
+    — not merely fall through a boolean. Demonstrated live once in M9-S5 (a
+    citation-free CLOSED took the gate RED naming the missing citation, with the
+    other 44 sub-checks still passing) and pinned here.
+    """
+    assert 'why.append("it is CLOSED and cites no AWAITING_PO entry")' in gate_code, (
+        "a CLOSED box with no citation does not produce a message saying so"
+    )
+    assert "an entry this inbox does not hold" in gate_code, (
+        "a CLOSED box citing an entry that does not exist does not produce a "
+        "message saying so"
+    )
+    assert 'why.append("the note it quotes appears nowhere in AWAITING_PO")' in gate_code, (
+        "a CLOSED box quoting a note the inbox never carried does not produce a "
+        "message saying so — a paraphrase of a human is not that human's word"
+    )
+
+
+def test_the_citation_check_reads_words_and_not_wrapping(gate_code: str) -> None:
+    """AWAITING_PO is markdown, and a quoted note is wrapped inside a blockquote.
+
+    Asked as a naive substring the citation leg goes RED on a perfectly honest
+    record — which is gotcha #50 arriving inside the check written to stop this
+    box being rounded up. It was observed doing exactly that on M9-S5's first
+    run. Both sides are flattened before comparison; the claim under test is
+    that the inbox holds these WORDS, never that it holds these bytes.
+    """
+    assert 'lstrip("> ")' in gate_code and 're.sub(r"\\s+", " "' in gate_code, (
+        "the citation leg compares raw bytes, so it will refuse any note the "
+        "inbox wrapped or quoted — the honest record fails and the check teaches "
+        "the next author to delete it"
     )
 
 

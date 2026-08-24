@@ -1,5 +1,136 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (cl) — M9-S5 (epilogue): the box a machine may not close, closed by a human and cited
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (ck) · **`docs/milestones/M9_EPILOGUE_KICKOFF.md`** (the current charter) ·
+AWAITING_PO. **Role block: MLOps** — charter read. Refusals in play all session:
+*no fit · no alias move · no registry version · no wire change · no threshold change ·
+no cluster mutation · no gate loosened*. None was broken: `@champion` is version **2** /
+`feature_set v2`, `uv.lock` byte-identical to `m7-closed`, all five DVC pins up to date,
+and the only live traffic this session sent was read-only (one `make demo-accept
+--no-write`, plus the gate's own three questions).
+
+**Story: M9-S5, the first of the epilogue's five.** ONE story, as chartered. S6…S9 remain.
+
+### Reconciliation (the staleness check, and it found the charter on the floor)
+The handoff's Next said "nothing is scheduled, on purpose" and the park had LATCHED
+(F-066's fix). Reality had moved twice since:
+
+1. **The PO answered all seven inbox items** (commits `0359c78`…`69ff424`) and someone
+   ran `automation/next_session.sh`, which cleared the latch — exactly the design.
+2. **An ARCH session ran at 07:50 UTC, authored the whole M9 epilogue charter, and
+   never committed it.** `docs/milestones/M9_EPILOGUE_KICKOFF.md` was UNTRACKED, with
+   the README epilogue row and the F-016/F-062 charter notes uncommitted beside it, and
+   no ARCH HANDOFF entry exists. The two architect launches logged either side of it
+   (`20260824_074646`, `20260824_074805`) both contain one line: *"You've hit your
+   monthly spend limit."* The work itself is complete and self-consistent — §0 triage,
+   five sized stories, risks, ARCH self-check — so it was committed **unedited** as
+   `62aca3a` before anything else, and this session executed from it. A charter nobody
+   can see is not a charter.
+
+Cluster 3/3 Ready v1.36.1 (7d10h). `make verify-m9` GREEN 45/45 as a baseline BEFORE
+any edit — recorded because everything below is a claim about a gate.
+
+### Done — the box
+The PO completed the observed run on 2026-08-24 (AWAITING_PO 2026-08-23-3, their words
+recorded verbatim). The record and the gate still said OPEN. Landed as ONE unit,
+because either half alone is a RED gate or a silent green:
+
+- **`automation/runs/m9-demo/accept.json`** → `status: "CLOSED — observed 2026-08-24,
+  cited at AWAITING_PO 2026-08-23-3"`, plus `cites`, `closed_on`, `closed_by` and
+  `po_note` **quoted, not paraphrased**. `box`/`url`/`raised_in` kept; the previous
+  claim kept as `status_before`. Added, never replaced.
+- **`scripts/verify_m9.sh` §2(f) RE-DERIVED**, never hand-flipped: the box is **OPEN and
+  honest** (record says OPEN, AWAITING_PO carries the live invitation, the two agree) or
+  **CLOSED and CITED** (record says CLOSED and names an inbox entry that EXISTS and
+  CONTAINS the observer's own words). **A CLOSED status with no citation, or a citation
+  the inbox does not hold, is RED.** Sub-check count unchanged at 45 — the leg changed
+  shape, not existence.
+- **The GREEN banner's box paragraph is DERIVED** from the record §2 just judged. A
+  typed banner is a second home for the one fact this gate may never assert on its own
+  authority — and in the OPEN direction it is the place a skimmer keeps being told the
+  box is open after a human closed it.
+- **Tests re-derived to the same property** (`tests/unit/test_verify_m9.py`, 33 → 35):
+  the "never rendered green" pin became "never rendered green WITHOUT a citation", plus
+  one test per failure sentence and one for the wrapping read below.
+
+### Done — F-067, which the story found by asking what else touches the field
+**`make demo-accept` would have silently RE-OPENED the box.** It rewrites the whole
+record on every run and wrote `po_observed_run` as a literal `OPEN` block — correct for
+four days, and a **deletion** the instant a human's closure existed. The next ordinary
+re-run (it is the demo's own acceptance test) would have dropped the citation, the date
+and the PO's words, and `verify-m9` would then have reported the box OPEN again:
+**correctly, about a record that had just lost the fact**, with nothing anywhere saying
+so. Third occurrence of one shape in this program (gotcha #48 · F-053 · F-063).
+
+Fixed asymmetrically, which is the point: `demo_accept.human_box()` carries a CLOSED
+block **forward verbatim** and can never author one. Two tests — one **exercises** all
+four input states (closed survives field-for-field; absent/torn/open fall back to OPEN),
+one asks the **AST** whether the script authors a closed status, **narrowly**, because a
+word search matches `startswith("CLOSED")` and `closed_on`, i.e. the code RECOGNISING a
+closure (gotcha #99, third time in that file — it went red on its author's first draft).
+
+### Verification
+- **`make verify-m9` GREEN 45/45** with the box CLOSED, banner citing the closure.
+- **The RED demonstrated twice**, both plants derived from the record and leaving the
+  verdict, the URL and every other field intact: citation fields removed → *"it is
+  CLOSED and cites no AWAITING_PO entry; …quotes no note from the observer"*; and the
+  more plausible lie, an entry id one day off plus a **paraphrase** of the PO → *"it
+  cites AWAITING_PO 2026-08-23-9, an entry this inbox does not hold; the note it quotes
+  appears nowhere"*. **44 sub-check lines still passed each time**; restored from a byte
+  copy, sha256 `ceec3ca26dbea2d9…` identical before the first plant and after the last,
+  `git status --porcelain` clean, GREEN again.
+- **`make verify-m9-redteam` PASSED** (after the repair below).
+- **`make demo-accept DEMO_ACCEPT_ARGS=--no-write` → PASSED 9/9 against the live
+  cluster**, printing *"the PO-observed box was CLOSED by a human on 2026-08-24 … and is
+  carried forward unedited"* — F-067's fix proved on the real path, with the record's
+  sha256 unchanged (deliberately `--no-write`: re-running the writer would rewrite
+  M9-S1's tracked evidence, which is the very shape F-063 is about).
+- Host suite **1159 passed**, 53 `needs_records` deselected; ruff clean.
+
+### Defects/Surprises
+- **F-067** (raised + CLOSED, medium) — row in `ledgers/findings.md`, field note in
+  `docs/LEARNING_GUIDE.md`, transcript §5.
+- **The gate's first run went RED on a perfectly honest record.** The citation check
+  asked `note in awaiting` — a raw substring — and `AWAITING_PO.md` is markdown: the
+  quoted note lives in a blockquote **wrapped at the file's column** and is never
+  contiguous there. Gotcha #50 arriving *inside* the check written to prevent gotcha
+  #50. Both sides are flattened now — the claim is that the inbox holds these **words**,
+  not these **bytes** (#76's distinction, reached through wrapping instead of rounding).
+- **The red team then failed for the same disease one layer out.** Its "unaffected legs
+  still green" control list named the box leg by the literal `recorded OPEN and
+  honestly`, so with the box CLOSED it reported `collateral damage` on a leg that had
+  passed — gate correct, plant correct, drill wrong. Needle is the stable half of the
+  sentence now, with the reason inline.
+- **Nothing about the close moved.** Ten gates GREEN stands; no gate was re-run to close
+  the box and nothing about the close depended on it being open. `PROGRAM_CLOSE.md`,
+  README, CLAUDE.md and AWAITING_PO carry **dated notes beside the originals** (the
+  M4-S2 ledger precedent) — no artifact that claimed the box was open was rewritten.
+
+### Decisions
+- **Committed the ARCH charter rather than improvising or parking.** It is complete
+  work, not mine to edit; committing it unedited puts the charter under review and is
+  the alternative to an executor inventing scope. Recorded here because the next ARCH
+  touch should know its own session left no handoff entry.
+- **Two plants instead of the chartered one.** The second (a real-looking entry id plus
+  a paraphrase) is the failure an honest tired person produces; the first is the one
+  nobody would make on purpose.
+- **Did not re-run the record-writing accept.** `--no-write` proves the same branch.
+
+### Next
+**M9-S6 — F-016 option B (the incumbent ≥0.50% margin)** is the next unstarted,
+unblocked story in `docs/milestones/M9_EPILOGUE_KICKOFF.md`. Read its **replay wall**
+first: `verify-m2` §2, `verify-m3` §5 and `verify-m7`'s retrain leg all replay recorded
+verdicts through `gate.decide` **on disk**; the kickoff's arithmetic says every recorded
+verdict survives B (+0.63% ≥ 0.50% still PROMOTES, −0.03% still REFUSES), and **if any
+replay flips, STOP — that is a finding and a PO question, never an edit to the replay.**
+S7 (F-062(b), the only wire change), S8 (README front door) and S9 (trivy + secret scan)
+follow. Nothing is detached; nothing waits on the PO — the inbox is fully answered and
+this session added no fork. `make verify-m9` remains the one-command health read.
+
+
 ## Session 2026-08-24 (ck) — POST-CLOSE: the watchdog healed a decision, and the fix had a trap in it
 
 ### State

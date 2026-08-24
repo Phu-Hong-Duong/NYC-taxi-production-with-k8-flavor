@@ -73,8 +73,14 @@
   "page_url": "http://localhost:8081/demo/",
   "po_observed_run": {
     "box": "BLUEPRINT \u00a79/M9: one non-technical person (the PO counts) completes a query unassisted, observed",
+    "cites": "2026-08-23-3",
+    "closed_by": "the PO, unassisted, on the live page at the url below",
+    "closed_on": "2026-08-24",
+    "po_note": "This is okay, I get the gist of it. Improvement can be done later.",
+    "po_note_is": "the PO's own words, quoted and not paraphrased; recorded verbatim in the cited AWAITING_PO entry. No label confusion was filed, so no legibility finding opens and improvements stay ordinary future work rather than an accept condition.",
     "raised_in": "AWAITING_PO.md",
-    "status": "OPEN \u2014 cannot be closed by an unattended session",
+    "status": "CLOSED \u2014 observed 2026-08-24, cited at AWAITING_PO 2026-08-23-3",
+    "status_before": "OPEN \u2014 cannot be closed by an unattended session",
     "url": "http://localhost:8081/demo/"
   },
   "quote": {
