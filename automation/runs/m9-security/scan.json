@@ -1,5 +1,5 @@
 {
-  "git_head": "4a7d5718733972ed7e878660ac65cf3d601fc69d",
+  "git_head": "fd2af50cce7e4c9422d1f70a62327a6719e26bd4",
   "legs": {
     "history-secrets": {
       "acknowledged": [
@@ -29,9 +29,9 @@
       "blocking": [],
       "findings_total": 1,
       "inputs": {
-        "commits_reachable_from_all_refs": 491,
+        "commits_reachable_from_all_refs": 493,
         "first_commit": "d5a40c4 2026-08-16",
-        "head": "4a7d571",
+        "head": "fd2af50",
         "note": "--all walks every ref this clone holds, not just HEAD's ancestry: a secret removed from main by a later commit still lives in the objects the old commit points at, and that is what publishing exposes",
         "refs": 16
       },
@@ -75,6 +75,32 @@
             }
           ],
           "fixable_critical_high": 39,
+          "fixable_in_our_lockfile": [
+            {
+              "fixed_in": "0.6.0",
+              "id": "CVE-2026-54284",
+              "installed": "0.5.5",
+              "package": "sqlparse",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.0",
+              "id": "CVE-2026-59893",
+              "installed": "0.5.5",
+              "package": "sqlparse",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.0",
+              "id": "CVE-2026-71491",
+              "installed": "0.5.5",
+              "package": "sqlparse",
+              "severity": "HIGH",
+              "target": "Python"
+            }
+          ],
           "image": "taxi-mlops-pipeline:4e5dd66",
           "image_id": "sha256:8ef09482bebdac7cd2048efcf763aa087c759a4226cb4ebf3317be37e6586471",
           "os": {
@@ -117,6 +143,7 @@
             }
           ],
           "fixable_critical_high": 36,
+          "fixable_in_our_lockfile": [],
           "image": "taxi-mlops-feast-server:feast-0.66.0-a524771",
           "image_id": "sha256:e6ff4c69024554e564e7cb9913a888523f802287169ed07ce025441c607f5f47",
           "os": {
@@ -194,6 +221,648 @@
             }
           ],
           "fixable_critical_high": 147,
+          "fixable_in_our_lockfile": [
+            {
+              "fixed_in": "1.2.0",
+              "id": "CVE-2025-6176",
+              "installed": "1.1.0",
+              "package": "Brotli",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.47",
+              "id": "CVE-2026-42215",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.47",
+              "id": "CVE-2026-42284",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.48",
+              "id": "CVE-2026-44243",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.49",
+              "id": "CVE-2026-44244",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.51",
+              "id": "GHSA-2f96-g7mh-g2hx",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.57",
+              "id": "GHSA-3f7w-8rr8-f37f",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.53",
+              "id": "GHSA-3rp5-jjmw-4wv2",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.58",
+              "id": "GHSA-4gmw-gg2m-w46p",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.54",
+              "id": "GHSA-6p8h-3wgx-97gf",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.55",
+              "id": "GHSA-94p4-4cq8-9g67",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.51",
+              "id": "GHSA-956x-8gvw-wg5v",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.58",
+              "id": "GHSA-9rj7-rf2p-w77r",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.54",
+              "id": "GHSA-fjr4-x663-mwxc",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.58",
+              "id": "GHSA-hmq2-w58f-27jc",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.58",
+              "id": "GHSA-jm78-9fvv-mhgr",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.50",
+              "id": "GHSA-mv93-w799-cj2w",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.54",
+              "id": "GHSA-r9mr-m37c-5fr3",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.52",
+              "id": "GHSA-rwj8-pgh3-r573",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.1.58",
+              "id": "GHSA-wvpp-8hx9-p66j",
+              "installed": "3.1.44",
+              "package": "GitPython",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "1.3.11",
+              "id": "CVE-2026-41205",
+              "installed": "1.3.10",
+              "package": "Mako",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "1.3.12",
+              "id": "CVE-2026-44307",
+              "installed": "1.3.10",
+              "package": "Mako",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.13.3",
+              "id": "CVE-2025-69223",
+              "installed": "3.12.9",
+              "package": "aiohttp",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.14.3",
+              "id": "CVE-2026-69244",
+              "installed": "3.12.9",
+              "package": "aiohttp",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "6.1.0",
+              "id": "CVE-2026-23949",
+              "installed": "5.3.0",
+              "package": "jaraco.context",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.4.0rc0",
+              "id": "CVE-2025-10279",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.0.0, 2.22.4",
+              "id": "CVE-2025-11201",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.5.0",
+              "id": "CVE-2025-14279",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.8.0rc0",
+              "id": "CVE-2025-14287",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.9.0rc0",
+              "id": "CVE-2025-15031",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.9.0rc0",
+              "id": "CVE-2025-15036",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "CRITICAL",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.8.1",
+              "id": "CVE-2025-15379",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "CRITICAL",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.9.0",
+              "id": "CVE-2026-0596",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "CRITICAL",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.8.0rc0",
+              "id": "CVE-2026-2033",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.9.0",
+              "id": "CVE-2026-2393",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.10.0",
+              "id": "CVE-2026-2614",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.8.0rc0",
+              "id": "CVE-2026-2635",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "CRITICAL",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.11.0rc1",
+              "id": "CVE-2026-2651",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "CRITICAL",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.11.0",
+              "id": "CVE-2026-2652",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.11.0",
+              "id": "CVE-2026-4035",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "CRITICAL",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.11.0",
+              "id": "CVE-2026-4137",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.15.0",
+              "id": "CVE-2026-64849",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "CRITICAL",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.13.0rc0",
+              "id": "CVE-2026-8147",
+              "installed": "2.22.1",
+              "package": "mlflow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "3.11.6",
+              "id": "CVE-2025-67221",
+              "installed": "3.10.18",
+              "package": "orjson",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "11.3.0",
+              "id": "CVE-2025-48379",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.1.1",
+              "id": "CVE-2026-25990",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.2.0",
+              "id": "CVE-2026-40192",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.2.0",
+              "id": "CVE-2026-42311",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-54058",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-54059",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-54060",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-55379",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-55380",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-59197",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-59199",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-59200",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-59204",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "12.3.0",
+              "id": "CVE-2026-59205",
+              "installed": "11.2.1",
+              "package": "pillow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "6.33.5, 5.29.6",
+              "id": "CVE-2026-0994",
+              "installed": "5.29.5",
+              "package": "protobuf",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "23.0.1",
+              "id": "CVE-2026-25087",
+              "installed": "19.0.1",
+              "package": "pyarrow",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.2",
+              "id": "CVE-2026-23490",
+              "installed": "0.6.1",
+              "package": "pyasn1",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.3",
+              "id": "CVE-2026-30922",
+              "installed": "0.6.1",
+              "package": "pyasn1",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.4",
+              "id": "CVE-2026-59884",
+              "installed": "0.6.1",
+              "package": "pyasn1",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.4",
+              "id": "CVE-2026-59885",
+              "installed": "0.6.1",
+              "package": "pyasn1",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.4",
+              "id": "CVE-2026-59886",
+              "installed": "0.6.1",
+              "package": "pyasn1",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.0.22",
+              "id": "CVE-2026-24486",
+              "installed": "0.0.20",
+              "package": "python-multipart",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.0.27",
+              "id": "CVE-2026-42561",
+              "installed": "0.0.20",
+              "package": "python-multipart",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.0.30",
+              "id": "CVE-2026-53539",
+              "installed": "0.0.20",
+              "package": "python-multipart",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.0",
+              "id": "CVE-2026-54284",
+              "installed": "0.5.3",
+              "package": "sqlparse",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.0",
+              "id": "CVE-2026-59893",
+              "installed": "0.5.3",
+              "package": "sqlparse",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.6.0",
+              "id": "CVE-2026-71491",
+              "installed": "0.5.3",
+              "package": "sqlparse",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.49.1",
+              "id": "CVE-2025-62727",
+              "installed": "0.46.2",
+              "package": "starlette",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "1.1.0",
+              "id": "CVE-2026-48818",
+              "installed": "0.46.2",
+              "package": "starlette",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "1.3.1",
+              "id": "CVE-2026-54283",
+              "installed": "0.46.2",
+              "package": "starlette",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "2.6.0",
+              "id": "CVE-2025-66418",
+              "installed": "2.1.0",
+              "package": "urllib3",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "2.6.0",
+              "id": "CVE-2025-66471",
+              "installed": "2.1.0",
+              "package": "urllib3",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "2.6.3",
+              "id": "CVE-2026-21441",
+              "installed": "2.1.0",
+              "package": "urllib3",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "2.7.0",
+              "id": "CVE-2026-44431",
+              "installed": "2.1.0",
+              "package": "urllib3",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.46.2",
+              "id": "CVE-2026-24049",
+              "installed": "0.45.1",
+              "package": "wheel",
+              "severity": "HIGH",
+              "target": "Python"
+            },
+            {
+              "fixed_in": "0.46.2",
+              "id": "CVE-2026-24049",
+              "installed": "0.45.1",
+              "package": "wheel",
+              "severity": "HIGH",
+              "target": "Python"
+            }
+          ],
           "image": "taxi-mlops-predictor:mlserver-1.7.1-lgb-4.7.0",
           "image_id": "sha256:2f98ab932f465ed41907be8820e436d1bcae0f37330b5917b57d68e77fe90059",
           "os": {
@@ -242,10 +911,10 @@
         }
       ],
       "blocking": [],
-      "findings_total": 11,
+      "findings_total": 16,
       "inputs": {
-        "files_git_tracks": 617,
-        "files_on_disk": 63052,
+        "files_git_tracks": 619,
+        "files_on_disk": 63059,
         "note": "the WHOLE disk tree, gitignored files included \u2014 pointing this at tracked files only would report zero and prove nothing about the hazard anyone actually has",
         "root": "/home/longt/NYC-taxi-production-with-k8-flavor"
       },
@@ -404,7 +1073,7 @@
         }
       ],
       "raw_report": "automation/runs/m9-security/raw/gitleaks-tree.raw (gitignored: it carries the values)",
-      "self_transcript_dropped": 0
+      "self_transcript_dropped": 5
     },
     "tree-vulns": {
       "dependencies": {
@@ -417,6 +1086,32 @@
         },
         "critical_findings": [],
         "fixable_critical_high": 3,
+        "fixable_in_our_lockfile": [
+          {
+            "fixed_in": "0.6.0",
+            "id": "CVE-2026-54284",
+            "installed": "0.5.5",
+            "package": "sqlparse",
+            "severity": "HIGH",
+            "target": "uv.lock"
+          },
+          {
+            "fixed_in": "0.6.0",
+            "id": "CVE-2026-59893",
+            "installed": "0.5.5",
+            "package": "sqlparse",
+            "severity": "HIGH",
+            "target": "uv.lock"
+          },
+          {
+            "fixed_in": "0.6.0",
+            "id": "CVE-2026-71491",
+            "installed": "0.5.5",
+            "package": "sqlparse",
+            "severity": "HIGH",
+            "target": "uv.lock"
+          }
+        ],
         "total": 5
       },
       "inputs": {
@@ -582,7 +1277,7 @@
       "raw_report": "automation/runs/m9-security/raw/trivy-fs.raw"
     }
   },
-  "recorded_at": "2026-08-24T15:13:49Z",
+  "recorded_at": "2026-08-24T15:20:04Z",
   "stages_run": [
     "tree-secrets",
     "history-secrets",

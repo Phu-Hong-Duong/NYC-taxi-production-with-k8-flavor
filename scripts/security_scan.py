@@ -427,28 +427,39 @@ SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN")
 def _summarise_trivy(report: dict) -> dict:
     counts = dict.fromkeys(SEVERITIES, 0)
     criticals: list[dict] = []
+    # The CVEs in packages OUR lockfile pins, as opposed to the ones inside a base
+    # image somebody else built. The distinction is the whole difference between a
+    # number and a decision: an OS package in `python:3.12.14-slim-trixie` is
+    # Debian's to fix and ours to pin; a Python package in `uv.lock` is a line we
+    # wrote. `Class: lang-pkgs` is trivy's own name for that split, so the record
+    # takes it from the report rather than from a list of package names.
+    ours: list[dict] = []
     fixable_critical_high = 0
     for result in report.get("Results") or []:
         for vuln in result.get("Vulnerabilities") or []:
             sev = vuln.get("Severity", "UNKNOWN")
             counts[sev] = counts.get(sev, 0) + 1
+            row = {
+                "id": vuln.get("VulnerabilityID"),
+                "severity": sev,
+                "package": vuln.get("PkgName"),
+                "installed": vuln.get("InstalledVersion"),
+                "fixed_in": vuln.get("FixedVersion") or None,
+                "target": result.get("Target"),
+            }
             if sev in ("CRITICAL", "HIGH") and vuln.get("FixedVersion"):
                 fixable_critical_high += 1
+                if result.get("Class") == "lang-pkgs":
+                    ours.append(row)
             if sev == "CRITICAL":
-                criticals.append(
-                    {
-                        "id": vuln.get("VulnerabilityID"),
-                        "package": vuln.get("PkgName"),
-                        "installed": vuln.get("InstalledVersion"),
-                        "fixed_in": vuln.get("FixedVersion") or None,
-                        "target": result.get("Target"),
-                    }
-                )
+                criticals.append({k: v for k, v in row.items() if k != "severity"})
+    key = lambda r: (r["package"] or "", r["id"] or "")  # noqa: E731
     return {
         "by_severity": counts,
         "total": sum(counts.values()),
         "fixable_critical_high": fixable_critical_high,
-        "critical_findings": sorted(criticals, key=lambda c: (c["package"] or "", c["id"] or "")),
+        "critical_findings": sorted(criticals, key=key),
+        "fixable_in_our_lockfile": sorted(ours, key=key),
     }
 
 
@@ -700,6 +711,11 @@ def main() -> int:
                 f"CRITICAL {dep['CRITICAL']} · HIGH {dep['HIGH']}; "
                 f"{mis['total']} failed misconfiguration check(s)"
             )
+            for row in leg["dependencies"]["fixable_in_our_lockfile"]:
+                print(
+                    f"    OURS      {row['severity']} {row['id']}  {row['package']} "
+                    f"{row['installed']} -> {row['fixed_in']}"
+                )
 
     if not args.no_write:
         RECORD_DIR.mkdir(parents=True, exist_ok=True)
