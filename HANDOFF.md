@@ -14,7 +14,7 @@ over* — none was broken.
 **M9-S2 is DONE. M9-S3 (F-057/F-054 closure) and M9-S4 (the gate) remain.** One new
 finding is OPEN and routed — **F-062** — and it does NOT block M9-S3 or M9-S4.
 
-**MERGED** — PR **#62**, merge commit `MERGE_SHA`; lineage proved:
+**MERGED** — PR **#62**, merge commit `dbbae50`; lineage proved:
 `git branch -r --contains 4ed17ae` -> origin/main. CI `lint-test` pass.
 
 ### Reconciliation (the staleness check — and this session inherited an interrupted one)
