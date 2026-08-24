@@ -36,7 +36,7 @@ This session's plan, in order:
    remote reachable with push rights; `gh auth status` succeeds (PR/merge
    autonomy runs through the GitHub CLI — the one human prerequisite);
    `claude` CLI present; permission flags set (echo $CLAUDE_PERMISSION_FLAGS);
-   Docker Desktop up; WSL RAM grant >=48GB (`free -h`); ports free (CLAUDE.md
+   Docker Desktop up; WSL RAM grant >=40GB (`free -h` ~39Gi; PO lowered it from 48 on 2026-08-22); ports free (CLAUDE.md
    port family). Paste every check.
 2. PROVE THE HARNESS before trusting it: (a) run
    `automation/next_session.sh executor 60` pointed at a throwaway hello
