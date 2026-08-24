@@ -83,7 +83,7 @@ record and requires the gate to catch it while the other sub-checks still pass.
 | Training window | **43,987,422** rows | `automation/runs/m7-drift/drift-2020-03.json` |
 | Online store contents | **57,688** keys, three independent witnesses | `automation/runs/m9-store-watch/headroom.json` |
 | Alert rules in force | **16 rules** across **13 signal ids** | `infra/monitoring/alerting_rules.yml` |
-| Host test suite | **1,220 tests**, no skips | `uv run pytest tests/unit -q` |
+| Host test suite | **1,227 tests**, no skips | `uv run pytest tests/unit -q` |
 | Scripted acceptance gates and their red teams | **10 gates · 8 red teams** | `Makefile`, `docs/milestones/PROGRAM_CLOSE.md` §1 |
 
 `make readme-check` re-verifies every number in that table against its record and

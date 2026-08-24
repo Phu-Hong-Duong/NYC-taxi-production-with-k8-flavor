@@ -84,6 +84,31 @@ def _json(path: str) -> dict:
     return json.loads((REPO / path).read_text())
 
 
+ONLINE = "automation/runs/m8-online/online_parity.json"
+KILL = "automation/runs/m6-gameday/kill.json"
+CANARY = "automation/runs/m6-canary/release_drill.json"
+STORE = "automation/runs/m9-store-watch/headroom.json"
+DRIFT_HEADROOM = "automation/runs/m7-drift/headroom.json"
+
+
+def _headroom_max_psi() -> float:
+    """The noisiest ACCEPTED 2019 month — the reason 0.10 is a bar and not a hunch."""
+    return max(month["max_input_psi"] for month in _json(DRIFT_HEADROOM).values())
+
+
+def _at(path: str, *keys: str):
+    """One value out of one record, named by the keys a reader would follow.
+
+    A missing key raises `KeyError`, which `main`'s leg reports as *could not read
+    the record* naming the claim — the shape of a record moving is a finding about
+    this table, never a silent `None` that formats into a plausible number.
+    """
+    value = _json(path)
+    for key in keys:
+        value = value[key]
+    return value
+
+
 def _bakeoff_winner_test_mae() -> float:
     record = _json("automation/runs/m3s5/bakeoff.json")
     winner = record["winner"]
@@ -122,17 +147,14 @@ def _alert_rule_count() -> int:
 def _alert_signal_count() -> int:
     document = yaml.safe_load(RULES.read_text())
     signals = {
-        rule["labels"]["signal"]
-        for group in document["groups"]
-        for rule in group.get("rules", [])
+        rule["labels"]["signal"] for group in document["groups"] for rule in group.get("rules", [])
     }
     return len(signals)
 
 
 def _make_targets() -> set[str]:
     return {
-        match.group(1)
-        for match in re.finditer(r"^([A-Za-z0-9_.-]+):", MAKEFILE.read_text(), re.M)
+        match.group(1) for match in re.finditer(r"^([A-Za-z0-9_.-]+):", MAKEFILE.read_text(), re.M)
     }
 
 
@@ -201,7 +223,9 @@ CLAIMS: tuple[Claim, ...] = (
     Claim(
         "100 declared pairs",
         "automation/runs/m8-online/online_parity.json",
-        lambda: f"{_json('automation/runs/m8-online/online_parity.json')['declared_pairs']} declared pairs",
+        lambda: (
+            f"{_at(ONLINE, 'declared_pairs')} declared pairs"
+        ),
         "the online parity's declared row set",
     ),
     Claim(
@@ -251,13 +275,17 @@ CLAIMS: tuple[Claim, ...] = (
     Claim(
         "13.75 s",
         "automation/runs/m6-gameday/kill.json",
-        lambda: f"{_json('automation/runs/m6-gameday/kill.json')['observed']['outage_seconds']:.2f} s",
+        lambda: (
+            f"{_json('automation/runs/m6-gameday/kill.json')['observed']['outage_seconds']:.2f} s"
+        ),
         "self-heal after the predictor is destroyed, M6-S5",
     ),
     Claim(
         "55 requests lost",
         "automation/runs/m6-gameday/kill.json",
-        lambda: f"{_json('automation/runs/m6-gameday/kill.json')['observed']['error_count']} requests lost",
+        lambda: (
+            f"{_at(KILL, 'observed', 'error_count')} requests lost"
+        ),
         "what the outage cost",
     ),
     Claim(
@@ -274,7 +302,9 @@ CLAIMS: tuple[Claim, ...] = (
     Claim(
         "0.37 s",
         "automation/runs/m6-canary/release_drill.json",
-        lambda: f"{_json('automation/runs/m6-canary/release_drill.json')['revert']['nginx_cleared_seconds']:.2f} s",
+        lambda: (
+            f"{_at(CANARY, 'revert', 'nginx_cleared_seconds'):.2f} s"
+        ),
         "what the traffic revert costs",
     ),
     Claim(
@@ -286,25 +316,33 @@ CLAIMS: tuple[Claim, ...] = (
     Claim(
         "PSI **0.0217**",
         "automation/runs/m7-drift/drift-2020-03.json",
-        lambda: f"PSI **{_json('automation/runs/m7-drift/drift-2020-03.json')['max_input_psi']:.4f}**",
+        lambda: (
+            f"PSI **{_json('automation/runs/m7-drift/drift-2020-03.json')['max_input_psi']:.4f}**"
+        ),
         "March 2020's most-moved input column",
     ),
     Claim(
         "PSI 0.0323",
         "automation/runs/m7-drift/headroom.json",
-        lambda: f"PSI {max(m['max_input_psi'] for m in _json('automation/runs/m7-drift/headroom.json').values()):.4f}",
+        lambda: (
+            f"PSI {_headroom_max_psi():.4f}"
+        ),
         "the noisiest ACCEPTED 2019 month, which is what makes 0.10 a bar",
     ),
     Claim(
         "**43,987,422** rows",
         "automation/runs/m7-drift/drift-2020-03.json",
-        lambda: f"**{_json('automation/runs/m7-drift/drift-2020-03.json')['reference_rows']:,}** rows",
+        lambda: (
+            f"**{_json('automation/runs/m7-drift/drift-2020-03.json')['reference_rows']:,}** rows"
+        ),
         "the training window the champion was fitted on",
     ),
     Claim(
         "**57,688** keys",
         "automation/runs/m9-store-watch/headroom.json",
-        lambda: f"**{_json('automation/runs/m9-store-watch/headroom.json')['expected_keys']['total']:,}** keys",
+        lambda: (
+            f"**{_at(STORE, 'expected_keys', 'total'):,}** keys"
+        ),
         "the online store's key count, M9-S2",
     ),
     Claim(
@@ -322,13 +360,17 @@ CLAIMS: tuple[Claim, ...] = (
     Claim(
         "3.30%",
         "automation/runs/m7-retrain/latest.json",
-        lambda: f"{_json('automation/runs/m7-retrain/latest.json')['verdict']['observed_pct_vs_floor']:.2f}%",
+        lambda: (
+            f"{_json('automation/runs/m7-retrain/latest.json')['verdict']['observed_pct_vs_floor']:.2f}%"
+        ),
         "what the refused challenger DID beat",
     ),
     Claim(
         "2.00%",
         "automation/runs/m7-retrain/latest.json",
-        lambda: f"{_json('automation/runs/m7-retrain/latest.json')['verdict']['required_pct_vs_floor']:.2f}%",
+        lambda: (
+            f"{_json('automation/runs/m7-retrain/latest.json')['verdict']['required_pct_vs_floor']:.2f}%"
+        ),
         "the floor condition's bar",
     ),
     Claim(
@@ -351,7 +393,7 @@ COMMAND_CLAIMS: tuple[Claim, ...] = (
 )
 
 TEST_COUNT_CLAIM = Claim(
-    "1,220 tests",
+    "1,227 tests",
     "uv run pytest tests/unit -q",
     lambda: f"{_collected_tests():,} tests",
     "the host suite",
@@ -403,7 +445,9 @@ def check_paths(text: str) -> list[str]:
         for path in re.findall(r"`([A-Za-z0-9_./-]+\.(?:md|json|yml|yaml|sh|py))`", text)
         if "/" in path
     }
-    candidates |= set(re.findall(r"`((?:docs|ledgers|automation|infra|scripts|demo)/[A-Za-z0-9_./-]*/)`", text))
+    candidates |= set(
+        re.findall(r"`((?:docs|ledgers|automation|infra|scripts|demo)/[A-Za-z0-9_./-]*/)`", text)
+    )
     named = sorted(candidates)
     missing = [p for p in named if not (REPO / p).exists()]
     if missing:
@@ -444,7 +488,10 @@ def check_claim(claim: Claim, text: str) -> str:
                 "almost any document and is not a check (gotcha #90)"
             )
         as_text = f"{actual:.{max(_decimals(rendered_value), 1)}e}"
-        if as_text != rendered_value and f"{actual:.{_decimals(rendered_value)}f}" != rendered_value:
+        if (
+            as_text != rendered_value
+            and f"{actual:.{_decimals(rendered_value)}f}" != rendered_value
+        ):
             raise ReadmeError(
                 f"the README says {claim.rendered!r} for {claim.about}; "
                 f"{claim.record} holds {actual!r}"
@@ -521,7 +568,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_collect:
         claims.append(TEST_COUNT_CLAIM)
     else:
-        print("[readme-check] --no-collect: the test-count claim is the CLI's leg (see module docstring)")
+        print(
+            "[readme-check] --no-collect: the test count is the CLI's leg (module docstring)"
+        )
 
     print(f"[readme-check] {len(claims)} claim(s), each read back from its record")
     for claim in claims:
@@ -530,7 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     if failures:
         print(f"\n[readme-check] RED — {len(failures)} claim(s) the README cannot support.")
         return 1
-    print(f"\n[readme-check] GREEN — every target, path and number in README.md checks out.")
+    print("\n[readme-check] GREEN — every target, path and number in README.md checks out.")
     return 0
 
 
