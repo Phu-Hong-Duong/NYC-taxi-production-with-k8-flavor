@@ -21,6 +21,19 @@ box; it waits at AWAITING_PO and this gate only ever checks that it is recorded
 honestly.` That banner is the gate working as chartered, not a caveat added
 here.
 
+> **DATED NOTE — 2026-08-24, M9-S5 (the paragraph above is kept as written).**
+> The box it describes is now **CLOSED**: the PO ran the page unassisted on
+> 2026-08-24 and their note is recorded verbatim at AWAITING_PO 2026-08-23-3.
+> The gate was NOT hand-flipped — §2's leg was re-derived from the literal
+> `OPEN` to the two-state property (**OPEN and honest, or CLOSED and CITED**),
+> and the banner's box paragraph is now derived from the record it just judged,
+> so this text is what a reader sees before the closure and a citation line is
+> what they see after. A **CLOSED status with no citation, or one AWAITING_PO
+> does not hold, is RED** — demonstrated twice in M9-S5 with 44 sub-checks
+> still passing and a sha256-identical restore. The verdict this document
+> records (ten gates GREEN) is unchanged: nothing was re-run to close the box,
+> and nothing about the close depended on it being open.
+
 **Lineage spot-check (gotcha #20):** `git branch -r --contains bf2d553`
 (M9-S4's story commit, PR #64) → `origin/main`. M9 landed as PRs **#61–#64**
 (S1 demo page · S2 store watchdog · S3 two closures · S4 the gate).
@@ -55,6 +68,13 @@ silent:**
   is **complete on every term a machine can verify, and unfinished on the one
   term only the PO can close** — both halves stated, neither blurred into the
   other.
+  > **DATED NOTE — 2026-08-24, M9-S5:** the human closed it. The PO completed
+  > the run unassisted the same day and filed no legibility defect (*"This is
+  > okay, I get the gist of it. Improvement can be done later."* — AWAITING_PO
+  > 2026-08-23-3, verbatim). §9/M9 is now closed on all three clauses. The
+  > sentence above stands because the distinction it draws is the point: this
+  > line was closed by a person, cited to their own words, and no gate could
+  > ever have done it.
 - **F-065 (NEW, raised + CLOSED this triage):** the program-close sweep ran
   `make verify-m2` for the first time since M4-S1 and it was **RED** — its §9
   root-stray allowlist predates M8-S2's `.venv-feast`, so the gate had been
@@ -113,7 +133,7 @@ The M9-S4 handoff invited the close to "run all ten as ten commands." Done,
 | `make verify-m6` | GREEN |
 | `make verify-m7` | GREEN |
 | `make verify-m8` | GREEN — incl. F-064's repaired key-count comparison, live |
-| `make verify-m9` | GREEN 45/45, OPEN ITEM printed in the banner |
+| `make verify-m9` | GREEN 45/45, OPEN ITEM printed in the banner (re-run GREEN 45/45 at M9-S5 with the box CLOSED and its citation printed instead — same count, the leg re-derived rather than removed) |
 
 The sweep's one finding (F-065) is the argument for the sweep: a named
 allowlist in a long-lived verifier is a twin of every later milestone's
@@ -135,7 +155,8 @@ preceded it is part of the record, not an embarrassment to it.
   law.
 - **The face:** `http://localhost:8081/demo/` — same-origin, CORS dissolved by
   construction, refusals rendered as refusals. The §9/M9 observed-run box is
-  the one thing on it a machine cannot close.
+  the one thing on it a machine cannot close — **and on 2026-08-24 the PO
+  closed it** (M9-S5 landed the citation; the gate still cannot).
 - **Eyes and judgement:** Prometheus + Alertmanager + Grafana; **16 alert
   rules across 10 signal ids**, every threshold argued in
   `docs/slo_serving.md` beside the rule that carries it; the drift surface
@@ -154,8 +175,10 @@ preceded it is part of the record, not an embarrassment to it.
 
 ## 3. What remains, and with whom (all of it the PO's, none of it the chain's)
 
-1. **The observed demo run** — AWAITING_PO 2026-08-23-3. Closes §9/M9's last
-   accept line. Five minutes.
+1. ~~**The observed demo run** — AWAITING_PO 2026-08-23-3. Closes §9/M9's last
+   accept line. Five minutes.~~ **DONE 2026-08-24** by the PO; the record was
+   flipped to CLOSED-and-CITED by M9-S5 (epilogue), which also re-derived the
+   gate so a citation-free CLOSED is RED.
 2. **F-062** — AWAITING_PO 2026-08-24-2. A genuine fork on a live boundary's
    refusal classes; recommendation (b).
 3. **The stretch menu** — AWAITING_PO 2026-08-23-2. Opt-in only.

@@ -172,8 +172,15 @@ hand; the chain resumes on the next cron tick.
 > finding opens; improvements stay ordinary future work, not an accept condition.
 > The §9/M9 box closes on this note — the next ARCH touch should flip
 > `automation/runs/m9-demo/accept.json` (`po_observed_run.status`) to cite it.
-
-**Nothing here blocks the chain.** M9-S1 is done and merged; M9-S2 (the
+>
+> **LANDED 2026-08-24 by M9-S5** (epilogue). The record now reads
+> `CLOSED — observed 2026-08-24, cited at AWAITING_PO 2026-08-23-3` and carries
+> your note above **quoted, not paraphrased**. The gate was not hand-flipped:
+> `verify-m9` §2 now asks the two-state PROPERTY — the box is **OPEN and
+> honest** (the invitation live in this file) or **CLOSED and CITED** (an entry
+> this file really holds, containing the observer's own words) — so a CLOSED
+> status nobody can trace is RED. Demonstrated twice with 44 sub-checks still
+> passing and a sha256-identical restore. Nothing is asked of you here. M9-S1 is done and merged; M9-S2 (the
 online-store watchdog) is the next story and does not wait on this.
 
 **The page is at <http://localhost:8081/demo/>.** Two things to run first, and

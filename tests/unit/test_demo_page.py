@@ -433,7 +433,7 @@ def test_the_accept_can_never_close_the_human_box() -> None:
         value.value
         for node in ast.walk(tree)
         if isinstance(node, ast.Dict)
-        for key, value in zip(node.keys, node.values)
+        for key, value in zip(node.keys, node.values, strict=True)
         if isinstance(key, ast.Constant) and key.value == "status"
         and isinstance(value, ast.Constant) and isinstance(value.value, str)
         and value.value.upper().startswith("CLOSED")
