@@ -1,5 +1,135 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-24 (ch) — M9-S3: two closures, and the tool made to agree with the reviewed artifact
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md · HANDOFF
+(cg) · `docs/milestones/M9_KICKOFF.md` · AWAITING_PO (incl. 2026-08-24-1, the PO-side chain
+fix). **Role block: MLOps** — the kickoff's assignment for S3; charter read. Refusals in play
+all session: *no alias move · nothing fitted · no gate invocation · no new hostPort · no
+project dependency (`uv.lock` frozen) · no Flyte trigger · the champion's wire is not cut
+over* — none was broken. **No cluster state changed at all**; this story is code, tests and
+ledgers.
+
+**M9-S3 is DONE. M9-S4 (the M9 gate — the program's last crossing) is the only story left.**
+No new finding. No fork.
+
+**MERGED** — PR **#63**, merge commit `78096a8`; lineage proved: `git branch -r --contains
+2bffaf1` -> origin/main. CI `lint-test` pass (**1169 passed, 2 skipped**).
+
+### Reconciliation (the staleness check)
+Nothing had moved and nothing needed repair. 3/3 nodes Ready v1.36.1 at 7d2h; tree clean at
+`e0a1b4f`; no `automation/STOP`; both 2026-08-20 statuses still `FAILED-ACKED` from the PO-side
+session, i.e. the landmine AWAITING_PO 2026-08-24-1 describes is defused. The quarantine venv
+`.venv-feast` was present and usable (66 packages) — which mattered, because this story rebuilds
+it from scratch on purpose.
+
+### Done — F-057, and the fork inside the fix
+**The pin file is UNCHANGED (+0/−0), and that is the closure's strongest form.** The defect was
+that `--rewrite-pins` emitted distribution names as PUBLISHED (`PyYAML`, `typing_extensions`)
+where the committed file carries the normalized spelling, so the file's own regenerator could
+not reproduce the file it maintains and M8-S4's two real additions arrived as **+14/−12**.
+
+Measured before deciding anything: normalizing fixes twelve spellings and leaves **three** lines
+still moving — `mypy-extensions`/`mypy`, `pydantic-core`/`pydantic`, `uvicorn-worker`/`uvicorn`.
+The committed body is sorted **as LINES** (`-` < `=`, so the hyphenated sibling comes first);
+today's `uv pip freeze` name-sorts. So there was a choice the finding's row did not see:
+regenerate and commit fifteen changed lines, or make the tool emit what the reviewed artifact
+already holds.
+
+**Took the second, and the reason is evidence rather than tidiness.** Under the first, the
+round-trip test's claim is *"the regenerator reproduces the file I just wrote with it"* — true by
+construction, and silent about whether the twelve spellings are the right ones. Under the second
+it is *"the regenerator reproduces a file under review since M8-S2, untouched"* — the fix is
+tested against something that predates it. Legitimate because this script is the file's ONLY
+producer (`feast_quarantine.sh --resolve` calls it) and sorting the lines is the ordering a
+reviewer verifies without running anything (`sort -c`). **The kickoff's anticipated "regenerate
+in a commit that does nothing else" therefore has NO CONTENT** — recorded in the row, in
+CLAUDE.md and here rather than quietly skipped. Honest cost, also recorded: a hand-run `uv pip
+freeze` now differs from the file on those three lines.
+
+- Regeneration produced **no diff at all** — sha256 `a700cd6b52dcaaa974ed36b50286161eead2373bd07e38734e99de53d04e4131`
+  before and after, 66 pins.
+- **PEP 503** (`[-_.]+` -> `-`, lowercased), not the row's shorter `lower().replace('_','-')`:
+  they agree on all 66 names today, which is why it was worth doing before somebody adds a dotted
+  name and gets a spelling no installer canonicalises to. Both differing cases are in the test.
+- A normalization maps many to one, so a **collision REFUSES** rather than silently dropping a
+  pin from a file whose entire claim is completeness.
+- **From-pins rebuild re-earned for the regenerated file** (M8-S2's proof, run again):
+  `.venv-feast` deleted, rebuilt `uv pip install --no-deps -r …` -> **same 66 packages, 0
+  only-before, 0 only-after**; `quarantine pandas 2.3.3 feast 0.66.0` vs `project pandas 3.0.5`;
+  `feast in project env: False`; `uv.lock` `640154c5…` unchanged throughout.
+- **M8-S2's `probe.json` was deliberately NOT regenerated.** It is that story's tracked record,
+  already divergent by design (64 pins, pre-`redis`/`hiredis`), and `feast_quarantine.sh --check`
+  rewrites it — rewriting an earlier milestone's evidence as a side effect is F-053/F-063's shape
+  (gotcha #48). `make feast-quarantine` is the command whose job that is, and it will normalize
+  the record's keys the next time somebody runs it, correctly.
+- **Red-teamed**: one pin put back as `PyYAML` -> **2 tests RED from two independent angles**
+  (the artifact's own property, and the round trip), restored, GREEN.
+
+### Done — F-054, closed by flipping a guard rather than by editing twelve tests
+`skipif(not RECORD.exists())` and `@pytest.mark.needs_records` both make the in-image run green
+and are not the same answer: on the host an absent record means the drill was never run, and the
+skip form reports that as a pass. The deciding fact (ARCH, M8 boundary) is that those records are
+git-tracked (F-029 option A), so option (a)'s stated cost is void and the assertion catches
+exactly one new thing — a deleted record, loudly.
+
+The interesting half is WHERE the closure lives. `test_record_marker.py` used to SUBTRACT the
+older form from its coverage check — i.e. accept it — and argue against it in its docstring. So
+`_skip_guarded` moved out of the subtraction and became what a new test **refuses**, derived by
+AST across every test file; enumerating the two known files would go green the day a third grew
+one. Decorators only, because this suite discusses the old form in prose (gotcha #99) — and the
+docstring that argued against the form now records that it is gone.
+
+- The twelve (`test_canary_and_rollback.py` 8, `test_shadow_and_spike.py` 4) read through one
+  `_record()` helper per file that asserts existence with a message saying what the absence MEANS
+  (`… is a TRACKED record (F-029 option A) — its absence means it was deleted or lost, not that
+  this clone lacks local artifacts`), because the default failure is a bare `FileNotFoundError`
+  five frames deep.
+- **Host suite 1171 passed, NO SKIPS** (was 1167: +3 F-057 tests, +1 this guard);
+  `-m 'not needs_records'` deselects **53** where it deselected 41 — the twelve moved from
+  skipping everywhere to running on the host and being deselected in the ONE place F-047 allows.
+- **Red-teamed**: `automation/runs/m6-shadow/disagreement.json` moved aside -> **3 FAILED** naming
+  the record and the finding while 12 still passed; restored -> 15 passed, clean tree.
+- **CI is the independent witness for option (a)'s deciding fact**: GitHub's runner is a fresh
+  clone, and the twelve passed there (1169 passed, 2 skipped — the two remaining `skipif`s in the
+  whole suite are env-gated on a BINARY and a build artifact, `make` and `.venv-feast`, plus a
+  couple of `importorskip`s).
+
+### Verification at exit (all re-run on merged main, tree clean)
+`make verify-m5` **GREEN** · `make verify-m6` **GREEN** · `make verify-m7` **GREEN** ·
+`make verify-m8` **GREEN 51/51** · host suite **1171 passed, no skips** · ruff clean ·
+**`uv.lock` byte-identical to `m7-closed`** (blob `7d772b4c`, sha256 `640154c5…`) · all settled
+DVC pins `Data and pipelines are up to date.` · `@champion` **2** / `feature_set v2` and
+**NOT ONE of the 2 registry versions created after `m7-closed`** (read off `verify-m8` §7 live,
+which also re-confirmed the champion and the transformer both answering **10.665224** at
+`model_version='2'`, `|Δ| = 0.000e+00`).
+
+### Next
+**M9-S4 — the M9 gate, the program's last crossing.** `make verify-m9` + `make verify-m9-redteam`,
+per the kickoff: ninth and final inheritance of M1's no-skip-flag rule, **re-runs nothing**, and
+its **live-question count is pinned by its own test** (one request through the demo's own request
+path, one rules read, one store question — and no more).
+
+What this story hands it, precisely:
+- **F-057's evidence is a NEGATIVE**: the gate should assert the round-trip test EXISTS and is in
+  the suite, and that the committed body is normalized and sorted — not that a regeneration was
+  committed, because there was nothing to commit. The kickoff's phrasing ("round-trip test present
+  and green in the suite; the skipif form absent — DERIVED, never enumerated") already fits.
+- **F-054's evidence is derived and already lives as a test**: `test_no_record_read_is_guarded_by_a_skip`
+  walks every file under `tests/unit`. The gate can read that the test exists and passes rather
+  than re-deriving the AST walk itself.
+- The demo, both InferenceServices, the feature server, Redis at 57,688 keys and all 16 alert
+  rules are still up and untouched — **the gate inherits every one of them live** and should read,
+  never re-run (M9-S2's empty phase is a real total outage of the transformer's dependency).
+- **F-062 stays OPEN and belongs to the program close**, not to M9-S4: fixing it changes what the
+  served boundary returns, which means a transformer redeploy and re-measuring three parity
+  records, and M9 law 3 keeps the wire still. It is in `ledgers/findings.md` with three costed
+  options and recommendation (b).
+- **The PO-observed demo box (AWAITING_PO 2026-08-23-3) is still OPEN by design** — the gate
+  asserts the entry exists and is honest, never renders it green.
+
+
 ## Session 2026-08-24 (cg) — M9-S2: the online-store watchdog, and two rules that carry no number
 
 ### State
