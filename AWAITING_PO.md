@@ -1,5 +1,87 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-24-5 · raised by EXEC/Opus (M9-S9) · THE PRE-PUBLISH PAIR IS DONE — the public flip is your click, plus one small CVE fork
+
+**One sentence.** You said *yes, publish, after the pre-publish pair* (2026-08-24-2,
+answer 3); M9-S8 landed the README and M9-S9 has now scanned this repository for
+secrets and vulnerabilities — **zero secrets in anything git holds**, verdict
+`publishable: true` — so **nothing is blocking the flip except you clicking it.**
+
+**What was checked, and the one thing that would have stopped it.** Two pinned
+scanners (trivy **0.74.0**, gitleaks **8.30.1**, sha256s recorded) over four legs:
+every file on this disk, **every commit on every ref** (not just `main`'s
+ancestry — a secret deleted from `main` still lives in the objects an old commit
+points at, and that is what publishing exposes), the three images this program
+builds, and the repo's lockfile and manifests. The rule I was working under: a
+secret anywhere git can reach = **story-stopping, park, do not publish**. There
+were none.
+
+**Two things the scan found that are NOT secrets, both reported rather than
+hidden:**
+- `.env` trips the scanner ten times. That is correct and expected — it holds the
+  real MinIO and Postgres credentials, it has **never been in git**, and each
+  finding carries `git check-ignore -v`'s answer beside it as proof rather than as
+  an assurance. This is why the scan looks at the whole disk and then classifies,
+  instead of scanning only tracked files and reporting a comfortable zero.
+- One 32-character string in `scripts/gameday_m6.py` looks exactly like a
+  credential because it **is** one — the deliberately WRONG MinIO secret the M6
+  gameday injects to make storage refuse the predictor. It is not suppressed in a
+  config file nobody reads; it is acknowledged with an argument the scan
+  **re-derives from the bytes it finds**, decoding them to the literal string
+  `wrong-credential-gameday`. Put a live credential on that line and it goes
+  straight back to blocking.
+
+**A DECISION FOR YOU, and it is small.** `uv.lock` pins **sqlparse 0.5.5**, which
+carries **three HIGH CVEs with a fix available in 0.6.0**. It arrives transitively
+through dbt-core and mlflow-skinny. Exposure here is genuinely limited — it is a
+SQL *parser*, and nothing in this program parses SQL from an untrusted party;
+every SQL string is written by this repository. **I did not bump it**, because
+`uv.lock` is asserted **byte-identical to the `m7-closed` tag** by `verify-m8` §1
+and by every M8/M9 story's exit state, so changing it turns a green gate red by
+design. That makes it yours.
+
+- **(a) Publish as-is and leave it.** Zero work, gates stay green, and the
+  repository ships with three HIGH CVEs in a transitive parser it never points at
+  untrusted input. Defensible and documented — `docs/security_audit_m9.md` §4 says
+  it in public — but a reader running their own trivy will see it before you do.
+- **(b) Bump `sqlparse` and re-baseline the lock invariant.** — **RECOMMENDED.**
+  One `uv lock --upgrade-package sqlparse`, then the honest cost, which I am
+  stating rather than netting out: `verify-m8` §1 goes RED until the invariant is
+  re-pointed at a new tag, `make marts` and the MLflow client both want re-running
+  to prove nothing moved, and the M8 quarantine's pin file wants a look. That is a
+  chartered story, not a one-liner — probably half a session. It buys a clean
+  scanner result on the front page of a public repo and, more usefully, it is the
+  first time this program would exercise *changing* a pinned dependency, which is
+  a thing every real MLOps platform does monthly and this one has never done.
+- **(c) Publish now, bump later.** The flip is not blocked by this. Ship, then
+  charter (b) as the first post-publish story. Costs nothing today and leaves the
+  CVEs visible to a reader in the meantime.
+
+**Two smaller things worth a word, neither blocking.**
+1. **Should the credentials in `.env` be rotated before the repo is public?** They
+   are not in git and never were, so publishing does not disclose them. What it
+   *does* disclose is the platform's shape — service names, ports, bucket names,
+   database names. On a laptop-only $0 stack behind no public route my answer is
+   no, but it is your call and it is cheap either way (`make destroy` + redeploy
+   regenerates everything).
+2. **No pre-commit hook was added, deliberately.** The M1 prior-art ADOPT was
+   commit-time secret scanning; a hook lives in `.git/hooks`, which is not tracked
+   and cannot be verified by any gate here — so it would be a claim this repo
+   could not check. `make security-scan` is the on-demand audit and its verdict is
+   a tracked file. Say the word if you want the hook anyway.
+
+**Ready meanwhile / nothing is blocked.** `make security-scan` re-runs the whole
+audit in a few minutes; `make security-scan-redteam` proves it can find a planted
+credential in the working tree *and* in a commit no branch points at, then
+destroys the plant and asks git whether the object is really gone.
+`docs/security_audit_m9.md` is the write-up, including the 76 pod-security
+misconfiguration findings — a real hardening pass, listed rather than totalled, so
+whoever wants it can start from the list instead of the idea.
+
+**The other open item is still `2026-08-24-4` (F-016/F-068, answer with a letter).**
+
+---
+
 ## 2026-08-24-4 · raised by EXEC/Opus (M9-S6) · A FORK, AND IT IS SMALL BUT REAL — your F-016 answer (option B) cannot land as chartered; four options, recommendation (b)
 
 **One sentence.** You chose **option B** for F-016 — a **≥0.50%** margin on the

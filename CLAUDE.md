@@ -131,6 +131,8 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | Serving alert rules | **7 rules across 6 signal ids** (A-1, A-2, A-3, A-5 ×2, A-6, A-7) in `infra/monitoring/alerting_rules.yml`, a plain Prometheus rules file · thresholds **5%** beyond 250 ms · **10%** edge 5xx · **1%** 4xx · **<1** available replica · **>2** restarts/15 m · **0.90** CFS-throttled fraction | 2026-08-19 | M6-S2, read back off `/api/v1/rules` (7 loaded, `health=ok`). Every threshold's argument lives in `docs/slo_serving.md`, and `scripts/render_alert_rules.py` REFUSES a rule with no `annotations.why`. **A-4 and A-3's client half have NO rule and that is recorded** (F-035) |
 | KServe `deploymentMode` | **`RawDeployment`** (ADR-004's Standard mode) — the chart default is `Knative` | 2026-08-19 | `infra/helm/kserve/values.yaml`, and READ BACK off `configmap/inferenceservice-config` by `scripts/deploy_serving.sh` rather than off the values that were submitted. Honest cost, landing on M6: **Standard mode has no canary** — `canaryTrafficPercent` requires Serverless (the prior-art ADOPT) |
 
+| trivy | **0.74.0**, sha256 of the installed binary `d89bcc6510a267f11b773398cbf1be5520ce39f9e8b6633178c4487f05b7d791` | 2026-08-24 | `make security-tools` (M9-S9). Into `~/.local/bin`, the M0-S1 precedent. The VERSION is pinned in `scripts/security_tools.sh` and never resolved from `latest`, and it is read BACK off the binary. What the publisher's `*_checksums.txt` proves is stated in the record itself: same origin, same TLS session, so it detects corruption and NOT tampering — the durable pin is the sha256, recorded in a tracked file. Sigstore attestations are NOT verified (that needs `cosign`, a third binary this program is not adding), recorded as a limit |
+| gitleaks | **8.30.1**, sha256 `88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509` | 2026-08-24 | `make security-tools` (M9-S9). The secret scanner; the history leg runs it with `--log-opts='--all --full-history'`, which walks every ref and not just HEAD's ancestry — a secret removed from `main` by a later commit still lives in the objects the old commit points at, and that is what publishing exposes |
 | Redis (the Feast ONLINE store) | **`redis:8.2-alpine@sha256:30abb90e62f14b737010746def3ba99cc79fe19dcdb3d37b41f21fc62e7da19d`** — TAG AND DIGEST, the Metabase precedent. Plain manifest (`infra/manifests/redis.yaml`), not a chart — the header says why. `maxmemory 512mb` + **`maxmemory-policy noeviction`** (a correctness setting, not tuning) · RDB `--save "60 1000"` onto a 1Gi PVC · `strategy: Recreate` · **no hostPort** | 2026-08-21 | `docker image inspect` (M8-S4), read back off the live Deployment and off the running server with `redis-cli CONFIG GET`. ADR-012 records why it is Redis and not sqlite (two-sided reachability) and not Postgres (blast radius: the ONE Postgres holds five irreplaceable tenants and an online store is the opposite state class) |
 | redis / hiredis (in the QUARANTINE only) | **`redis==7.4.1` · `hiredis==3.4.1`** — feast's own `[redis]` extra (`redis<8,>=4.2.2`, `hiredis<4,>=2.0.0`, read off feast's metadata) | 2026-08-21 | M8-S4. The only two lines `infra/feast/requirements-feast.txt` gained (+2/−0, hand-inserted in sorted position — see F-057 for why not by regeneration), and `scripts/feast_quarantine.sh`'s `FEAST_PIN` is now `feast[redis]==0.66.0` so a future `--resolve` produces the set the pin file already holds. **`uv.lock` byte-identical to the `m7-closed` tag across the whole story** |
 
@@ -3574,6 +3576,89 @@ can never disagree (the port-family twins lesson, applied before it bit).
   `feature_set v2` · host suite **1227 passed** (was 1220) · ruff clean ·
   `make verify-m5` and `make verify-m9` GREEN after the change.
 
+## The pre-publish audit (M9-S9) — the scan that flagged its own record, and a drill that lied comfortably
+- **Zero secrets in anything git holds, verdict `publishable: true`** — over every
+  file on this disk, **every commit on every ref**, the three images this program
+  builds, and `uv.lock` plus the hand-written manifests. trivy **0.74.0** and
+  gitleaks **8.30.1**, pinned by VERSION (never `latest`) with sha256s in a
+  tracked record. `.env` never entered git by design, so this VERIFIES hygiene
+  rather than creating it — which makes the expected answer the same one a broken
+  scanner gives, and is why every leg records the inputs it looked at (gotcha #59)
+  and why `make security-scan-redteam` exists.
+- **The triage is a classification and the tempting alternative is a lie by
+  omission.** Findings split into **in git** (tracked, in history, or untracked
+  AND unignored — one `git add -A` away), **acknowledged**, and **gitignored on
+  this disk**, the last carrying `git check-ignore -v`'s own answer beside each
+  one. `.env` trips the scanner ten times and that is CORRECT. A scan pointed only
+  at tracked files would report zero and prove nothing about the hazard anyone
+  actually has: a developer committing the `.env` they have been editing all week.
+- **The one acknowledged finding is a DERIVATION, not a suppression.**
+  `scripts/gameday_m6.py:699` holds the M6-S5 gameday's deliberately WRONG MinIO
+  secret — *a credential designed not to work is the one string in this repo that
+  must look exactly like a credential*. No `.gitleaksignore` (a suppression nobody
+  can read is how the next real one hides behind it): it is keyed on the sha256 of
+  the found bytes, and the scan DECODES the bytes it actually found and requires
+  them to spell `wrong-credential-gameday`. It fails in BOTH directions — an entry
+  matching nothing is a stale suppression and is itself a failure
+  (`render_alert_rules.py`'s rule). A unit test proves the table offline too:
+  encoding the claimed plaintext and hashing it must reproduce the key.
+- **The scan flagged its own tracked record, thirteen times, and was right.** The
+  first run wrote each finding as a 64-hex digest under a field called
+  `secret_sha256` — `generic-api-key` fires on a long high-entropy value under a
+  credential-shaped key, and both halves were there. Fixed in the ARTIFACT: a
+  **12-character** `finding_id` in the record, the full digest kept in code where
+  it is a dict key rather than a value after a credential-shaped name, and
+  `_`-prefixed working fields stripped at the WRITE BOUNDARY so a leg added later
+  cannot leak one. The quieter twin: the tree scan read its own previous raw
+  report, making the finding count a function of how often the scan had been run —
+  dropped, COUNTED and named, and the drop is BOUNDED (the code EXITS rather than
+  dropping anything heading for `blocking`).
+- **F-071 — the red team was flaky in the direction that reads as good news.**
+  Two runs in five reported all six detection checks failing, i.e. *the scanner
+  found nothing*, while the scan was perfect. Both causes were the PLANT:
+  `generic-api-key` matches `[\w.=-]`, which excludes `+` and `/`, so a
+  base64-alphabet secret with an early `+` was truncated below the rule's minimum
+  length; and both rules carry an entropy floor a short random string clears only
+  on average (a 20-char AWS-shaped id measured **3.15–4.22** bits over 2,000
+  draws). **A randomly generated plant must be drawn against the properties the
+  detector keys on** — the generator redraws above a stated floor, measures entropy
+  over the WHOLE matched string (prefix included, because that is what the scanner
+  sees) and PRINTS it. Four consecutive **16/16** runs after, one at the floor.
+- **The drill also found a real gap on its first run**: a blocking HISTORY finding
+  printed rule, file and line and **no commit** — and the remedy for a secret in
+  history is per-commit. It prints commit/author/date now. And destruction is part
+  of the drill: branch deleted, reflog expired, `gc --prune=now`, then
+  `git cat-file -e` ASKED whether the object is gone — *"I deleted the branch"* and
+  *"the object is gone"* are different claims and only the second is what
+  publishing cares about.
+- **CVEs are recorded, not chased — but the record splits the ones we can act
+  on.** 201 · 196 · 879 across the three images (the predictor's is its py3.10
+  mlserver base, which M5-S2 already recorded as unmovable), plus 5 dependency
+  CVEs and **76 failed pod-security/Dockerfile misconfiguration checks**, listed
+  per file rather than totalled so a hardening pass can start from the list. The
+  actionable split is trivy's own `Class: lang-pkgs`: an OS package in a Debian
+  base is Debian's to fix and ours to pin, a Python package in `uv.lock` is a line
+  we wrote. Exactly one cluster qualifies — **`sqlparse` 0.5.5, three HIGH, fix in
+  0.6.0**, transitive through dbt-core and mlflow-skinny — and it is **NOT bumped
+  here** because `uv.lock` is asserted byte-identical to `m7-closed` by
+  `verify-m8` §1: a PO fork with a stated cost (AWAITING_PO 2026-08-24-5), never a
+  quiet edit. Exposure bounded and stated: nothing here parses SQL from an
+  untrusted party.
+- **No pre-commit hook, deliberately.** The M1 prior-art ADOPT was commit-time
+  scanning; a hook lives in `.git/hooks`, which is not tracked and no gate here can
+  verify — it would be a claim this repo could not check. `make security-scan` is
+  the on-demand audit and its verdict is a tracked file.
+- **Two smaller lessons.** A README claim of "489 commits" can never be right,
+  because fixing it adds a commit — a number that invalidates its own correction
+  belongs in the record, not the document. And my own new test forbade long hex in
+  the record and tripped on commit shas and image ids: a guard firing on correct
+  data is re-derived, never widened (gotcha #50) — the real property was always
+  *a long value under a credential-shaped key*.
+- Exit state: nothing fitted, no alias moved, no version created, **no wire
+  touched, no cluster call that writes**. `@champion` **2** / `feature_set v2` ·
+  host suite **1244 passed** (was 1227) · ruff clean · `uv.lock` byte-identical to
+  `m7-closed` · `make readme-check` GREEN · `make verify-m9` GREEN 45/45.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3794,6 +3879,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Validate the alert rules, now sixteen (M9-S2) | `make alert-rules` | RE-VERIFIED 2026-08-23 (M9-S2): **16 rules validated across 10 signal ids** (was 13 across 9) — **DATED CORRECTION 2026-08-24 (M9-S8), original kept above: the id counts are wrong and the rule counts are right. `infra/monitoring/alerting_rules.yml` carries 16 rules across **13** signal ids (A-1…A-13, with A-12 holding two rules), and `git show m8-closed:` says the before-state was 13 rules across **11**. "Ten ids" was true at M7-S3 and was carried forward twice without recounting — the exact shape M9-S8's `make readme-check` now prevents in the README, where the same fact is read out of the rules file on every run** — the three new ones printed with their `for:` and severity — `A-12 OnlineStoreCanaryFailing for=2m critical` · `A-12 OnlineStoreIncomplete for=2m warning` · `A-13 OnlineStoreWatchdogAbsent for=10m warning`. Every one carries an `annotations.why` or the renderer REFUSES it, which is what stops a threshold shipping without the argument beside it. Read back off the live `prometheus-server` ConfigMap: all three present, **`health=ok`, and NO pod restart** — the configmap-reload sidecar, M6-S1's measurement re-confirmed a fourth time |
 | Gate check M9 — the program's last crossing | `make verify-m9` | VERIFIED 2026-08-24 (M9-S4): **GREEN 45/45 sub-checks in 7 sections, 4.450 s, exit 0** — the demo page (530 `<option>` elements == 2 x the CSV's 265 zones, the request schema equal to `transformer.RAW_INPUTS` on wire name AND datatype AND source field, the default trip a PUBLISHED parity row, TLC's two non-places RENDERED and quotable at 8.2445 min, the served page byte-identical to git by sha256 read three ways, and the page posting to the RAW boundary and never the champion's 24-column wire) · §9/M9's accept answered line by line with the bar **PARSED** out of the section that argues it (`EXACT`, |Δ| 0.000e+00, cross-artifact against the transformer-parity row matched on (at, pu, do)) · **law 4 from git four times** (133 s · 0 s · 1878 s · 700 s) · the watchdog's three rules with **NO NUMBER on either side of A-12b**, the one bar (1800) argued in §9 specifically, and **every series the rules SELECT produced by `store_health`** — a rule selecting a series nobody pushes stays `health=ok`/`inactive` forever · **THREE live questions** (one quote through the DEMO's own request path at 39.00193715359812 stamped with the version the alias resolves to; the three rules LOADED `health=ok` with every `for:` equal to the file's; **57,688 keys with THREE WITNESSES agreeing**) · the drill's 28/0 with its prediction FIELD-EQUAL to the committed file · F-057 and F-054 as **derived** properties · the pointer, the lock, the pins, the nine inherited gates NOT nested, and **F-062 required to be an honest OPEN row**. **RE-RUNS NOTHING**, pinned by `tests/unit/test_verify_m9.py` (33 tests) incl. the three-question count and the absence of its predecessors' questions. No skip flag, no fast mode (M1's rule, **ninth and final** inheritance). **The PO-observed box is printed as an OPEN ITEM in §2 and in the GREEN banner and is never rendered green** — a test pins all three halves. Transcript: `docs/verify_m9_transcripts.md` §1. **RE-DERIVED AND RE-RUN 2026-08-24 (M9-S5): GREEN 45/45 with the box CLOSED** — §2's box leg now asks the two-state property (**OPEN and honest** — the invitation live in AWAITING_PO — **or CLOSED and CITED** — an entry the inbox really holds, carrying the observer's own words, compared on WORDS not bytes because a quoted note is wrapped inside a blockquote), the banner's box paragraph is DERIVED from the record §2 just judged, and a citation-free CLOSED is RED: demonstrated twice (no citation → *"it is CLOSED and cites no AWAITING_PO entry"*; a citation the inbox does not hold + a paraphrase → *"an entry this inbox does not hold; the note it quotes appears nowhere"*), **44 sub-check lines still passing each time**, sha256-identical restore (`ceec3ca26dbe…`), clean tree. Sub-check count unchanged — the leg was re-derived, not removed (gotcha #50). Tests now 35 |
 | Prove the M9 gate can go RED | `make verify-m9-redteam` (`bash scripts/verify_m9_redteam.sh`) | VERIFIED 2026-08-24 (M9-S4): shortens ONE number in `automation/runs/m9-store-watch/headroom.json` — `expected_keys.total` **57,688 -> 57,425**, short by exactly the **263** keys of the view CHOSEN from the record as the smallest (`zone_static`, which holds every centroid the champion's nine geometry features are built from), derived from the record's own fields and leaving `per_view`, `transformer_dependency_keys`, the live_store block and the materialization block untouched. **It is not a lie about a measurement; it is a correct-looking expectation of the WRONG POPULATION** — and because A-12b compares metric-to-metric with no literal on either side, no rule is loosened and every alert stays `inactive`, while the store it describes could lose ALL its geometry and still satisfy the alert that exists to notice. → **RED exit 1 with 3 FAILs from THREE artifacts**: the record's own per-view arithmetic, the live `DBSIZE` beside the M8-S4 materialization record, and `docs/store_watchdog_m9.md` — the only witness a human reads, and **the leg that reads it had to be built for this drill**. **42 sub-check lines still ran and passed**, and the **no-number leg and law 4's ordering leg stayed GREEN by design** — what separates a gate that fails on a wrong number from one that fails on any edit. Restored under an EXIT trap, sha256-verified (`b875049f8289…`), `git status` clean → **GREEN 45/45**. Touches no pod, no image, no Redis key, no MLflow run, no registry version, no alias, no rule, no page and no traffic |
+| Pin the two scanners this program audits itself with (M9-S9) | `make security-tools` (`DRY_RUN=1` installs nothing; `FORCE=1` re-downloads; `make security-tools-check` reads the versions back) | VERIFIED 2026-08-24 (M9-S9): **trivy 0.74.0** and **gitleaks 8.30.1** into `~/.local/bin`, each tarball matched against the publisher's `*_checksums.txt` and each installed binary's sha256 RECORDED in `automation/runs/m9-security/tools.json`. Versions read BACK off the binaries and compared with the pins — a disagreement exits 2. The record states what the checksum check does NOT prove (same origin, same TLS session; sigstore unverified for want of `cosign`) rather than leaving the reader to assume a chain of trust |
+| The pre-publish audit (M9-S9) | `make security-scan` (`SCAN_ARGS="--stage tree-secrets"` is the seconds-long probe; `--no-write` records nothing) | VERIFIED 2026-08-24 (M9-S9): **0 secrets in git, `publishable: true`**, over every file on this disk, **every commit on every ref** (`--log-opts='--all --full-history'`), the three images this program builds and `uv.lock` + the manifests. **1 acknowledged** (the M6 gameday's deliberately wrong MinIO secret, its argument RE-DERIVED by base64-decoding the bytes actually found) and **10 local-only** (`.env`, each carrying `git check-ignore -v`'s own answer). CVEs recorded not chased — 201 · 196 · 879 for the three images, 5 dependency + 76 misconfiguration for the tree — with the actionable subset split out by trivy's `Class: lang-pkgs`: **`sqlparse` 0.5.5, three HIGH, fix in 0.6.0**, NOT bumped because `uv.lock` is asserted byte-identical to `m7-closed` (PO fork, AWAITING_PO 2026-08-24-5). It exits **1** on a blocking finding and **2** on a stale acknowledgement. Write-up: `docs/security_audit_m9.md` |
+| Prove the secret scan can FIND one (M9-S9) | `make security-scan-redteam` | VERIFIED 2026-08-24 (M9-S9): **PASSED — 16 checks, 0 failures.** An AWS-shaped pair GENERATED at run time (a drill carrying a credential-shaped literal becomes a finding in the scan it tests) is planted twice: in an untracked, unignored working-tree file → **BLOCKING, reason `untracked AND NOT ignored`**; and in a real COMMIT on a scratch branch **asserted NOT reachable from HEAD** first, so what is under test is `--all` and not HEAD's ancestry → **BLOCKING, naming the commit**. Neither arm prints the secret. Then the plant is DESTROYED — branch deleted, reflog expired, `gc --prune=now` — and `git cat-file -e` is ASKED whether the object is gone, before the untampered scan comes back **GREEN with 0 blocking**, the tracked record sha256-unchanged (both arms `--no-write`, pinned by a test) and `git status` clean. **It was FLAKY on its first outing and that is F-071** — see the story section |
 | FLAML scout (M3-S4) | `make automl AUTOML_ARGS="--set v1"` (`--time-budget` is a SMOKE override and says so; `--no-mlflow` is never a result) | SMOKED 2026-08-17 (M3-S4): 4 families ran against pandas 3.0.5 at a 40s override, leaderboard printed with every line labelled **scout-internal** (gotcha #15). The configured 1,800s runs land with the detached track |
 | Optuna sniper (M3-S4) | `make tune TUNE_ARGS="--set v1 --scout <verdict.json>"` (TPE + MedianPruner from `configs/tuning.yaml`; `--budget-seconds` is DR-01's cap; the study is namespaced `m3-…`, gotcha #17) | SMOKED 2026-08-17 (M3-S4): 4 xgboost trials and 16 lgbm trials through Postgres storage with MLflow nested runs under one parent; **the DSN is built from `.env` in memory and a test walks every `configs/*.yaml` for a connection string** |
 | Prove a study outlives its process (M3-S4) | `make tune-resume-drill` | VERIFIED 2026-08-17 (M3-S4): `kill -9` on the process group after 3 trials → `{'COMPLETE': 2, 'RUNNING': 1}` read back on a FRESH Postgres connection; the SAME command again (no resume flag) opened the study with 3 existing trials and finished **8 answered of 8, 1 dead trial reaped and retried, 0 stuck**. Its first run PASSED while silently losing a trial — that is gotcha #47 |

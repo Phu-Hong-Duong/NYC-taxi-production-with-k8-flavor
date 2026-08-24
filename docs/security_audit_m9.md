@@ -203,9 +203,31 @@ test. (Not hypothetical — see §6.)
 **The drill found a real gap on its first run.** Arm B failed the check *"names
 the planted commit"* — a blocking history finding printed rule, file and line and
 **no commit**. The remedy for a secret in history is per-commit (rewrite, rotate),
-and *"somewhere in 489 commits"* is not where. Fixed by printing the commit,
+and *"somewhere in the history"* is not where. Fixed by printing the commit,
 author and date on the blocking line; the check passes on the artifact rather
 than on a looser bar.
+
+### And then the drill itself was flaky, in the worst possible direction
+
+Roughly two runs in five reported **all six detection checks failing** — that is,
+*the scanner found nothing* — while the scan was working perfectly. Both causes
+were about the plant, not the scan, and both are worth knowing before writing any
+detector drill:
+
+- **`generic-api-key` matches `[\w.=-]`, which excludes `+` and `/`.** The plant
+  was drawn from a base64 alphabet, so a `+` early in the string truncated the
+  match below the rule's minimum length. Alphanumeric now.
+- **Both rules carry an entropy floor**, and a short random string clears it only
+  on average — a 20-character AWS-shaped id came out anywhere between 3.15 and
+  4.22 bits. The generator now redraws until it is above the floor, measures
+  entropy over the **whole matched string** (prefix included, because that is what
+  the scanner sees), and prints what it settled on.
+
+The generalisable line: **a randomly generated plant has to be drawn against the
+properties the detector keys on, or the drill is flaky exactly where flakiness
+reads as good news.** A red team that intermittently says PASS is worse than one
+that always fails, because nobody investigates a pass. Four consecutive runs
+green afterwards, one of them at the floor (3.646).
 
 ---
 
