@@ -1,5 +1,117 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (cq) — no story remained: the resume, the state read live, and the handover to ARCH
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cp) · `docs/milestones/M9_EPILOGUE_KICKOFF.md` · AWAITING_PO. Refusals in
+play: *no fit · no alias move · no registry version · no wire change · no cluster
+mutation · no gate loosened*. None broken — **this session changed no code, no
+config, no manifest and no record.** Its whole diff is this entry.
+
+**Story executed: NONE, and that is the finding, not an omission.** The epilogue
+charters five stories. S5, S7, S8 and S9 are landed and merged; **S6 is started and
+BLOCKED** — session (cm) ran it to the charter's own stopping rule (the replay wall
+fired) and parked it on the PO as AWAITING_PO **2026-08-24-4**, which is still
+unanswered. So there is no *next unstarted, unblocked* story to take, and the
+scope law's answer to that is not to invent one.
+
+### Reconciliation (the staleness check — this is what the session is for)
+Handoff (cp) ended parked with `automation/STOP` latched mid-session, so the first
+question was whether the resume really happened and whether the platform survived
+the ten-hour gap. Measured, not assumed:
+
+- **The park is cleared and I did not clear it.** `automation/STOP` and
+  `automation/logs/watchdog_parked` are both **absent**; `automation/logs/` shows
+  `20260825_021831_executor.log` (`bash: line 1: claude: command not found`) and
+  `20260825_021848_executor.log` — the PO ran `automation/next_session.sh executor`
+  twice at 02:18, which is F-066's one eraser, and the second attempt is this
+  session (`running_session: 808 executor 2026-08-25T02:18:53Z`). Daily count **2**
+  against a cap of 40.
+- **No answer arrived with the resume.** `AWAITING_PO.md` carries no `ANSWERED`
+  marker dated 2026-08-25; **2026-08-24-4 (F-016/F-068) and 2026-08-24-5 (the
+  publish flip + the `sqlparse` fork) are both still open.** The PO used the resume
+  command printed at the foot of 2026-08-24-4 — correct when it was written, when
+  S7…S9 still remained — which is why an *executor* was started rather than the
+  ARCH touch the epilogue's Exit section charters.
+- **The cluster is up and did not restart** (gotcha #34's first suspect, cleared):
+  `kubectl get nodes` → 3/3 `Ready` v1.36.1 at **7d23h**; **37 pods, none outside
+  Running/Completed**.
+- **`make verify-m9` → `[verify-m9] GREEN — every M9 sub-check passed.`**, run
+  twice, with the closing banner now printing the CLOSED-and-cited box (M9-S5's
+  flip) and the F-019/F-062 both-states leg (M9-S7's). Inside it, read live:
+  `@champion` → version **2** / `feature_set v2`; **not one of the 2 registry
+  versions was created after the `m7-closed` tag**; `uv.lock` **byte-identical to
+  `m7-closed`**; all **5** settled DVC pins `up to date`.
+- **`make readme-check` → `GREEN — every target, path and number in README.md
+  checks out.`** (20 targets, 28 paths, 29 claims, 12 Status rows.)
+- Tree **clean at `cbd4310`**, `main == origin/main`, nothing pending under
+  `automation/runs/*.status` for the epilogue.
+
+**Nothing had moved. The state the ARCH boundary will assert is the state on disk.**
+
+### Done
+Nothing was built, because nothing was chartered. What this session produced is the
+verified read above and this handover.
+
+### Defects/Surprises
+- **The watchdog's inbox baseline is 14 hours stale, and it is armed.**
+  `automation/logs/watchdog_awaiting_po.sha` holds `ddc0849…` (written 2026-08-24
+  **08:00**) while `sha256sum AWAITING_PO.md` is `d9865ec…`. The reason is
+  structural rather than a bug in any one pass: the watchdog re-stamps that
+  baseline **only inside `red()`**, and every pass since 08:00 exited earlier — at
+  *session alive* (13:20–15:30), then at *STOP present* (21:30–00:40), then at
+  *session alive* again (02:20, me). So the two entries the PO has demonstrably
+  **already seen** — they resumed the chain from one of their footers — are still
+  unobserved by the park sensor. **Consequence, stated at its real size:** the next
+  pass that reaches §5 with the chain idle will park citing "a new entry to
+  AWAITING_PO.md" when nothing is new. Here that park is *also* the outcome the
+  epilogue's Exit section wants (ARCH re-parks deliberately), so the practical harm
+  today is an attribution that will read wrong in the log, not a wedged chain —
+  which is why I am recording it rather than fixing chain automation with no
+  charter. **It is F-066's residual shape: §5 is still an edge detector on a hash,
+  now with a latch on top, and an edge observed while §5 is unreachable is
+  remembered and replayed later.** Whether that earns a ledger row is boundary
+  triage, i.e. ARCH's call, not mine.
+- **I deliberately did NOT add a resume-command footer to AWAITING_PO 2026-08-24-5**,
+  which is the obvious small fix for the wrong-role resume that started this
+  session. **Any edit to `AWAITING_PO.md` is a park trigger** — the inbox is the
+  park sensor — and the entry that most needs the footer is the newest one, so
+  writing it would arm exactly the latch that killed session (cp)'s exit. The right
+  place for that footer is the ARCH boundary entry, which is being written anyway.
+
+### Decisions
+- **Ritual (c), not (d).** No fork is mine to raise: the two open entries are the
+  PO's and neither blocks the boundary. The chain has somewhere to go, so it goes
+  there rather than parking a second time. `automation/next_session.sh architect 120`.
+- **No self-promotion to boundary triage.** Re-running the gates, tagging
+  `m9-epilogue-closed` and flipping the README row is ARCH's under ORG.md rule 7,
+  and the producer of S5…S9 must not approve them. An executor that "just tagged
+  it" would be the only unsigned crossing in the program.
+
+### Next
+**The epilogue boundary, unchanged from handoff (cp), and it needs no PO decision
+to run.** `docs/milestones/M9_EPILOGUE_KICKOFF.md` §Exit: an ARCH touch re-runs the
+affected gates, closes the epilogue with tag **`m9-epilogue-closed`**, flips the
+README PROGRAM CLOSE row, and RE-PARKS the chain with the publish-flip entry as the
+standing item. The park will latch (F-066) and `automation/next_session.sh` remains
+the one eraser.
+
+**Two things for that session specifically:**
+1. **S6 is the epilogue's one unlanded story and it must be named in the close**,
+   not quietly dropped — it is blocked on 2026-08-24-4, not abandoned.
+2. **The stale park baseline above.** If it is judged a finding, it is cheap to
+   describe and its fix is one line (re-stamp the baseline where the latch is
+   cleared, so answering clears both); if it is judged designed behaviour, say so
+   and the next reader stops re-deriving it.
+
+**Waiting on the PO, two entries, neither blocking the boundary:** **2026-08-24-5**
+(the publish flip is their click; plus the `sqlparse` a/b/c fork, recommendation
+(b)) and **2026-08-24-4** (F-016/F-068, answer with a letter — S6 unblocks on it).
+
+`make verify-m9` remains the one-command health read; `make readme-check` the front
+door's; `make security-scan` the pre-publish one.
+
 ## Session 2026-08-24 (cp) — M9-S9: the pre-publish audit, and two instruments aimed at themselves
 
 ### State
