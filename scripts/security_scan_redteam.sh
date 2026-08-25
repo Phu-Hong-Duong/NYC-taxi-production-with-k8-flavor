@@ -122,7 +122,15 @@ git checkout -q -b "$SCRATCH_BRANCH"
   printf 'aws_secret_access_key = %s\n' "$KEY_SECRET"
 } > "$PLANT_FILE"
 git add "$PLANT_FILE"
-git commit -q -m "redteam(m9-s9): planted credential — DRILL ONLY, destroyed by the same script"
+# --no-verify, and it is NOT a workaround: from M9-S13 this clone may carry a
+# pre-commit hook whose entire job is to refuse a staged credential, and this arm
+# stages one on purpose. Without the flag the drill dies at `git commit` under
+# `set -e` — which is what happened the first time the hook existed (F-080). The
+# hook being right is the reason the flag is here; that the AUDIT still catches
+# what the bypass let through is the thing this arm goes on to prove.
+echo "[sec-redteam]   (committing with --no-verify: the M9-S13 hook correctly refuses this)"
+git commit -q --no-verify \
+  -m "redteam(m9-s9): planted credential — DRILL ONLY, destroyed by the same script"
 PLANTED_COMMIT="$(git rev-parse --short HEAD)"
 # Leave HEAD on the starting branch: the point is that --all reaches a ref that
 # HEAD's own ancestry does not. A scan run from the branch itself would pass
