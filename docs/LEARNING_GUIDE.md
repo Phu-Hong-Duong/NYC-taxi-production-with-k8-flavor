@@ -5035,3 +5035,58 @@ I am testing were switched off entirely, would this check notice — or would it
 pass?* The second question is the one `trust` answers badly, and it is the one a
 positive control is usually assumed to have covered.
 
+---
+
+## M9-S13 — a guard nothing can verify, and the drill it broke on its first day
+
+**What was built.** A tracked `scripts/hooks/pre-commit` that scans the INDEX for
+secrets before every commit; `make install-hooks` to copy it in and set the
+execute bit; `make hook-redteam` to watch it refuse a planted credential, permit
+an ordinary commit, and be bypassed by `--no-verify`; 22 tests; and the AWAITING_PO
+entry that hands the publish flip back to the PO.
+
+**Why this way.** Three choices, and the first one decided the other two.
+
+(1) **The hook runs the AUDIT's module rather than its own gitleaks.** The obvious
+implementation is three lines of bash. It is wrong here because this repo contains
+one string that is a credential by shape and a non-secret by fact — the gameday's
+deliberately-wrong MinIO secret — argued once, in one table, keyed on the sha256
+of the bytes. A hook that does not carry that argument refuses every commit
+touching the gameday, and *the flag its owner learns on a false positive is the
+flag they reach for on the commit that matters.* A guard's credibility budget is
+spent by its false positives, not by its true ones.
+
+(2) **The unverifiable half is named everywhere it could mislead, and the bypass
+is measured rather than warned about.** `.git/hooks` is untracked; no gate here
+can see the hook. So the drill's arm C runs `git commit --no-verify`, watches the
+plant land, and then watches the audit catch it. A limit you have executed is a
+different object from a limit you have documented — and the second one gets quietly
+downgraded to "in theory" by the next reader.
+
+(3) **The drill's load-bearing arm is the one that lets a commit through.** Arm A
+commits an ordinary file and requires the hook to have demonstrably RUN. Without
+it, "the plant was blocked" is equally consistent with a hook that blocks
+everything — which is worse than no hook, because it is uninstalled by Friday. The
+same shape as the canary that moved zero traffic and looked linked and healthy.
+
+**The concept underneath.** *A new refusal changes the meaning of every command
+that already does the forbidden thing on purpose.* Installing the hook broke
+`make security-scan-redteam` within the hour: its arm B stages a credential
+deliberately, so the audit's history leg can be watched catching one. Nothing was
+wrong — a working guard presented as a broken red team, and if I had not just
+written the guard I would have gone looking for a defect in the drill. Two earlier
+findings in this repo (F-053, F-063) ask *what does my command do to state that
+already exists?* This is the mirror: *what does my new refusal do to commands that
+already exist?* Both are answerable in seconds — one `grep` for the forbidden
+operation — and both are invisible if you only test the thing you just built.
+
+**What to look at.** `scripts/hooks/pre-commit` (its header IS the honest limit) ·
+`stage_staged_secrets` and `main`'s refusal in `scripts/security_scan.py` ·
+`scripts/install_hooks.sh`'s read-back and its three `--check` states ·
+`scripts/hook_redteam.sh` arms A and C · `docs/precommit_hook_m9.md` §5 for F-080 ·
+`tests/unit/test_hooks.py`.
+
+**What to try yourself.** Install the hook, then `chmod -x .git/hooks/pre-commit`
+and commit something. Nothing happens — no error, no scan, no clue. That silence
+is the whole reason the installer reads the bit back off the file it just wrote,
+and it is worth feeling once rather than reading about.

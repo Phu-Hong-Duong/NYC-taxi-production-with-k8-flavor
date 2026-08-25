@@ -1,5 +1,5 @@
 {
-  "git_head": "ec3fd4df07cf622ad7b5589038a830aa32937fc7",
+  "git_head": "99431266ddfd2a2e5d15ec7f2ead609f208512db",
   "legs": {
     "history-secrets": {
       "acknowledged": [
@@ -29,11 +29,11 @@
       "blocking": [],
       "findings_total": 1,
       "inputs": {
-        "commits_reachable_from_all_refs": 530,
+        "commits_reachable_from_all_refs": 539,
         "first_commit": "d5a40c4 2026-08-16",
-        "head": "ec3fd4d",
+        "head": "9943126",
         "note": "--all walks every ref this clone holds, not just HEAD's ancestry: a secret removed from main by a later commit still lives in the objects the old commit points at, and that is what publishing exposes",
-        "refs": 20
+        "refs": 18
       },
       "instrument": "gitleaks git --log-opts='--all --full-history'",
       "leg": "history-secrets",
@@ -913,8 +913,8 @@
       "blocking": [],
       "findings_total": 15,
       "inputs": {
-        "files_git_tracks": 631,
-        "files_on_disk": 63092,
+        "files_git_tracks": 639,
+        "files_on_disk": 63103,
         "note": "the WHOLE disk tree, gitignored files included \u2014 pointing this at tracked files only would report zero and prove nothing about the hazard anyone actually has",
         "root": "/home/longt/NYC-taxi-production-with-k8-flavor"
       },
@@ -1237,7 +1237,7 @@
       "raw_report": "automation/runs/m9-security/raw/trivy-fs.raw"
     }
   },
-  "recorded_at": "2026-08-25T05:32:17Z",
+  "recorded_at": "2026-08-25T06:05:49Z",
   "stages_run": [
     "tree-secrets",
     "history-secrets",

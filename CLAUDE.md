@@ -3860,6 +3860,75 @@ can never disagree (the port-family twins lesson, applied before it bit).
   storage-initializer fetches the champion under the NEW serving credential —
   a real object download, not a login. Write-up: `docs/credential_rotation_m9.md`.
 
+## The hook that no gate can see (M9-S13) — one acknowledgement table, and a bit git records
+- **`make install-hooks` puts `scripts/hooks/pre-commit` into `.git/hooks` and
+  sets the execute bit; `make security-scan` is still the audit of record.** The
+  PO's fourth answer (2026-08-24-5) was a YES that came with its own limit:
+  `.git/hooks` is untracked, so **nothing in this repository can prove the hook is
+  installed**, and `git commit --no-verify` walks straight past it. Both halves are
+  stated in the hook's own header, in the README's honest limits and in the drill's
+  record — and the bypass is **MEASURED** in arm C rather than warned about.
+- **The hook runs the AUDIT's module, not a second scanner, and that is the design
+  decision.** `scripts/gameday_m6.py` holds a value that is a credential by shape
+  and a non-secret by fact; M9-S9 argued it ONCE in `ACKNOWLEDGED_SECRETS`, keyed
+  on the sha256 of the found bytes. A hook with its own rules and no copy of that
+  argument refuses every commit that touches the gameday — and the flag its owner
+  learns on a false positive is the flag they reach for on the commit that matters.
+  One table, one redaction, one vocabulary: **F-013's "one home" applied to a
+  suppression.**
+- **`staged-secrets` is a leg of that module and deliberately NOT one of `STAGES`.**
+  `STAGES` is what the audit runs and what `scan.json` records; a record carrying a
+  staged leg would describe whatever happened to be in somebody's index the minute
+  they ran the audit. It **cannot write** — `main` REFUSES `--stage staged-secrets`
+  without `--no-write`, loudly rather than by forcing the flag (a silent force is
+  F-064's defensive default, and the thing refused here is a write *inside* a
+  commit). Its sentences are its own too: the audit says *secrets in git (tracked
+  files + full history)*, this leg looked at an index and says *secrets staged for
+  commit* — reusing the audit's line would claim a corpus it never opened.
+  **0.4 s** on a clean index; a hook that takes ten seconds gets uninstalled.
+- **The instrument is `gitleaks git --staged`, and the charter's command does not
+  exist**: `protect` was removed in the gitleaks 8.19 line. Read off `--help` on the
+  PINNED 8.30.1 binary (gotcha #118, #70's family).
+- **The execute bit is why there is an installer at all.** Git records a tracked
+  file's mode (the hook is `100755` in the index, asserted by a test), but a hook
+  that lands at 0644 in `.git/hooks` is one git **skips silently** — no error, no
+  scan, `ls` shows it sitting there. So the bit is set and then **read back off the
+  installed file** (`deploy_serving.sh`'s idiom), and `--check` separates the three
+  ways a hook stops being one: absent · stale · present-but-not-executable. The
+  tests **RUN** the installer into a temp directory and read the mode back; grepping
+  the script for `chmod` passes on a script that chmods the wrong path. It never
+  destroys — a foreign `pre-commit` is left alone and named (`FORCE=1` to overwrite).
+- **The drill's load-bearing arm is the one that lets a commit THROUGH.** `make
+  hook-redteam` **PASSED 20/20**: arm A commits an ordinary file and requires the
+  hook to have **demonstrably run** (gotcha #81 at the commit boundary — an
+  installed hook doing nothing looks exactly like one that passed); arm B stages a
+  generated credential and requires a refusal that names the file, prints no secret,
+  leaves **HEAD unmoved** and leaves the plant staged; arm C bypasses with
+  `--no-verify`, proves the audit still catches what the bypass let through, then
+  destroys the object and **asks `git cat-file -e`**. It **installs nothing** — it
+  refuses unless the hook is already installed and current, so it cannot pass
+  against a hook of its own making.
+- **F-080, and it broke the hour the hook landed:** `make security-scan-redteam`
+  had passed 16/16 for a day and died at `git commit` under `set -e`, because its
+  arm B **stages a credential on purpose**. Nothing was wrong — a working guard
+  presenting as a broken red team. **Before shipping a repo-wide refusal, ask who
+  already does the forbidden thing deliberately; the answer is the drills.** Blast
+  radius measured in two seconds (`grep -rn "git commit"` over `scripts/`,
+  `automation/` and the Makefile → exactly one caller), fixed with one flag and a
+  comment saying the flag is there *because the hook is right*.
+- **The plant generator stopped being a twin.** Both drills draw a
+  credential-shaped value against the properties the DETECTOR keys on; F-071 is the
+  record of what happens otherwise. It lives once now, in
+  `scripts/redteam_plant.py`, with a property test that draws 25 pairs and asserts
+  the alphabet and both entropy floors. One S9 guard went red for the move
+  (`secrets.choice` no longer appears in the drill) and was **re-derived, not
+  widened** — the property was always *generated rather than typed* (gotcha #50).
+- Exit state: nothing fitted, no alias moved, no version created, **no wire
+  touched, no cluster call that writes**. `@champion` **2** / `feature_set v2` ·
+  host suite **1,319 passed** (was 1,297) · ruff clean · `make security-scan`
+  **`publishable: true`, `secrets_in_git: 0`** · `make readme-check` GREEN ·
+  `make verify-m9` **GREEN 46/46**. Write-up: `docs/precommit_hook_m9.md`.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -4075,6 +4144,9 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | Prove the PRE-rotation values are dead (M9-S12) | `make rotate-verify-old` — run AFTER the positive gate sweep, never before | VERIFIED 2026-08-25 (M9-S12): **PASSED — 4 check(s)**. MinIO root refused · MinIO user `serving` refused · Postgres `mlflow` refused with a **password authentication failure** · and the CURRENT password accepted over the same path, which is the control. Ordering is the point (gotcha #105/F-060): an absence check run first passes against a platform that is simply down. **Its first run reported the rotation had not taken, and that was F-077** — it probed `127.0.0.1` inside the postgres pod, where `pg_hba.conf` says `trust`, so no password was ever consulted and the positive control could not tell (under `trust` both arms pass). It connects to the pod's OWN IP now, read from the cluster, which falls through to the `scram-sha-256` rule |
 | Destroy the rotation's undo copy (M9-S12) | `make rotate-destroy-undo` — the LAST step | VERIFIED 2026-08-25 (M9-S12): overwrote and unlinked `~/.nyc-taxi-rotation/env.pre-rotation` (1,296 bytes) and recorded the fact. It lives OUTSIDE the repo because `make verify-m2`'s root-stray leg named it when it did not — **gitignore hides a file from git and from nothing else** (F-075). The record states the honest limit rather than implying a shred: on a CoW/journalling filesystem overwrite-then-unlink is not a guarantee the bytes are unrecoverable, only that no path reads them |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7/M8 live |
+| Install the secret-scanning git hook (M9-S13) | `make install-hooks` (`FORCE=1` overwrites a hook that is not ours) · `make install-hooks-check` is the read-only twin | VERIFIED 2026-08-25 (M9-S13): `ok  pre-commit -> .git/hooks/pre-commit  (sha256 60d412e51081…, mode 775)`, the sha256 and the bit **read BACK off the installed file**. `--check` answers `installed, current … and executable` at exit 0 and separates the three ways a hook stops being one — **NOT INSTALLED · STALE · NOT EXECUTABLE** (git skips a 0644 hook in SILENCE), each a parametrised test that RUNS the installer into a temp directory rather than grepping it for `chmod`. Idempotent (`already current`), and it REFUSES to overwrite a `pre-commit` that is not ours. **`.git/hooks` is untracked, so no gate can see the result** — that sentence is in the hook, the installer's closing line, the README and the drill's record |
+| The staged-secret scan the hook runs (M9-S13) | `uv run python scripts/security_scan.py --stage staged-secrets --no-write` | VERIFIED 2026-08-25 (M9-S13): **0.4 s** on a clean index, and it ran on every commit of this story. It is a leg of the AUDIT's module — one `ACKNOWLEDGED_SECRETS`, one redaction — and deliberately NOT in `STAGES`. Without `--no-write` it exits **2** naming why (a hook that rewrote a tracked record would dirty the tree inside the commit it is inspecting). Instrument `gitleaks git --staged`; the charter's `gitleaks protect --staged` does not exist in the pinned 8.30.1 (gotcha #118) |
+| Watch the hook refuse — and watch it permit (M9-S13) | `make hook-redteam` (`--no-write` records nothing) | VERIFIED 2026-08-25 (M9-S13): **PASSED 20/20**, record `automation/runs/m9-hook/redteam.json`. Arm A (**the load-bearing one**) commits an ordinary file and requires the hook to have **demonstrably RUN** — an installed hook doing nothing looks exactly like one that passed. Arm B stages a generated AWS-shaped credential: **commit REFUSED**, `BLOCKING generic-api-key … staged for commit`, **HEAD unmoved**, plant still staged, secret never printed. Arm C **MEASURES the documented limit** — `--no-verify` commits the very thing the hook refused, the audit still catches it, then the object is destroyed and `git cat-file -e` is ASKED. It **installs nothing**: it refuses unless the hook is already installed and current, so it cannot pass against a hook of its own making |
 | The stakeholder demo page (M9-S1) | `make demo-page` regenerates it from its three sources · `make demo-page-check` is the write-nothing twin | VERIFIED 2026-08-23 (M9-S1): **265 zones** from `data/reference/taxi_zone_lookup.csv`, **4 raw inputs** from `transformer.RAW_INPUTS`, and a default trip that is a PUBLISHED parity row — so the first thing a stakeholder sees is checkable against a record. `--check` regenerates in memory and diffs against git; a unit test runs it, and a second asserts regeneration is deterministic. **Its first run substituted the template's own explanatory comment** and shipped 795 `<option>` elements instead of 530 — gotcha **#110**, now guarded by an occurrence COUNT (`TOKEN_COUNTS`), because every one of the three copies matched the CSV |
 | Deploy the demo + its route (M9-S1) | `make deploy-demo` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` removes its four objects and touches nothing else) | VERIFIED 2026-08-23 (M9-S1): ConfigMap rendered FROM `demo/index.html` (the file in git is the only copy), a `busybox:1.38.0` httpd Deployment at the digest the data stager already pins, a ClusterIP Service and ONE **host-less** Ingress. **Three wait legs**: `rollout status`, then the pod template's page-sha256 == the committed file's, then **the ROUTE itself** under the origin the browser will use (F-037/F-060, gotcha #106). It then asserts the two invariants it shares a server block with — **`/healthz` 200 and `/` 404** — rather than leaving the next `make deploy-serving` to discover them. F-039's precondition is asked of the CLUSTER: it refuses to write to any of its four names that carries `ownerReferences`. `DRY_RUN=1` verified to leave the namespace with no demo object. Deploys no model and cannot name the registry in code (AST-tested) |
 | THE demo accept — real requests, sent the way the PAGE sends them (M9-S1) | `make demo-accept` (`DEMO_ACCEPT_ARGS=--no-write` records nothing). A READER | VERIFIED 2026-08-23 (M9-S1): **PASSED 9/9.** The endpoint, the request schema and the payload are READ OUT of `demo/index.html` and posted with **no Host header override** — the one thing a browser cannot do and every other client here does. Bar **EXACT**, argued in `demo/README.md` §4 and committed BEFORE the record existed: **39.00193715359812 vs the recorded 39.00193715359812, |delta| = 0.000e+00** against `automation/runs/m8-transformer/transformer-parity.json`'s `federal-holiday` row (matched on `(at, pu, do)`, never typed) · `model_version` **'2'** read off the ANSWER · `X-Taxi-Lookups` equal to the recorded string · the served page **byte-identical to git by sha256** (47,147 bytes, fetched back through the route) · a **2031** quote **422**-refused naming the date · the no-geometry path 264 -> 264 **quoted at 8.2445 min, not broken** · and the CHAMPION's own model name **404** on this origin, asserted only after a real quote succeeded (F-060). The PO-observed box is recorded **OPEN** in the record itself |

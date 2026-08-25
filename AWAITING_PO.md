@@ -1,5 +1,65 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-25-3 · raised by EXEC/Opus (M9-S13) · **ALL THREE LETTERS ARE LANDED — the public flip is your click, and nothing is blocking it**
+
+**One sentence.** Your four answers of 2026-08-24-5 are done and verified —
+sqlparse, the credential rotation, the pre-commit hook, and the publish decision
+itself — so the only thing left between this repository and a public URL is you
+clicking *Change visibility → Public* on GitHub.
+
+**What landed since you answered, each with the command that proves it:**
+
+| your answer | story | evidence |
+|---|---|---|
+| F-016/F-068 option (b), era-aware incumbent margin | **M9-S10** | `make verify-m2` GREEN 57/57 · `verify-m3` 47/47 · `verify-m7` GREEN; both planted-edit red teams PASS. All nine recorded verdicts replay unchanged |
+| sqlparse 0.6.0, option (b) | **M9-S11** | three HIGH CVEs gone (repo-tree dependency findings **5 → 1**, CRITICAL 0 · HIGH 0); `uv.lock` re-anchored to the tag `lock-rebaselined-m9-publish` |
+| rotate the credentials, in place | **M9-S12** | 12 credentials across 5 families; **all ten gates GREEN in one sweep**; the pre-rotation copy destroyed |
+| yes to the pre-commit hook | **M9-S13** | `make hook-redteam` **PASSED, 20 checks, 0 failures**; `make security-scan` **`publishable: true`, `secrets_in_git: 0`** |
+
+**The hook, and the limit you were told about when you said yes.** It is
+installed with `make install-hooks` and it refuses any commit that would add a
+credential — verified by planting one and watching the commit be refused. Two
+things it is NOT, both by design and both stated in the README, in the hook's own
+header and in its record: it is **not a gate** (`.git/hooks` is untracked, so no
+check in this repository can see whether it is installed on any machine), and it
+is **bypassable** with `git commit --no-verify` — which the drill *measures*
+rather than merely warns about, and then shows the audit catching what the bypass
+let through. **`make security-scan` remains the audit of record**, and it is what
+your publish decision was made conditional on.
+
+**One thing found by running it, so it is not a surprise later.** Installing the
+hook broke an existing drill within the hour: `make security-scan-redteam` stages
+a credential *on purpose* so the history scan can be watched catching one, and the
+new hook correctly refused it. Nothing was wrong with either. Fixed in the same
+session (F-080), both drills re-run green.
+
+**NOTHING IS BLOCKING AND NO DECISION IS NEEDED HERE.** This entry exists so the
+inbox says plainly that the queue is empty. The chain continues to the ARCH
+publish boundary on its own.
+
+**When you want to flip it:**
+
+1. GitHub → the repository → Settings → General → Danger Zone → **Change
+   visibility → Public**.
+2. Nothing else. `.env` has never been in git; the audit above verified that over
+   every tracked file and every commit on every ref, not just over `main`.
+
+**If you want to re-run the evidence yourself first** (a few minutes, read-only):
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+make security-scan      # publishable: true, secrets_in_git: 0
+make verify-m9          # GREEN
+make readme-check       # every number in the README, read back from its record
+```
+
+**To restart the chain by hand at any point:** `automation/next_session.sh architect 120`
+
+*Two standing entries remain open and neither blocks the flip:* **2026-08-17-1**
+(a one-line OpenMP convenience for this laptop) and **2026-08-16-2** (widening the
+session permission allowlist).
+
+
 ## 2026-08-25-2 · raised by EXEC/Opus (M9-S11) · NOT A FORK, NO ACTION NEEDED — your sqlparse answer has LANDED, and the price you were quoted was wrong by one package
 
 **One sentence.** Option (b) is done — **sqlparse 0.5.5 → 0.6.0, the three HIGH
