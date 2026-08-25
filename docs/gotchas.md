@@ -1708,3 +1708,55 @@ the seed line are earned by THIS project.
     park became permanent, i.e. both properties got STRICTER at once. The tell
     that this had been normalised: the existing test's docstring described the
     false park as the expected trace (F-066, M9 post-close).
+
+113. **`kubectl exec deploy/X` can land on the pod you just replaced, and
+    `rollout restart` + `rollout status` will tell you it is safe to try.**
+    Two independent races, one consequence. `exec deploy/X` does not address
+    the Deployment — it resolves the Deployment's SELECTOR and picks a matching
+    pod, and a RollingUpdate with `maxSurge=100%` puts two pods behind that
+    selector. Meanwhile `rollout status` asks about the Deployment's CURRENT
+    status, which until the controller observes the new generation still
+    describes the PREVIOUS, complete, rollout — so it affirms a restart that has
+    not begun (F-036/gotcha #79 from the other side: there a trailing
+    `observedGeneration` made kubectl REFUSE conditions that were true). Both
+    fire hardest on the check you added because the operation is dangerous: here
+    the read-back proving a MinIO root rotation had not destroyed the named
+    users answered `authentication failed` — **byte-for-byte the catastrophe's
+    own signature** — on a rotation that had worked. A false alarm
+    indistinguishable from a real disaster is worse than no alarm, because the
+    reflex it triggers is to undo the thing that was fine. Wait for
+    `observedGeneration >= generation` before `rollout status`, and resolve ONE
+    ready, non-terminating pod by name rather than execing a Deployment. Then
+    MEASURE what is left: here the first successful read moved to **0.3 s past
+    Ready**, which is how you learn the generation race was the cause and the
+    retry you also added is not what fixed it (F-076, M9-S12).
+
+114. **A negative proof is only as good as the path it runs on, and a positive
+    control cannot save it if that path authenticates nothing.** The rotation's
+    "the old password is refused" probe ran `psql` to `127.0.0.1` from inside
+    the postgres pod. `pg_hba.conf` there is `host all all 127.0.0.1/32 trust`
+    before `host all all all scram-sha-256`, so the password was never
+    consulted — and the probe reported a correctly-rotated role as unrotated.
+    The control ("the NEW password works over the same path") had been added
+    precisely to stop a false refusal, and it could not: **under `trust` both
+    arms pass, so the control agreed with the false alarm.** A control only
+    discriminates if the mechanism under test is engaged; this one was built to
+    catch *the database is gone*, which is a different failure from *nothing is
+    being authenticated*. The fix was the address, not the assertion —
+    connecting to the pod's own IP falls through to the `scram-sha-256` rule.
+    Before trusting any auth check, read the auth CONFIG and confirm your
+    connection matches the rule you think it does (F-077, M9-S12).
+
+115. **A variable the launcher exported can convert a test into a test of
+    something else, and the suite's verdict becomes a function of who ran it.**
+    `tests/unit/test_watchdog.py` built its sandbox from `os.environ`;
+    `watchdog.sh`'s heal path exports `WATCHDOG_HEAL=1`, and a session STARTED
+    by that path carries the flag for its whole life. Two tests asserting the
+    ordinary human-run behaviour of `next_session.sh` silently became tests of
+    the heal path and went red on a repo where nothing was wrong. The tell is a
+    failure that reproduces for one operator and not another, on the same
+    commit. Pin the flags your subject reads to an explicit default in the
+    fixture — the tests that WANT the other path already set it themselves, so
+    pinning makes both intentions visible instead of leaving one to chance
+    (F-079, M9-S12).
+
