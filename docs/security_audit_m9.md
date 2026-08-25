@@ -161,6 +161,29 @@ and by every M8/M9 story's exit state. Changing it turns a green gate red by
 design. That makes it a PO decision, and it is written into the exit entry rather
 than done quietly. See AWAITING_PO 2026-08-24-5.
 
+> **DATED NOTE — 2026-08-25 (M9-S11). The paragraph above stands as the M9-S9
+> record; this is what happened next.** The PO answered 2026-08-24-5 with
+> **option (b)** and the bump landed. Two things about it are worth carrying:
+>
+> 1. **The one-liner this section implies does not exist.** `uv lock
+>    --upgrade-package sqlparse` produced an **empty diff** and reported a
+>    successful resolution, because dbt-core 1.12.2 declares `sqlparse<0.6.0` —
+>    an upper bound the resolver honours and does not narrate. The minimal
+>    upstream-sanctioned path also bumps **dbt-core 1.12.2 → 1.12.3**, whose
+>    relevant change is the bound relaxation to `<0.7.0`. Recorded as **F-074**:
+>    *a resolver asked to upgrade one package answers with a lock, not with a
+>    verdict — the check is the diff, and an empty one is a finding.*
+> 2. **The invariant kept its shape; only its anchor moved**, once, by letter, to
+>    `lock-rebaselined-m9-publish`. Deliberately NOT re-pointed: the tag §7 of
+>    both gates uses to bound registry-version creation times, which gets
+>    *weaker* as it moves forward.
+>
+> Result on this leg: repo-tree dependency CVEs **5 → 1**, **CRITICAL 0 · HIGH
+> 0**, `fixable_in_our_lockfile: []`. The three HIGH sqlparse findings above are
+> gone from the live scan record. **The three IMAGES still carry 0.5.5** until
+> their next natural rebuild — stated in `docs/lock_rebaseline_m9.md` §5.1 with
+> its reasoning, not netted out. Full write-up: `docs/lock_rebaseline_m9.md`.
+
 ### The 76 misconfigurations, named rather than totalled
 
 They are pod-security-standard checks (`KSV-*`) on the seven plain manifests this
