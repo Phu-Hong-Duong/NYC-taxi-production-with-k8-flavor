@@ -1,5 +1,130 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (ct) — M9-S10: the incumbent margin lands era-aware (F-016 + F-068 CLOSED)
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cs) · `docs/milestones/M9_PUBLISH_KICKOFF.md` (the phase this session's
+story opens) · AWAITING_PO (both entries answered 2026-08-25; nothing blocking).
+Role block **MLE**, charter read, refusals in play: *no fit · no alias move · no
+registry version · no wire change · no cluster mutation · no gate LOOSENED*. None
+broken — this story tightens one gate under a PO letter quoted verbatim, and moves
+nothing else.
+
+**Story: M9-S10, COMPLETE and MERGED** (PR **#73**, merge commit `98d68b6`,
+`git branch -r --contains 24544ac` → `origin/main`). on-track / CLOSED.
+
+### Reconciliation (staleness check)
+The handoff's Next claimed a live cluster and a GREEN `verify-m9`. Measured, not
+assumed: all three `mlops-taxi` nodes **Ready, 8d, v1.36.1**; 36 pods Running, 1
+Completed; tree clean at `7db7067`; no `.status` file pointed at unfinished work.
+`make verify-m9` GREEN, `make verify-m8` GREEN, `@champion` **2** /
+`feature_set v2` (asserted inside the gates, not re-derived). Nothing had moved.
+
+### Done
+- **The knob**: `configs/train.yaml: gate.incumbent_min_improvement_pct: 0.50`
+  (F-013 — one home), with the argument, both observations the decision was made
+  against (**+0.63%** moved the pointer at M3-S5; **−0.03%** held it at M7-S4),
+  and the accepted cost stated rather than netted out: *a model genuinely
+  0.3–0.4% better will not ship*.
+- **The gate**: `gate.decide` applies it to the incumbent **KPI-09** condition
+  only (floor bar, both KPI-10 conditions untouched) and **RAISES** rather than
+  defaulting when the key is absent with an incumbent present — zero IS the old
+  behaviour, so `.get(key, 0.0)` would silently un-land the story (F-048).
+- **The recorded field**, in six places, so no future verdict is ambiguous about
+  its own bar: `Decision.incumbent_required_pct` · `as_mlflow()` · the promoted
+  version's `gate_incumbent_required_pct` tag · the retrain record · the pipeline
+  manifest (`required_pct_vs_incumbent`, which also narrows M4-S4's honest gap
+  about `margins` carrying floor numbers only) · the `[gate] incumbent bar:`
+  transcript line, a TWIN of `gate_eras.MARGIN_RE`.
+- **`src/taxi_mlops/training/gate_eras.py`**: resolve a recorded verdict's bar
+  from what the verdict DECLARES → else the ENUMERATED nine in
+  `automation/runs/m9-f016/replay-wall.json` (keyed on (leg, source, label),
+  every one at 0.00%) → else **RAISE**. `verify-m2` §2 and `verify-m3` §5 replay
+  era-aware; **all nine reproduce, 0 FLIPS**, so the charter's STOP rule was
+  never reached.
+- **The ratchet, ONE home** (`verify-m2` §2):
+  `gate_eras.assert_margin_never_decreased` — the number on disk must be ≥ every
+  margin a recorded verdict was taken against and ≥ the sanctioned 0.50%.
+- **`make gate-margin-redteam`** (new, 9th red team in the repo though not one of
+  the eight milestone-gate ones the README counts): plants **0.10** — plausible,
+  still positive, still refuses the identity case — → **RED with 1 FAIL naming
+  both numbers, 56 sub-checks still passing, the era-aware replays deliberately
+  still GREEN**, sha256-identical restore, GREEN 57/57, clean tree.
+- **Tests**: `tests/unit/test_gate_eras.py` (12 new) + 7 in
+  `test_training_gate.py` + 4 in `test_verify_m2.py`. The four F-068 arithmetic
+  tests were UPDATED to the landed behaviour, not deleted.
+- **Ledgers/inbox/docs**: F-016 and F-068 → **CLOSED** in `ledgers/findings.md`
+  (Status column and closing evidence); AWAITING_PO **2026-08-18-1** and
+  **2026-08-24-4** each carry a LANDED note; `docs/incumbent_margin_m9.md` is the
+  write-up with every transcript; CLAUDE.md section; LEARNING_GUIDE field note;
+  README test count 1,246 → **1,269** with `readme_check.py`'s claim moved in the
+  same commit.
+
+### Verification
+`make verify-m2` **GREEN 57/57** · `make verify-m3` **GREEN 47/47** ·
+`make verify-m7` **GREEN** · `make verify-m8` **GREEN** · `make verify-m9`
+**GREEN** · `make verify-m2-redteam` **PASSED** · `make verify-m3-redteam`
+**PASSED** · `make gate-margin-redteam` **PASSED** · `make readme-check`
+**GREEN** · host suite **1,269 passed, no skips** · ruff clean · CI `lint-test`
+pass 1m39s · all three gates re-run on `main` after the merge, still GREEN.
+`@champion` **2** / `feature_set v2`, versions `['1','2']` — nothing fitted, no
+alias moved, no version created, no wire touched, no cluster call that writes.
+`uv.lock` byte-identical to `m7-closed`.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **Sub-check counts moved and were RE-DERIVED, never widened** (gotcha #50, and
+  the accept explicitly allows it): `verify-m2` §2 13 → **16** (it was
+  under-declared — the leg emitted 14 while the bound said 13, and the bound is
+  "at least", so the slack was invisible), `verify-m3` §5 8 → **10**,
+  `verify-m7` §6 9 → **10**.
+- **The ratchet lives in `verify-m2` only.** `verify-m3` §6's existing bar check
+  absorbed the incumbent margin against `gate_eras.SANCTIONED_MARGIN_PCT` instead
+  of re-asserting the ratchet, so one loosening does not report as two witnesses.
+- **`automation/runs/m9-f016/replay-wall.json` was NOT regenerated.** The probe
+  was re-run as a READER (no `--json`) and still reports its two flips, which is
+  correct — it measures what the margin does to recorded verdicts, and that
+  answer did not change. Regenerating another story's record as a side effect is
+  F-053/F-063's shape (gotcha #48).
+- **No `ledgers/deployments.md` row**: this story touched no wire and made no
+  cluster call that writes (the M7-S5 precedent for host-side-only stories).
+
+### Defects/Surprises
+- **The red team found a defect in this story's own gate leg, which is the usual
+  yield of writing the drill second.** The monotonic check was asserted TWICE —
+  in §2's bar block and inside the era-aware summary — so a lowered margin
+  produced **two FAILs carrying the same sentence**. That reads like two
+  independent witnesses and is one fact counted twice. Split: the era line
+  asserts era-awareness only (and must STAY GREEN when the live bar moves — the
+  drill's load-bearing negative), the ratchet has one home.
+- **The charter's premise about `verify-m7` was wrong, and measuring it was
+  cheaper than assuming it.** The kickoff names its retrain leg as a third
+  era-aware replay; it READS `automation/runs/m7-retrain/latest.json` and never
+  calls `decide`. It gained the sub-check that says so checkably — that verdict's
+  **−0.03%** REFUSE is era-STABLE (refused under the pre-B bar AND under 0.50%)
+  — rather than an era table it does not need.
+- **An older unit test argued the opposite of the PO's decision and was ANSWERED,
+  not deleted.** `test_a_tie_with_the_incumbent_is_not_a_regression` claimed a
+  re-gate of the champion's own numbers must pass or "every promotion is a
+  one-way door". The idempotence it names lives in `registry.promote`: a re-run
+  reproducing the champion's numbers changes nothing about the registry under
+  either rule. What changed is the exit code, **0 → 1**, and that is now written
+  down in the test, the config comment and the write-up.
+- **`make readme-check` caught this session's own diff before anyone looked**
+  (third unplanted catch since M9-S8): 1,246 → 1,269 tests, RED naming the claim.
+
+### Next
+**Executor session on M9-S11** — sqlparse 0.6.0 + the lock re-baseline
+(`docs/milestones/M9_PUBLISH_KICKOFF.md`). Read its **safe stopping point** first:
+after the bump and the gotcha #36 measurement the tree is RED on `verify-m8` §1
+until the anchor tag is placed and the four readers are re-pointed, and the story
+must not end there — if it must stop, `git checkout` the lock and record the
+attempt. Then S12 (in-place credential rotation) → S13 (pre-commit hook + the
+final sweep + the AWAITING_PO entry re-inviting the flip), after which the ARCH
+publish boundary closes the phase. The flip remains the PO's click.
+Health reads: `make verify-m2` · `make verify-m3` · `make verify-m9` ·
+`make readme-check` · `make gate-margin-redteam`.
+
 ## Session 2026-08-25 (cs) — THE PO ANSWERED: publish phase chartered, chain resumed (ARCH)
 
 ### State
