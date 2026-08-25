@@ -389,6 +389,18 @@ CLAIMS: tuple[Claim, ...] = (
         lambda: f"~{_json('automation/runs/m4-image/image.json')['content_bytes'] / 2**20:.0f} MiB",
         "the task image a first run builds",
     ),
+    Claim(
+        "20 checks",
+        "automation/runs/m9-hook/redteam.json",
+        lambda: f"{_json('automation/runs/m9-hook/redteam.json')['checks']} checks",
+        "the pre-commit hook drill (M9-S13)",
+    ),
+    Claim(
+        "0 failures",
+        "automation/runs/m9-hook/redteam.json",
+        lambda: f"{_json('automation/runs/m9-hook/redteam.json')['failures']} failures",
+        "the pre-commit hook drill's verdict",
+    ),
 )
 
 #: Claims whose record is not a file on disk (a command, or the Makefile itself).
@@ -403,7 +415,7 @@ COMMAND_CLAIMS: tuple[Claim, ...] = (
 )
 
 TEST_COUNT_CLAIM = Claim(
-    "1,297 tests",
+    "1,319 tests",
     "uv run pytest tests/unit -q",
     lambda: f"{_collected_tests():,} tests",
     "the host suite",
