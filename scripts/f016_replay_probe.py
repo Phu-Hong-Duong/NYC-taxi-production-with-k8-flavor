@@ -58,7 +58,13 @@ TRANSCRIPTS = (Path("docs/promotion_gate_m2.md"), Path("docs/promotion_gate_m3.m
 #: margin under option B — the PO's answer says "KPI-10 non-regression
 #: unchanged" — so the KPI-10 incumbent check is left exactly as `decide()`
 #: computed it.
-_INCUMBENT_MAE_CHECK = "KPI-09 does not regress against the serving champion"
+#: M9-S10 renamed this check when it gained its margin ("does not regress" would
+#: be a lie once there is one), so the match is on the two words that identify
+#: the CONDITION rather than on a sentence that legitimately moved. The probe
+#: still simulates `--margin` itself and ignores whatever the live gate decided
+#: about this one check, which is what keeps it re-runnable after the landing.
+def _is_incumbent_mae_check(name: str) -> bool:
+    return name.startswith("KPI-09") and "serving champion" in name
 
 _LINE = re.compile(
     r"\[gate\] (challenger|floor)\s*: (\S+)\s+KPI-09 ([\d.]+) min\s+·\s+KPI-10 ([\d.]+)%"
@@ -100,7 +106,7 @@ def under_margin(
     others = all(
         check.passed
         for check in decision.checks
-        if not check.name.startswith(_INCUMBENT_MAE_CHECK)
+        if not _is_incumbent_mae_check(check.name)
     )
     pct = improvement_pct(round(challenger.mae, INCUMBENT_MAE_DECIMALS), incumbent.mae)
     return ("PROMOTE" if (others and pct >= margin) else "REFUSE"), pct

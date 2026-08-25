@@ -221,6 +221,11 @@ def verdict_payload(decision: gate.Decision | None, *, floor_name: str) -> dict[
         "incumbent_version": getattr(decision.incumbent, "version", None),
         "incumbent_mae": getattr(decision.incumbent, "mae", None),
         "incumbent_within_rate": getattr(decision.incumbent, "within_tolerance_rate", None),
+        # F-016: the margin this verdict was judged under. `None` exactly when
+        # there was no incumbent — never when there was one and nobody wrote the
+        # bar down, which is the state `gate_eras` exists to make impossible
+        # from M9-S10 on.
+        "incumbent_required_pct": decision.incumbent_required_pct,
         "reasons": [
             {"check": c.name, "passed": c.passed, "detail": c.detail} for c in decision.checks
         ],

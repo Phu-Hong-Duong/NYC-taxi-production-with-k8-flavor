@@ -176,13 +176,16 @@ class RegisterResult:
 
     `decision` is one of PROMOTE / REFUSE / NO_VERDICT. `margins` carries the
     numbers the decision was made from, so a downstream reader never has to
-    parse a transcript to learn why.
+    parse a transcript to learn why — including, from M9-S10, the INCUMBENT bar
+    (`required_pct_vs_incumbent`), which is `None` exactly when there was no
+    incumbent to beat. Before it existed this payload could show REFUSE beside a
+    passing floor margin and leave the reader to know M3-S1 to reconcile them.
     """
 
     decision: str
     promoted: bool
     reason: str
-    margins: dict[str, float] = field(default_factory=dict)
+    margins: dict[str, float | None] = field(default_factory=dict)
     champion_alias_version: str | None = None
 
     @property
@@ -432,6 +435,7 @@ def register(manifest_path: str, *, promote: bool = False) -> RegisterResult:
             "floor_mae": decision["floor_mae"],
             "observed_pct_vs_floor": decision["observed_pct"],
             "required_pct_vs_floor": decision["required_pct"],
+            "required_pct_vs_incumbent": decision.get("incumbent_required_pct"),
             "challenger_within_rate": decision["challenger_within"],
             "floor_within_rate": decision["floor_within"],
         },
@@ -649,6 +653,10 @@ def _manifest(
             "incumbent_version": (
                 None if decision.incumbent is None else decision.incumbent.version
             ),
+            # F-016: the incumbent bar travels in the manifest too, so the
+            # verdict this stage hands the next one is never ambiguous about
+            # what it had to clear.
+            "incumbent_required_pct": decision.incumbent_required_pct,
             "checks": [
                 {"name": c.name, "passed": c.passed, "detail": c.detail}
                 for c in decision.checks

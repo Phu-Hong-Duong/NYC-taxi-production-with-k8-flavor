@@ -725,6 +725,13 @@ def _payload(loaded, decisions, winner, train_cfg, floor, train_months, train_ro
             "floor": train_cfg["gate"]["floor"],
             "min_improvement_pct": train_cfg["gate"]["min_improvement_pct"],
             "require_no_kpi10_regression": train_cfg["gate"]["require_no_kpi10_regression"],
+            # F-016 (M9-S10): the incumbent bar this run's verdicts were taken
+            # against. `verify-m3` §5 replays those verdicts through the gate on
+            # disk, so a record written under one bar and replayed under another
+            # is not a replay — the record carries its own era from here on, and
+            # the M3-S5 record that predates this key is enumerated in
+            # `taxi_mlops.training.gate_eras` instead.
+            "incumbent_min_improvement_pct": train_cfg["gate"]["incumbent_min_improvement_pct"],
         },
         "incumbent": None if incumbent is None else {
             "version": incumbent.version, "mae": incumbent.mae,

@@ -165,7 +165,53 @@ gate:
   # optimised what we report and degraded what we promise — and only the second
   # of those is on M5's SLO.
   require_no_kpi10_regression: true
-  # THE INCUMBENT CONDITION (M3-S1, F-011) has no knob and never will. The floor
+  # THE INCUMBENT MARGIN (M9-S10, F-016 + F-068). Sanctioned by the PO at
+  # AWAITING_PO 2026-08-18-1 (option B) and confirmed era-aware at 2026-08-24-4;
+  # it is the one number the incumbent condition below now consults, and it is
+  # the ONLY margin knob that exists for it (F-013 — one home).
+  #
+  # WHY IT EXISTS. Non-regression with no margin let the alias move at M3-S5 on
+  # +0.63% against the incumbent — 1.2 seconds of mean error over 5.95M rows —
+  # while the FLOOR condition four lines above demanded 2.00% of the same model.
+  # The two bars disagreed about what a promotion is worth: one priced the cost
+  # of OWNING a booster, the other priced replacing one at zero. Replacing a
+  # champion is not free either — it re-runs the promotion path, moves an alias
+  # riders are served through, invalidates every published prediction's version
+  # stamp, and buys a rollback that has to be rehearsed (M6-S4 measured that
+  # rollback at 35.35 s of moves and 27.93 s of failing requests).
+  #
+  # WHY 0.50 AND NOT 2.00. It is deliberately a fraction of the floor bar,
+  # because the two ask different questions: 2.00% is "does a booster earn its
+  # keep against a `GROUP BY`", and this is "does a NEW booster earn a
+  # transition against one already serving". 0.50% of 3.2608 min is ~1.0 second
+  # of mean error. Both observations the decision was made against are on file:
+  # +0.63% MOVED the pointer at M3-S5 (it would still move — the margin is
+  # deliberately set below the one transition this program has actually made,
+  # not above it), and −0.03% HELD it at M7-S4 under plain non-regression.
+  # The nearest surviving recorded verdict is M3-S5's `artisan v2` at +0.5612%:
+  # it survives 0.50 and dies at 0.57, and that daylight is asserted by a test.
+  #
+  # THE COST, STATED RATHER THAN NETTED OUT: a model genuinely 0.3–0.4% better
+  # than the champion will not ship. That is the point of a maintenance-cost
+  # bar and it is still a real loss — the honest reading is that this program
+  # would rather leave a fifth of a second of mean error on the table than move
+  # a pointer for it.
+  #
+  # THE IDENTITY CASE IS DECIDED, NOT INCIDENTAL: a challenger numerically
+  # identical to the incumbent (+0.0000%) is REFUSED under any positive margin.
+  # Two RECORDED verdicts sit exactly there (M3-S5's `champion v1` and
+  # `docs/promotion_gate_m3.md`'s `lightgbm-v1` — both a champion judged
+  # against ITSELF), which is what stopped this edit at M9-S6 and what
+  # `taxi_mlops.training.gate_eras` now handles by replaying each recorded
+  # verdict against the bar IN FORCE when it was taken.
+  #
+  # LOWERING this is a PO fork, and it is checked mechanically as well as
+  # socially: `gate_eras.assert_margin_never_decreased` fails the M2 gate if the
+  # number here drops below the sanctioned 0.50 or below any margin a recorded
+  # verdict was taken against.
+  incumbent_min_improvement_pct: 0.50
+  # THE INCUMBENT CONDITION (M3-S1, F-011) has no ON/OFF knob and never will —
+  # what M9-S10 added above is the BAR it applies, not a switch. The floor
   # asks "is a booster worth serving at all"; only the model that IS serving can
   # answer "is this one better than what riders already get", and a challenger
   # 4% worse than the champion can clear a floor bar the champion cleared by 7%.
