@@ -1,4 +1,14 @@
 .env
+# Every sibling of .env is a credential file too, and the bare `.env` above does
+# NOT match them — gitignore patterns are literal names, not prefixes. Found at
+# M9-S12 by running `git check-ignore -v .env.pre-rotation` before making the
+# copy the rotation charter asks for: it exited 1. The charter had called that
+# path "a gitignored path"; it was not one, and a single `git add -A` during a
+# rotation would have committed every OLD credential in the program — the one
+# outcome the whole story exists to prevent. Presence was assumed; the two-second
+# command was what said otherwise.
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.pyc
