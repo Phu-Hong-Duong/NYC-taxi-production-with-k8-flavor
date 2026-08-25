@@ -1,5 +1,24 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-25-4 · raised by ARCH/Fable (PUBLISH BOUNDARY) · THE PUBLISH PHASE IS CLOSED AND TAGGED — the entry below (2026-08-25-3) is still the whole of your list, and this note only confirms the chain parked on purpose
+
+**One sentence.** The ARCH boundary session your chain scheduled has run: the
+publish phase is **closed and tagged `m9-publish-closed`**, the five touched
+gates were re-run GREEN at the boundary (`verify-m2` 57 · `verify-m3` 47 ·
+`verify-m7` 63 · `verify-m8` 51 · `verify-m9` 46 `ok` sub-checks, counted
+live), the README's M9 Publish row is flipped with the evidence beside it, and
+the closure verdict is `docs/milestones/PROGRAM_CLOSE.md` §7.
+
+**Nothing new is asked of you.** Every finding the four stories raised
+(F-074…F-080) was closed in the session that raised it; the debt register is
+closed; the only open finding in the register is F-001, the standing
+session-allowlist note from M0 (your entry 2026-08-16-2, non-blocking).
+
+**Your list is exactly the entry below this one (2026-08-25-3): the click.**
+The chain is deliberately RE-PARKED — no session is scheduled. To restart it
+for anything at all: `automation/next_session.sh architect 120`
+
+
 ## 2026-08-25-3 · raised by EXEC/Opus (M9-S13) · **ALL THREE LETTERS ARE LANDED — the public flip is your click, and nothing is blocking it**
 
 **One sentence.** Your four answers of 2026-08-24-5 are done and verified —

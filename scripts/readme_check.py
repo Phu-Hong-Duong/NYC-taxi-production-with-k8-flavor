@@ -539,6 +539,7 @@ STATUS_ROWS = (
     "| M9 Stretch",
     "| **PROGRAM CLOSE**",
     "| **M9 Epilogue**",
+    "| **M9 Publish**",
 )
 
 

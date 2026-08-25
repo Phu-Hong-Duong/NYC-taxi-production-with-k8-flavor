@@ -1,5 +1,66 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (cx) — ARCH publish boundary: the phase closes, the chain re-parks on the click
+
+### State
+**ARCH, `claude-fable-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cw) · `docs/milestones/M9_PUBLISH_KICKOFF.md` §Exit · AWAITING_PO
+(2026-08-25-3 is the flip entry; nothing blocking) · ledgers. **The publish
+phase is CLOSED — tag `m9-publish-closed`** — and the chain is RE-PARKED on the
+flip entry. No session is scheduled; the one live item is the PO's click.
+
+### Reconciliation (staleness check)
+Handoff (cw)'s Next claimed a clean tree at the M9-S13 merge, host suite 1,319,
+the hook installed in this clone, and `automation/runs/m9-hook/redteam.json` as
+tracked evidence. Measured: tree clean at `d5151b5`, three `mlops-taxi` nodes
+live (every gate below asked the cluster real questions and got answers), the
+hook ran on this session's own closing commit. Nothing had moved.
+
+### Done (the §Exit list, in order)
+- **The gate sweep, run by the approver and counted live** (`grep -cE "ok  "`):
+  `verify-m2` GREEN **57** · `verify-m3` GREEN **47** · `verify-m7` GREEN
+  **63** (was 62 — S10's added era-stable sub-check) · `verify-m8` GREEN **51**
+  against the S11 anchor `lock-rebaselined-m9-publish` · `verify-m9` GREEN
+  **46**, banner citing the CLOSED-and-cited observed box. Lineage (gotcha
+  #20): M9-S13's merge `24364ab` (PR #76) reaches `origin/main`.
+- **Dispositions: nothing carried.** F-074…F-080 all CLOSED by their own
+  stories (verified in the ledger, not assumed); F-016/F-068 CLOSED at M9-S10;
+  debt register CLOSED, no rows due. The register's only open row is **F-001**
+  (the standing session-allowlist note, AWAITING_PO 2026-08-16-2, non-blocking
+  since M0 — an environmental limit, not a defect).
+- **The closure verdict**: `docs/milestones/PROGRAM_CLOSE.md` **§7** — the
+  established home (§0 program close, §6 epilogue close, §7 publish close).
+- **The README row flip, same commit**: M9 Publish → **closed 2026-08-25**,
+  evidence = the tag + the five counted gates + §7 + the flip entry.
+- **One boundary repair (F-065/F-072/F-073 precedent)**: the M9 Publish row
+  joined `readme_check.py`'s `STATUS_ROWS` pin (12 → 13) — a closed row is
+  history, and unpinned history can be dropped by a rewrite without any check
+  noticing. `tests/unit/test_readme.py` re-derived with it (12 → 13, gotcha
+  #50), 7 passed; `make readme-check` GREEN after both edits.
+- **Signoffs row appended** (Producer EXEC/Opus S10…S13 PRs #73–#76 · Approver
+  ARCH/Fable · PASS). **AWAITING_PO 2026-08-25-4** added: a park confirmation
+  that asks nothing — the watchdog reads a deliberate park, the PO reads that
+  the queue is still exactly one click.
+
+### Verification
+The five gates above, plus `make readme-check` GREEN (32 claims, Status table
+now 13 pinned rows) and `uv run pytest tests/unit/test_readme.py` 7 passed.
+`@champion` **2** / `feature_set v2` — this boundary fitted nothing, moved no
+alias, created no version, touched no wire, and its only cluster calls were
+the gates' own read-only questions.
+
+### Defects/Surprises
+- None. Every gate passed on its first run at this boundary; the only edit
+  beyond the closure artifacts was the STATUS_ROWS pin described above.
+
+### Next
+**THE CHAIN IS PARKED — nothing is scheduled, and that is the deliberate end
+state.** The one live item is AWAITING_PO **2026-08-25-3**: the PO's click
+(Settings → General → Change visibility → Public). 2026-08-25-4 confirms the
+park. To restart the chain for anything: `automation/next_session.sh
+architect 120`. There is no pre-chartered work anywhere — a restart begins
+with an ARCH touch that charters whatever the PO has answered or asked.
+
 ## Session 2026-08-25 (cw) — M9-S13: the pre-commit hook, the limit it cannot hide, and the drill it broke
 
 ### State

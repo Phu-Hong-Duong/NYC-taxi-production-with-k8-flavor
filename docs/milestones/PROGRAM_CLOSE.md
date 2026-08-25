@@ -277,3 +277,82 @@ ANY answer is now:
 cd ~/NYC-taxi-production-with-k8-flavor
 automation/next_session.sh architect 120   # an ARCH touch charters answered work — the epilogue is closed, so nothing remains pre-chartered
 ```
+
+## 7. PUBLISH CLOSE — the three letters landed, and the click is the only thing left (ARCH/Fable · 2026-08-25)
+
+**Verdict: the PUBLISH PHASE CLEANLY CLOSES — tag `m9-publish-closed`.** All
+four chartered stories (`docs/milestones/M9_PUBLISH_KICKOFF.md`) landed and
+merged, every finding they raised is CLOSED with evidence, and the inbox holds
+exactly one live item: the flip, which is the PO's click and never a story's.
+
+**The gate sweep this boundary ran itself (the kickoff §Exit's list — the two
+gates S10 touched and re-derived, the two S11 re-anchored, plus `verify-m9`),
+counted live by `grep -cE "ok  "`:**
+
+```
+make verify-m2  → GREEN — every M2 sub-check passed.  (57 ok)
+make verify-m3  → GREEN — every M3 sub-check passed.  (47 ok)
+make verify-m7  → GREEN — every M7 sub-check passed.  (63 ok — was 62; S10's
+                  added era-stable sub-check, re-derived not widened, #50)
+make verify-m8  → GREEN — every M8 sub-check passed.  (51 ok, against the
+                  S11 anchor `lock-rebaselined-m9-publish`)
+make verify-m9  → GREEN — every M9 sub-check passed.  (46 ok; banner cites the
+                  CLOSED-and-cited observed box)
+```
+
+Lineage spot-check (gotcha #20): M9-S13's merge `24364ab` (PR #76) reaches
+`origin/main`, and `git branch -r --contains 51e0841` → `origin/main`. Tree
+clean at `d5151b5` before this close's commit.
+
+**The four stories, dispositioned:**
+- **M9-S10 (F-016/F-068, option (b) era-aware) — LANDED, PR #73.** The margin
+  `incumbent_min_improvement_pct: 0.50` is in `configs/train.yaml: gate`; all
+  nine frozen verdicts replay with **0 flips**; the monotonic ratchet is
+  demonstrable RED (`make gate-margin-redteam`). **F-016 and F-068 CLOSED.**
+- **M9-S11 (sqlparse 0.6.0 + lock re-baseline) — LANDED, PR #74.** Two
+  packages moved (dbt-core 1.12.3 came with it — **F-074**, the empty diff
+  that reported success), the lock anchor moved ONCE to
+  `lock-rebaselined-m9-publish`, the registry bound deliberately stayed at
+  `m7-closed`. Three HIGH CVEs gone; `dbt build` PASS=80 and every published
+  count to the row. **F-074 CLOSED.**
+- **M9-S12 (credential rotation, in place) — LANDED, PR #75.** 12 credentials
+  across 5 families; all ten gates GREEN in one sweep on the new values; the
+  old values proved dead; the undo copy destroyed. **F-075/F-076/F-077/F-078/
+  F-079 CLOSED** — all four rotation findings were in the CHECKING, never the
+  rotation.
+- **M9-S13 (pre-commit hook) — LANDED, PR #76.** The hook runs the audit's own
+  module (one acknowledgement table); `make hook-redteam` PASSED 20/20 with
+  the bypass MEASURED; the limit (`.git/hooks` is untracked, no gate can see
+  it) is stated in every artifact that could mislead without it. **F-080
+  CLOSED** (the hook broke the drill that stages a secret on purpose — fixed
+  where the drill is, not where the hook is).
+
+**Nothing is carried.** The findings register's every row is CLOSED except
+**F-001**, the standing session-allowlist friction note (non-blocking,
+parked at AWAITING_PO 2026-08-16-2 since M0 — an environmental limit, not a
+defect). Debt register: **CLOSED, no rows due.** Standing-open-on-purpose
+items unchanged: error memo §7 row 2 · the daily drift window (F-046
+residual) · R-1 · the retrain trigger's activation — each named in §3 with
+its owner.
+
+**One repair made AT this boundary (the F-065/F-072/F-073 precedent —
+one-line-class, by the approver, with the demonstration in hand):** the
+**M9 Publish** README row joined `readme_check.py`'s `STATUS_ROWS` pin (12 →
+13) in the same commit that flips it to closed — a closed row is history, and
+history that is not pinned can be dropped by a rewrite without any check
+noticing. The unit test's count was re-derived with it (gotcha #50).
+
+**End state, read live at this close:** `@champion` **2** / `feature_set v2`,
+versions `['1','2']` — no version 3 was ever created; `uv.lock` byte-identical
+to `lock-rebaselined-m9-publish`; host suite **1,319 passed, no skips**;
+`make security-scan` **`publishable: true`, `secrets_in_git: 0`**;
+`make readme-check` GREEN.
+
+**The chain RE-PARKS on the flip entry (AWAITING_PO 2026-08-25-3).** Nothing
+is scheduled. The one live item is the PO's click — Settings → General →
+Change visibility → Public — and the resume for anything after it is:
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+automation/next_session.sh architect 120
+```
