@@ -1760,3 +1760,38 @@ the seed line are earned by THIS project.
     pinning makes both intentions visible instead of leaving one to chance
     (F-079, M9-S12).
 
+116. **A git hook that is not executable is not a hook, and git says nothing
+    about it.** No error, no warning, no scan — `ls` shows the file sitting
+    right where you put it and every commit sails through. Git records the mode
+    of a TRACKED file (`scripts/hooks/pre-commit` is `100755` in the index, and
+    a test asserts that), but the copy into `.git/hooks` is where the bit gets
+    lost: a `cp` from a tarball, a `curl`, a filesystem that drops it, or
+    M8-S4 leg 2's `COPY`, whose 0644 surfaced as containerd's
+    `exec: permission denied` and read like a missing binary. So the installer
+    sets the bit and then READS IT BACK off the installed file, and its
+    `--check` distinguishes the three ways a hook stops being one — absent,
+    stale, and present-but-not-executable — because they are three different
+    repairs and only one of them is visible to `ls` (M9-S13).
+
+117. **Before shipping a repo-wide refusal, ask who already does the forbidden
+    thing on purpose — the answer is usually the drills.** The M9-S13
+    pre-commit hook refuses a staged credential; `make security-scan-redteam`
+    STAGES one deliberately, so it can watch the audit catch a secret on a ref
+    HEAD does not reach. It had passed 16/16 for a day and died at `git commit`
+    under `set -e` the hour the hook was installed — a working guard presenting
+    as a broken red team. Neither party was wrong; the interaction was new. The
+    fix is one flag with a comment saying the flag is there BECAUSE the guard is
+    right, and the blast radius is a two-second measurement (`grep -rn "git
+    commit"` over `scripts/`, `automation/` and the Makefile found exactly one
+    caller). This is F-053/F-063's question asked from the other side: those ask
+    *what does my command do to state that already exists*, this asks *what does
+    my new refusal do to commands that already exist* (F-080, M9-S13).
+
+118. **A CLI's subcommands are a version fact, not a remembered one.** The M9
+    charter specified `gitleaks protect --staged`; `protect` was removed in the
+    8.19 line and the pinned 8.30.1 binary offers `dir`, `git` and `stdin` —
+    with `git --staged` as the pre-commit form. One `--help` on the PINNED
+    binary answered it before a line was written. Same family as #70 (ask the
+    server what endpoint it serves) and the Flyte-2 trigger check: when a
+    charter, a blog post or a memory names a command, run it against the version
+    you actually pin before designing around it (M9-S13).
