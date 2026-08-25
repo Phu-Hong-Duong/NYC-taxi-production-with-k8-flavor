@@ -64,6 +64,31 @@ def git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True)
 
 
+def require_a_clone_that_has_tags() -> None:
+    """Skip only where a MISSING tag proves nothing — gotcha #105 / F-060.
+
+    `actions/checkout@v4` fetches no tags, so in CI *every* tag is absent and an
+    absent anchor says nothing about this repository. That is a property of the
+    checkout, not of the invariant.
+
+    The discriminator is the one F-060 established: **where the artifact is an
+    absence, prove first that presence was possible.** A clone holding NO tags at
+    all cannot answer the question and skips; a clone holding tags and not THIS
+    one is a real defect and fails. So the two failure modes stay distinguishable
+    instead of collapsing into one permissive `skipif`.
+
+    Honest limit, stated rather than left to be discovered: this means CI does not
+    check the anchor. The host does, on every `make verify-m8` / `verify-m9`, and
+    those are where the invariant is enforced.
+    """
+    if not git("tag").stdout.strip():
+        pytest.skip(
+            "this clone holds no tags at all (a shallow CI checkout — "
+            "`actions/checkout` does not fetch them), so an absent anchor is a fact "
+            "about the checkout and not about the lock. The gates check it on the host."
+        )
+
+
 def test_every_gate_names_the_same_lock_anchor():
     """Four sites, one tag. A drifted anchor is a gate checking a stale baseline."""
     for rel, at_least in LOCK_ANCHOR_SITES.items():
@@ -77,6 +102,7 @@ def test_every_gate_names_the_same_lock_anchor():
 
 def test_the_lock_anchor_is_an_annotated_tag_that_resolves():
     """A gate whose reference point does not exist has no invariant at all."""
+    require_a_clone_that_has_tags()
     rc = git("rev-parse", "--verify", f"{SANCTIONED_ANCHOR}^{{commit}}")
     assert rc.returncode == 0, (
         f"the {SANCTIONED_ANCHOR} tag does not resolve in this clone. `verify-m8` §1 and "
@@ -93,9 +119,13 @@ def test_the_anchored_lock_is_the_lock_on_disk():
     live platform to run and this does not, so a lock edit is caught by `pytest`
     and by CI rather than at the next milestone gate.
     """
+    require_a_clone_that_has_tags()
     blob = git("show", f"{SANCTIONED_ANCHOR}:uv.lock")
-    if blob.returncode != 0:
-        pytest.skip(f"{SANCTIONED_ANCHOR} not present in this clone (see the test above)")
+    assert blob.returncode == 0, (
+        f"this clone has tags but not {SANCTIONED_ANCHOR} — the anchor was never pushed, "
+        f"or was deleted. `git fetch --tags` first; if it is genuinely gone, the two gates "
+        f"have no reference point and go RED, which is the safe direction and still broken."
+    )
     assert blob.stdout == (REPO / "uv.lock").read_text(encoding="utf-8"), (
         "uv.lock DIFFERS from the sanctioned anchor. The project's dependency graph moves "
         "only by PO letter (F-013's spirit applied to dependencies): either revert the "

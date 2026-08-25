@@ -203,6 +203,28 @@ Corrected in the README's **epilogue-close** row only, with the reason inline. T
 silently rewrites its own numbers cannot be compared against the decisions made
 from them.
 
+## 6.1 The new test failed CI, and the repair was the discriminator
+
+`test_the_lock_anchor_is_an_annotated_tag_that_resolves` went RED on the first CI
+run: `actions/checkout@v4` fetches **no tags**, so in CI *every* tag is absent.
+
+The tempting repair is a blanket `skipif(tag missing)`. That collapses two
+different facts into one — *"this checkout has no tags"* and *"the anchor was
+never pushed"* — and the second is exactly what the test exists to catch. The
+repair is **F-060 / gotcha #105**, one layer along:
+
+> **Where the artifact is an absence, prove first that presence was possible.**
+
+So `require_a_clone_that_has_tags()` skips only when the clone holds **no tags at
+all**; a clone holding tags and not *this* one FAILS. Demonstrated both ways:
+`git tag -d lock-rebaselined-m9-publish` (other tags still present) → **2 FAILED,
+6 passed**; restored with `git fetch origin --tags` → **8 passed** — which also
+proves the tag really reached the remote rather than only the local clone.
+
+**Honest limit, stated rather than left to be found: CI does not check the
+anchor.** The host does, on every `make verify-m8` and `make verify-m9`, and those
+are where the invariant is enforced.
+
 ## 7. What did not happen
 
 Nothing was fitted. No alias moved. No registry version was created

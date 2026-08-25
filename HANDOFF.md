@@ -102,6 +102,16 @@ wire touched.
   checker — no leg reads a gate's sub-check count, and the README's number lives
   in prose the twin does not resolve. Worth a future story: make the front door's
   gate counts derived like its evidence table is.
+- **The new anchor test failed CI, and the fix was a discriminator rather than a
+  skip.** `actions/checkout@v4` fetches no tags, so in CI every tag is absent. A
+  blanket `skipif` would have collapsed *"this checkout has no tags"* into *"the
+  anchor was never pushed"* — the second being what the test exists to catch. So
+  it skips only when the clone holds NO tags at all and FAILS when the clone has
+  tags and not this one (**F-060 / gotcha #105**, one layer along). Proved both
+  ways: anchor deleted locally with other tags present → **2 FAILED, 6 passed**;
+  `git fetch origin --tags` → **8 passed**, which also proves the tag reached the
+  remote. Honest limit recorded: **CI does not check the anchor**; the host does,
+  on every `verify-m8`/`verify-m9`.
 - **The F-026 image guard now also sees `uv.lock`, and it was ALREADY firing.**
   Measured read-only against `taxi-mlops-pipeline:4e5dd66`: it already saw drift
   under `scripts/` and `src/` from M9-S9/S10; `uv.lock` joins a list that was not
