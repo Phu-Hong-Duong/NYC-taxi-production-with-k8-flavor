@@ -180,7 +180,7 @@ if [[ "$red_oks" -ge 40 ]]; then
 else
   bad "only $red_oks sub-check(s) still passed — the suite collapsed instead of continuing"
 fi
-for still_green in "BYTE-IDENTICAL to the m7-closed tag" \
+for still_green in "BYTE-IDENTICAL to the lock-rebaselined-m9-publish tag" \
                    "is ABSENT from the project environment" \
                    "the import law holds in BOTH directions" \
                    "COMMITTED BEFORE the records they judge" \

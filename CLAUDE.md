@@ -90,7 +90,8 @@ Spec: docs/BLUEPRINT.md (v2). Constitution: docs/org/ORG.md + ROLES.md.
 | PyYAML | 6.0.3 | 2026-08-16 | `uv add pyyaml` (M1-S1) — configs/*.yaml are read by code from M1 on |
 | duckdb | 1.5.5 | 2026-08-16 | `uv add duckdb` (M1-S2). The analyst layer is VIEWS in this engine — it copies no rows |
 | dvc | 3.67.1 | 2026-08-16 | `uv add dvc` (M1-S2). A runtime dep, not dev: `make data` invokes it. **Analytics disabled at init** — see gotcha #32 |
-| dbt-core | **1.12.2** | 2026-08-16 | `uv run dbt --version` (M1-S4). Note it pulled **snowplow-tracker 1.1.0** in — the telemetry client. Opt-out is `flags.send_anonymous_usage_stats: false` in `dbt_project.yml` + `DO_NOT_TRACK=1` (gotcha #32's dbt sibling, now pinned by a test) |
+| dbt-core | **1.12.3** (was 1.12.2 from M1-S4 until 2026-08-25) | 2026-08-25 | `uv run dbt --version` (M9-S11). Note it pulled **snowplow-tracker 1.1.0** in — the telemetry client. Opt-out is `flags.send_anonymous_usage_stats: false` in `dbt_project.yml` + `DO_NOT_TRACK=1` (gotcha #32's dbt sibling, now pinned by a test). **It moved for a reason that is not about dbt**: 1.12.2 declares `sqlparse<0.6.0`, so the PO-sanctioned sqlparse CVE bump could not resolve until dbt-core reached 1.12.3, whose relevant change is the bound relaxation to `<0.7.0` (F-074). Verified by `make marts`: `dbt build` PASS=80 and every published count reproduced to the row |
+| sqlparse | **0.6.0** (was 0.5.5) | 2026-08-25 | `uv pip list` (M9-S11). Transitive through dbt-core and mlflow-skinny; bumped by PO letter (AWAITING_PO 2026-08-24-5, option (b)) to clear **three HIGH CVEs** before the public flip. The lock invariant's anchor moved with it, ONCE, to `lock-rebaselined-m9-publish` — the invariant keeps its shape (`uv.lock` byte-identical to a SANCTIONED tag), and the tag §7 of both gates uses to bound registry-version creation times deliberately did NOT move, because that one gets weaker as it goes forward |
 | dbt-duckdb | **1.11.0** | 2026-08-16 | `uv run dbt --version` (M1-S4). A runtime dep, not dev: `make marts` invokes it |
 | Metabase | **v0.63.13**, image pinned by TAG AND DIGEST `metabase/metabase:v0.63.13@sha256:6e188e7068c6e9cf7b24480ada80f335bca9135765764ee827245f44ffa9eace` | 2026-08-17 | `docker pull` (M1-S5). Newest stable at pin time (Docker Hub tag list read live; `v0.58-lts` was the conservative alternative and stays the 3-attempt-wall fallback). Plain manifest, not the chart — `infra/manifests/metabase.yaml` header says why |
 | TLC yellow parquet (2019-01…08) | 8 files, sha256-pinned in `data/raw_manifest.json` | 2026-08-16 | `make ingest`; e.g. 2019-01 = `3ad95f39…26d`, 110,439,634 bytes. Manifest is timestamp-free by design: a diff = the bytes moved |
@@ -3722,6 +3723,67 @@ can never disagree (the port-family twins lesson, applied before it bit).
   `make verify-m2` GREEN 57/57 · `make verify-m3` GREEN 47/47 · `make verify-m7`
   GREEN · both planted-edit red teams PASS · host suite **1269 passed** (was
   1246) · ruff clean · `uv.lock` byte-identical to `m7-closed`.
+
+## The first dependency change (M9-S11) — the empty diff, and the tag that must not move
+- **`uv lock --upgrade-package sqlparse` upgraded nothing and reported success.**
+  The PO sanctioned the bump to 0.6.0 (three HIGH CVEs, AWAITING_PO 2026-08-24-5
+  option (b)) and the kickoff priced it as one command; it printed
+  `Resolved 243 packages` and produced a **zero-byte diff**, because **dbt-core
+  1.12.2 declares `sqlparse<0.6.0`** — an upper bound `--upgrade-package` honours
+  correctly and does not narrate. Read as "already current", this story would have
+  re-baselined the anchor, re-run five proofs and closed the CVE fork with 0.5.5
+  still pinned: ten gates green, the letter unhonoured. **F-074, and it
+  generalises: a resolver answers with a LOCK, not with a verdict — the check is
+  the DIFF, and an empty one is a finding.**
+- **The minimal upstream path moves TWO packages, and the tempting alternative is
+  the one that makes the record match the estimate.** dbt-core **1.12.3** relaxes
+  the bound to `<0.7.0`, so (i) bump both. The charter's own fallback — a
+  constraint pin `sqlparse==0.6.0` — would force a version dbt's metadata forbids,
+  shipping an untested combination *purely to keep the diff looking like the one
+  that was priced*. The extra mover is a fact about the world; hiding it would not
+  make it smaller.
+- **gotcha #36 measured, not hoped:** 243 packages before and after, **0 added, 0
+  removed, exactly 2 moved**; pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 ·
+  mlflow-skinny 3.15.1 · lightgbm 4.7.0 · dbt-duckdb 1.11.0 · duckdb · pyarrow ·
+  xgboost · scipy · flaml · optuna · flyte all byte-unchanged. It is a **standing
+  assertion** now (`tests/unit/test_lock_anchor.py`), so the next dependency change
+  inherits the check instead of re-deriving it.
+- **The invariant kept its SHAPE; only its anchor moved**, once, by letter, to
+  **`lock-rebaselined-m9-publish`** — spelled ONCE per gate as `LOCK_ANCHOR`, plus
+  the two red-team "must stay green" needles.
+- **The distinction a `sed` would have destroyed, and it is the story's best
+  find.** `m7-closed` was doing TWO unrelated jobs in both gates. The **lock
+  anchor** ("uv.lock must equal this tag's blob") is neutral to moving forward.
+  The **registry bound** (§7: "no model version created after this tag") gets
+  **WEAKER** — a tag placed today ADMITS every version created since M7. A bulk
+  rename would have landed the story, passed every gate, and silently loosened the
+  strongest form of the alias law, in a diff where one tag name replaces another
+  and a reviewer cannot see that half of them were a loosening. The registry bound
+  stays at `m7-closed`, asserted on the `git log --format=%ct -1 <tag>`
+  INVOCATION (both files argue about tags in prose — #35/#99).
+- **The proof that matters is `make marts`, because dbt is sqlparse's consumer:**
+  `dbt build` **PASS=80 WARN=0 ERROR=0** and every published count reproduced to
+  the row (56,127,878 · 44,792 · 8 · 80 · 1,151 · 91). Plus `make parity`
+  **0.000e+00** over 16 hazards (the MLflow client + the wire). CVEs: repo-tree
+  dependency findings **5 -> 1**, **CRITICAL 0 · HIGH 0**,
+  `fixable_in_our_lockfile: []`.
+- **Honest cost, stated rather than netted out:** the three IMAGES still carry
+  sqlparse 0.5.5 and dbt-core 1.12.2 until their next natural rebuild — nothing
+  on-cluster parses untrusted SQL, and rebuilding three images to close a CVE in a
+  parser nothing points at untrusted input is cost without a threat model. **The
+  F-026 guard is already firing and that is correct**: `uv.lock` is in both
+  `run_pipeline.sh`'s and `retrain_schedule.sh`'s `IMAGE_PATHS`, so an on-cluster
+  run refuses (exit 3) until `make image-load`. Measured read-only: the guard
+  already saw drift from M9-S9/S10 under `scripts/` and `src/`; `uv.lock` joins a
+  list that was not empty.
+- **`verify-m9` is 46 sub-checks, not 45, and has been since M9-S7** — measured on
+  both sides (at `main`: 45 `ok` + the lock `FAIL`; at HEAD: 46 `ok`; and the gate
+  diff removes one `ok(`/`no(` pair and adds one, so it is count-neutral by
+  construction), corroborated by the red team's own restore line. The README's
+  **epilogue-close** row is corrected with the reason inline; the **M9-close** row
+  keeps its `45/45`, which was true when written.
+- Nothing fitted, no alias moved, no version created, no wire touched. `@champion`
+  **2** / `feature_set v2`. Write-up: `docs/lock_rebaseline_m9.md`.
 
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·

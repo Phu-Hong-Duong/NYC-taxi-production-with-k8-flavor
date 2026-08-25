@@ -42,8 +42,12 @@
 #  1. THE WALL IS AN INVARIANT, NOT A HABIT (§1). The whole milestone rests on
 #     Feast never entering this project's dependency graph: feast 0.66.0
 #     declares `pandas<3` against this project's 3.0.5. `uv.lock` must be
-#     byte-identical to the `m7-closed` tag and `feast` must be absent from the
-#     project environment — both ASKED, neither assumed.
+#     byte-identical to the SANCTIONED LOCK ANCHOR and `feast` must be absent
+#     from the project environment — both ASKED, neither assumed. The anchor was
+#     `m7-closed` from M8-S5 until 2026-08-25, when the PO sanctioned one move of
+#     it (AWAITING_PO 2026-08-24-5, answered block, option (b): bump sqlparse out
+#     of three HIGH CVEs before the public flip). The INVARIANT did not change
+#     shape — only its reference point moved, once, by letter. See M9-S11.
 #
 #  2. FOUR PARITY BARS, EACH ARGUED BEFORE THE MEASUREMENT, CHECKED FROM GIT
 #     (§3). M8 law 4 says a bar is argued before the comparison runs. That is
@@ -114,6 +118,11 @@ from pathlib import Path
 def ok(m): print(f"PASS|{m}")
 def no(m): print(f"FAIL|{m}")
 
+# The one sanctioned lock anchor. Spelled ONCE per script and pinned across all
+# of them by tests/unit/test_lock_anchor.py, which also refuses a search-and-
+# replace that drags §7's registry-time bound along with it.
+LOCK_ANCHOR = "lock-rebaselined-m9-publish"
+
 try:
     PIN = Path("infra/feast/requirements-feast.txt")
     probe = json.loads(Path("automation/runs/m8-feast/probe.json").read_text())
@@ -123,17 +132,29 @@ try:
     # the tag's blob out of git, the working tree's off disk. A typed sha256
     # would be a literal that stops meaning anything the day the lock legitimately
     # moves for a reason unrelated to Feast.
-    tagged = subprocess.run(["git", "show", "m7-closed:uv.lock"],
+    #
+    # The ANCHOR moved once, on 2026-08-25, by PO letter (AWAITING_PO
+    # 2026-08-24-5 option (b) — sqlparse 0.5.5 -> 0.6.0 to clear three HIGH CVEs
+    # before the public flip, which also required dbt-core 1.12.2 -> 1.12.3
+    # because 1.12.2 declares `sqlparse<0.6.0`). M9-S11 landed it and placed
+    # `lock-rebaselined-m9-publish`. The invariant keeps its SHAPE: the lock is
+    # still asserted byte-identical to a SANCTIONED tag, and an unsanctioned
+    # `uv add` is still a RED gate. Note this is deliberately NOT the tag §7 uses
+    # to bound registry-version creation times — that one must stay at
+    # `m7-closed`, because moving it forward would ADMIT versions rather than
+    # refuse them.
+    tagged = subprocess.run(["git", "show", f"{LOCK_ANCHOR}:uv.lock"],
                             capture_output=True, text=True)
     if tagged.returncode != 0:
-        no("the m7-closed tag does not resolve — the wall's invariant has no reference point")
+        no(f"the {LOCK_ANCHOR} tag does not resolve — the wall's invariant has no "
+           f"reference point")
     elif tagged.stdout == Path("uv.lock").read_text():
-        ok("uv.lock is BYTE-IDENTICAL to the m7-closed tag — five M8 stories, a feature "
-           "repo, an online store, a feature server and a transformer, and the project's "
-           "dependency graph did not move")
+        ok(f"uv.lock is BYTE-IDENTICAL to the {LOCK_ANCHOR} tag — five M8 stories, a "
+           f"feature repo, an online store, a feature server and a transformer, and the "
+           f"project's dependency graph moves only by PO letter")
     else:
-        no("uv.lock DIFFERS from the m7-closed tag — something entered the project graph "
-           "during M8; `git diff m7-closed -- uv.lock` says what")
+        no(f"uv.lock DIFFERS from the {LOCK_ANCHOR} tag — something entered the project "
+           f"graph unsanctioned; `git diff {LOCK_ANCHOR} -- uv.lock` says what")
 
     # (b) The absence asked of the environment, not inferred from (a). A lock can
     # be unchanged while a venv holds something installed by hand.

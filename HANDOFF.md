@@ -1,5 +1,141 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (cu) — M9-S11: sqlparse 0.6.0, and the upgrade that upgraded nothing (F-074)
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (ct) · `docs/milestones/M9_PUBLISH_KICKOFF.md` § M9-S11 · AWAITING_PO
+(2026-08-24-4 and -5 both answered 2026-08-25; nothing blocking). Role block
+**MLOps**, charter read, refusals in play: *no fit · no alias move · no registry
+version · no gate LOOSENED · no wire change*. None broken.
+
+**Story: M9-S11, COMPLETE** — the PO's 2026-08-24-5 decision 1 (option (b)).
+
+### Reconciliation (staleness check)
+Handoff (ct)'s Next claimed a live cluster, `uv.lock` at sqlparse 0.5.5 and a
+quarantine that does not pin it. Measured, not assumed: tree clean at `132683c`,
+three `mlops-taxi` nodes **Ready, 8d, v1.36.1**, `uv.lock` sha256 `640154c5…`
+(the recorded value), `grep sqlparse infra/feast/requirements-feast.txt` **exit
+1**. No `.status` file pointed at unfinished work. Nothing had moved.
+
+### Done
+- **The bump**: sqlparse **0.5.5 → 0.6.0** — and **dbt-core 1.12.2 → 1.12.3**,
+  which is **F-074** and the story's centre. The chartered one-liner `uv lock
+  --upgrade-package sqlparse` produced an **EMPTY diff and reported success**,
+  because dbt-core 1.12.2 declares `sqlparse<0.6.0`. Read as "already current",
+  this story would have re-baselined the anchor, re-run five proofs and closed
+  the CVE fork with 0.5.5 still pinned — every gate green, the letter
+  unhonoured. **A resolver answers with a LOCK, not a verdict; the check is the
+  DIFF, and an empty one is a finding.**
+- **gotcha #36 as a MEASUREMENT**: 243 packages before and after, **0 added, 0
+  removed, exactly 2 moved**; pandas 3.0.5 · numpy 2.5.2 · scikit-learn 1.9.0 ·
+  mlflow-skinny 3.15.1 · lightgbm 4.7.0 · dbt-duckdb 1.11.0 · duckdb · pyarrow ·
+  xgboost · scipy · flaml · optuna · flyte all byte-unchanged. Read back off the
+  ENV (`uv pip list`), not off the lock. Now a **standing assertion** in
+  `tests/unit/test_lock_anchor.py`, so the next dependency change inherits it.
+- **The re-baseline**: annotated tag **`lock-rebaselined-m9-publish`** on
+  `5694c2f`. The invariant kept its SHAPE (`uv.lock` byte-identical to a
+  SANCTIONED tag); only the reference point moved, once, by letter. Four sites
+  re-pointed — `verify_m8.sh` and `verify_m9.sh` (each now spelling it ONCE as
+  `LOCK_ANCHOR`) and both red teams' must-stay-green needles.
+- **The distinction a `sed` would have destroyed** — the best find. `m7-closed`
+  was doing TWO jobs in both gates: the lock anchor (neutral to moving forward)
+  and §7's **registry-creation bound** (moving it forward **ADMITS** versions —
+  a loosening of the strongest form of the alias law). A bulk rename lands the
+  story, passes every gate, and hides the weakening inside a diff where one tag
+  name replaces another. The bound stays at `m7-closed`, asserted on the
+  `git log --format=%ct -1 <tag>` **invocation** (#35/#99 — both files argue
+  about tags in prose).
+- **Proofs that nothing moved**: `make marts` — the load-bearing one, dbt IS
+  sqlparse's consumer — **dbt build PASS=80 WARN=0 ERROR=0** and every published
+  count reproduced to the row (56,127,878 · 44,792 · 8 · 80 · 1,151 · 91, 256.9 s);
+  `make parity` **0.000e+00 over 16 hazard rows** (the MLflow client + the wire).
+- **CVEs**: `make security-scan` → repo-tree dependency findings **5 → 1**,
+  **CRITICAL 0 · HIGH 0**, `fixable_in_our_lockfile: []`; still 0 secrets,
+  `publishable: true`. The quarantine leg is a **recorded ABSENCE** and now a
+  test, so a later sqlparse pin on that side of the wall inherits the decision.
+- **`verify-m9` is 46 sub-checks, not 45, and has been since M9-S7** — measured
+  both sides (at `main` with the lock bumped: 45 `ok` + the correct lock `FAIL`;
+  at HEAD: 46 `ok`; and the gate diff removes one `ok(`/`no(` pair and adds one,
+  so it is count-neutral by construction), corroborated by the red team's own
+  restore line. README's **epilogue-close** row corrected with the reason inline;
+  the **M9-close** row keeps `45/45` — true when written.
+- **Docs/ledgers/inbox**: `docs/lock_rebaseline_m9.md` (write-up) · **F-074** in
+  `ledgers/findings.md` · a DATED NOTE beside `docs/security_audit_m9.md`'s
+  original CVE paragraph (never a rewrite) · CLAUDE.md version table (dbt-core
+  row + a new sqlparse row) and a new section · LEARNING_GUIDE field note ·
+  AWAITING_PO **2026-08-25-2** (flagged **NOT A FORK**) plus a LANDED note
+  quoted on the PO's own answered block.
+
+### Verification
+`make verify-m8` **GREEN 51/51, exit 0** (count unchanged — the invariant kept
+its shape) · `make verify-m9` **GREEN, exit 0** (46 sub-checks) · `make verify-m5`
+**GREEN, exit 0** · `make verify-m8-redteam` **PASSED** · `make verify-m9-redteam`
+**PASSED** (both sha256-identical restores, clean tree) · `make marts` PASS=80 ·
+`make parity` **0.000e+00** · `make security-scan` `publishable: true` ·
+`make readme-check` **GREEN** · host suite **1,277 passed, no skips** · ruff clean.
+`@champion` **2** / `feature_set v2`, versions `['1','2']` — asserted inside both
+gates' §7, not re-derived. Nothing fitted, no alias moved, no version created, no
+wire touched.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **dbt-core 1.12.3 was landed rather than parked**, and AWAITING_PO 2026-08-25-2
+  says so plainly. The PO chose the goal and accepted the cost class; the
+  alternative that keeps the *diff* matching the *estimate* is the charter's own
+  fallback — a constraint pin forcing sqlparse past dbt's declared bound — which
+  ships an untested combination purely to protect a price. The undo is one
+  `git checkout` and the entry offers to take a letter reverting it.
+- **The lock anchor is spelled once per script as `LOCK_ANCHOR`** rather than
+  centralised into a new tracked file: two more root-level files to satisfy one
+  literal is worse than a test that pins all four sites *and* the distinction.
+- **`automation/runs/m5-parity/parity.json` is committed refreshed** — it is the
+  record of the parity run that proves the bump inert, so it belongs in this diff.
+- **No `ledgers/deployments.md` row**: the only cluster mutation is `make marts`,
+  which republished the six marts to counts they already held and writes no record
+  describing a deployed object; both gates' deployments legs passed unchanged.
+
+### Defects/Surprises
+- **F-074 itself** — the successful command that changed nothing. See Done.
+- **`make readme-check` caught this story's own diff before anyone looked**
+  (fourth unplanted catch since M9-S8): 1,269 → 1,277 tests, RED naming the claim.
+- **The stale `45/45`** was found by disbelieving a number rather than by a
+  checker — no leg reads a gate's sub-check count, and the README's number lives
+  in prose the twin does not resolve. Worth a future story: make the front door's
+  gate counts derived like its evidence table is.
+- **The new anchor test failed CI, and the fix was a discriminator rather than a
+  skip.** `actions/checkout@v4` fetches no tags, so in CI every tag is absent. A
+  blanket `skipif` would have collapsed *"this checkout has no tags"* into *"the
+  anchor was never pushed"* — the second being what the test exists to catch. So
+  it skips only when the clone holds NO tags at all and FAILS when the clone has
+  tags and not this one (**F-060 / gotcha #105**, one layer along). Proved both
+  ways: anchor deleted locally with other tags present → **2 FAILED, 6 passed**;
+  `git fetch origin --tags` → **8 passed**, which also proves the tag reached the
+  remote. Honest limit recorded: **CI does not check the anchor**; the host does,
+  on every `verify-m8`/`verify-m9`.
+- **The F-026 image guard now also sees `uv.lock`, and it was ALREADY firing.**
+  Measured read-only against `taxi-mlops-pipeline:4e5dd66`: it already saw drift
+  under `scripts/` and `src/` from M9-S9/S10; `uv.lock` joins a list that was not
+  empty. So `make pipeline` and `make retrain-schedule` refuse (exit 3) until
+  `make image-load` — correct behaviour, recorded, not a regression from here.
+
+### Next
+**Executor session on M9-S12** — credential rotation, in-place
+(`docs/milestones/M9_PUBLISH_KICKOFF.md`). Read its `.env` handling rule FIRST:
+copy `.env` aside to a gitignored path **before the first change** (losing it
+mid-rotation orphans every volume), enumerate the rotation set LIVE from `.env`
+cross-checked against `scripts/platform_secrets.sh` rather than from any list,
+and rotate backing-service → Secret + `.env` → consumer restart, per pair. Then
+S13 (pre-commit hook + the final sweep + the AWAITING_PO entry re-inviting the
+flip), after which the ARCH publish boundary closes the phase. **The flip remains
+the PO's click.**
+
+**One thing S12/S13 must know**: the anchor is now `lock-rebaselined-m9-publish`
+and the tag must be pushed for a fresh clone's `verify-m8`/`verify-m9` to resolve
+it (`git push --tags` was run here; `git fetch --tags` on any other clone).
+Health reads: `make verify-m5` · `make verify-m8` · `make verify-m9` ·
+`make readme-check` · `make security-scan`.
+
+
 ## Session 2026-08-25 (ct) — M9-S10: the incumbent margin lands era-aware (F-016 + F-068 CLOSED)
 
 ### State

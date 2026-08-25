@@ -1,6 +1,6 @@
 {
   "story": "M5-S3",
-  "measured_at": "2026-08-20T02:46:07Z",
+  "measured_at": "2026-08-25T04:16:33Z",
   "endpoint": "http://localhost:8081/v2/models/nyc-taxi-eta/infer",
   "tolerance_minutes": 1e-06,
   "max_abs_delta_minutes": 0.0,
