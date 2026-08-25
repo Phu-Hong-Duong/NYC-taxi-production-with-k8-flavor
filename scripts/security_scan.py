@@ -89,7 +89,22 @@ FS_SKIP_DIRS = (
     "node_modules",
 )
 
+#: The legs the AUDIT OF RECORD runs. `make security-scan` with no `--stage` runs
+#: exactly these, and `scan.json` records exactly these — a test reads this tuple
+#: as "every leg the record covers".
 STAGES = ("tree-secrets", "history-secrets", "images", "tree-vulns")
+
+#: M9-S13. `staged-secrets` is deliberately NOT in STAGES: it is the pre-commit
+#: hook's leg, it looks at the index rather than at the disk or at history, and an
+#: audit record that carried it would describe whatever happened to be staged the
+#: minute the audit ran. It lives HERE, in the same module as the acknowledgement
+#: table and the redaction, for one reason that matters more than tidiness — see
+#: `stage_staged_secrets`.
+STAGE_CHOICES = (*STAGES, "staged-secrets")
+
+#: Which legs looked for a secret at all (gotcha #78: "0 secrets" printed by a run
+#: that never looked reads exactly like a clean bill of health).
+SECRET_STAGES = frozenset({"tree-secrets", "history-secrets", "staged-secrets"})
 
 # --------------------------------------------------------------------------- #
 # The ONE acknowledged finding, and why it is a list of arguments rather than a
@@ -256,7 +271,13 @@ def _ignored_reason(path: str) -> str | None:
     return proc.stdout.strip() or None
 
 
-def _classify(findings: list[dict], *, in_history: bool) -> dict:
+#: Where the scanner was looking. One value, not two booleans: "in history AND
+#: staged" is not a state, and a pair of flags that can express it invites a call
+#: site that means neither.
+ORIGINS = ("tree", "history", "staged")
+
+
+def _classify(findings: list[dict], *, origin: str) -> dict:
     """Split findings into three classes that are NOT degrees of one another.
 
     Location is decided FIRST and the acknowledgement is applied on top of it, so
@@ -265,6 +286,9 @@ def _classify(findings: list[dict], *, in_history: bool) -> dict:
     tracked file, and argued" — correct verdict, wrong reason (gotcha #67's
     family, and a wrong reason is what somebody acts on at 3am).
     """
+    if origin not in ORIGINS:
+        raise ValueError(f"origin must be one of {ORIGINS}, got {origin!r}")
+    in_history = origin == "history"
     tracked = _tracked_files()
     blocking: list[dict] = []
     local_only: list[dict] = []
@@ -277,7 +301,14 @@ def _classify(findings: list[dict], *, in_history: bool) -> dict:
         path = item["file"] or ""
 
         # --- location, always ---
-        if in_history:
+        if origin == "staged":
+            # The index is not the disk. A path can be staged clean and dirty in
+            # the working tree, or staged dirty and clean on disk — and it is the
+            # STAGED bytes that become a commit. .gitignore has nothing to say
+            # about a file somebody has already `git add`ed.
+            item["why"] = "staged for commit — one `git commit` from history"
+            item["class"] = "in-git"
+        elif in_history:
             # Anything gitleaks found while walking commits is, by construction,
             # content git has held. .gitignore is about the future, not the past.
             item["why"] = "present in git history"
@@ -305,7 +336,10 @@ def _classify(findings: list[dict], *, in_history: bool) -> dict:
         # the drop is BOUNDED: a file under the raw directory is gitignored, so it
         # can only ever be local-only, and this branch is asserted unable to
         # suppress anything that was heading for `blocking`.
-        if not in_history and path.startswith(raw_rel + "/"):
+        # Scoped to the TREE walk on purpose: a raw report is gitignored, so the
+        # only way one reaches the index is `git add -f`, and a force-added file
+        # full of verbatim secrets is exactly what the hook should refuse.
+        if origin == "tree" and path.startswith(raw_rel + "/"):
             if item["class"] != "local-only":
                 sys.exit(
                     f"[sec-scan] FAIL: {path} is under the scan's own raw directory and "
@@ -352,7 +386,7 @@ def stage_tree_secrets(*, write: bool) -> dict:
         ]
     )
     findings = json.loads(raw.read_text() or "[]")
-    classified = _classify(findings, in_history=False)
+    classified = _classify(findings, origin="tree")
     scanned = sum(1 for p in REPO.rglob("*") if p.is_file() and ".git/" not in str(p))
     return {
         "leg": "tree-secrets",
@@ -394,7 +428,7 @@ def stage_history_secrets(*, write: bool) -> dict:
         ]
     )
     findings = json.loads(raw.read_text() or "[]")
-    classified = _classify(findings, in_history=True)
+    classified = _classify(findings, origin="history")
     refs = _git("for-each-ref", "--format=%(refname)").splitlines()
     return {
         "leg": "history-secrets",
@@ -415,6 +449,75 @@ def stage_history_secrets(*, write: bool) -> dict:
         "findings_total": len(findings),
         **classified,
         "raw_report": str(raw.relative_to(REPO)) + " (gitignored: it carries the values)",
+    }
+
+
+def stage_staged_secrets(*, write: bool) -> dict:
+    """M9-S13 — the pre-commit hook's leg: the INDEX, and nothing else.
+
+    WHY THIS LIVES IN THE AUDIT'S MODULE INSTEAD OF BEING A SMALL SEPARATE SCRIPT.
+    Not tidiness — the acknowledgement. `scripts/gameday_m6.py` carries a value
+    that is a credential by shape and a non-secret by fact, argued once in
+    ACKNOWLEDGED_SECRETS. A hook with its own copy of gitleaks and no copy of that
+    argument refuses every commit that touches the gameday, and the first thing
+    its owner learns is `--no-verify` — which disarms the hook for every commit
+    after, including the one that matters. One table, one redaction, one
+    vocabulary; F-013's "one home for a bar" applied to a suppression.
+
+    The instrument is `gitleaks git --staged`, which is what the 8.30.1 binary
+    this program pins calls the thing older docs (and this story's charter) call
+    `gitleaks protect --staged`: `protect` was removed in the 8.19 line. Read off
+    `gitleaks --help` on the pinned binary, never off a remembered command.
+
+    It NEVER writes: `main` refuses `--stage staged-secrets` without `--no-write`.
+    A commit hook that rewrote a tracked record mid-commit would dirty the tree
+    inside the commit it is inspecting — gotcha #48's shape, third family.
+    """
+    if write:  # pragma: no cover - main refuses first; belt and braces
+        raise RuntimeError("the staged leg never writes; see main()'s refusal")
+    gl = _bin("gitleaks")
+    proc = subprocess.run(
+        [
+            gl,
+            "git",
+            str(REPO),
+            "--staged",
+            "--no-banner",
+            "--redact=0",
+            "--report-format",
+            "json",
+            "--report-path",
+            "/dev/stdout",
+            "--exit-code",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+    )
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stderr[-4000:])
+        sys.exit(f"[sec-scan] FAIL: gitleaks exited {proc.returncode} scanning the index")
+    # Straight to stdout and never to a file: the raw report carries the values
+    # verbatim, and the tree-secrets leg's own raw file is already the reason
+    # findings had to be dropped for being inside this scan's transcript. A hook
+    # that left one behind on every commit would seed that problem per commit.
+    body = proc.stdout.strip()
+    findings = json.loads(body[body.index("[") :]) if "[" in body else []
+    staged = [p for p in _git("diff", "--cached", "--name-only").splitlines() if p]
+    return {
+        "leg": "staged-secrets",
+        "instrument": "gitleaks git --staged",
+        "inputs": {
+            "staged_files": len(staged),
+            "head": _git("rev-parse", "--short", "HEAD"),
+            "note": (
+                "the INDEX, not the disk: a file can be staged clean and dirty in "
+                "the working tree, and it is the staged bytes that become a commit"
+            ),
+        },
+        "findings_total": len(findings),
+        **_classify(findings, origin="staged"),
     }
 
 
@@ -597,17 +700,35 @@ RUNNERS = {
     "history-secrets": stage_history_secrets,
     "images": stage_images,
     "tree-vulns": stage_tree_vulns,
+    "staged-secrets": stage_staged_secrets,
 }
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--stage", choices=STAGES, action="append", help="run one leg (repeatable)")
+    ap.add_argument(
+        "--stage", choices=STAGE_CHOICES, action="append", help="run one leg (repeatable)"
+    )
     ap.add_argument("--no-write", action="store_true", help="print the verdicts, record nothing")
     ap.add_argument("--out", default=str(RECORD))
     args = ap.parse_args()
 
+    # Default = the audit of record. `staged-secrets` is opt-in only: it describes
+    # an index, and an audit record carrying it would describe whatever happened
+    # to be staged the minute somebody ran the audit.
     stages = args.stage or list(STAGES)
+    if "staged-secrets" in stages and not args.no_write:
+        # LOUD, not a silent force. A verifier that quietly does something other
+        # than what it was asked is how a defensive default keeps a verdict green
+        # (F-064); and the thing being refused here is a WRITE inside a commit.
+        print(
+            "[sec-scan] FAIL: --stage staged-secrets requires --no-write. It is the "
+            "pre-commit hook's leg, it describes an index rather than the audit's "
+            "inputs, and a hook that rewrote a tracked record mid-commit would "
+            "dirty the tree inside the commit it is inspecting.",
+            file=sys.stderr,
+        )
+        return 2
     tools = json.loads(TOOLS_RECORD.read_text()) if TOOLS_RECORD.exists() else {}
 
     legs: dict[str, dict] = {}
@@ -621,8 +742,11 @@ def main() -> int:
 
     # BOTH DIRECTIONS. An acknowledgement that matches nothing is a suppression
     # that has outlived what it suppressed, and the next real finding hides behind
-    # it. Only asked when a secret leg actually ran — an images-only invocation
-    # has not looked, and "did not look" must not read as "is stale".
+    # it. Only asked when a WHOLE-CORPUS secret leg ran — an images-only
+    # invocation has not looked, and "did not look" must not read as "is stale".
+    # `staged-secrets` is excluded for the same reason with the opposite sign: a
+    # staged diff that does not happen to touch the gameday contains none of the
+    # acknowledged values, and that is the normal case, not a stale suppression.
     if {"tree-secrets", "history-secrets"} & set(stages):
         matched = {f["_sha256"] for f in acknowledged}
         stale = sorted(set(ACKNOWLEDGED_SECRETS) - matched)
@@ -662,12 +786,19 @@ def main() -> int:
     payload = _strip_working_fields(payload)
 
     print()
-    secret_legs = {"tree-secrets", "history-secrets"} & set(stages)
+    secret_legs = SECRET_STAGES & set(stages)
     if not secret_legs:
         # gotcha #78, and it is the direction that matters: "0 secrets" printed by a
         # run that never looked for one reads exactly like a clean bill of health.
         print("[sec-scan] secrets: NOT ASKED — no secret leg ran in this invocation")
-    print(f"[sec-scan] secrets in git (tracked files + full history): {len(blocking)}")
+    if stages == ["staged-secrets"]:
+        # The staged leg's own sentence. Reusing the audit's would claim a corpus
+        # this invocation never opened: it looked at an index, and saying
+        # "tracked files + full history" over it is the false-green of #78 said
+        # by the checker rather than by a panel.
+        print(f"[sec-scan] secrets staged for commit: {len(blocking)}")
+    else:
+        print(f"[sec-scan] secrets in git (tracked files + full history): {len(blocking)}")
     for f in blocking:
         print(f"    BLOCKING  {f['rule']}  {f['file']}:{f['start_line']}  {f['why']}")
         if f.get("commit"):
@@ -724,13 +855,24 @@ def main() -> int:
         Path(args.out).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         print(f"[sec-scan] wrote {Path(args.out).relative_to(REPO)}")
 
+    if blocking and stages == ["staged-secrets"]:
+        print()
+        print("[sec-scan] COMMIT REFUSED: the bytes above are staged, not yet committed.")
+        print("[sec-scan] Unstage them (`git restore --staged <file>`), move the value into")
+        print("[sec-scan] .env or another gitignored file, and commit again. If this is a")
+        print("[sec-scan] false positive, argue it in ACKNOWLEDGED_SECRETS — never with")
+        print("[sec-scan] `--no-verify`, which disarms the hook for the commit that matters.")
+        return 1
     if blocking:
         print()
         print("[sec-scan] STORY-STOPPING: a secret is in git. Park at AWAITING_PO —")
         print("[sec-scan] do NOT publish, and do not 'fix' it by deleting the file:")
         print("[sec-scan] history rewriting plus credential rotation is a PO decision.")
         return 1
-    print("[sec-scan] OK — nothing git holds is a secret.")
+    if stages == ["staged-secrets"]:
+        print("[sec-scan] OK — nothing staged for this commit is a secret.")
+    else:
+        print("[sec-scan] OK — nothing git holds is a secret.")
     return 0
 
 

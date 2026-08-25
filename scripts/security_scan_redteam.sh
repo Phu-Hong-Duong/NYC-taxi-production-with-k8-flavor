@@ -68,52 +68,16 @@ check() {  # $1 = description, $2 = 1 for pass
   fi
 }
 
-# The plant: an AWS-shaped access key id + secret, both generated here. Real
-# shape, never a real key, and never written into a tracked file by this script.
+# The plant: an AWS-shaped access key id + secret, both generated at run time.
+# Real shape, never a real key, and never written into a tracked file.
 #
-# GENERATED AGAINST THE PROPERTIES THE SCANNER KEYS ON, because the first version
-# was FLAKY and flaky in the direction that reads as good news — roughly two runs
-# in five reported PASS-shaped output with all six detection checks failing, i.e.
-# "the scanner found nothing", which is exactly the sentence this drill exists to
-# stop anyone believing. Two causes, both about the plant and neither about the
-# scan:
-#   * `generic-api-key` matches `[\w.=-]`, which does NOT include `+` or `/`. A
-#     base64 alphabet puts those anywhere, and one early in the string truncates
-#     the match below the rule's minimum length. Alphabet is alphanumeric now.
-#   * both rules carry an entropy floor, and a short random string clears it only
-#     on average. So the generator RETRIES until it does, and prints the entropy
-#     it settled on, so a future reader can see the property rather than infer it.
-PLANTED="$(python3 - <<'PY'
-import collections, math, secrets, string
-
-ALNUM_UPPER = string.ascii_uppercase + string.digits
-ALNUM = string.ascii_letters + string.digits
-
-
-def shannon(value: str) -> float:
-    counts = collections.Counter(value)
-    n = len(value)
-    return -sum(c / n * math.log2(c / n) for c in counts.values())
-
-
-def draw(alphabet: str, length: int, floor: float, prefix: str = "") -> tuple[str, float]:
-    """Entropy is measured over the WHOLE matched string, prefix included — that is
-    what the scanner sees, and measuring the random part alone would set the floor
-    on a quantity nobody keys on."""
-    for _ in range(10_000):
-        candidate = prefix + "".join(secrets.choice(alphabet) for _ in range(length))
-        if (h := shannon(candidate)) >= floor:
-            return candidate, h
-    raise SystemExit("could not draw a high-entropy plant; the floors are wrong")
-
-
-key_id, h_id = draw(ALNUM_UPPER, 16, 3.6, prefix="AKIA")
-secret, h_secret = draw(ALNUM, 40, 4.8)
-print(key_id)
-print(secret)
-print(f"{h_id:.3f} {h_secret:.3f}")
-PY
-)"
+# The generator moved to `scripts/redteam_plant.py` at M9-S13, when the hook drill
+# needed the same one: F-071 is the record of what goes wrong when a plant is
+# drawn without regard for the rules that must match it, and a lesson learned in
+# one copy of a generator is a lesson the other copy has not learned. That file
+# carries the argument (alphabet, entropy floor, and why entropy is measured over
+# the whole matched string).
+PLANTED="$(python3 scripts/redteam_plant.py)"
 KEY_ID="$(echo "$PLANTED" | sed -n 1p)"
 KEY_SECRET="$(echo "$PLANTED" | sed -n 2p)"
 ENTROPY="$(echo "$PLANTED" | sed -n 3p)"
@@ -158,7 +122,15 @@ git checkout -q -b "$SCRATCH_BRANCH"
   printf 'aws_secret_access_key = %s\n' "$KEY_SECRET"
 } > "$PLANT_FILE"
 git add "$PLANT_FILE"
-git commit -q -m "redteam(m9-s9): planted credential — DRILL ONLY, destroyed by the same script"
+# --no-verify, and it is NOT a workaround: from M9-S13 this clone may carry a
+# pre-commit hook whose entire job is to refuse a staged credential, and this arm
+# stages one on purpose. Without the flag the drill dies at `git commit` under
+# `set -e` — which is what happened the first time the hook existed (F-080). The
+# hook being right is the reason the flag is here; that the AUDIT still catches
+# what the bypass let through is the thing this arm goes on to prove.
+echo "[sec-redteam]   (committing with --no-verify: the M9-S13 hook correctly refuses this)"
+git commit -q --no-verify \
+  -m "redteam(m9-s9): planted credential — DRILL ONLY, destroyed by the same script"
 PLANTED_COMMIT="$(git rev-parse --short HEAD)"
 # Leave HEAD on the starting branch: the point is that --all reaches a ref that
 # HEAD's own ancestry does not. A scan run from the branch itself would pass

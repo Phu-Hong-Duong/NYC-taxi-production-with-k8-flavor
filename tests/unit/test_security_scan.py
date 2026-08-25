@@ -246,9 +246,19 @@ def test_the_redteam_only_ever_scans_with_no_write():
 
 
 def test_the_redteam_carries_no_credential_shaped_literal():
-    """It generates its plant at run time, or it becomes a finding in its own scan."""
+    """It generates its plant at run time, or it becomes a finding in its own scan.
+
+    The property is "generated", not "generated HERE". Until M9-S13 the draw was an
+    inline heredoc and this assertion named `secrets.choice`; when the hook drill
+    needed the same plant, the generator moved to `scripts/redteam_plant.py` so
+    F-071's lesson could live in one place, and a literal-hunting assertion went
+    red for the change that made it stronger (gotcha #50). Re-derived, not widened:
+    the drill must OBTAIN its plant from a generator, in this file or in that one.
+    """
     text = REDTEAM.read_text()
-    assert "secrets.choice" in text, "the plant must be generated, not typed"
+    assert "secrets.choice" in text or "redteam_plant.py" in text, (
+        "the plant must be generated, not typed — inline, or from the shared generator"
+    )
     for hit in re.findall(r"[A-Za-z0-9+/]{20,}", text):
         assert not re.match(r"^AKIA[A-Z0-9]{16}$", hit), f"a typed AWS-shaped key id: {hit}"
 

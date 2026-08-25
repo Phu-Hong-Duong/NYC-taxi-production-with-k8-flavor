@@ -83,7 +83,8 @@ record and requires the gate to catch it while the other sub-checks still pass.
 | Training window | **43,987,422** rows | `automation/runs/m7-drift/drift-2020-03.json` |
 | Online store contents | **57,688** keys, three independent witnesses | `automation/runs/m9-store-watch/headroom.json` |
 | Alert rules in force | **16 rules** across **13 signal ids** | `infra/monitoring/alerting_rules.yml` |
-| Host test suite | **1,297 tests**, no skips | `uv run pytest tests/unit -q` |
+| Host test suite | **1,319 tests**, no skips | `uv run pytest tests/unit -q` |
+| Pre-commit hook, watched refusing a staged credential — and watched letting an ordinary commit through | **20 checks**, 0 failures | `automation/runs/m9-hook/redteam.json` |
 | Scripted acceptance gates and their red teams | **10 gates · 8 red teams** | `Makefile`, `docs/milestones/PROGRAM_CLOSE.md` §1 |
 | Secrets in git — every tracked file, and every commit on every ref | **zero unacknowledged**, one argued and re-derived from its own bytes | `automation/runs/m9-security/scan.json` |
 
@@ -147,6 +148,18 @@ make train-redteam            # a model fitted on shuffled labels, REFUSED by th
 make verify-m9-redteam        # one number rewritten in a tracked record; the gate must catch it
 ```
 
+**If you are going to commit in this clone**, install the secret-scanning hook —
+it reads the index before every commit and refuses one that would add a
+credential:
+
+```bash
+make install-hooks            # copies scripts/hooks/pre-commit and sets the execute bit
+make install-hooks-check      # installed? current? EXECUTABLE? (git skips a 0644 hook silently)
+make hook-redteam             # watch it refuse a generated credential, and let an ordinary commit through
+```
+
+It is a convenience, not a gate, and the next section says exactly why.
+
 ## Honest limits
 
 - **One laptop, $0.** No cloud, no autoscaling, no multi-tenancy, no HA. Every
@@ -167,6 +180,14 @@ make verify-m9-redteam        # one number rewritten in a tracked record; the ga
 - **One acceptance line needed a human** (a non-technical person completing a
   query on the demo page, unassisted). It was closed by the product owner on
   2026-08-24 and the gate checks the *citation*, never the box itself.
+- **The pre-commit hook is the one artifact here no gate can see.** `.git/hooks`
+  is untracked by git's design, so nothing in this repository can prove the hook
+  is installed on your machine — and `git commit --no-verify` walks straight past
+  it, which `make hook-redteam` measures rather than merely warns about. The
+  tracked script, the installer's execute bit and the drill are checkable; the
+  installation is not. **`make security-scan` is the audit of record** — it reads
+  every tracked file and every commit on every ref, and it is what publishing was
+  made conditional on.
 - **Deprecated-but-kept:** superseded records live beside their replacements in
   `attempt1-*/` directories. Findings that turned out wrong are corrected with a
   dated note beside the original, never by rewriting it.
