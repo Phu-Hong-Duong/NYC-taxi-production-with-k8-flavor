@@ -489,6 +489,15 @@ def _promote(
             "gate_incumbent_version": (
                 "none" if decision.incumbent is None else decision.incumbent.version
             ),
+            # F-016: the bar, on the version, beside the observation. A version
+            # that records what it beat and not what it had to beat is a verdict
+            # a future replay must infer a margin for — and the only inference
+            # available from an absence is the loosest one (gate_eras).
+            "gate_incumbent_required_pct": (
+                "none"
+                if decision.incumbent is None
+                else f"{float(decision.incumbent_required_pct or 0.0):.2f}"
+            ),
             "feature_set": train_cfg["features"]["version"],
             "metric_source": "taxi_mlops.training.evaluate",
             # F-048: every version ANSWERS the question "what scale were your

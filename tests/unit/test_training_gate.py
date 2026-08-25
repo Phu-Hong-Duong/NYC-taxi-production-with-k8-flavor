@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from taxi_mlops.data.config import load_yaml
-from taxi_mlops.training import gate, registry
+from taxi_mlops.training import gate, gate_eras, registry
 from taxi_mlops.training.evaluate import Metrics
 
 REPO = Path(__file__).resolve().parents[2]
@@ -218,12 +218,30 @@ def test_a_genuinely_better_challenger_still_passes_with_an_incumbent_present():
     )
 
 
-def test_a_tie_with_the_incumbent_is_not_a_regression():
-    """Re-gating the champion's own numbers must not refuse it: `make train` is
-    idempotent by run, and a re-run that cannot reach its own verdict again would
-    make every promotion a one-way door."""
+def test_a_tie_with_the_incumbent_is_REFUSED_from_M9_S10_on():
+    """The identity case, and the argument this test used to make against it.
+
+    Until M9-S10 this asserted the opposite, for a reason worth keeping visible:
+    *"re-gating the champion's own numbers must not refuse it — `make train` is
+    idempotent by run, and a re-run that cannot reach its own verdict again
+    would make every promotion a one-way door."* The PO's F-016 letter decided
+    the other way (AWAITING_PO 2026-08-24-4), and the one-way-door fear does not
+    bite, because the idempotence it names lives in `registry.promote` and not
+    here: a re-run that produces the champion's own numbers changes NOTHING
+    about the registry under either rule — the alias already points at that
+    model. What changed is the exit code of such a re-run: 0 (a no-op promotion)
+    becomes 1 (a refusal). That is the honest cost, and it is the correct
+    reading — +0.0000% buys nothing, and a transition that buys nothing is not
+    worth the alias move, the version stamp on every published prediction, or
+    the rollback it obliges.
+    """
     same = metrics("lightgbm-v1", mae=V1_TEST_MAE, within=V1_TEST_WITHIN)
-    assert gate.decide(same, floor(), GATE_CFG, incumbent=incumbent()).passed
+    decision = gate.decide(same, floor(), GATE_CFG, incumbent=incumbent())
+    assert not decision.passed
+    failed = [c for c in decision.checks if not c.passed]
+    assert len(failed) == 1 and "serving champion" in failed[0].name
+    bar = float(GATE_CFG["incumbent_min_improvement_pct"])
+    assert f"required >= {bar:.2f}%" in failed[0].detail
 
 
 def test_the_champion_re_fitted_is_not_a_regression_against_its_own_rounded_tag():
@@ -235,18 +253,40 @@ def test_the_champion_re_fitted_is_not_a_regression_against_its_own_rounded_tag(
     serving, against itself, on 23 microseconds of arithmetic. Numbers are
     compared at the resolution the registry recorded them at; this test uses the
     unrounded measurement on purpose, because the rounded one could never fail.
+
+    M9-S10's margin changed the VERDICT here (a tie is now a refusal, see above)
+    and left the property intact one level down: the comparison is still made at
+    four decimals, so the re-fit still reads as EXACTLY zero and not as the
+    −0.00072% regression its unrounded digits would suggest. The verdict moved;
+    the arithmetic this test exists for did not, so the assertion moved with it
+    rather than the test being deleted.
     """
     refit = metrics("lightgbm-v1", mae=3.2608234567, within=81.4801234)
     decision = gate.decide(refit, floor(), GATE_CFG, incumbent=incumbent())
-    assert decision.passed, [c.detail for c in decision.checks if not c.passed]
+    observed = gate.improvement_pct(
+        round(refit.mae, gate.INCUMBENT_MAE_DECIMALS), incumbent().mae
+    )
+    assert observed == 0.0, "the re-fit is being judged on digits the registry never recorded"
+    assert "+0.00% vs incumbent" in next(
+        c.detail for c in decision.checks if "serving champion" in c.name
+    )
 
 
 def test_a_regression_bigger_than_the_recorded_resolution_is_still_caught():
     """The other side of the same line: rounding must not become a free pass.
     One ten-thousandth of a minute is the smallest difference the registry can
-    represent, and it is refused."""
+    represent, and it must read as NEGATIVE — under a margin every non-improving
+    challenger is refused anyway, so the refusal alone would no longer prove the
+    rounding did not swallow it."""
     worse = metrics("v2", mae=V1_TEST_MAE + 0.0001, within=V1_TEST_WITHIN)
-    assert not gate.decide(worse, floor(), GATE_CFG, incumbent=incumbent()).passed
+    decision = gate.decide(worse, floor(), GATE_CFG, incumbent=incumbent())
+    assert not decision.passed
+    assert (
+        gate.improvement_pct(
+            round(worse.mae, gate.INCUMBENT_MAE_DECIMALS), incumbent().mae
+        )
+        < 0.0
+    )
 
 
 def test_the_rounding_constants_are_twins_of_the_tags_the_registry_writes():
@@ -621,23 +661,28 @@ def test_nothing_in_the_registry_module_deletes():
 
 
 # ------------------------- F-068: the identity case under any incumbent margin ---
-# These pin the ARITHMETIC of a finding, not a behaviour: `gate.decide` has NO
-# incumbent margin today and this story did not give it one (the replay wall
-# fired first — F-068, AWAITING_PO 2026-08-24-4). They exist so that whoever
-# lands F-016 option B cannot land it without meeting the case that stopped it.
-def test_a_challenger_identical_to_the_incumbent_passes_today_by_exactly_zero():
+# These pinned the ARITHMETIC of a finding while `gate.decide` had no incumbent
+# margin — they existed so that whoever landed F-016 option B could not land it
+# without meeting the case that stopped it (F-068, AWAITING_PO 2026-08-24-4).
+# M9-S10 landed it, so they are UPDATED to the landed behaviour rather than
+# deleted: the case they pinned is now the behaviour they assert.
+def test_a_challenger_identical_to_the_incumbent_is_exactly_zero_and_therefore_refused():
     """The pre-registered rule, and the number the whole finding turns on.
 
     M3-S1 re-fitted v1 on full data and measured 3.2608 — the incumbent's own
     recorded value — and M3-S5's bake-off scored the serving champion as one of
     its five contenders, so both carry a challenger judged against ITSELF. Under
-    non-regression-with-no-margin that is a PASS at +0.0000%, and both are
-    RECORDED as PROMOTE. Any margin above zero refuses them.
+    non-regression-with-no-margin that was a PASS at +0.0000% and both are
+    RECORDED as PROMOTE; under the landed margin both are REFUSED, which is why
+    those two rows are replayed era-aware (`gate_eras`) rather than re-judged.
     """
     same = metrics("lightgbm-v1", mae=V1_TEST_MAE, within=V1_TEST_WITHIN)
-    decision = gate.decide(same, floor(), GATE_CFG, incumbent=incumbent())
-    assert decision.passed, "today the incumbent condition is non-regression, so 0.00% passes"
     assert gate.improvement_pct(same.mae, incumbent().mae) == 0.0
+    assert not gate.decide(same, floor(), GATE_CFG, incumbent=incumbent()).passed
+    # ...and it is the MARGIN that refuses it: under the era that was in force
+    # when those two verdicts were taken, the same numbers still promote.
+    pre_b = {**GATE_CFG, "incumbent_min_improvement_pct": gate_eras.PRE_B_MARGIN_PCT}
+    assert gate.decide(same, floor(), pre_b, incumbent=incumbent()).passed
 
 
 def test_the_identity_case_is_refused_by_ANY_positive_incumbent_margin():
@@ -669,3 +714,116 @@ def test_the_nearest_surviving_recorded_verdict_has_six_hundredths_of_a_point_of
     observed = gate.improvement_pct(artisan.mae, incumbent().mae)
     assert 0.50 <= observed < 0.57
     assert round(observed, 4) == 0.5612
+    # ...and it is a RECORDED PROMOTE that survives the landed bar, which is the
+    # half that says 0.50 was chosen with history in view rather than around it.
+    assert gate.decide(artisan, floor(), GATE_CFG, incumbent=incumbent()).passed
+
+
+# ------------------- M9-S10: the incumbent MARGIN, from both sides and the edges ---
+def test_a_challenger_that_beats_the_champion_by_less_than_the_margin_is_refused_BY_NAME():
+    """+0.3% — a real improvement, and not one worth a transition.
+
+    0.3% of 3.2608 min is ~0.6 seconds of mean error. The refusal must NAME the
+    bar, because "refused" with no number is what teaches a reader to stop
+    reading refusals.
+    """
+    near = metrics("challenger-just-short", mae=V1_TEST_MAE * (1 - 0.003), within=V1_TEST_WITHIN)
+    decision = gate.decide(near, floor(), GATE_CFG, incumbent=incumbent())
+    assert not decision.passed
+    failed = [c for c in decision.checks if not c.passed]
+    assert len(failed) == 1 and "serving champion" in failed[0].name
+    assert "required >= 0.50%" in failed[0].detail and "+0.30% vs incumbent" in failed[0].detail
+
+
+def test_the_transition_this_program_actually_made_would_still_be_made():
+    """+0.63% — M3-S5's alias move, the one observation the PO's number was set
+    below rather than above. A margin that would have refused the program's own
+    only transition is a bar chosen from the wrong end."""
+    winner = metrics("auto-lgbm-v2", mae=3.2403, within=81.577)
+    decision = gate.decide(winner, floor(), GATE_CFG, incumbent=incumbent())
+    assert decision.passed
+    assert gate.improvement_pct(winner.mae, incumbent().mae) == pytest.approx(0.63, abs=0.01)
+
+
+def test_the_margin_boundary_is_inclusive_from_both_sides():
+    """`>=`, tested either side by two ten-thousandths of a minute — the M2
+    precedent (a test written exactly ON the boundary asserts IEEE 754 rather
+    than the gate)."""
+    required = float(GATE_CFG["incumbent_min_improvement_pct"])
+    exact = round(V1_TEST_MAE * (1 - required / 100), gate.INCUMBENT_MAE_DECIMALS)
+    over = metrics("just-over", mae=exact - 0.0002, within=V1_TEST_WITHIN)
+    under = metrics("just-under", mae=exact + 0.0002, within=V1_TEST_WITHIN)
+    assert gate.decide(over, floor(), GATE_CFG, incumbent=incumbent()).passed
+    assert not gate.decide(under, floor(), GATE_CFG, incumbent=incumbent()).passed
+
+
+def test_an_absent_margin_RAISES_rather_than_defaulting_when_an_incumbent_is_present():
+    """F-048's rule, on the one value where a default is indistinguishable from
+    the old behaviour: zero IS plain non-regression, so a `.get(key, 0.0)` would
+    silently un-land this whole story for any caller that assembled a config by
+    hand."""
+    without = dict(GATE_CFG)
+    without.pop("incumbent_min_improvement_pct")
+    with pytest.raises(gate.GateError) as raised:
+        gate.decide(metrics("x", mae=3.0), floor(), without, incumbent=incumbent())
+    assert "incumbent_min_improvement_pct" in str(raised.value)
+    # ...and with no incumbent there is no margin to apply, so the same config
+    # judges the floor conditions perfectly well. The raise is scoped to the
+    # comparison that needs the number, not to the config's shape.
+    assert gate.decide(metrics("x", mae=3.0, within=99.0), floor(), without).passed
+
+
+def _with_margin(margin: float) -> dict:
+    cfg = dict(GATE_CFG)
+    cfg["incumbent_min_improvement_pct"] = margin
+    return cfg
+
+
+def test_every_verdict_records_the_bar_it_was_judged_under():
+    """The recorded field, in the places a future replay could read it.
+
+    `None` exactly when there was no incumbent — the state that means "there was
+    nothing to beat", never the state that means "nobody wrote the bar down".
+    """
+    decision = gate.decide(
+        metrics("v2", mae=V1_TEST_MAE - 0.1, within=V1_TEST_WITHIN + 0.5),
+        floor(),
+        GATE_CFG,
+        incumbent=incumbent(),
+    )
+    assert decision.incumbent_required_pct == float(GATE_CFG["incumbent_min_improvement_pct"])
+    assert decision.as_mlflow()["gate_incumbent_required_pct"] == decision.incumbent_required_pct
+    parsed = gate_eras.parse_recorded_margin(gate.verdict_lines(decision).splitlines())
+    assert parsed == decision.incumbent_required_pct
+    first_promotion = gate.decide(metrics("v1", mae=V1_TEST_MAE), floor(), GATE_CFG)
+    assert first_promotion.incumbent_required_pct is None
+    assert "gate_incumbent_required_pct" not in first_promotion.as_mlflow()
+    assert gate_eras.parse_recorded_margin(gate.verdict_lines(first_promotion).splitlines()) is None
+
+
+def test_the_transcript_line_and_the_replay_regex_are_twins():
+    """`gate.verdict_lines` writes it and `gate_eras.MARGIN_RE` reads it. Two
+    files, one sentence — the port-family lesson applied to a transcript, and
+    the failure it prevents is silent: a changed line makes a RECORDED margin
+    read as an absence, which is the one inference this story exists to remove.
+    """
+    source = (REPO / "src/taxi_mlops/training/gate.py").read_text(encoding="utf-8")
+    assert "[gate] incumbent bar: KPI-09 at least " in source
+    for margin in (0.0, 0.5, 2.0):
+        decision = gate.decide(
+            metrics("x", mae=1.0, within=99.0),
+            floor(),
+            _with_margin(margin),
+            incumbent=incumbent(),
+        )
+        rendered = gate.verdict_lines(decision).splitlines()
+        assert gate_eras.parse_recorded_margin(rendered) == margin
+
+
+def test_the_recorded_margin_reaches_the_version_tags_and_the_retrain_record():
+    """Where a replay would actually look: both writers name the field, so a
+    verdict recorded by either is unambiguous about its own bar."""
+    promote = (REPO / "src/taxi_mlops/training/run.py").read_text(encoding="utf-8")
+    assert '"gate_incumbent_required_pct"' in promote
+    retrain = (REPO / "src/taxi_mlops/training/retrain_run.py").read_text(encoding="utf-8")
+    assert '"incumbent_required_pct": decision.incumbent_required_pct' in retrain

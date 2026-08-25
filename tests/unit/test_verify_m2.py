@@ -229,3 +229,59 @@ def test_the_red_team_asserts_the_other_legs_kept_running():
     assert '"$red_oks" -ge 25' in body
     assert "unaffected leg still green" in body
     assert "the gate is GREEN again" in body
+
+
+# ------------------------------ M9-S10: the incumbent margin cannot be lowered --
+MARGIN_REDTEAM = REPO / "scripts" / "gate_margin_redteam.sh"
+
+
+def test_the_gate_replays_are_era_aware_and_the_ratchet_has_exactly_one_home():
+    """Two halves, and only together do they mean anything (F-016/F-068).
+
+    Era-awareness lets HISTORY replay against the bar it was actually taken
+    against; on its own it would also let a LOOSENING replay perfectly. The
+    ratchet is the half that does not move — and it is asserted here to appear
+    ONCE, because the first draft of this leg asserted it twice and a lowered
+    margin produced two FAILs carrying one sentence, which reads like two
+    independent witnesses.
+    """
+    body = without_comments(VERIFY_M2)
+    assert "gate_eras.in_force_margin(" in body
+    assert "gate_eras.parse_recorded_margin(" in body
+    assert body.count("gate_eras.assert_margin_never_decreased(") == 1
+    # ...and the era-aware summary must NOT be about the live bar, or it would
+    # fire alongside the ratchet on every loosening.
+    assert "replayed ERA-AWARE" in body
+
+
+def test_the_margin_drill_plants_a_plausible_number_and_restores_it_verifiably():
+    """0.10 is the point: a well-formed, still-positive margin that still
+    refuses the identity case, so it satisfies F-068's arithmetic while
+    spending the PO's letter without one. A drill planting `-200` proves the
+    parser works and teaches nobody anything."""
+    body = without_comments(MARGIN_REDTEAM)
+    assert 'PLANTED="0.10"' in body
+    assert "trap restore EXIT" in body
+    assert 'sha256sum "$CONFIG"' in body
+    # It touches the config and NOTHING else — no registry verb, no cluster
+    # mutation, no record rewritten.
+    for forbidden in ("set_registered_model_alias", "delete_", "kubectl", "rm -rf", "--json"):
+        assert forbidden not in body, f"the drill calls {forbidden} — that is not a drill"
+
+
+def test_the_margin_drill_requires_the_era_aware_replays_to_STAY_green():
+    """The load-bearing negative. If lowering today's bar turned the historical
+    replays red, the replays would be reading the live config instead of the
+    era — which is the defect era-awareness exists to prevent, arriving through
+    the check that was supposed to prove it."""
+    body = without_comments(MARGIN_REDTEAM)
+    assert "replayed ERA-AWARE" in body
+    assert "the replays are reading the live bar, not the era" in body
+    assert '"$red_oks" -ge 50' in body
+    assert "the gate is GREEN again" in body
+
+
+def test_the_makefile_exposes_the_margin_drill():
+    body = MAKEFILE.read_text()
+    assert "gate-margin-redteam:" in body
+    assert "bash scripts/gate_margin_redteam.sh" in body

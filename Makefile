@@ -84,7 +84,7 @@ verify-m1: ## M1 gate: rebuild + DVC match; corrupt-file refusal; dbt tests gree
 	@bash scripts/verify_m1.sh
 
 # ---- M2 modeling I (role:MLE) ----
-.PHONY: train train-redteam predictions verify-m2 verify-m2-redteam
+.PHONY: train train-redteam predictions verify-m2 verify-m2-redteam gate-margin-redteam
 train: ## both floors + LightGBM v1 through ONE evaluator, promotion gate on test, champion alias on a pass (exit 1 = refused)
 	uv run python -m taxi_mlops.training train
 train-redteam: ## prove the gate can say no: a hobbled challenger through the SAME gate, expect REFUSED
@@ -95,6 +95,9 @@ verify-m2: ## M2 gate: champion w/ signature; the gate still refuses; prediction
 	@bash scripts/verify_m2.sh
 verify-m2-redteam: ## prove the M2 gate can go RED: drop the champion alias, expect RED naming it, restore, expect GREEN
 	@bash scripts/verify_m2_redteam.sh
+
+gate-margin-redteam: ## prove the incumbent margin cannot be quietly lowered (F-016): plant 0.10, expect RED, restore, expect GREEN
+	@bash scripts/gate_margin_redteam.sh
 
 # ---- M3 modeling II: scout x sniper (role:MLE) ----
 .PHONY: zones ablation leakage-redteam gate-redteam predictions-redteam automl tune tune-resume-drill automl-refit automation-track f008-guard bakeoff champion-transition verify-m3 verify-m3-redteam

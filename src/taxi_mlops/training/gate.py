@@ -62,6 +62,24 @@ M4-S1 added a seventh, and it is about what the gate is allowed to CLAIM:
    its challenger without reading the holdout says so explicitly, and is the one
    accountable for saying it.
 
+M9-S10 added an eighth, and it is the first time a PO letter TIGHTENED this file:
+
+8. **The incumbent KPI-09 condition carries a MARGIN, and every verdict records
+   the margin it was judged under** (F-016 / F-068, AWAITING_PO 2026-08-18-1 and
+   2026-08-24-4). Non-regression with no margin moved the alias at M3-S5 on
+   +0.63% — 1.2 seconds of mean error — while the FLOOR condition demanded 2.00%
+   for the same model; the two bars disagreed about what a promotion is worth.
+   `configs/train.yaml: gate.incumbent_min_improvement_pct` is the one home for
+   the number (F-013), and `decide` RAISES rather than defaulting when an
+   incumbent is present and the key is absent: zero is the loosest bar there is,
+   so an absent margin resolving to it is the one failure a margin cannot
+   survive (F-048). The identity case is now DECIDED behaviour — a challenger
+   numerically identical to the incumbent is REFUSED under any positive margin,
+   because +0.0000% buys nothing and nothing about moving an alias is free.
+   `Decision.incumbent_required_pct` and the `[gate] incumbent bar:` transcript
+   line exist so that no future verdict is ambiguous about its own bar; see
+   `taxi_mlops.training.gate_eras` for what that buys the replay legs.
+
 The decision is a pure function of `Metrics` objects and the config: no MLflow,
 no filesystem, no cluster. Promotion — the part with side effects — is
 `taxi_mlops.training.registry`'s, and it only ever runs on a decision that
@@ -148,6 +166,12 @@ class Decision:
     #: points somewhere else — a decision that never saw the incumbent may not
     #: replace it, whether it skipped the comparison or raced with another run.
     incumbent: Incumbent | None = None
+    #: The incumbent KPI-09 margin this verdict was judged under, in percent of
+    #: the incumbent's own MAE — `None` exactly when there was no incumbent to
+    #: beat. Recorded rather than inferable (F-016/F-068, M9-S10): a replay that
+    #: has to guess a bar from an absence guesses the loosest one.
+    #: `taxi_mlops.training.gate_eras` is the module that consumes it.
+    incumbent_required_pct: float | None = None
 
     @property
     def passed(self) -> bool:
@@ -171,6 +195,13 @@ class Decision:
         if self.incumbent is not None:
             metrics["gate_incumbent_mae"] = self.incumbent.mae
             metrics["gate_incumbent_within_rate"] = self.incumbent.within_tolerance_rate
+            # F-016: the bar travels with the verdict, not just the observation.
+            # A run logging what it beat and not what it had to beat is exactly
+            # the record a later replay has to infer a margin for.
+            metrics["gate_incumbent_required_pct"] = float(self.incumbent_required_pct or 0.0)
+            metrics["gate_incumbent_observed_pct"] = improvement_pct(
+                round(self.challenger_mae, INCUMBENT_MAE_DECIMALS), self.incumbent.mae
+            )
         return metrics
 
 
@@ -290,21 +321,47 @@ def decide(
             )
         )
 
+    incumbent_required: float | None = None
     if incumbent is not None:
         # F-011. The floor asks "is a booster worth serving at all"; only the
         # incumbent can answer "is this one better than what riders already get".
         # Both conditions, because a challenger can win the mean and lose the
         # rider-facing rate — over the test month, 0.1 KPI-10 points is ~6,000
         # riders quoted wrongly who were not before.
+        #
+        # F-016/F-068 (M9-S10): the KPI-09 half now carries a MARGIN, and the
+        # key is REQUIRED rather than defaulted. `.get(..., 0.0)` would be the
+        # obvious line and it is the one thing this condition cannot survive: a
+        # caller that assembled a gate config by hand and forgot the knob would
+        # get plain non-regression back, silently, which is the exact bar this
+        # story was sanctioned to retire. So an absent margin is a GateError
+        # naming its one home (F-048's rule, F-013's one home).
+        if "incumbent_min_improvement_pct" not in cfg:
+            raise GateError(
+                "this gate config carries no `incumbent_min_improvement_pct` and an "
+                "incumbent was supplied. The margin lives in configs/train.yaml: gate "
+                "(F-013 — one home) and was sanctioned at "
+                f"{0.50:.2f}% by the PO at AWAITING_PO 2026-08-24-4; defaulting it here "
+                "would judge this challenger against the loosest bar there is and call "
+                "that non-regression. A replay of a pre-M9-S10 verdict must pass the "
+                "margin that was IN FORCE when it was taken — see "
+                "taxi_mlops.training.gate_eras.in_force_margin."
+            )
+        incumbent_required = float(cfg["incumbent_min_improvement_pct"])
         challenger_mae = round(challenger.mae, INCUMBENT_MAE_DECIMALS)
         challenger_within = round(challenger.within_tolerance_rate, INCUMBENT_WITHIN_DECIMALS)
+        # Measured at the precision the incumbent's number EXISTS at (gotcha
+        # #42) on both sides of the comparison, so the margin is not decided by
+        # digits the registry never recorded.
+        incumbent_observed = improvement_pct(challenger_mae, incumbent.mae)
         checks.append(
             Check(
-                name=f"KPI-09 does not regress against the serving champion (v{incumbent.version})",
-                passed=challenger_mae <= incumbent.mae,
+                name=f"KPI-09 beats the serving champion (v{incumbent.version}) by the margin",
+                passed=incumbent_observed >= incumbent_required,
                 detail=(
                     f"{challenger.mae:.4f} vs {incumbent.mae:.4f} min "
-                    f"({improvement_pct(challenger.mae, incumbent.mae):+.2f}% vs incumbent)"
+                    f"({incumbent_observed:+.2f}% vs incumbent, required "
+                    f">= {incumbent_required:.2f}%)"
                 ),
             )
         )
@@ -335,6 +392,7 @@ def decide(
         tolerance_minutes=challenger.tolerance_minutes,
         checks=tuple(checks),
         incumbent=incumbent,
+        incumbent_required_pct=incumbent_required,
     )
 
 
@@ -369,6 +427,17 @@ def verdict_lines(decision: Decision, *, holdout_untouched_by_selection: bool = 
         lines.append(
             f"[gate] incumbent : version {inc.version:<20} KPI-09 {inc.mae:.4f} min"
             f"  ·  KPI-10 {inc.within_tolerance_rate:.3f}%   [{inc.source}]"
+        )
+        # F-016: the bar this verdict was taken against, ON the verdict. Its
+        # shape is a TWIN of `gate_eras.MARGIN_RE`, which is what the milestone
+        # replay legs parse — so a transcript pasted into a document from here
+        # on can be replayed era-correctly without anyone inferring anything.
+        # Printed even at 0.00%, because "no margin" and "nobody wrote it down"
+        # are the two states this line exists to separate.
+        lines.append(
+            f"[gate] incumbent bar: KPI-09 at least "
+            f"{float(decision.incumbent_required_pct or 0.0):.2f}% below the serving "
+            "champion (F-016)"
         )
     lines += [
         f"[gate] required  : KPI-09 at least {decision.required_pct:.2f}% below the floor",

@@ -3659,6 +3659,70 @@ can never disagree (the port-family twins lesson, applied before it bit).
   host suite **1244 passed** (was 1227) · ruff clean · `uv.lock` byte-identical to
   `m7-closed` · `make readme-check` GREEN · `make verify-m9` GREEN 45/45.
 
+## The bar that moved, and the history that did not (M9-S10) — F-016/F-068 landed era-aware
+- **The incumbent condition has a margin now: `incumbent_min_improvement_pct:
+  0.50` in `configs/train.yaml: gate`** (F-013's one home), applied to the
+  incumbent **KPI-09** condition ONLY. PO letters 2026-08-18-1 (option B) and
+  2026-08-24-4 (option (b), era-aware), both quoted in the config comment. Why
+  it existed to be found: plain non-regression moved the alias at M3-S5 on
+  **+0.63%** — 1.2 s of mean error — while the FLOOR condition four lines above
+  demanded **2.00%** of the same model. **0.50 is set BELOW the one transition
+  this program actually made, not above it**; the accepted cost is stated rather
+  than netted out — *a model genuinely 0.3–0.4% better will not ship*.
+- **The tightening was easy; not falsifying the program's own record was the
+  work.** Three gates replay recorded verdicts through `gate.decide` as it
+  exists on disk, and M9-S6 measured — before any edit — that **two of nine flip
+  from PROMOTE to REFUSE** under any positive margin. Both are a champion judged
+  against ITSELF at exactly **+0.0000%**. `src/taxi_mlops/training/gate_eras.py`
+  resolves each verdict's bar from what the verdict DECLARES, else from the
+  **enumerated** nine in `automation/runs/m9-f016/replay-wall.json`, else it
+  **RAISES**. All nine reproduce, **0 flips**.
+- **The raise is the whole design, and the reason is specific: the default that
+  would "work" is ZERO, and zero is the loosest bar there is.** A permissive
+  `.get(key, 0.0)` would let a FUTURE verdict, taken under a margin and recorded
+  carelessly, be replayed against nothing and pass — F-048's rule applied to a
+  bar instead of a divisor. `gate.decide` raises the same way when an incumbent
+  is present and the key is absent. That is why the inference-from-absence is
+  confined **permanently** to those nine: from here every verdict records its
+  own bar (`Decision.incumbent_required_pct`, `as_mlflow`, the version's
+  `gate_incumbent_required_pct` tag, the retrain record, the pipeline manifest,
+  and the `[gate] incumbent bar:` transcript line the legs parse — a TWIN of
+  `gate_eras.MARGIN_RE`).
+- **Era-awareness alone would have been a hole, and the ratchet is the half that
+  does not move.** Judge history by its own bar and a LOOSENING replays
+  perfectly: nine green sub-checks over a gate nobody can promote past.
+  `gate_eras.assert_margin_never_decreased` requires the number on disk to be ≥
+  every margin a recorded verdict was taken against and ≥ the sanctioned 0.50%.
+  **ONE home** (`verify-m2` §2) — and it took the red team to establish that:
+  the first draft asserted it twice and a lowered margin produced **two FAILs
+  carrying one sentence**, which reads like two witnesses and is one fact
+  counted twice.
+- **`make gate-margin-redteam` plants 0.10 — plausible, still positive, and it
+  still refuses the identity case**, so it satisfies F-068's arithmetic while
+  spending the PO's letter without one. RED with **1 FAIL naming both numbers,
+  56 sub-checks still passing**, sha256-identical restore, GREEN 57/57. Its
+  load-bearing check is the NEGATIVE one: **the era-aware replays must STAY
+  green**, because if lowering today's bar turned history red the replays would
+  be reading the live config instead of the era.
+- **The identity case is DECIDED, and the test that argued the other way was
+  answered rather than deleted.** It said a re-gate of the champion's own
+  numbers must pass or "every promotion is a one-way door". The idempotence it
+  names lives in `registry.promote`: a re-run reproducing the champion's numbers
+  changes NOTHING about the registry under either rule, because the alias
+  already points at that model. **What changed is the exit code, 0 -> 1.**
+- **The charter's premise about `verify-m7` was wrong, and measuring it was
+  cheaper than assuming it.** Its retrain leg READS
+  `automation/runs/m7-retrain/latest.json`; it never calls `decide`, so it needs
+  no era table. It gained the sub-check that says so checkably — that verdict's
+  **−0.03%** REFUSE is era-STABLE (refused under the pre-B bar AND under 0.50%)
+  — because "no era logic needed here" is a claim, and a claim about a gate is
+  worth what asserting it costs.
+- Exit state: nothing fitted, no alias moved, no version created, **no wire
+  touched, no cluster call that writes**. `@champion` **2** / `feature_set v2` ·
+  `make verify-m2` GREEN 57/57 · `make verify-m3` GREEN 47/47 · `make verify-m7`
+  GREEN · both planted-edit red teams PASS · host suite **1269 passed** (was
+  1246) · ruff clean · `uv.lock` byte-identical to `m7-closed`.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)

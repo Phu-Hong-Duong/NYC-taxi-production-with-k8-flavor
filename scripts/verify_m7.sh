@@ -1075,6 +1075,31 @@ try:
     else:
         no(f"verdict={verdict['verdict']} promoted={rec['promoted']} failed={failed}")
 
+    # (a2) ...and that REFUSE is STABLE ACROSS THE ERA BOUNDARY (M9-S10, F-016).
+    # This leg reads a recorded verdict; it does not replay one through
+    # `gate.decide` the way verify-m2 §2 and verify-m3 §5 do, so it needs no era
+    # table — but that is a claim worth asserting rather than assuming, because
+    # the record predates the incumbent margin and carries no bar of its own.
+    # The refusal here is by −0.03% against the serving champion, so it fails the
+    # incumbent condition under the pre-B era (plain non-regression) AND under
+    # every positive margin. A record whose meaning depended on the era would
+    # show up as a POSITIVE percentage with a REFUSE beside it.
+    from taxi_mlops.training.gate import INCUMBENT_MAE_DECIMALS, improvement_pct
+
+    vs_incumbent = improvement_pct(
+        round(verdict["challenger_mae"], INCUMBENT_MAE_DECIMALS), verdict["incumbent_mae"])
+    incumbent_failed = [r for r in verdict["reasons"]
+                        if not r["passed"] and "serving champion" in r["check"]]
+    if vs_incumbent < 0 and incumbent_failed:
+        ok(f"this recorded verdict needs no era table: it is {vs_incumbent:+.2f}% against the "
+           f"serving champion, so it is REFUSED under the non-regression bar in force when it "
+           f"was taken AND under M9-S10's {float(load_train_config('configs/train.yaml')['gate']['incumbent_min_improvement_pct']):.2f}% margin — "
+           f"{len(incumbent_failed)} incumbent condition(s) failed then and would fail now")
+    else:
+        no(f"the retrain's recorded refusal is era-DEPENDENT: {vs_incumbent:+.4f}% vs the "
+           f"incumbent with failing incumbent condition(s) {[r['check'] for r in incumbent_failed]} "
+           "— a verdict whose meaning changed under the F-016 landing is a finding, never an edit")
+
     # (b) F-020's TRANSFER, re-derived on both sides. A hyperparameter is a
     # number PLUS the scale it means it at, and the check is that the FRACTION
     # the knob represents is preserved.
@@ -1267,7 +1292,9 @@ except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the retrain check itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 9 "the retrain check"
+# 10 from M9-S10: the era-stability sub-check (a2). Re-DERIVED by running the
+# leg; the bound is "at least" and exists to catch a leg that died on import.
+expect_verdicts 10 "the retrain check"
 
 # ------------------------------------- 7. the memo, the board, the champion ---
 section "7. the memo against the records, the board that renders it, and the champion still on the wire"
