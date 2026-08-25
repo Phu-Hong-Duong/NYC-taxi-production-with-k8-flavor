@@ -1,5 +1,121 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (cv) — M9-S12: every credential replaced, nothing destroyed — and four alarms that were wrong
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cu) · `docs/milestones/M9_PUBLISH_KICKOFF.md` § M9-S12 · AWAITING_PO
+(2026-08-24-4 and -5 both answered; 2026-08-25-2 is flagged NOT A FORK). Role block
+**SRE**, charter read, refusals in play: *no `make destroy` · no state destroyed ·
+no fit · no alias move · no registry version · no gate loosened · no value ever
+echoed or committed*. None broken.
+
+**Story: M9-S12, COMPLETE.** The PO's 2026-08-24-5 decision 2 (rotate, in place).
+
+### Reconciliation (staleness check)
+Handoff (cu)'s Next claimed a live cluster and a clean tree at the M9-S11 merge.
+Measured, not assumed: tree clean at `f2b5eca`, three `mlops-taxi` nodes **Ready,
+8d, v1.36.1**, all platform pods Running. No `.status` file pointed at unfinished
+work. Nothing had moved.
+
+### Done
+- **12 credentials rotated IN PLACE across 5 families on a live cluster.** Record
+  `automation/runs/m9-publish/rotation.json` — it names WHAT rotated, never to what.
+  `make backup` ran first (`2026-08-25T05-01-26Z`, 1.7 GiB) on the standing
+  precedent for risky mutations.
+- **The design decision: `.env` holds 27 keys and only 12 are secrets, so every key
+  is CLASSIFIED and an unrecognised one is a FAILURE, never a skip.** The other 15
+  are identities/endpoints/settings — `AWS_ACCESS_KEY_ID=mlflow` is a username,
+  each `*_DB_USER` OWNS a database — and rotating one is a rename that orphans
+  whatever points at the old name. A rotation that silently skips a credential
+  added later reports success while an old value lives on. Both directions refuse.
+- **Mechanisms mostly already existed**: Postgres `ALTER ROLE` through
+  `postgres_databases.sh` (superuser separately — that script describes TENANT
+  databases and `postgres` owns none) · `mc admin user add` re-issuing in place ·
+  MinIO root Secret+restart · Grafana Secret+restart (a rotation *only* because
+  persistence is OFF, M6-S1) · Metabase's admin via its API, the one family whose
+  service change must come first. Record checkpoints per family.
+- **F-076 — the alarm that sounded exactly like the disaster.** The MinIO root
+  read-back said `authentication failed`: the signature of an IAM re-encryption
+  that loses every named user, on a rotation that had worked. Two races —
+  **`kubectl exec deploy/X` resolves the SELECTOR** (RollingUpdate at maxSurge=100%
+  puts two pods behind it, and it hit the one being replaced), and **`rollout
+  restart` + `rollout status` affirms a rollout that has not begun** because status
+  describes the CURRENT status until `observedGeneration` catches up (F-036/#79
+  from the other side). Fixed, then MEASURED at **0.3 s past Ready** — which says
+  the generation race was the cause and the retry added alongside is NOT the fix.
+- **F-077 — the negative probe ran where nothing authenticates.** `pg_hba.conf` is
+  `host all all 127.0.0.1/32 trust` before `host all all all scram-sha-256`, so the
+  loopback probe never consulted a password and reported a correctly rotated role
+  as unrotated. **The positive control could not catch it: under `trust` both arms
+  pass.** Fixed by the ADDRESS (the pod's own IP, read from the cluster).
+- **F-075 — the charter's undo copy was wrong twice.** `git check-ignore -v
+  .env.pre-rotation` exited 1 (gitignore patterns are NAMES, not prefixes); with
+  that fixed, `verify-m2`'s root-stray leg named it anyway and was right. It lives
+  **outside the repo** now and is destroyed by `make rotate-destroy-undo`.
+- **F-078 — a consumer the charter did not enumerate**: Metabase stores the
+  WAREHOUSE connection in its app-db. `make boards` was already the mechanism; it
+  is in `CONSUMERS` now and the rotation was **re-run end to end so the committed
+  record came from the committed recipe** (F-063 precedent).
+- **F-079 — unrelated, found by the suite**: `WATCHDOG_HEAL=1` leaks from the
+  launcher into `os.environ` for a session's life, so two watchdog tests asserting
+  human-run behaviour had become tests of the heal path.
+- Docs/ledgers: `docs/credential_rotation_m9.md` · F-075…F-079 in
+  `ledgers/findings.md` · a `ledgers/deployments.md` row · gotchas **#113/#114/#115**
+  · CLAUDE.md section + 4 command rows · LEARNING_GUIDE field note.
+
+### Verification
+**`make verify-m0` … `verify-m9` — all ten GREEN in one sweep, exit 0** (the accept,
+and the strongest available claim: the gates are not about credentials, so every
+consumer is read live and one the charter forgot showed up as a red gate — F-078).
+`make parity` **0.000e+00** over 16 hazard rows · `make rotate-verify-old`
+**PASSED, 4 checks** (run AFTER the sweep, never before — gotcha #105) ·
+`make security-scan` **`publishable: true`, `secrets_in_git: 0`** ·
+`make readme-check` GREEN · host suite **1,297 passed, no skips** · ruff clean.
+`@champion` **2** / `feature_set v2`, versions `['1','2']` — nothing fitted, no
+alias moved, no version created. `uv.lock` byte-identical to
+`lock-rebaselined-m9-publish`.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **The undo copy lives outside the repository**, not merely gitignored. `verify-m2`
+  made the argument: gitignore hides a file from git and from nothing else.
+- **Consumers are drained ONCE each at the end of a run**, not per key. `mlflow` and
+  `flyte` are touched by two families and `deploy-flyte` is a helm upgrade; the
+  charter's rule is that no pair is left disagreeing, not a restart count.
+- **Flyte is converged by helm upgrade, not a restart** — the chart renders its DB
+  password and S3 key out of VALUES, so a `rollout restart` would look like it
+  worked and change nothing.
+- **`security-scan`'s `secrets_local_only` moved 10 → 9 and that is recorded, not
+  smoothed**: one rotated random value fell under `generic-api-key`'s entropy
+  floor — F-071's mechanism observed naturally.
+
+### Defects/Surprises
+- All four rotation findings were in the CHECKING, never in the rotation itself.
+- **`make readme-check` caught this story's own diff again** (fifth unplanted catch
+  since M9-S8): 1,277 → 1,297 tests, RED naming the claim before anyone looked.
+- The first attempt died mid-`minio-root` and left a record reading
+  `families_completed: ["minio-users","postgres"], finished_at: null` — the
+  per-family checkpoint demonstrated by accident rather than by drill.
+
+### Next
+**Executor session on M9-S13** — the pre-commit hook + the final sweep + the
+AWAITING_PO entry re-inviting the flip (`docs/milestones/M9_PUBLISH_KICKOFF.md`).
+Read its two stated limits FIRST: the hook is **unverifiable by any gate**
+(`.git/hooks` is untracked) so the tracked script + `make install-hooks` + the
+exec-bit step are what get tests, and `make security-scan` remains the audit of
+record. Its red team plants a STAGED credential **drawn against the detector's
+properties** (F-071's generator idiom: entropy floor, an alphabet the rules match)
+and destroys it after. Then the ARCH publish boundary closes the phase and tags
+`m9-publish-closed`. **The flip remains the PO's click.**
+
+**Three things S13 should know.** (1) The host suite is **1,297** and both the
+README and `scripts/readme_check.py`'s claim table carry that number — they are
+twins and move together. (2) `automation/runs/m9-publish/rotation.json` is tracked
+evidence with two `needs_records` tests behind it; do not regenerate it. (3) The
+pre-rotation undo copy is **destroyed** — `make rotate-verify-old` can no longer
+run, by design, and the record holds its verdict.
+
+
 ## Session 2026-08-25 (cu) — M9-S11: sqlparse 0.6.0, and the upgrade that upgraded nothing (F-074)
 
 ### State

@@ -57,7 +57,16 @@ def _sandbox(tmp_path: Path) -> tuple[Path, dict]:
     claude.write_text(f'#!/usr/bin/env bash\necho launched > "{marker}"\n')
     claude.chmod(0o755)
 
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"}
+    # WATCHDOG_HEAL is forced to "0" rather than merely inherited. It is the flag
+    # watchdog.sh exports on its heal path, and a session STARTED by that path
+    # carries it for its whole life — so every test here that asserts the
+    # ordinary, human-run behaviour of next_session.sh silently became a test of
+    # the heal path instead, and two of them went red on a repo where nothing was
+    # wrong. Found 2026-08-25 (M9-S12) in a session the watchdog had healed.
+    # The tests that DO want the heal path set it explicitly (see below), so
+    # pinning the default here makes both intentions visible instead of leaving
+    # one of them at the mercy of whoever launched the suite.
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "WATCHDOG_HEAL": "0"}
     return tmp_path, env
 
 

@@ -1,0 +1,182 @@
+{
+  "story": "M9-S12",
+  "started_at": "2026-08-25T05:24:02Z",
+  "env_file": ".env",
+  "inventory": {
+    "env_keys": 27,
+    "rotatable": [
+      "AWS_SECRET_ACCESS_KEY",
+      "FLYTE_DB_PASSWORD",
+      "FLYTE_S3_SECRET_KEY",
+      "GRAFANA_ADMIN_PASSWORD",
+      "MARTS_DB_PASSWORD",
+      "METABASE_ADMIN_PASSWORD",
+      "METABASE_DB_PASSWORD",
+      "MINIO_ROOT_PASSWORD",
+      "MLFLOW_DB_PASSWORD",
+      "OPTUNA_DB_PASSWORD",
+      "POSTGRES_PASSWORD",
+      "SERVING_S3_SECRET_KEY"
+    ],
+    "identities": {
+      "AWS_ACCESS_KEY_ID": "a username \u2014 the MinIO user the chart creates, twinned with infra/helm/minio/values.yaml",
+      "AWS_DEFAULT_REGION": "a setting, not a credential",
+      "FLYTE_DB_USER": "a Postgres role name \u2014 it OWNS a database",
+      "FLYTE_S3_ACCESS_KEY": "a username (the MinIO user `flyte`)",
+      "GRAFANA_ADMIN_USER": "a login identity",
+      "MARTS_DB_USER": "a Postgres role name \u2014 it OWNS a database",
+      "METABASE_ADMIN_EMAIL": "a login identity, stored in the Metabase app-db",
+      "METABASE_DB_USER": "a Postgres role name \u2014 it OWNS a database",
+      "MINIO_ROOT_USER": "a username (the MinIO root account's name)",
+      "MLFLOW_ARTIFACT_BUCKET": "a bucket name \u2014 renaming it orphans every artifact",
+      "MLFLOW_DB_USER": "a Postgres role name \u2014 it OWNS a database",
+      "MLFLOW_S3_ENDPOINT_URL": "an endpoint \u2014 the host-side address of MinIO, twinned with the port family",
+      "MLFLOW_TRACKING_URI": "an endpoint \u2014 the host-side address of the tracking server, not a credential",
+      "OPTUNA_DB_USER": "a Postgres role name \u2014 it OWNS a database",
+      "SERVING_S3_ACCESS_KEY": "a username (the MinIO user `serving`)"
+    },
+    "families": {
+      "postgres": [
+        "FLYTE_DB_PASSWORD",
+        "MARTS_DB_PASSWORD",
+        "METABASE_DB_PASSWORD",
+        "MLFLOW_DB_PASSWORD",
+        "OPTUNA_DB_PASSWORD",
+        "POSTGRES_PASSWORD"
+      ],
+      "minio-users": [
+        "AWS_SECRET_ACCESS_KEY",
+        "FLYTE_S3_SECRET_KEY",
+        "SERVING_S3_SECRET_KEY"
+      ],
+      "minio-root": [
+        "MINIO_ROOT_PASSWORD"
+      ],
+      "grafana": [
+        "GRAFANA_ADMIN_PASSWORD"
+      ],
+      "metabase-admin": [
+        "METABASE_ADMIN_PASSWORD"
+      ]
+    }
+  },
+  "families": {
+    "postgres": {
+      "rotated_keys": [
+        "FLYTE_DB_PASSWORD",
+        "MARTS_DB_PASSWORD",
+        "METABASE_DB_PASSWORD",
+        "MLFLOW_DB_PASSWORD",
+        "OPTUNA_DB_PASSWORD",
+        "POSTGRES_PASSWORD"
+      ],
+      "roles": [
+        "postgres",
+        "mlflow",
+        "marts",
+        "metabase",
+        "optuna",
+        "flyte"
+      ],
+      "mechanism": "ALTER ROLE \u2014 five tenants via scripts/postgres_databases.sh, the superuser here",
+      "verified": "6 roles hold a SCRAM-SHA-256 verifier",
+      "at": "2026-08-25T05:24:04Z"
+    },
+    "minio-users": {
+      "rotated_keys": [
+        "AWS_SECRET_ACCESS_KEY",
+        "FLYTE_S3_SECRET_KEY",
+        "SERVING_S3_SECRET_KEY"
+      ],
+      "users": [
+        "flyte",
+        "mlflow",
+        "serving"
+      ],
+      "policies_preserved": {
+        "flyte": "readwrite",
+        "mlflow": "readwrite",
+        "serving": "readonly,serving-readonly"
+      },
+      "mechanism": "mc admin user add (re-issues an existing accessKey's secret in place)",
+      "at": "2026-08-25T05:24:07Z"
+    },
+    "minio-root": {
+      "rotated_keys": [
+        "MINIO_ROOT_PASSWORD"
+      ],
+      "mechanism": "Secret minio-root + rollout restart deploy/minio (the PVC keeps every object)",
+      "verified": "3 named users readable after restart: ['flyte', 'mlflow', 'serving']",
+      "seconds_after_ready_before_admin_api_accepted_root": 3.5,
+      "at": "2026-08-25T05:24:15Z"
+    },
+    "grafana": {
+      "rotated_keys": [
+        "GRAFANA_ADMIN_PASSWORD"
+      ],
+      "mechanism": "Secret monitoring/grafana-admin + restart (persistence is OFF, so the admin is re-created from it)",
+      "at": "2026-08-25T05:24:17Z"
+    },
+    "metabase-admin": {
+      "rotated_keys": [
+        "METABASE_ADMIN_PASSWORD"
+      ],
+      "user_id": 1,
+      "mechanism": "PUT /api/user/:id/password (the app-db is persistent; no Secret carries this)",
+      "verified": "a fresh POST /api/session on the new password returned a session",
+      "at": "2026-08-25T05:24:17Z"
+    }
+  },
+  "sanction": "AWAITING_PO 2026-08-24-5, answer 2 (YES, in-place preferred over destroy+rebuild)",
+  "no_values_recorded": "this record names what rotated, never to what \u2014 old or new",
+  "families_completed": [
+    "grafana",
+    "metabase-admin",
+    "minio-root",
+    "minio-users",
+    "postgres"
+  ],
+  "rotated_key_count": 12,
+  "consumers_converged": [
+    "mlflow/mlflow (restart)",
+    "metabase/metabase (restart)",
+    "monitoring/grafana (restart)",
+    "flyte (helm upgrade via deploy_flyte.sh \u2014 values-rendered credentials)",
+    "metabase boards (make boards \u2014 converges the stored `marts` warehouse connection)",
+    "serving (make serve \u2014 the storage-initializer re-fetches under the new credential)"
+  ],
+  "finished_at": "2026-08-25T05:26:42Z",
+  "old_credentials_refused": {
+    "at": "2026-08-25T05:30:11Z",
+    "checks": [
+      {
+        "check": "minio-root",
+        "refused": true,
+        "detail": "mc alias set with the pre-rotation root password exited 1 (non-zero = refused)"
+      },
+      {
+        "check": "minio-user-serving",
+        "refused": true,
+        "detail": "mc alias set as `serving` with its pre-rotation secret exited 1 (non-zero = refused)"
+      },
+      {
+        "check": "postgres-mlflow",
+        "refused": true,
+        "detail": "psql as `mlflow` at 10.244.2.7 (the scram-sha-256 rule) with its pre-rotation password exited 2 with a password authentication failure"
+      },
+      {
+        "check": "postgres-mlflow-NEW-works",
+        "refused": true,
+        "detail": "the same path with the CURRENT password exited 0 (0 = accepted; this is the control \u2014 and it only discriminates because the address forces real authentication)"
+      }
+    ],
+    "note": "run AFTER the positive sweep: an absence check before a presence check passes against a dead platform"
+  },
+  "pre_rotation_copy": {
+    "path": "/home/longt/.nyc-taxi-rotation/env.pre-rotation",
+    "destroyed_at": "2026-08-25T05:33:53Z",
+    "held": "the PRE-rotation values, kept only as the undo while the rotation was in flight",
+    "destroyed_after": "the ten gates, make parity, and the old-credential refusals all passed",
+    "limit": "overwritten then unlinked; on a CoW/journalling filesystem that is not a guarantee of unrecoverability, only that no path reads them"
+  }
+}

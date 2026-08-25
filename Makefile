@@ -365,6 +365,16 @@ security-scan: ## M9-S9: the pre-publish audit — secrets in the WORKING TREE a
 security-scan-redteam: ## M9-S9: prove the secret scan can FIND one — plant a real-shaped credential in a scratch commit, watch gitleaks name it, then destroy the branch
 	@bash scripts/security_scan_redteam.sh
 
+.PHONY: rotate-plan rotate-credentials rotate-verify-old rotate-destroy-undo
+rotate-plan: ## M9-S12: enumerate + classify every key in .env and print what WOULD rotate. Touches nothing
+	@uv run python scripts/rotate_credentials.py --plan
+rotate-credentials: ## M9-S12: rotate every credential in .env IN PLACE on the live platform (PO 2026-08-24-5 answer 2). ROTATE_ARGS="--families postgres" does one family
+	@uv run python scripts/rotate_credentials.py $(ROTATE_ARGS)
+rotate-verify-old: ## M9-S12: prove the .env.pre-rotation values are REFUSED. Run AFTER the positive gate sweep, never before (gotcha #105)
+	@uv run python scripts/rotate_credentials.py --verify-old-refused
+rotate-destroy-undo: ## M9-S12: overwrite and unlink the pre-rotation undo copy — the LAST step, only after the accept passes
+	@uv run python scripts/rotate_credentials.py --destroy-pre-rotation
+
 # ---- always available ----
 .PHONY: lint test fmt readme-check
 readme-check: ## M9-S8: every `make` target, path and number in README.md, read back from the record that holds it

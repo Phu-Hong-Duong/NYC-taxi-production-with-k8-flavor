@@ -3785,6 +3785,81 @@ can never disagree (the port-family twins lesson, applied before it bit).
 - Nothing fitted, no alias moved, no version created, no wire touched. `@champion`
   **2** / `feature_set v2`. Write-up: `docs/lock_rebaseline_m9.md`.
 
+## Every credential replaced, nothing destroyed (M9-S12) — and four alarms that were wrong
+- **12 of `.env`'s 27 keys are secrets; the other 15 are deliberately NOT
+  rotated.** `AWS_ACCESS_KEY_ID=mlflow` is a **username**, `MLFLOW_ARTIFACT_BUCKET`
+  names the bucket every artifact lives in, each `*_DB_USER` **owns a database** —
+  rotating one is a rename that orphans whatever points at the old name. So
+  `scripts/rotate_credentials.py` **classifies every key** and the design decision
+  is: **a key it does not recognise is a FAILURE, never a skip.** A rotation that
+  silently passes over a credential added later reports success while an old value
+  lives on — F-048's rule applied to an inventory. Both directions refuse; two
+  offline tests pin the inventory against `.env.example` and against
+  `platform_secrets.sh`'s `REQUIRED` list.
+- **In place, because `make destroy` spends state whose recovery is unproven.**
+  The PO's own reason (2026-08-24-5 answer 2): a full restore over a dead platform
+  is still un-rehearsed. Five families, each a safe stopping point, each with a
+  mechanism that mostly **already existed** — Postgres `ALTER ROLE` through
+  `postgres_databases.sh` (the superuser separately, because that script describes
+  TENANT databases and `postgres` owns none) · `mc admin user add` re-issuing a
+  named user's secret in place · MinIO root Secret+restart · Grafana Secret+restart
+  (*only* a rotation because persistence is OFF by M6-S1's decision) · Metabase's
+  admin via its **API**, the one family whose service change must come FIRST
+  because the app-db is persistent and no Secret carries it. The record
+  **checkpoints per family**, demonstrated by accident when attempt 1 died and
+  left `families_completed: ["minio-users","postgres"], finished_at: null`.
+- **The accept is all ten gates, and that is the point** — they are not about
+  credentials, so every consumer is read LIVE and one the charter forgot shows up
+  as a red gate. **verify-m0…m9 GREEN in one sweep** · `make parity` 0.000e+00 ·
+  `make rotate-verify-old` PASSED 4 · `security-scan` `publishable: true`,
+  `secrets_in_git: 0` · host suite **1,297**. Then the undo copy was destroyed.
+- **F-076, the one worth remembering: the safety check answered with the
+  catastrophe's own signature.** The MinIO root read-back said `authentication
+  failed` — exactly what an IAM re-encryption that lost every named user looks
+  like — on a rotation that worked. Two races: **`kubectl exec deploy/X` resolves
+  the SELECTOR**, and a RollingUpdate at `maxSurge=100%` puts two pods behind it,
+  so the check interrogated the pod being replaced; and **`rollout restart` +
+  `rollout status` affirms a rollout that has not started**, because status
+  describes the CURRENT status until the controller observes the new generation
+  (F-036/gotcha #79 from the other side). Fixed by resolving ONE ready,
+  non-terminating pod and waiting on `observedGeneration`, then **MEASURED**: the
+  first successful read is **0.3 s past Ready**, so the generation race was the
+  cause and the retry added alongside is explicitly not credited with the fix.
+  **A false alarm indistinguishable from a real disaster is worse than no alarm**
+  — the reflex it triggers is to undo the thing that was fine.
+- **F-077: the negative probe ran where nothing authenticates, and the positive
+  control could not tell.** `pg_hba.conf` is `host all all 127.0.0.1/32 trust`
+  before `host all all all scram-sha-256`, so `psql` to loopback inside the pod
+  never consults a password — the pre-rotation password read as "accepted" over a
+  correctly rotated role. **Under `trust` BOTH arms pass**, so the control agreed
+  with the false alarm instead of exposing it: a control discriminates only if the
+  mechanism under test is engaged. Fixed by the ADDRESS (the pod's own IP, read
+  from the cluster), not by the assertion.
+- **F-075: the charter's undo copy was wrong twice, and both guards were two-second
+  commands.** `git check-ignore -v .env.pre-rotation` exited 1 — gitignore patterns
+  are NAMES, not prefixes, so the path the charter called gitignored was one
+  `git add -A` from committing every old credential. With that fixed
+  (`.env.*` + `!.env.example`), **`verify-m2`'s root-stray leg named the file
+  anyway and was right**: gitignore hides a file from git and from nothing else,
+  not a directory listing and not a `tar`. It now lives OUTSIDE the repo at
+  `~/.nyc-taxi-rotation/env.pre-rotation` (700/600), and is destroyed by
+  `make rotate-destroy-undo` once the accept passes.
+- **F-078: a consumer nobody enumerated — Metabase stores the WAREHOUSE connection
+  in its app-db, not its environment.** Restarting the pod converges its own
+  credential and leaves the `marts` one stale; every card then fails with a
+  connection-pool error naming no credential at all. `make boards` was already the
+  mechanism (`ensure_marts_database` PUTs from `.env`) and is now in `CONSUMERS`.
+  The rotation was **re-run end to end so the committed record came from the
+  committed recipe** (the F-063 precedent).
+- **F-079, unrelated and found by the suite: `WATCHDOG_HEAL=1` leaks from the
+  launcher into `os.environ` for a session's whole life**, so two watchdog tests
+  asserting human-run behaviour had silently become tests of the heal path. The
+  sandbox pins it; the tests that want the heal path already set it themselves.
+- Nothing fitted, no alias moved, no version created. `@champion` **2** /
+  `feature_set v2`. One measured wire change by charter: `make serve`, so the
+  storage-initializer fetches the champion under the NEW serving credential —
+  a real object download, not a login. Write-up: `docs/credential_rotation_m9.md`.
+
 ## Port family (fleet rule: check for foreign stacks before cluster-up)
 MLflow 5000 · MinIO 9000/9001 · Flyte console 8080 · Grafana 3000 ·
 KServe ingress 8081 · Pushgateway 9091 · Metabase 3030 · Postgres 5432 (in-cluster only)
@@ -3995,6 +4070,10 @@ Accept: `GET localhost:8081/` -> 404 (route up, nothing behind it yet) AND
 | p95 at the NEW boundary, beside the old one (M8-S4 leg 3) | `make transformer-load` (`TRANSFORMER_LOAD_ARGS=--no-write`). A READER — it POSTs, it times, it sets no threshold | VERIFIED 2026-08-23 (M8-S4 leg 3): M5-S4's shape EXACTLY (4 req/s, 60 s, concurrency 8, hazard mix, open loop) through the SAME `run_load` with only the payload differing — two percentiles at different shapes are not comparable. **Both arms back to back in one invocation**, so the champion is a CONTROL measured in the same minutes rather than a figure quoted across a host reboot. **p50 31.1 -> 49.3 ms (+18.1), p95 113.1 -> 118.1 (+5.0), 240/240 ok on each arm, ZERO errors on both, 4.01 req/s achieved on both, version `['2']` on both.** **Quote the p50**: the p95 delta was **+23.0 ms** in a run eight minutes earlier while p50 held at +16.8, and both records are tracked (`transformer-load.json`, `transformer-load-run1.json`) so that is checkable rather than asserted — the tail is laptop contention, the reading M6-S2 already refused once |
 | Gate check M8 | `make verify-m8` | VERIFIED 2026-08-23 (M8-S5 leg 2): **GREEN 51/51 sub-checks in 7 sections, exit 0** — the wall (`uv.lock` **byte-identical to the `m7-closed` tag**, `feast` **ABSENT** asked of `uv pip list` and not inferred from the lock, the conflict re-read live (`pandas<3,>=1.4.3` vs 3.0.5), the wall **one package wide**, 66 exact pins with `--no-deps`, the import law both directions by **ast**) · the feature repo (the APPLIED registry's 4 views and 5 entities equal to what `ast` parses out of `definitions.py` — two independently produced lists; `feast plan` 0 substantive, F-055's only checkable statement; no registry.db TRACKED and the generated one gitignored, asked of `git check-ignore`; every view carrying a verdict, 2 CATALOG-ONLY, the losing number labelled a SAMPLE number) · **the four seams, all at `0.000e+00` against a bar of EXACT that is PARSED from the prose arguing it, `one missing` ZERO on every column, and all four bars COMMITTED BEFORE the records they judge — 678 s · 356 s · 320 s · 546 s, read off `git log --diff-filter=A`** (M8 law 4 from git, not from a sentence) · the PIT proof as a DIFFERENCE with two anchors (honest vs naive disagree on every time-varying column, **the naive answer IS our own full-window table**, the honest one reconciles with `aggregates.transform` at zero, 10 rows told nothing, 7 distinct windows, F-056's shortfall CLASSIFIED with UNEXPLAINED 0) · **five live questions** (champion 10.665224 min at `model_version='2'` **exactly** the recorded value; the transformer answering the same hazard from four RAW fields at `|Δ| = 0.000e+00` with `X-Taxi-Lookups` naming the two groups that did NOT cross; the feature server two-sided; **57,688 keys** at `noeviction`; one PromQL query — F-043's, and it found **F-061**) · F-059 as a TYPE by ast · the page (12 rows, all verdicted, **3 ADOPT / 5 SURPASS**, per-row provenance) · **the alias law in its strong form: not one registry version created after the `m7-closed` tag**. **RE-RUNS NOTHING and MINTS NOTHING**, pinned by `tests/unit/test_verify_m8.py` (36 tests) incl. the five-question count. No skip flag, no fast mode (M1's rule, **eighth** inheritance). Transcript: `docs/verify_m8_transcripts.md` §1 |
 | Prove the M8 gate can go RED | `make verify-m8-redteam` (`bash scripts/verify_m8_redteam.sh`) | VERIFIED 2026-08-23 (M8-S5 leg 2): rewrites ONE count in `automation/runs/m8-online/online_parity.json` — a pickup-zone column's `both_missing` **13 → 0**, the column CHOSEN from the record rather than typed — leaving `compared`, `mismatches`, `max_abs_delta`, `one_missing`, the headline delta and the `PASSED` verdict untouched. **It is not a lie about a measurement; it is what a correct-looking measurement of the wrong population reports** — zero missing values is exactly what a comparison that dropped nulls prints, and it looks BETTER than the truth. → **RED exit 1 with 3 FAILs from THREE artifacts**: the run's own two-sided no-geometry assertion, the independently-built ANCHOR block inside the same record, and `docs/feast_online_parity_table.md` — the blueprint's named accept artifact and the only witness a human diffs. **48 sub-check lines still ran and passed**, and **the four-seam headline leg stayed GREEN by design** — what separates a gate that fails on a WRONG POPULATION from one that fails on any edit. Restored under an EXIT trap, sha256-verified (`153c4399deab…`), `git status` clean → **GREEN 51/51**. Touches no pod, no image, no Redis key, no MLflow run, no registry version, no alias, no rule and no traffic |
+| Enumerate what WOULD rotate, touching nothing (M9-S12) | `make rotate-plan` | VERIFIED 2026-08-25 (M9-S12): **27 key(s) in `.env`, every one classified** — 12 rotatable across 5 families, 15 identities/endpoints/settings each printed with the reason it is not a secret. **A key it does not recognise is a FAILURE, never a skip** (exit 2 naming it), and so is a key it expects that `.env` lacks; both directions are pinned by tests against a temp `.env`. This is the read-only twin of the rotation and the thing to run before believing any claim about what the platform's credentials are |
+| Rotate every credential IN PLACE on the live platform (M9-S12) | `make rotate-credentials` (`ROTATE_ARGS="--families postgres"` does one family — each is a safe stopping point) | VERIFIED 2026-08-25 (M9-S12): **12 credential(s) across 5 families**, PO-sanctioned at AWAITING_PO 2026-08-24-5 answer 2. Postgres **6 roles hold a SCRAM-SHA-256 verifier** read back from `pg_authid` · MinIO **3 users re-issued with policy attachment unchanged, read BACK** (`serving` carries TWO policies, `readonly,serving-readonly`, and a silent reset to a default would have widened the most-exposed identity in the program without any read failing) · MinIO root restarted with **all 3 named users still readable 0.3 s past Ready** · Grafana Secret+restart · Metabase admin via its API with **a FRESH login on the new password** as the proof. Six consumers converged once each, incl. **flyte by helm upgrade** (the chart renders its credentials out of VALUES, so a `rollout restart` would look like it worked and change nothing) and **`make boards`** (F-078). No value is printed, put in argv or written to the record — three AST tests plus one that fails on any 32-hex token in the committed record. The record **checkpoints per family**, so a run that dies says which completed |
+| Prove the PRE-rotation values are dead (M9-S12) | `make rotate-verify-old` — run AFTER the positive gate sweep, never before | VERIFIED 2026-08-25 (M9-S12): **PASSED — 4 check(s)**. MinIO root refused · MinIO user `serving` refused · Postgres `mlflow` refused with a **password authentication failure** · and the CURRENT password accepted over the same path, which is the control. Ordering is the point (gotcha #105/F-060): an absence check run first passes against a platform that is simply down. **Its first run reported the rotation had not taken, and that was F-077** — it probed `127.0.0.1` inside the postgres pod, where `pg_hba.conf` says `trust`, so no password was ever consulted and the positive control could not tell (under `trust` both arms pass). It connects to the pod's OWN IP now, read from the cluster, which falls through to the `scram-sha-256` rule |
+| Destroy the rotation's undo copy (M9-S12) | `make rotate-destroy-undo` — the LAST step | VERIFIED 2026-08-25 (M9-S12): overwrote and unlinked `~/.nyc-taxi-rotation/env.pre-rotation` (1,296 bytes) and recorded the fact. It lives OUTSIDE the repo because `make verify-m2`'s root-stray leg named it when it did not — **gitignore hides a file from git and from nothing else** (F-075). The record states the honest limit rather than implying a shred: on a CoW/journalling filesystem overwrite-then-unlink is not a guarantee the bytes are unrecoverable, only that no path reads them |
 | Gate checks | `make verify-m0` … `verify-m8` | M0/M1/M2/M3/M4/M5/M6/M7/M8 live |
 | The stakeholder demo page (M9-S1) | `make demo-page` regenerates it from its three sources · `make demo-page-check` is the write-nothing twin | VERIFIED 2026-08-23 (M9-S1): **265 zones** from `data/reference/taxi_zone_lookup.csv`, **4 raw inputs** from `transformer.RAW_INPUTS`, and a default trip that is a PUBLISHED parity row — so the first thing a stakeholder sees is checkable against a record. `--check` regenerates in memory and diffs against git; a unit test runs it, and a second asserts regeneration is deterministic. **Its first run substituted the template's own explanatory comment** and shipped 795 `<option>` elements instead of 530 — gotcha **#110**, now guarded by an occurrence COUNT (`TOKEN_COUNTS`), because every one of the three copies matched the CSV |
 | Deploy the demo + its route (M9-S1) | `make deploy-demo` (`DRY_RUN=1` mutates nothing; `TEARDOWN=1` removes its four objects and touches nothing else) | VERIFIED 2026-08-23 (M9-S1): ConfigMap rendered FROM `demo/index.html` (the file in git is the only copy), a `busybox:1.38.0` httpd Deployment at the digest the data stager already pins, a ClusterIP Service and ONE **host-less** Ingress. **Three wait legs**: `rollout status`, then the pod template's page-sha256 == the committed file's, then **the ROUTE itself** under the origin the browser will use (F-037/F-060, gotcha #106). It then asserts the two invariants it shares a server block with — **`/healthz` 200 and `/` 404** — rather than leaving the next `make deploy-serving` to discover them. F-039's precondition is asked of the CLUSTER: it refuses to write to any of its four names that carries `ownerReferences`. `DRY_RUN=1` verified to leave the namespace with no demo object. Deploys no model and cannot name the registry in code (AST-tested) |

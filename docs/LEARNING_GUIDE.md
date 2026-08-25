@@ -4973,3 +4973,65 @@ transitive upper bound. Note what it tells you. Then ask: in the pipeline where
 you run it, is there anything that would notice the difference between *"upgraded"*
 and *"declined to upgrade, successfully"*? If the answer is your own reading of the
 output, that check does not exist yet.
+
+---
+
+## M9-S12 — the alarm that sounds exactly like the disaster
+
+**The story in one line.** Twelve credentials rotated on a live platform without
+destroying any state, and the four things that went wrong were all in the
+*checking*, never in the rotation.
+
+**Why rotate in place at all.** `make destroy` + redeploy replaces every
+credential in one command. It also deletes the MLflow registry, five Postgres
+tenants, the MinIO objects and the Feast store — and a full restore over a dead
+platform has never been rehearsed here. The cheap path spends state whose recovery
+is unproven. That is the whole argument, and the PO made it before being asked.
+
+**The design decision worth stealing.** `.env` had 27 keys and 12 were secrets;
+the rest were usernames, endpoints and a bucket name. So the script *classifies*
+every key and
+
+> **refuses to run on a key it does not recognise, rather than skipping it.**
+
+A rotation that quietly passes over a credential added last month reports
+success, and the operator now believes something false. Skipping is the failure
+mode that produces confidence; refusing is the one that produces a fix.
+
+**The finding that matters most.** The MinIO root rotation's safety check —
+*did the named users survive?* — came back `authentication failed`. That is
+precisely what the catastrophe it guards against looks like. It was not the
+catastrophe: `kubectl exec deploy/minio` resolves the Deployment's *selector*,
+and during a rolling restart that selector matches two pods, so the check had
+interrogated the pod being replaced. Behind it, `rollout status` had already
+affirmed a restart that had not started, because it describes the Deployment's
+current status and the controller had not yet observed the new generation.
+
+> **A false alarm indistinguishable from a real disaster is worse than no alarm.**
+> The reflex it triggers is to undo the thing that was working.
+
+**And the finding that is subtler.** The negative probe — *the old password is
+refused* — ran `psql` to `127.0.0.1` inside the postgres pod, where `pg_hba.conf`
+says `trust`. The password was never consulted, so a correctly rotated role
+reported as unrotated. The positive control I had added specifically to catch a
+false refusal could not help: **under `trust` both arms pass**, so the control
+agreed with the false alarm. A control discriminates only if the mechanism under
+test is actually engaged.
+
+**Two guards corrected the charter, and both were two-second commands.** The
+charter called `.env.pre-rotation` "a gitignored path"; `git check-ignore` said
+otherwise (gitignore patterns are names, not prefixes). With that fixed,
+`verify-m2`'s root-stray leg named the file anyway and was right — a gitignored
+file is hidden from git and from nothing else, not a directory listing and not a
+`tar`. A file holding every old credential of a soon-to-be-public repo belongs
+outside the repo entirely.
+
+**What to try yourself.** Find a check in your system that verifies a dangerous
+operation succeeded — a failover, a key rotation, a migration. Ask two questions
+about it. First: *what else, other than the disaster, could produce this exact
+failure output?* If you cannot name at least one benign cause, you have not
+looked at the plumbing between the check and the thing. Second: *if the mechanism
+I am testing were switched off entirely, would this check notice — or would it
+pass?* The second question is the one `trust` answers badly, and it is the one a
+positive control is usually assumed to have covered.
+
