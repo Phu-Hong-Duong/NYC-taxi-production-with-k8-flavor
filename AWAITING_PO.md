@@ -99,6 +99,25 @@ automation/next_session.sh architect 120   # resumes the chain on any answer (an
 >    re-pointed at a new tag, `make marts` and the MLflow client re-run to prove
 >    nothing moved, the M8 quarantine's pin file checked. The public flip
 >    happens after this lands and remains the PO's click.
+>
+>    **LANDED 2026-08-25 (M9-S11) — decision 1 only; 2 and 3 remain chartered as
+>    M9-S12 and M9-S13.** sqlparse 0.5.5 → 0.6.0, three HIGH CVEs gone
+>    (repo-tree dependency findings **5 → 1, CRITICAL 0 · HIGH 0**,
+>    `fixable_in_our_lockfile: []`). **It was not one command**: dbt-core 1.12.2
+>    declares `sqlparse<0.6.0`, so `uv lock --upgrade-package sqlparse` produced
+>    an EMPTY diff and reported success — **dbt-core 1.12.3** moved with it, and
+>    that is **F-074**. 243 packages before and after, 0 added, 0 removed,
+>    exactly 2 moved, every pinned numeric core byte-unchanged. The invariant
+>    kept its SHAPE and only its anchor moved, once, to
+>    `lock-rebaselined-m9-publish`; §7's registry-creation bound deliberately
+>    stayed at `m7-closed`, because moving THAT forward would ADMIT versions
+>    rather than refuse them. Proofs: `make marts` dbt build **PASS=80** with all
+>    six mart counts reproduced to the row · `make parity` **0.000e+00** over 16
+>    hazards · `verify-m8` GREEN 51/51 · `verify-m9` GREEN · both red teams PASS
+>    · host suite 1,277 · `readme-check` GREEN. The quarantine pin file is a
+>    recorded ABSENCE (sqlparse is not among its 66 pins) and the three images
+>    are deliberately NOT rebuilt, with the reason recorded rather than netted
+>    out. Write-up: `docs/lock_rebaseline_m9.md`. See **2026-08-25-2**.
 > 2. **Rotate the `.env` credentials before publish — YES.** The mechanism is
 >    ARCH's to charter: this entry priced it as `make destroy` + redeploy, but
 >    an in-place secret rotation is preferred over a rebuild of the stateful
