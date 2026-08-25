@@ -507,20 +507,20 @@ try:
     # with the live bar required to be no lower. Two of the five sit at exactly
     # +0.0000% against the incumbent, so this leg is the one that would report
     # the flip if the enumeration or the era logic were wrong.
+    # It says nothing about the LIVE bar, deliberately: the ratchet that stops
+    # today's margin falling has ONE home (verify-m2 §2), and asserting it here
+    # as well would report one fact as two independent witnesses — which is
+    # exactly what `make gate-margin-redteam` found in this leg's first draft.
     ties = [c["label"] for c in contenders
             if inc and round(c["test_mae"], 4) == round(inc["mae"], 4)]
-    try:
-        required = gate_eras.assert_margin_never_decreased(
-            cfg["incumbent_min_improvement_pct"], eras_seen)
+    if len(eras_seen) == len(contenders):
         ok(f"all {len(eras_seen)} verdict(s) replayed ERA-AWARE at the "
            f"{sorted(set(f'{e:.2f}%' for e in eras_seen))} margin in force when the "
            f"bake-off ran — including {len(ties)} judged against the incumbent's own "
-           f"number ({', '.join(ties)}) — while the live bar is "
-           f"{float(cfg['incumbent_min_improvement_pct']):.2f}% (>= the sanctioned "
-           f"{required:.2f}%)")
-    except gate_eras.GateEraError as exc:
-        no(f"the live incumbent margin is below one this record's verdicts were taken "
-           f"against: {str(exc).splitlines()[0]}")
+           f"number ({', '.join(ties)}), which is the row F-068 stopped this landing on")
+    else:
+        no(f"only {len(eras_seen)} of {len(contenders)} contender(s) could be attributed to "
+           "an era — a skipped replay is not a passing one")
 
     # "printed from evaluator-traceable MLflow runs" — every non-floor contender
     # must name a run, and that run must name the evaluator as its metric source.
@@ -646,11 +646,23 @@ try:
         no("a sampled train-month list passed the F-008 guard — sampling makes this gate easier")
 
     # The bar itself. Tightening is the MLE's to argue; loosening is a PO fork.
-    if float(gate_cfg["min_improvement_pct"]) >= 2.0 and gate_cfg.get("require_no_kpi10_regression"):
-        ok(f"the bar is unchanged: KPI-09 margin >= {gate_cfg['min_improvement_pct']}% and the "
-           f"KPI-10 no-regression condition still armed")
+    # Both bars, from M9-S10: the floor margin AND the incumbent margin, which
+    # is checked here against the PO-sanctioned constant rather than against a
+    # literal typed in this file (gate_eras.SANCTIONED_MARGIN_PCT — one home).
+    from taxi_mlops.training import gate_eras
+
+    incumbent_bar = float(gate_cfg["incumbent_min_improvement_pct"])
+    if (float(gate_cfg["min_improvement_pct"]) >= 2.0
+            and gate_cfg.get("require_no_kpi10_regression")
+            and incumbent_bar >= gate_eras.SANCTIONED_MARGIN_PCT):
+        ok(f"both bars are unchanged: KPI-09 margin >= {gate_cfg['min_improvement_pct']}% over "
+           f"the floor, >= {incumbent_bar:.2f}% over the serving champion (F-016's sanctioned "
+           f"{gate_eras.SANCTIONED_MARGIN_PCT:.2f}%), and the KPI-10 no-regression condition "
+           f"still armed")
     else:
-        no(f"the gate has been LOOSENED: {gate_cfg['min_improvement_pct']}% margin, "
+        no(f"the gate has been LOOSENED: {gate_cfg['min_improvement_pct']}% floor margin, "
+           f"{incumbent_bar:.2f}% incumbent margin (sanctioned "
+           f"{gate_eras.SANCTIONED_MARGIN_PCT:.2f}%), "
            f"require_no_kpi10_regression={gate_cfg.get('require_no_kpi10_regression')}")
 except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the guards check itself raised {type(exc).__name__}: {exc}")

@@ -274,22 +274,12 @@ try:
         ok("the KPI-10 no-regression condition is still armed (it can refuse what the margin admits)")
     else:
         no("require_no_kpi10_regression is off — the rider-facing condition was switched off")
-    # THE MONOTONIC CHECK (M9-S10, F-016). Separate from, and deliberately not
-    # weakened by, the era-aware replay below: era-awareness makes HISTORY
-    # replay correctly, and on its own it would make a LOOSENING replay
-    # correctly too — every old verdict judged against its own old bar while the
-    # live one quietly fell. So the number on disk must be at least the largest
-    # margin any recorded verdict was taken against, and at least the number the
-    # PO sanctioned. The observed set is built below and re-asserted after the
-    # replays, once the recorded margins are in hand.
-    try:
-        floor_required = gate_eras.assert_margin_never_decreased(
-            cfg["incumbent_min_improvement_pct"], [])
-        ok(f"the incumbent margin on disk is {float(cfg['incumbent_min_improvement_pct']):.2f}% "
-           f"and may not fall below the PO-sanctioned {floor_required:.2f}% "
-           f"(AWAITING_PO 2026-08-18-1 / 2026-08-24-4)")
-    except gate_eras.GateEraError as exc:
-        no(f"the incumbent margin was LOOSENED: {str(exc).splitlines()[0]}")
+    # THE MONOTONIC CHECK (M9-S10, F-016) lives BELOW, once the era of every
+    # replayed verdict is in hand — one sub-check and one only. The first draft
+    # of this leg asserted it twice, here and in the era summary, and the red
+    # team is what said so: a lowered margin produced two FAILs carrying the
+    # same sentence, which reads like two independent witnesses and is one fact
+    # counted twice.
     # M3-S1 (F-010) changed this floor, and the change is a TIGHTENING: the same
     # lookup with one more backoff level, measured lower on the same month. The
     # pin below moved with it in the same PR — never weakened, and the sub-check
@@ -403,21 +393,36 @@ try:
     else:
         no("no transcript in the doc replays to PROMOTE")
 
-    # The ratchet, re-asserted against what these verdicts were ACTUALLY taken
-    # against rather than against the sanctioned constant alone. Today every era
-    # here is the pre-B 0.00% and the sanctioned 0.50% is what binds; the day a
-    # transcript records a HIGHER bar, this is the sub-check that stops the
-    # config falling back below it.
+    # (i) ERA-AWARENESS, and nothing else: every block resolved a bar, and it
+    # resolved it from what the verdict declares or from the enumerated pre-B
+    # set. This says NOTHING about the live margin on purpose — a historical
+    # verdict is judged by the bar in force when it was taken, so this line must
+    # stay GREEN when today's bar moves, and the red team asserts exactly that.
+    if len(eras_seen) == len(blocks):
+        ok(f"all {len(eras_seen)} verdict(s) replayed ERA-AWARE — margin(s) in force when "
+           f"they were taken: {sorted(set(f'{e:.2f}%' for e in eras_seen))} "
+           f"(F-016/F-068: read off the verdict, else from the enumerated pre-B set, "
+           f"never defaulted)")
+    else:
+        no(f"only {len(eras_seen)} of {len(blocks)} transcript block(s) could be attributed "
+           "to an era — the rest were skipped, and a skipped replay is not a passing one")
+
+    # (ii) THE RATCHET, and it is the half era-awareness cannot provide. Judging
+    # history by its own bar would let the LIVE bar fall tomorrow while all nine
+    # replays stayed green. So the number on disk must be at least the largest
+    # margin any recorded verdict was taken against AND at least the number the
+    # PO sanctioned. Today every era here is the pre-B 0.00% and the sanctioned
+    # 0.50% is what binds; the day a transcript records a HIGHER bar, this is
+    # the sub-check that stops the config falling back below it.
     try:
         required = gate_eras.assert_margin_never_decreased(
             cfg["incumbent_min_improvement_pct"], eras_seen)
-        ok(f"{len(eras_seen)} verdict(s) replayed ERA-AWARE (margins in force: "
-           f"{sorted(set(f'{e:.2f}%' for e in eras_seen))}) and the live bar "
-           f"{float(cfg['incumbent_min_improvement_pct']):.2f}% is >= all of them "
-           f"and >= the sanctioned {required:.2f}%")
+        ok(f"the live incumbent margin {float(cfg['incumbent_min_improvement_pct']):.2f}% "
+           f"is >= the PO-sanctioned {required:.2f}% and >= every margin a recorded "
+           f"verdict was taken against — lowering it is a PO fork, not an edit "
+           f"(AWAITING_PO 2026-08-18-1 / 2026-08-24-4)")
     except gate_eras.GateEraError as exc:
-        no(f"the live incumbent margin is below one a recorded verdict was taken "
-           f"against: {str(exc).splitlines()[0]}")
+        no(f"the incumbent margin was LOOSENED: {str(exc).splitlines()[0]}")
 
     # A floor swap is only NOT a loosening if the new floor is harder, so the
     # direction is measured rather than asserted — from two committed transcripts,
