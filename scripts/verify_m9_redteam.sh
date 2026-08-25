@@ -175,7 +175,7 @@ for still_green in "<option> elements" \
                    "LOADED with health=ok" \
                    "FIRED and reached Alertmanager" \
                    "NOT ONE of the" \
-                   "BYTE-IDENTICAL to the m7-closed tag"; do
+                   "BYTE-IDENTICAL to the lock-rebaselined-m9-publish tag"; do
   if printf '%s\n' "$red_log" | grep -aqE "$still_green"; then
     ok "unaffected leg still green: ${still_green}"
   else

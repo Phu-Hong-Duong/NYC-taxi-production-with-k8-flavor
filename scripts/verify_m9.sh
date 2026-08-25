@@ -1050,6 +1050,10 @@ from pathlib import Path
 def ok(m): print(f"PASS|{m}")
 def no(m): print(f"FAIL|{m}")
 
+# The one sanctioned lock anchor. Spelled ONCE per script and pinned across all
+# of them by tests/unit/test_lock_anchor.py.
+LOCK_ANCHOR = "lock-rebaselined-m9-publish"
+
 try:
     import mlflow
     import yaml
@@ -1092,13 +1096,20 @@ try:
 
     # (b) The lock. M9 added a page, three rules and a reader, and the project's
     # dependency graph did not move — the demo is stdlib-and-a-template by
-    # design (no JS framework, no build step, no new python package).
-    tagged = subprocess.run(["git", "show", "m7-closed:uv.lock"], capture_output=True, text=True)
+    # design (no JS framework, no build step, no new python package). The ANCHOR
+    # moved once on 2026-08-25 by PO letter (AWAITING_PO 2026-08-24-5 option (b),
+    # landed by M9-S11: sqlparse 0.5.5 -> 0.6.0 for three HIGH CVEs, which also
+    # required dbt-core 1.12.2 -> 1.12.3). The invariant keeps its shape — the
+    # lock still may not move except by letter — and this is NOT the tag (a)
+    # above uses to bound registry-version creation times.
+    tagged = subprocess.run(["git", "show", f"{LOCK_ANCHOR}:uv.lock"],
+                            capture_output=True, text=True)
     if tagged.returncode == 0 and tagged.stdout == Path("uv.lock").read_text():
-        ok("uv.lock is BYTE-IDENTICAL to the m7-closed tag — M8's five stories and M9's four, "
-           "and the project's dependency graph has not moved since M7 closed")
+        ok(f"uv.lock is BYTE-IDENTICAL to the {LOCK_ANCHOR} tag — M8's five stories and "
+           f"M9's, and the project's dependency graph moves only by PO letter")
     else:
-        no("uv.lock DIFFERS from the m7-closed tag — `git diff m7-closed -- uv.lock` says what")
+        no(f"uv.lock DIFFERS from the {LOCK_ANCHOR} tag — "
+           f"`git diff {LOCK_ANCHOR} -- uv.lock` says what")
 
     # (c) The settled pins. DVC answers for every target in ONE summary line
     # when nothing moved and names each drifted target individually when
