@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# M9-S13 — the pre-commit secret scan. THE PO'S YES, WITH ITS LIMIT INTACT.
+#
+# It scans the INDEX — the bytes this commit would actually add — through the same
+# module, the same acknowledgement table and the same redaction as the audit of
+# record (`make security-scan`). It is not a second scanner and it must never
+# become one: a hook with its own copy of the rules and no copy of the argument
+# for `scripts/gameday_m6.py`'s deliberately-wrong MinIO credential refuses every
+# commit that touches the gameday, and the first thing its owner learns is
+# `--no-verify`.
+#
+# WHAT THIS IS NOT, said here because `.git/hooks` is untracked and therefore
+# nothing in this repository can prove the file is installed on your machine:
+#
+#   * it is NOT a gate. No `make verify-mN` can see it. `make security-scan`
+#     remains the audit of record and is the thing publishing is conditional on.
+#   * it is bypassable by design — `git commit --no-verify` skips every hook, and
+#     `make hook-redteam` MEASURES that rather than asserting it, so the limit is
+#     a demonstrated fact rather than a caution.
+#   * it sees the index, so a secret already in a past commit is invisible to it.
+#     That is `make security-scan`'s history leg, and it walks every ref.
+#
+# It fails CLOSED. If the scanner is missing the commit is refused, because a
+# scanner that is not there has not cleared anything — and a hook that waves a
+# commit through when its instrument is absent is the false green this program
+# has spent nine milestones refusing (gotcha #78).
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[pre-commit] REFUSED: uv is not on PATH, so the staged-secret scan could" >&2
+  echo "[pre-commit]          not run. This hook fails closed: an instrument that" >&2
+  echo "[pre-commit]          did not run has not cleared this commit." >&2
+  echo "[pre-commit]          Fix the environment, or commit with --no-verify and" >&2
+  echo "[pre-commit]          run 'make security-scan' before you push." >&2
+  exit 1
+fi
+
+exec uv run python scripts/security_scan.py --stage staged-secrets --no-write

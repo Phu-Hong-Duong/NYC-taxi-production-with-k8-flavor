@@ -365,6 +365,18 @@ security-scan: ## M9-S9: the pre-publish audit — secrets in the WORKING TREE a
 security-scan-redteam: ## M9-S9: prove the secret scan can FIND one — plant a real-shaped credential in a scratch commit, watch gitleaks name it, then destroy the branch
 	@bash scripts/security_scan_redteam.sh
 
+# ---- M9-S13: the pre-commit hook (PO answer 4, 2026-08-24-5) ----
+# `.git/hooks` is untracked, so no gate can see the installed hook. The tracked
+# script, this installer and the drill are the verifiable halves; `security-scan`
+# stays the audit of record.
+.PHONY: install-hooks install-hooks-check hook-redteam
+install-hooks: ## M9-S13: copy scripts/hooks/* into .git/hooks and set the execute bit, then read it back. FORCE=1 overwrites a hook that is not ours
+	@bash scripts/install_hooks.sh
+install-hooks-check: ## M9-S13: is the pre-commit hook installed, current and EXECUTABLE in this clone? Installs nothing
+	@bash scripts/install_hooks.sh --check
+hook-redteam: ## M9-S13: with the hook installed, stage a generated credential and watch the commit be REFUSED — then prove an ordinary commit still passes, and that --no-verify really does bypass it
+	@bash scripts/hook_redteam.sh
+
 .PHONY: rotate-plan rotate-credentials rotate-verify-old rotate-destroy-undo
 rotate-plan: ## M9-S12: enumerate + classify every key in .env and print what WOULD rotate. Touches nothing
 	@uv run python scripts/rotate_credentials.py --plan
