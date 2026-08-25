@@ -1,5 +1,120 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (cw) — M9-S13: the pre-commit hook, the limit it cannot hide, and the drill it broke
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cv) · `docs/milestones/M9_PUBLISH_KICKOFF.md` § M9-S13 · AWAITING_PO
+(2026-08-25-2 flagged NOT A FORK; nothing blocking). Role block **MLOps**, charter
+read, refusals in play: *no fit · no alias move · no registry version · no gate
+loosened · no wire change · no cluster call that writes*. None broken.
+
+**Story: M9-S13, COMPLETE.** The PO's fourth answer (2026-08-24-5) — the last
+chartered story of the publish phase. PR **#76**, merged, `git branch -r --contains
+51e0841` → `origin/main`.
+
+### Reconciliation (staleness check)
+Handoff (cv)'s Next claimed a live cluster, a clean tree at the M9-S12 merge, host
+suite 1,297, a tracked rotation record and a destroyed undo copy. Measured, not
+assumed: tree clean at `0c9ed49`, three `mlops-taxi` nodes **Ready, 8d, v1.36.1**,
+suite 1,297 before this story's tests. No `.status` file pointed at unfinished work.
+Nothing had moved.
+
+### Done
+- **`scripts/hooks/pre-commit` (tracked, `100755` in the index) + `make
+  install-hooks` / `install-hooks-check` + `make hook-redteam` + 22 tests.** The
+  hook ran on **every commit of this story** — its output is in each commit's
+  transcript.
+- **The design decision: the hook runs the AUDIT's module, not a second scanner.**
+  `security_scan.py --stage staged-secrets --no-write`, so there is ONE
+  `ACKNOWLEDGED_SECRETS` table, one redaction, one vocabulary. A hook with its own
+  rules and no copy of the gameday argument refuses every commit touching
+  `scripts/gameday_m6.py`, **and the flag its owner learns on a false positive is
+  the flag they reach for on the commit that matters.** F-013's "one home" applied
+  to a suppression.
+- **`staged-secrets` is deliberately NOT in `STAGES`** (the audit's leg set, which
+  `scan.json` records) and **cannot write**: `main` REFUSES it without `--no-write`,
+  loudly rather than by forcing the flag — a hook that rewrote a tracked record
+  would dirty the tree inside the commit it is inspecting. Its sentences are its own
+  (*secrets staged for commit*, *COMMIT REFUSED*), because reusing the audit's line
+  would claim a corpus it never opened. **0.4 s** on a clean index.
+- **The instrument is `gitleaks git --staged`; the charter's `gitleaks protect
+  --staged` does not exist** — `protect` was removed in the 8.19 line. Read off
+  `--help` on the pinned 8.30.1 binary (gotcha #118).
+- **The execute bit is why there is an installer.** The bit is set and then **read
+  back off the installed file**; `--check` separates **NOT INSTALLED · STALE · NOT
+  EXECUTABLE** (git skips a 0644 hook in silence); the tests **RUN** the installer
+  into a temp directory rather than grepping it for `chmod`. It refuses to overwrite
+  a `pre-commit` that is not ours (`FORCE=1`).
+- **`make hook-redteam` PASSED 20/20**, record `automation/runs/m9-hook/redteam.json`.
+  Arm A is the load-bearing one — an ordinary commit PASSES and the hook is proved
+  to have **RUN** (an installed hook doing nothing looks exactly like one that
+  passed). Arm B: refusal, HEAD unmoved, plant still staged, secret never printed.
+  Arm C **MEASURES the documented limit** — `--no-verify` lands the plant, the audit
+  still catches it, then the object is destroyed and `git cat-file -e` is ASKED.
+- **F-080 — the hook broke `make security-scan-redteam` the hour it landed**, because
+  that drill stages a credential *on purpose*. A working guard presenting as a broken
+  red team. **Before shipping a repo-wide refusal, ask who already does the forbidden
+  thing deliberately — the answer is the drills.** Blast radius measured (`grep -rn
+  "git commit"` → exactly one caller), fixed with `--no-verify` + a comment saying
+  the flag is there *because the hook is right*.
+- **The plant generator stopped being a twin** — `scripts/redteam_plant.py`, with a
+  property test that draws 25 pairs and asserts F-071's alphabet and both entropy
+  floors. One S9 guard went red for the move and was **re-derived, not widened**
+  (gotcha #50).
+- Docs/ledgers/inbox: `docs/precommit_hook_m9.md` · **F-080** in `ledgers/findings.md`
+  · gotchas **#116/#117/#118** · CLAUDE.md section + 3 command rows · README (install
+  commands, an honest-limits bullet, two new record-anchored claims) · LEARNING_GUIDE
+  field note · **AWAITING_PO 2026-08-25-3** (flagged NOT A FORK, NO ACTION NEEDED —
+  all four letters landed, the flip is the PO's click, with the two commands).
+
+### Verification (the story's final sweep, one place)
+`make hook-redteam` **PASSED 20/20** · `make security-scan-redteam` **PASSED 16/16**
+(re-run after the generator extraction AND after F-080's fix) · `make security-scan`
+**`publishable: true`, `secrets_in_git: 0`**, 2 acknowledged (the one argument, seen
+by both secret legs), 9 local-only in `.env`, CVEs 201/196/879 + 1 dependency
+(CRITICAL 0 · HIGH 0) · `make verify-m9` **GREEN, 46 sub-checks** (re-run on `main`
+after the merge) · `make readme-check` **GREEN** (24 targets, 30 paths, 32 claims,
+Status table 12 rows) · host suite **1,319 passed, no skips** (was 1,297) · ruff
+clean · `make install-hooks-check` ok. `@champion` **2** / `feature_set v2` —
+nothing fitted, no alias moved, no version created, no wire touched.
+
+### Decisions (craft-level, inside scope, recorded here)
+- **The hook fails CLOSED**: no `uv` on PATH → the commit is refused, naming the fix
+  and naming `--no-verify`. A scanner that did not run has cleared nothing.
+- **The drill installs nothing.** It refuses unless the hook is already installed and
+  current, so it cannot pass against a hook of its own making and cannot leave a
+  clone in a state its owner did not choose.
+- **No `.gitleaksignore`, still.** The one argued finding stays in
+  `ACKNOWLEDGED_SECRETS`, re-derived from the bytes on every run, including the
+  hook's.
+- **The drill writes its record LAST**, after every git-state check, and the cleanup
+  trap only restores forcefully when the drill is not already home — a blanket
+  `reset --hard` would destroy the run's own evidence (F-063's family).
+
+### Defects/Surprises
+- F-080, above — found by running the thing, one hour after installing it.
+- `make readme-check` caught this story's own diff again (**sixth** unplanted catch
+  since M9-S8): 1,297 → 1,319 tests, RED naming the claim before anyone looked.
+
+### Next
+**ARCH publish-boundary session** (`docs/milestones/M9_PUBLISH_KICKOFF.md` §Exit):
+re-run `verify-m9` + the S11-re-anchored `verify-m8` + the S10-touched
+`verify-m2`/`m3`/`m7`, disposition anything the four stories raised (F-074…F-080 are
+all CLOSED; nothing is open from this story), tag **`m9-publish-closed`** on a clean
+close, flip the **M9 Publish** row in README's Status table (state + evidence) in the
+same commit, and re-park on the flip entry. **The flip itself is the PO's click and
+no story publishes anything.**
+
+**Three things the boundary should know.** (1) The host suite is **1,319** and both
+the README and `scripts/readme_check.py`'s claim table carry that number — twins,
+they move together. (2) `automation/runs/m9-hook/redteam.json` is tracked evidence
+with two `needs_records` tests and two README claims behind it; do not regenerate it
+casually — `make hook-redteam` is safe and idempotent, but it rewrites the record.
+(3) **The pre-commit hook is installed in this clone**, so any drill or script that
+deliberately commits a secret must pass `--no-verify` (F-080); exactly one does, and
+it already does.
+
 ## Session 2026-08-25 (cv) — M9-S12: every credential replaced, nothing destroyed — and four alarms that were wrong
 
 ### State
