@@ -76,6 +76,7 @@ import re
 import secrets as pysecrets
 import subprocess
 import sys
+import time
 from typing import Any
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -242,6 +243,37 @@ def kubectl(*args: str, stdin: str | None = None, check: bool = True) -> subproc
     return p
 
 
+def restart_and_wait(ns: str, deploy: str, timeout_s: int = 600) -> None:
+    """`rollout restart`, then wait for the controller to have SEEN it, then for the rollout.
+
+    The middle step is the one people skip. `kubectl rollout restart` patches a
+    pod-template annotation and returns immediately; `kubectl rollout status`
+    asks about the Deployment's CURRENT status — which, until the controller
+    observes the new generation, still describes the PREVIOUS rollout, and that
+    one is complete. So the pair can report "successfully rolled out" about a
+    restart that has not started, leaving the caller talking to the pod it just
+    asked to be replaced.
+
+    Same root cause as F-036/gotcha #79 (`observedGeneration` trailing
+    `generation`), arriving from the other side: there it made kubectl refuse to
+    read conditions that were true, here it makes kubectl affirm a rollout that
+    has not begun.
+    """
+    kubectl("-n", ns, "rollout", "restart", f"deploy/{deploy}")
+    want = int(kubectl("-n", ns, "get", f"deploy/{deploy}", "-o",
+                       "jsonpath={.metadata.generation}").stdout.strip())
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        seen = kubectl("-n", ns, "get", f"deploy/{deploy}", "-o",
+                       "jsonpath={.status.observedGeneration}").stdout.strip()
+        if seen and int(seen) >= want:
+            break
+        time.sleep(1)
+    else:
+        raise RotationError(f"{ns}/{deploy}: controller never observed generation {want}")
+    kubectl("-n", ns, "rollout", "status", f"deploy/{deploy}", f"--timeout={timeout_s}s")
+
+
 def run_script(rel: str, env_extra: dict[str, str] | None = None) -> None:
     env = {**os.environ, **(env_extra or {})}
     p = subprocess.run(["bash", str(REPO / rel)], cwd=REPO, env=env, capture_output=True, text=True)
@@ -353,6 +385,45 @@ def rotate_postgres(env: dict[str, str], new: dict[str, str], record: dict[str, 
 
 
 # -------------------------------------------------------------- minio users ---
+def _minio_pod(timeout_s: int = 120) -> str:
+    """Resolve ONE concrete, Ready, not-terminating MinIO pod — never `deploy/minio`.
+
+    THIS COST THIS STORY ITS FIRST RUN, and the failure mode is worth the
+    paragraph. `kubectl exec deploy/minio` does not address the Deployment; it
+    resolves the Deployment's SELECTOR and picks a matching pod. MinIO here is
+    RollingUpdate with maxSurge=100% and maxUnavailable=0, so a restart puts TWO
+    pods behind that selector at once — and `kubectl rollout status` returns as
+    soon as the new ReplicaSet is complete, while the old pod is still
+    Terminating inside its grace period.
+
+    So the read-back that proves the root rotation worked can land on the pod
+    that is being replaced, which still holds the OLD root password. It answered
+    `mc: authentication failed`, which is EXACTLY what the catastrophe this check
+    exists to detect would look like — a MinIO build that re-encrypted its IAM
+    data with the new root credential and lost every named user. A false alarm
+    indistinguishable from a real disaster is worse than no alarm, because the
+    next operator's instinct is to roll the credential back.
+
+    gotcha #71's family in its exec form: a wait the thing you are replacing can
+    satisfy is not a wait — and neither is an exec it can answer.
+    """
+    deadline = time.time() + timeout_s
+    last = ""
+    while time.time() < deadline:
+        p = kubectl("-n", "platform", "get", "pods", "-l", "app=minio", "-o", "json")
+        pods = [
+            item for item in json.loads(p.stdout)["items"]
+            if item["metadata"].get("deletionTimestamp") is None
+            and item["status"].get("phase") == "Running"
+            and all(c.get("ready") for c in item["status"].get("containerStatuses", []))
+        ]
+        if len(pods) == 1:
+            return pods[0]["metadata"]["name"]
+        last = f"{len(pods)} ready, non-terminating pod(s): {[i['metadata']['name'] for i in pods]}"
+        time.sleep(3)
+    raise RotationError(f"could not resolve exactly one live MinIO pod within {timeout_s}s ({last})")
+
+
 def _mc(script: str, stdin: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     """Run `mc` inside the MinIO pod with credentials fed on STDIN.
 
@@ -361,26 +432,51 @@ def _mc(script: str, stdin: str, check: bool = True) -> subprocess.CompletedProc
     both read it. `read -r` keeps it in a shell variable instead.
     """
     return kubectl(
-        "-n", "platform", "exec", "-i", "deploy/minio", "--", "sh", "-c", script,
+        "-n", "platform", "exec", "-i", _minio_pod(), "--", "sh", "-c", script,
         stdin=stdin, check=check,
     )
 
 
-def _minio_user_policies(root_user: str, root_pw: str) -> dict[str, str]:
-    p = _mc(
-        'read -r RU; read -r RP; mc alias set r http://127.0.0.1:9000 "$RU" "$RP" >/dev/null 2>&1 '
-        "&& mc admin user list r --json",
-        stdin=f"{root_user}\n{root_pw}\n",
-    )
-    out: dict[str, str] = {}
-    for line in p.stdout.strip().splitlines():
-        try:
-            d = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if d.get("accessKey"):
-            out[d["accessKey"]] = d.get("policyName", "")
-    return out
+def _minio_user_policies(root_user: str, root_pw: str, wait_s: int = 0) -> tuple[dict[str, str], float]:
+    """List the named users and their policies. Returns (users, seconds_waited).
+
+    `wait_s` exists because of the second half of this story's first failure: for
+    a few seconds after a restart MinIO answers its readiness probe and REFUSES
+    the correct root credential. A single-shot read there reports "the named
+    users are gone" — the catastrophe — when the truth is "not yet".
+
+    So the retry is not politeness, it is the thing that makes the verdict mean
+    something: only after a bounded wait has elapsed is an empty answer evidence
+    of loss rather than of haste. The elapsed time is RETURNED rather than
+    swallowed, because a number that grows over releases is how anybody would
+    ever notice this getting worse.
+    """
+    started = time.time()
+    deadline = started + wait_s
+    last = ""
+    while True:
+        p = _mc(
+            'read -r RU; read -r RP; mc alias set r http://127.0.0.1:9000 "$RU" "$RP" '
+            "&& mc admin user list r --json",
+            stdin=f"{root_user}\n{root_pw}\n",
+            check=False,
+        )
+        if p.returncode == 0:
+            out: dict[str, str] = {}
+            for line in p.stdout.strip().splitlines():
+                try:
+                    d = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if d.get("accessKey"):
+                    out[d["accessKey"]] = d.get("policyName", "")
+            return out, round(time.time() - started, 1)
+        last = (p.stderr + p.stdout).strip().splitlines()[-1:] or ["(no output)"]
+        if time.time() >= deadline:
+            raise RotationError(
+                f"mc could not list MinIO users after {round(time.time() - started, 1)}s: {last[0][:200]}"
+            )
+        time.sleep(3)
 
 
 def rotate_minio_users(env: dict[str, str], new: dict[str, str], record: dict[str, Any]) -> None:
@@ -395,7 +491,7 @@ def rotate_minio_users(env: dict[str, str], new: dict[str, str], record: dict[st
     performs would still succeed.
     """
     root_user, root_pw = env["MINIO_ROOT_USER"], env["MINIO_ROOT_PASSWORD"]
-    before = _minio_user_policies(root_user, root_pw)
+    before, _ = _minio_user_policies(root_user, root_pw)
     print(f"[rotate]   {len(before)} MinIO user(s) before: " + ", ".join(f"{k}[{v}]" for k, v in sorted(before.items())))
 
     for ak_key, sk_key in MINIO_USERS:
@@ -411,7 +507,7 @@ def rotate_minio_users(env: dict[str, str], new: dict[str, str], record: dict[st
         )
         print(f"[rotate]   mc admin user add {access} ok (secret re-issued; no value printed)")
 
-    after = _minio_user_policies(root_user, root_pw)
+    after, _ = _minio_user_policies(root_user, root_pw)
     drifted = {k: (before[k], after.get(k, "<missing>")) for k in before if after.get(k) != before[k]}
     if drifted:
         raise RotationError(
@@ -450,11 +546,10 @@ def rotate_minio_root(env: dict[str, str], new: dict[str, str], record: dict[str
     write_env_keys(ENV_FILE, {"MINIO_ROOT_PASSWORD": new["MINIO_ROOT_PASSWORD"]})
     print("[rotate]   .env written for MINIO_ROOT_PASSWORD")
     run_script("scripts/platform_secrets.sh")
-    kubectl("-n", "platform", "rollout", "restart", "deploy/minio")
-    kubectl("-n", "platform", "rollout", "status", "deploy/minio", "--timeout=300s")
+    restart_and_wait("platform", "minio", timeout_s=300)
     print("[rotate]   minio restarted on the new root credential")
 
-    users = _minio_user_policies(env["MINIO_ROOT_USER"], new["MINIO_ROOT_PASSWORD"])
+    users, waited = _minio_user_policies(env["MINIO_ROOT_USER"], new["MINIO_ROOT_PASSWORD"], wait_s=120)
     expected = {env[ak] for ak, _ in MINIO_USERS}
     if not expected.issubset(set(users)):
         raise RotationError(
@@ -463,11 +558,15 @@ def rotate_minio_root(env: dict[str, str], new: dict[str, str], record: dict[str
             "UNDO: put MINIO_ROOT_PASSWORD back from .env.pre-rotation, re-run "
             "scripts/platform_secrets.sh, restart deploy/minio."
         )
-    print(f"[rotate]   {len(users)} named user(s) still readable AFTER the root rotation — no IAM re-encryption hazard on this build")
+    print(
+        f"[rotate]   {len(users)} named user(s) still readable AFTER the root rotation "
+        f"(first successful read {waited}s past Ready) — no IAM re-encryption hazard on this build"
+    )
     record["families"]["minio-root"] = {
         "rotated_keys": ["MINIO_ROOT_PASSWORD"],
         "mechanism": "Secret minio-root + rollout restart deploy/minio (the PVC keeps every object)",
         "verified": f"{len(users)} named users readable after restart: {sorted(users)}",
+        "seconds_after_ready_before_admin_api_accepted_root": waited,
         "at": now(),
     }
 
@@ -559,16 +658,13 @@ def drain_consumers(pending: set[str], record: dict[str, Any]) -> None:
     """
     done: list[str] = []
     if "mlflow" in pending:
-        kubectl("-n", "mlflow", "rollout", "restart", "deploy/mlflow")
-        kubectl("-n", "mlflow", "rollout", "status", "deploy/mlflow", "--timeout=600s")
+        restart_and_wait("mlflow", "mlflow")
         done.append("mlflow/mlflow (restart)")
     if "metabase" in pending:
-        kubectl("-n", "metabase", "rollout", "restart", "deploy/metabase")
-        kubectl("-n", "metabase", "rollout", "status", "deploy/metabase", "--timeout=600s")
+        restart_and_wait("metabase", "metabase")
         done.append("metabase/metabase (restart)")
     if "grafana" in pending:
-        kubectl("-n", "monitoring", "rollout", "restart", "deploy/grafana")
-        kubectl("-n", "monitoring", "rollout", "status", "deploy/grafana", "--timeout=600s")
+        restart_and_wait("monitoring", "grafana")
         done.append("monitoring/grafana (restart)")
     if "flyte" in pending:
         # NOT a restart: the flyte-binary chart renders its DB password and its S3
@@ -715,6 +811,21 @@ def main() -> int:
     new: dict[str, str] = {}
     pending: set[str] = set()
 
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    def checkpoint() -> None:
+        """Persist after every family.
+
+        A rotation that dies mid-run has already changed live credentials, and
+        the record is the only thing that says WHICH. Writing it once at the end
+        would mean the one run that most needs evidence produces none — the
+        charter's own safe-stopping-point rule requires the file to be true at
+        every family boundary, not just at the last one.
+        """
+        record["families_completed"] = sorted(record["families"])
+        record["rotated_key_count"] = len(new)
+        out.write_text(json.dumps(record, indent=2) + "\n")
+
     print(f"== credential rotation ==  families: {', '.join(families)}")
     for fam in FAMILY_ORDER:
         if fam not in families:
@@ -722,6 +833,7 @@ def main() -> int:
         print(f"-- family {fam} --")
         ROTATORS[fam](env, new, record)
         pending.update(CONSUMERS[fam])
+        checkpoint()
         # Every family except postgres writes .env itself and then needs the
         # Secrets converged; postgres and minio-root already ran the script.
         if fam in ("postgres", "minio-users"):
@@ -731,9 +843,7 @@ def main() -> int:
     drain_consumers(pending, record)
 
     record["finished_at"] = now()
-    record["rotated_key_count"] = len(new)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(record, indent=2) + "\n")
+    checkpoint()
     print(f"[rotate] {len(new)} credential(s) rotated across {len(families)} family/families -> {out}")
     print("[rotate] NEXT: the positive sweep (the ten gates), THEN --verify-old-refused.")
     return 0
