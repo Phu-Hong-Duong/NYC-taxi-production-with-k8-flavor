@@ -1,0 +1,16 @@
+{
+  "story": "M9-S13",
+  "recorded_at": "2026-08-25T05:55:24Z",
+  "git_head": "8837b01baab4a8bac36af20c55d5b513402fcae2",
+  "drill": "the pre-commit hook, watched refusing and watched permitting",
+  "hook": "scripts/hooks/pre-commit -> .git/hooks/pre-commit (untracked by git, so this record is a statement about the machine it ran on)",
+  "arms": {
+    "A_negative_control": "an ordinary staged file commits, and the hook is proved to have RUN",
+    "B_refusal": "a generated AWS-shaped credential staged; git commit REFUSED, HEAD unmoved, secret never printed",
+    "C_documented_limit": "git commit --no-verify commits the same plant — the bypass is measured, not claimed — and the audit of record still catches it"
+  },
+  "checks": 20,
+  "failures": 0,
+  "verdict": "PASSED",
+  "what_this_does_not_prove": "that the hook is installed in any other clone. .git/hooks is untracked; make security-scan remains the audit of record."
+}
