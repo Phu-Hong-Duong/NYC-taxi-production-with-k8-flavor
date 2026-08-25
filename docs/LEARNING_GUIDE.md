@@ -4913,3 +4913,63 @@ happens to every conclusion already drawn under the old value. If the answer is
 whether that is a property you can state, or just something nobody has looked
 at. Then write down where the old value is recorded. If the answer is "nowhere",
 that is the finding.
+
+## M9-S11 — the upgrade that upgraded nothing, and the tag doing two jobs
+
+**The command succeeded and the artifact did not change.** The PO had answered a
+CVE fork with *bump it*, and the charter priced the work as one line:
+`uv lock --upgrade-package sqlparse`. It printed `Resolved 243 packages` and left
+a zero-byte diff — because a package four levels down the graph, `dbt-core
+1.12.2`, declares `sqlparse<0.6.0`. The resolver honoured that bound, correctly,
+and had nothing to report: nothing failed. There is no warning for *"I could not
+do the thing you asked, and the result of not doing it is a valid lockfile."*
+
+Read as "already up to date", the rest of the story would have run flawlessly on
+top of it: re-baseline the invariant, re-run five proofs, close the finding, ten
+gates green — with the vulnerable version still pinned and a commit message
+saying otherwise. The lesson is small and it transfers everywhere:
+
+> **A resolver answers with an artifact, not with a verdict. Check the diff. An
+> empty one is a finding, not a no-op.**
+
+**Then the interesting choice.** The way out that keeps the *record* matching the
+*estimate* is a constraint override — force `sqlparse==0.6.0` past dbt's declared
+bound and only one version number moves. The way out that is actually smaller is
+to take upstream's own fix: `dbt-core 1.12.3` relaxes the bound, so two packages
+move instead of one. The first option does not make the risk smaller; it moves it
+somewhere nobody measures, and buys a diff that looks like the one that was
+promised. The extra mover was a fact about the world. Hiding it would not have
+shrunk it — and the proof the charter already required (`make marts`, since dbt
+*is* the consumer) falsifies the honest option directly and the dishonest one not
+at all.
+
+**The best find was in a rename nobody would review.** The lock invariant is
+*"`uv.lock` must be byte-identical to a sanctioned tag"*, and the sanctioned tag
+was `m7-closed`. But the same literal was doing a second, unrelated job in the
+same two files: *"no model version may have been created after this tag."* Those
+two move in opposite directions. Advancing the lock anchor is neutral — the gate
+still refuses an unsanctioned edit, just against a newer baseline. Advancing the
+registry bound **admits** every version created in between; it is a loosening of
+the strongest form of the alias law. A single `sed` over both files would have
+landed the story, passed every gate, and left a diff in which one tag name
+replaces another — with no way for a reviewer to see that half the replacements
+were a weakening.
+
+> **Before a bulk rename, ask what each occurrence of the literal is FOR. Two
+> facts wearing one spelling is a rename waiting to be a regression.**
+
+**And the number that had been wrong for four stories.** The gate reported 46
+sub-checks where every record said 45. That is exactly the shape to *measure*
+rather than argue about: run the gate with the story's edits reverted (45 passes
+plus one correct failure — 46 lines), then diff the script and confirm it removes
+one check and adds one, so the count cannot have moved. It had been 46 since an
+earlier story added a leg and did not re-count the front door. The correction went
+into the row that made the claim *after* the drift, and not into the older row
+that was true when it was written.
+
+**What to try yourself.** Take any upgrade command you trust — `pip install -U`,
+`npm update`, a Dependabot bump — and run it against a dependency with a
+transitive upper bound. Note what it tells you. Then ask: in the pipeline where
+you run it, is there anything that would notice the difference between *"upgraded"*
+and *"declined to upgrade, successfully"*? If the answer is your own reading of the
+output, that check does not exist yet.
