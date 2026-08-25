@@ -428,6 +428,7 @@ def no(m): print(f"FAIL|{m}")
 BAKEOFF = Path("automation/runs/m3s5/bakeoff.json")
 DOC = Path("docs/bakeoff_m3.md")
 try:
+    from taxi_mlops.training import gate_eras
     from taxi_mlops.training.evaluate import Metrics
     from taxi_mlops.training.gate import Incumbent, decide
     from taxi_mlops.training.run import load_train_config
@@ -436,6 +437,17 @@ try:
     cfg = load_train_config("configs/train.yaml")["gate"]
     holdout = rec["holdout_split"]
     contenders = rec["contenders"]
+    LEG = "verify-m3 §5"
+    # M9-S10 (F-016/F-068). This record was written under an incumbent condition
+    # with NO margin, and two of its five verdicts — the floor judged against
+    # itself and `champion v1`, both at exactly +0.0000% — flip under the landed
+    # 0.50%. A replay that judged them by today's bar would report the gate
+    # "moving under the transcript" when what moved is the transcript's era. So
+    # the margin comes from the RECORD when it declares one (every bake-off from
+    # here on writes `gate.incumbent_min_improvement_pct`) and otherwise from
+    # the ENUMERATED pre-B set — never from a default, since the only default
+    # that would work is zero and zero is the loosest bar there is (F-048).
+    recorded_margin = rec.get("gate", {}).get("incumbent_min_improvement_pct")
 
     if len(contenders) == 5:
         ok(f"the bake-off recorded all {len(contenders)} contenders on {holdout!r} — "
@@ -456,9 +468,17 @@ try:
     # only version that goes red when somebody loosens `configs/train.yaml: gate`
     # after the transcript was written.
     replayed = {"PROMOTE": 0, "REFUSE": 0}
+    eras_seen = []
     for c in contenders:
         n = c["test_rows"]
-        block_cfg = {**cfg, "floor": floor["name"]}
+        try:
+            era = gate_eras.in_force_margin(
+                LEG, str(BAKEOFF), c["label"], recorded=recorded_margin)
+        except gate_eras.GateEraError as exc:
+            no(f"{c['label']} cannot be replayed: {str(exc).splitlines()[0]}")
+            continue
+        eras_seen.append(era)
+        block_cfg = {**cfg, "floor": floor["name"], "incumbent_min_improvement_pct": era}
         incumbent = Incumbent(
             version=inc["version"], mae=inc["mae"],
             within_tolerance_rate=inc["within_tolerance_rate"], split=holdout,
@@ -483,6 +503,25 @@ try:
         no(f"the replay produced {replayed} — a bake-off nobody was refused in "
            "is a bake-off nobody was judged in")
 
+    # ...and the era those five were judged under is stated rather than assumed,
+    # with the live bar required to be no lower. Two of the five sit at exactly
+    # +0.0000% against the incumbent, so this leg is the one that would report
+    # the flip if the enumeration or the era logic were wrong.
+    ties = [c["label"] for c in contenders
+            if inc and round(c["test_mae"], 4) == round(inc["mae"], 4)]
+    try:
+        required = gate_eras.assert_margin_never_decreased(
+            cfg["incumbent_min_improvement_pct"], eras_seen)
+        ok(f"all {len(eras_seen)} verdict(s) replayed ERA-AWARE at the "
+           f"{sorted(set(f'{e:.2f}%' for e in eras_seen))} margin in force when the "
+           f"bake-off ran — including {len(ties)} judged against the incumbent's own "
+           f"number ({', '.join(ties)}) — while the live bar is "
+           f"{float(cfg['incumbent_min_improvement_pct']):.2f}% (>= the sanctioned "
+           f"{required:.2f}%)")
+    except gate_eras.GateEraError as exc:
+        no(f"the live incumbent margin is below one this record's verdicts were taken "
+           f"against: {str(exc).splitlines()[0]}")
+
     # "printed from evaluator-traceable MLflow runs" — every non-floor contender
     # must name a run, and that run must name the evaluator as its metric source.
     models = [c for c in contenders if c["track"] != "floor"]
@@ -504,7 +543,10 @@ except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the bake-off replay check itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 8 "the bake-off replay"
+# 10 from M9-S10 (the era-aware summary, plus one the old bound under-declared).
+# Re-DERIVED by running the leg, never widened: the bound is "at least", so its
+# job is to fail a leg that died on import rather than to describe the leg.
+expect_verdicts 10 "the bake-off replay"
 
 # ------------------------------------ 6. the guards, each provably armed ------
 section "6. the guards: incumbent, val, flattering floor, and the sampled run"

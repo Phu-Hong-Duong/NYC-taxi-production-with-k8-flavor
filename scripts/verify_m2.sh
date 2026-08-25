@@ -255,11 +255,13 @@ def no(m): print(f"FAIL|{m}")
 DOC = "docs/promotion_gate_m2.md"
 DOC_M3 = "docs/promotion_gate_m3.md"
 try:
+    from taxi_mlops.training import gate_eras
     from taxi_mlops.training.evaluate import Metrics
     from taxi_mlops.training.gate import GateError, Incumbent, decide
     from taxi_mlops.training.run import load_train_config
 
     cfg = load_train_config("configs/train.yaml")["gate"]
+    LEG = "verify-m2 §2"
 
     # The bar itself. Tightening is the MLE's; loosening is a PO fork, ever
     # (CLAUDE.md). These are the values M2-S3 argued for in the config comments,
@@ -272,6 +274,22 @@ try:
         ok("the KPI-10 no-regression condition is still armed (it can refuse what the margin admits)")
     else:
         no("require_no_kpi10_regression is off — the rider-facing condition was switched off")
+    # THE MONOTONIC CHECK (M9-S10, F-016). Separate from, and deliberately not
+    # weakened by, the era-aware replay below: era-awareness makes HISTORY
+    # replay correctly, and on its own it would make a LOOSENING replay
+    # correctly too — every old verdict judged against its own old bar while the
+    # live one quietly fell. So the number on disk must be at least the largest
+    # margin any recorded verdict was taken against, and at least the number the
+    # PO sanctioned. The observed set is built below and re-asserted after the
+    # replays, once the recorded margins are in hand.
+    try:
+        floor_required = gate_eras.assert_margin_never_decreased(
+            cfg["incumbent_min_improvement_pct"], [])
+        ok(f"the incumbent margin on disk is {float(cfg['incumbent_min_improvement_pct']):.2f}% "
+           f"and may not fall below the PO-sanctioned {floor_required:.2f}% "
+           f"(AWAITING_PO 2026-08-18-1 / 2026-08-24-4)")
+    except gate_eras.GateEraError as exc:
+        no(f"the incumbent margin was LOOSENED: {str(exc).splitlines()[0]}")
     # M3-S1 (F-010) changed this floor, and the change is a TIGHTENING: the same
     # lookup with one more backoff level, measured lower on the same month. The
     # pin below moved with it in the same PR — never weakened, and the sub-check
@@ -299,10 +317,12 @@ try:
     def transcripts(path):
         text = open(path, encoding="utf-8").read()
         rows = int(re.search(r"holdout\s+: \w+ — ([\d,]+) rows", text).group(1).replace(",", ""))
-        blocks, current = [], {}
+        blocks, current, lines = [], {}, []
         for line in text.splitlines():
             m = line_re.match(line)
             i = inc_re.match(line)
+            if line.startswith("[gate]"):
+                lines.append(line)
             if i:
                 current["incumbent"] = (i.group(1), float(i.group(2)), float(i.group(3)))
             elif m:
@@ -310,8 +330,12 @@ try:
             elif line.startswith("[gate] VERDICT"):
                 current["verdict"] = line.split(":", 1)[1].strip()
                 current["doc"] = path
+                # The whole block, kept, because from M9-S10 a verdict DECLARES
+                # the incumbent bar it was taken under and the replay reads it
+                # off the transcript rather than inferring it (gate_eras).
+                current["lines"] = lines
                 blocks.append(current)
-                current = {}
+                current, lines = {}, []
         return rows, blocks
 
     rows, blocks = transcripts(DOC)
@@ -327,6 +351,7 @@ try:
     if not blocks:
         no(f"{DOC} holds no parseable gate transcript — the refusal is not on file")
     replayed = {"REFUSE": 0, "PROMOTE": 0}
+    eras_seen = []
     for b in blocks:
         if not {"challenger", "floor", "verdict"} <= b.keys():
             no(f"a transcript block in {b.get('doc', DOC)} is missing one of its two numbers")
@@ -339,7 +364,23 @@ try:
         # the stronger `baseline-group-median-od-fallback`. The floor's IDENTITY
         # is guarded separately and unweakened: the pinned name above, the
         # flattering-floor refusal below, and the direction check after this loop.
+        #
+        # ...and from M9-S10 the same sentence governs the INCUMBENT MARGIN
+        # (F-016/F-068). The margin is read off the transcript when the verdict
+        # declares one, and otherwise from the ENUMERATED pre-B set — never from
+        # a default, because the default that would work is zero and zero is the
+        # loosest bar there is (F-048). A verdict in neither place raises, and
+        # the raise is a FAIL here rather than an exception that takes the leg.
         block_cfg = {**cfg, "floor": b["floor"][0]}
+        try:
+            era = gate_eras.in_force_margin(
+                LEG, b["doc"], b["challenger"][0],
+                recorded=gate_eras.parse_recorded_margin(b.get("lines", [])))
+        except gate_eras.GateEraError as exc:
+            no(f"{b['challenger'][0]} cannot be replayed: {str(exc).splitlines()[0]}")
+            continue
+        eras_seen.append(era)
+        block_cfg["incumbent_min_improvement_pct"] = era
         version, mae, within = b.get("incumbent", (None, 0.0, 0.0))
         inc = None if version is None else Incumbent(
             version=version, mae=mae, within_tolerance_rate=within, split=holdout,
@@ -361,6 +402,22 @@ try:
         ok(f"the promotion transcript exists with both numbers and still promotes ({replayed['PROMOTE']} block(s))")
     else:
         no("no transcript in the doc replays to PROMOTE")
+
+    # The ratchet, re-asserted against what these verdicts were ACTUALLY taken
+    # against rather than against the sanctioned constant alone. Today every era
+    # here is the pre-B 0.00% and the sanctioned 0.50% is what binds; the day a
+    # transcript records a HIGHER bar, this is the sub-check that stops the
+    # config falling back below it.
+    try:
+        required = gate_eras.assert_margin_never_decreased(
+            cfg["incumbent_min_improvement_pct"], eras_seen)
+        ok(f"{len(eras_seen)} verdict(s) replayed ERA-AWARE (margins in force: "
+           f"{sorted(set(f'{e:.2f}%' for e in eras_seen))}) and the live bar "
+           f"{float(cfg['incumbent_min_improvement_pct']):.2f}% is >= all of them "
+           f"and >= the sanctioned {required:.2f}%")
+    except gate_eras.GateEraError as exc:
+        no(f"the live incumbent margin is below one a recorded verdict was taken "
+           f"against: {str(exc).splitlines()[0]}")
 
     # A floor swap is only NOT a loosening if the new floor is harder, so the
     # direction is measured rather than asserted — from two committed transcripts,
@@ -417,7 +474,13 @@ except Exception as exc:  # noqa: BLE001
     print(f"FAIL|the gate replay itself raised {type(exc).__name__}: {exc}")
 PY
 )
-expect_verdicts 13 "the gate replay"
+# 16 from M9-S10. The leg emitted 14 while this said 13 — the bound is "at
+# least", so it was under-declared and the slack was invisible; M9-S10 adds two
+# (the monotonic check and the era-aware summary) and re-DERIVES the number by
+# running it rather than by adding two to the old one. Never widened: this bound
+# exists so a leg that dies on import fails instead of contributing zero silent
+# passes.
+expect_verdicts 16 "the gate replay"
 
 # -------------------------------------- 3. MLflow holds the runs behind it all --
 section "3. MLflow: experiment 'm2-modeling' holds the runs, including the refused one"
