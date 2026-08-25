@@ -403,7 +403,7 @@ COMMAND_CLAIMS: tuple[Claim, ...] = (
 )
 
 TEST_COUNT_CLAIM = Claim(
-    "1,277 tests",
+    "1,297 tests",
     "uv run pytest tests/unit -q",
     lambda: f"{_collected_tests():,} tests",
     "the host suite",

@@ -823,6 +823,44 @@ def verify_old_refused(record_path: pathlib.Path) -> int:
     return 0
 
 
+def destroy_pre_rotation(record_path: pathlib.Path) -> int:
+    """Destroy the undo copy — the LAST step, and only after the accept has passed.
+
+    It exists to survive a rotation that goes wrong; once the ten gates are green
+    and the old values are proved refused, it has stopped being an undo and is
+    only a file holding every superseded credential of a platform that is about
+    to be published. The record keeps the fact; the disk keeps nothing.
+
+    Overwritten before unlinking. On a copy-on-write or journalling filesystem
+    that is not a guarantee the bytes are unrecoverable, and this says so rather
+    than implying a shred it cannot perform — the honest claim is that no path
+    reads them any more.
+    """
+    if not PRE_ROTATION.exists():
+        print(f"[destroy] {PRE_ROTATION} is already gone — nothing to do")
+        return 0
+    size = PRE_ROTATION.stat().st_size
+    with PRE_ROTATION.open("r+b") as fh:
+        fh.write(b"\0" * size)
+        fh.flush()
+        os.fsync(fh.fileno())
+    PRE_ROTATION.unlink()
+    print(f"[destroy] {PRE_ROTATION} overwritten ({size} bytes) and unlinked")
+    if record_path.exists():
+        rec = json.loads(record_path.read_text())
+        rec["pre_rotation_copy"] = {
+            "path": str(PRE_ROTATION),
+            "destroyed_at": now(),
+            "held": "the PRE-rotation values, kept only as the undo while the rotation was in flight",
+            "destroyed_after": "the ten gates, make parity, and the old-credential refusals all passed",
+            "limit": "overwritten then unlinked; on a CoW/journalling filesystem that is not a"
+                     " guarantee of unrecoverability, only that no path reads them",
+        }
+        record_path.write_text(json.dumps(rec, indent=2) + "\n")
+        print(f"[destroy] recorded in {record_path.name}")
+    return 0
+
+
 # ---------------------------------------------------------------------- main ---
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -831,9 +869,14 @@ def main() -> int:
                     help=f"comma-separated subset of {FAMILY_ORDER} (each is a safe stopping point)")
     ap.add_argument("--verify-old-refused", action="store_true",
                     help="prove the .env.pre-rotation values are refused (run AFTER the positive sweep)")
+    ap.add_argument("--destroy-pre-rotation", action="store_true",
+                    help="overwrite and unlink the undo copy — the LAST step, after the accept passes")
     ap.add_argument("--out", default=str(RECORD))
     args = ap.parse_args()
     out = pathlib.Path(args.out)
+
+    if args.destroy_pre_rotation:
+        return destroy_pre_rotation(out)
 
     env = read_env(ENV_FILE)
     inventory = classify(env)

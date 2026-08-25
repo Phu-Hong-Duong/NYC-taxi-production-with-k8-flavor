@@ -1,6 +1,6 @@
 {
   "story": "M9-S12",
-  "started_at": "2026-08-25T05:09:36Z",
+  "started_at": "2026-08-25T05:24:02Z",
   "env_file": ".env",
   "inventory": {
     "env_keys": 27,
@@ -80,7 +80,7 @@
       ],
       "mechanism": "ALTER ROLE \u2014 five tenants via scripts/postgres_databases.sh, the superuser here",
       "verified": "6 roles hold a SCRAM-SHA-256 verifier",
-      "at": "2026-08-25T05:09:38Z"
+      "at": "2026-08-25T05:24:04Z"
     },
     "minio-users": {
       "rotated_keys": [
@@ -99,7 +99,7 @@
         "serving": "readonly,serving-readonly"
       },
       "mechanism": "mc admin user add (re-issues an existing accessKey's secret in place)",
-      "at": "2026-08-25T05:09:41Z"
+      "at": "2026-08-25T05:24:07Z"
     },
     "minio-root": {
       "rotated_keys": [
@@ -107,15 +107,15 @@
       ],
       "mechanism": "Secret minio-root + rollout restart deploy/minio (the PVC keeps every object)",
       "verified": "3 named users readable after restart: ['flyte', 'mlflow', 'serving']",
-      "seconds_after_ready_before_admin_api_accepted_root": 0.3,
-      "at": "2026-08-25T05:09:46Z"
+      "seconds_after_ready_before_admin_api_accepted_root": 3.5,
+      "at": "2026-08-25T05:24:15Z"
     },
     "grafana": {
       "rotated_keys": [
         "GRAFANA_ADMIN_PASSWORD"
       ],
       "mechanism": "Secret monitoring/grafana-admin + restart (persistence is OFF, so the admin is re-created from it)",
-      "at": "2026-08-25T05:09:49Z"
+      "at": "2026-08-25T05:24:17Z"
     },
     "metabase-admin": {
       "rotated_keys": [
@@ -124,7 +124,7 @@
       "user_id": 1,
       "mechanism": "PUT /api/user/:id/password (the app-db is persistent; no Secret carries this)",
       "verified": "a fresh POST /api/session on the new password returned a session",
-      "at": "2026-08-25T05:09:49Z"
+      "at": "2026-08-25T05:24:17Z"
     }
   },
   "sanction": "AWAITING_PO 2026-08-24-5, answer 2 (YES, in-place preferred over destroy+rebuild)",
@@ -142,11 +142,12 @@
     "metabase/metabase (restart)",
     "monitoring/grafana (restart)",
     "flyte (helm upgrade via deploy_flyte.sh \u2014 values-rendered credentials)",
+    "metabase boards (make boards \u2014 converges the stored `marts` warehouse connection)",
     "serving (make serve \u2014 the storage-initializer re-fetches under the new credential)"
   ],
-  "finished_at": "2026-08-25T05:14:46Z",
+  "finished_at": "2026-08-25T05:26:42Z",
   "old_credentials_refused": {
-    "at": "2026-08-25T05:21:15Z",
+    "at": "2026-08-25T05:30:11Z",
     "checks": [
       {
         "check": "minio-root",
@@ -170,5 +171,12 @@
       }
     ],
     "note": "run AFTER the positive sweep: an absence check before a presence check passes against a dead platform"
+  },
+  "pre_rotation_copy": {
+    "path": "/home/longt/.nyc-taxi-rotation/env.pre-rotation",
+    "destroyed_at": "2026-08-25T05:33:53Z",
+    "held": "the PRE-rotation values, kept only as the undo while the rotation was in flight",
+    "destroyed_after": "the ten gates, make parity, and the old-credential refusals all passed",
+    "limit": "overwritten then unlinked; on a CoW/journalling filesystem that is not a guarantee of unrecoverability, only that no path reads them"
   }
 }
