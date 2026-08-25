@@ -38,6 +38,24 @@ automation/next_session.sh architect 120   # resumes the chain on any answer (an
 
 ## 2026-08-24-5 · raised by EXEC/Opus (M9-S9) · THE PRE-PUBLISH PAIR IS DONE — the public flip is your click, plus one small CVE fork
 
+> **ANSWERED 2026-08-25 by the PO: Option (b), plus YES to both smaller things**
+> (decisions collected option-by-option via the PO's Windows-side session and
+> recorded here verbatim):
+>
+> 1. **sqlparse — option (b).** Bump to 0.6.0 and re-baseline the lock
+>    invariant BEFORE the flip, cost accepted as stated: `verify-m8` §1
+>    re-pointed at a new tag, `make marts` and the MLflow client re-run to prove
+>    nothing moved, the M8 quarantine's pin file checked. The public flip
+>    happens after this lands and remains the PO's click.
+> 2. **Rotate the `.env` credentials before publish — YES.** The mechanism is
+>    ARCH's to charter: this entry priced it as `make destroy` + redeploy, but
+>    an in-place secret rotation is preferred over a rebuild of the stateful
+>    cluster if one is available, since a full restore over a dead platform is
+>    still un-rehearsed.
+> 3. **Add the pre-commit secret-scan hook — YES**, accepted as unverifiable by
+>    any gate exactly as this entry states; `make security-scan` remains the
+>    audit of record.
+
 **One sentence.** You said *yes, publish, after the pre-publish pair* (2026-08-24-2,
 answer 3); M9-S8 landed the README and M9-S9 has now scanned this repository for
 secrets and vulnerabilities — **zero secrets in anything git holds**, verdict
@@ -119,6 +137,17 @@ whoever wants it can start from the list instead of the idea.
 ---
 
 ## 2026-08-24-4 · raised by EXEC/Opus (M9-S6) · A FORK, AND IT IS SMALL BUT REAL — your F-016 answer (option B) cannot land as chartered; four options, recommendation (b)
+
+> **ANSWERED 2026-08-25 by the PO: Option (b)** (decision collected
+> option-by-option via the PO's Windows-side session and recorded here verbatim).
+> Land B era-aware: replay each historical verdict against the incumbent margin
+> IN FORCE when it was taken; the margin becomes a RECORDED field on every
+> future verdict, so the inference from absence is confined to the frozen nine
+> in `automation/runs/m9-f016/replay-wall.json`; plus the separate, unweakened
+> check that the margin on disk never decreases. Chosen with the stated cost
+> accepted, eyes open: this is a full story, not a config line — and the
+> in-force value for the frozen nine is read from an enumerated set, never a
+> permissive default (F-048's rule). An ARCH touch charters the landing.
 
 **One sentence.** You chose **option B** for F-016 — a **≥0.50%** margin on the
 gate's incumbent condition — the M9 epilogue chartered it as story S6, and the
@@ -1179,6 +1208,11 @@ The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork 
 Watchdog log: automation/logs/watchdog.log
 
 ## 2026-08-24 07:40 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-25 02:50 UTC — watchdog: Chain parked — your decision needed
 The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
 
 Watchdog log: automation/logs/watchdog.log

@@ -1,5 +1,70 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (cs) — THE PO ANSWERED: publish phase chartered, chain resumed (ARCH)
+
+### State
+**ARCH, `claude-fable-5` (stated first line — an architect session on any other
+model is void, ORG.md rule 7).** Boot per the ritual: CLAUDE.md · HANDOFF (cr) ·
+AWAITING_PO (the PO's edit was live in the working tree) · ledgers ·
+`docs/milestones/M9_EPILOGUE_KICKOFF.md` (the S6 charter this session
+re-charters) · `automation/runs/m9-f016/replay-wall.json`. **RESUMED — the PO
+answered both open entries on 2026-08-25**: 2026-08-24-4 (F-016/F-068 →
+**option (b), era-aware**) and 2026-08-24-5 (**sqlparse (b)** · **rotate
+credentials YES, in-place preferred** · **pre-commit hook YES**). The flip
+remains the PO's click, after these land.
+
+### Done (the boundary's three jobs)
+- **Triage.** `make verify-m9` re-run live → **GREEN, every sub-check passed**
+  (pasted in the kickoff §0); all three kind nodes Ready; lineage spot-check:
+  `fe0fca2` and `m9-epilogue-closed` both reach `origin/main`. Register's only
+  open rows (F-016, F-068) dispositioned → **CHARTERED as M9-S10** with the
+  PO's words quoted; dated notes appended to both ledger rows this commit.
+  Debt register CLOSED, nothing due. No tag placed — nothing new closed here;
+  `m9-publish-closed` belongs to the boundary that closes THIS phase.
+- **Authored `docs/milestones/M9_PUBLISH_KICKOFF.md`** — four stories, run in
+  order: **M9-S10** F-016/F-068 option (b) era-aware (margin ≥0.50% in
+  `configs/train.yaml: gate`; margin a RECORDED field on every future verdict;
+  era-aware replays reading the frozen nine's in-force value from the
+  enumerated set, never a default — F-048's rule; separate unweakened
+  margin-never-decreases check; identity case DECIDED as refused; STOP rule
+  inherited verbatim) · **M9-S11** sqlparse 0.6.0 + lock re-baseline (new tag,
+  four readers re-pointed, gotcha #36 measured, `make marts`/`make parity`
+  reproduce their records; quarantine leg is a recorded ABSENCE — sqlparse is
+  not in the feast pins, measured exit 1) · **M9-S12** in-place credential
+  rotation (per-family service→secret→restart; `.env.pre-rotation` copy;
+  positive-then-negative per gotcha #105; accept = ALL TEN gates GREEN;
+  destroy+rebuild is NEVER auto-run) · **M9-S13** pre-commit hook + the final
+  sweep + the AWAITING_PO handoff entry re-inviting the click.
+- **README**: gained the **M9 Publish — in progress 2026-08-25** row (appended
+  below the epilogue row; the twelve pinned rows byte-untouched, so
+  `STATUS_ROWS` and its test hold without edits). `make readme-check` GREEN
+  after; `tests/unit/test_readme.py` 7 passed.
+- **Committed the PO's answers** (their working-tree edit to AWAITING_PO.md)
+  with this kickoff, so the answered blocks are in history before the work
+  that lands them.
+- **Chain resumed**: `automation/next_session.sh executor 120` (which, per
+  F-072, also stamps the inbox baseline so the answered entries cannot read as
+  a new fork).
+
+### Verification
+`make verify-m9` GREEN (live re-run, pasted in kickoff §0) ·
+`make readme-check` GREEN · `tests/unit/test_readme.py` 7 passed · lineage
+pasted. Docs-only diff: no fit, no alias, no registry version, no wire, no
+cluster call that writes. `@champion` 2 / `feature_set v2` (asserted inside
+verify-m9, not re-derived here).
+
+### Defects/Surprises
+None. The PO's answers were recorded verbatim by their Windows-side session
+directly into AWAITING_PO.md's answered blocks — the diff read clean and is
+committed as received.
+
+### Next
+**Executor session on M9-S10** (F-016/F-068 era-aware landing) — scheduled at
++120 s. Then S11 → S12 → S13 in order; after S13's entry, the ARCH publish
+boundary closes the phase (`m9-publish-closed`, README row flip) and re-parks
+on the flip entry. The flip is the PO's click.
+
+
 ## Session 2026-08-25 (cr) — THE EPILOGUE BOUNDARY: closed, tagged, re-parked (ARCH)
 
 ### State
