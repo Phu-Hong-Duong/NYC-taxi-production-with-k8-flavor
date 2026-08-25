@@ -1,5 +1,78 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-25 (cr) — THE EPILOGUE BOUNDARY: closed, tagged, re-parked (ARCH)
+
+### State
+**ARCH, `claude-fable-5` (stated first line — an architect session on any other
+model is void, ORG.md rule 7).** Boot per the ritual: CLAUDE.md · HANDOFF (cq) ·
+`docs/milestones/M9_EPILOGUE_KICKOFF.md` (its §Exit is this session's charter) ·
+`docs/milestones/PROGRAM_CLOSE.md` · ledgers · AWAITING_PO. **PARKED / program
+and epilogue both closed.** The PO's move: answer 2026-08-24-4 (a letter) and/or
+2026-08-24-5 (the click + a letter), then `automation/next_session.sh architect
+120`.
+
+### Done (the boundary's three jobs)
+- **Triage + close.** `make verify-m9` re-run → **GREEN 45/45** (pasted in
+  PROGRAM_CLOSE.md §6). Lineage: `m9-closed` and M9-S9's merge `fe0fca2` both
+  reach `origin/main`. Every finding dispositioned, none silent: S5/S7/S8/S9
+  LANDED (PRs #66/#68/#69/#70); **S6 NOT LANDED and named everywhere** —
+  parked on F-068 at AWAITING_PO 2026-08-24-4 per its charter's own stop rule;
+  F-016+F-068 are the register's only open rows. Debt register still CLOSED.
+  **Tag `m9-epilogue-closed`** on this close commit; README's M9 Epilogue row
+  flipped in the same commit; signoffs row written (producer EXEC, approver
+  ARCH). Close section: **PROGRAM_CLOSE.md §6** (dated, appended — §0–§5 kept
+  as written).
+- **Two findings raised AND closed at this boundary** (the F-065 precedent —
+  one-line-class repairs by the approver, each demonstrated able to go RED):
+  - **F-072** (session (cq)'s observation, judged a FINDING): the watchdog's
+    inbox baseline re-stamps only on passes reaching step 5, so an ANSWERED
+    fork could later read as new — and a mid-chain crash would LATCH as a
+    false park, blocking its own heal (accident dressed as decision, the
+    silent direction). Fix: `next_session.sh` stamps the baseline on every
+    human-initiated resume; the heal path deliberately does not (F-066's
+    asymmetry kept). Two tests; the load-bearing one **FAILS against the old
+    scheduler** (1 failed, 1 passed), suite 21/21 with the fix.
+  - **F-073** (found this triage by reading the gate's own GREEN output
+    against the ledger): `verify-m9`'s F-062 leg passed the CLOSED row while
+    narrating "recorded OPEN" — it grepped the whole row for a word the row's
+    history keeps forever, and would have passed a DISHONEST closure too.
+    Re-derived two-state with the drill record deciding which state the
+    ledger must be in; demonstrated RED on a planted citation-free closure
+    (1 FAIL naming `rider=503, closed-citing-M9-S7=False`, 44 sub-checks
+    still passing), ledger restored byte-identically (sha `28000c08…` both
+    sides), GREEN 45/45.
+- **No next kickoff** — there is no next milestone; PROGRAM_CLOSE.md §6 stands
+  where one would, and the only chartered-but-unlanded work (S6) waits on the
+  PO's letter, after which an ARCH touch charters the landing under whichever
+  option they pick.
+- **Re-park.** AWAITING_PO **2026-08-25-1** written (the park entry; also
+  corrects -4's stale `executor` footer to `architect` — the footer session
+  (cq) deliberately left to this boundary). **Nothing scheduled.** The next
+  idle watchdog pass parks and latches on this entry; F-066's latch holds it
+  until the PO's own resume, and F-072 means that resume now stamps the inbox
+  so the chain cannot re-park on entries already answered.
+
+### Verification
+`make verify-m9` GREEN 45/45 (twice: before and after the gate repair, plus
+the planted RED between) · `make readme-check` GREEN — **and it caught this
+session's own diff first**: F-072's two tests moved the host suite 1,244 →
+**1,246** and the checker went RED naming the claim before anyone looked
+(M9-S8's instrument, second unplanted catch) · host suite **1,246 passed, no
+skips** · `tests/unit/test_chain_script.py` + `test_verify_m9.py` 40 passed ·
+ruff clean · tree committed and pushed, tag pushed.
+
+### Defects/Surprises
+- Both findings above. Nothing else moved: no fit, no alias, no registry
+  version, no wire, no cluster call that writes. `@champion` 2 / `feature_set
+  v2` throughout (asserted inside verify-m9, not re-derived here).
+
+### Next
+**Nothing, until the PO answers.** The two open entries are 2026-08-24-4
+(F-016/F-068 — a letter) and 2026-08-24-5 (the publish flip — a click; plus
+`sqlparse`, a letter). Resume for ANY answer:
+`automation/next_session.sh architect 120`. Health reads: `make verify-m9` ·
+`make readme-check` · `make security-scan`.
+
 ## Session 2026-08-25 (cq) — no story remained: the resume, the state read live, and the handover to ARCH
 
 ### State

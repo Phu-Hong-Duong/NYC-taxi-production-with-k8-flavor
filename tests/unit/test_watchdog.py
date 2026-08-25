@@ -483,3 +483,73 @@ def test_a_live_job_is_never_rotated_out_from_under_itself(tmp_path):
     assert "ALREADY RUNNING" in result.stdout
     assert not (runs / "job.log.1").exists(), "a live job's log was rotated"
     assert (runs / "job.log").read_text() == first
+
+
+# --------------------------------------------------------------------------
+# F-072: the inbox baseline moves with the human's own resume.
+# --------------------------------------------------------------------------
+def test_a_resume_stamps_the_inbox_baseline_so_a_later_crash_heals(tmp_path):
+    """Session (cq)'s 2026-08-25 observation, replayed: entries the PO has
+    demonstrably already SEEN (they resumed the chain from one's own footer)
+    must not later read as a NEW fork. Before F-072 the baseline was stale
+    whenever the inbox changed on passes that never reached step 5, so the
+    next idle pass read a session CRASH as a deliberate park — an accident
+    dressed as a decision, in the silent direction, and the false park BLOCKS
+    the heal (step 5 exits before step 8)."""
+    tmp_path, env = _sandbox(tmp_path)
+    _park(tmp_path, env)
+
+    # The PO answers the fork (an inbox edit the watchdog cannot observe while
+    # anything is alive) and resumes from the entry's own footer.
+    with (tmp_path / "AWAITING_PO.md").open("a") as fh:
+        fh.write("\n> ANSWERED by the PO: option (b)\n")
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "automation" / "next_session.sh"), "executor", "15"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    # The direct property: the baseline now equals the inbox as the human
+    # left it.
+    digest = hashlib.sha256((tmp_path / "AWAITING_PO.md").read_bytes()).hexdigest()
+    stamped = (
+        tmp_path / "automation" / "logs" / "watchdog_awaiting_po.sha"
+    ).read_text().strip()
+    assert stamped == digest, "resuming did not stamp the inbox baseline (F-072)"
+
+    # The behavioural property: the queued session dies before launching (the
+    # crash), and the watchdog HEALS rather than parking on the answer the PO
+    # already gave. Against the pre-F-072 scheduler this latches a false park.
+    (tmp_path / "automation" / "logs" / "pending_successor").unlink()
+    _run(tmp_path, env)
+    assert "chain is DEAD" in _wlog(tmp_path), _wlog(tmp_path)
+    assert not (tmp_path / "automation" / "logs" / "watchdog_parked").exists(), (
+        "a session crash after an ANSWERED fork was read as a new park — "
+        "an accident dressed as a decision (F-072)"
+    )
+
+
+def test_a_heal_does_not_stamp_the_inbox_baseline(tmp_path):
+    """The heal path holds no park-shaped eraser (F-066's asymmetry, kept): a
+    heal that stamped the baseline would swallow a fork written by the very
+    session whose death it is healing, and the next pass would read the parked
+    chain as merely dead."""
+    tmp_path, env = _sandbox(tmp_path)
+    _prime_po_hash(tmp_path, env)
+    before = (tmp_path / "automation" / "logs" / "watchdog_awaiting_po.sha").read_text()
+    (tmp_path / "AWAITING_PO.md").write_text(
+        "# inbox\n\n## a fork written just before dying\noptions...\n"
+    )
+
+    heal_env = dict(env)
+    heal_env["WATCHDOG_HEAL"] = "1"
+    subprocess.run(
+        ["bash", str(tmp_path / "automation" / "next_session.sh"), "executor", "15"],
+        cwd=tmp_path, env=heal_env, capture_output=True, text=True, timeout=60,
+    )
+
+    after = (tmp_path / "automation" / "logs" / "watchdog_awaiting_po.sha").read_text()
+    assert after == before, (
+        "the heal path stamped the inbox baseline — it now holds an eraser "
+        "for forks it never read (F-072/F-066)"
+    )

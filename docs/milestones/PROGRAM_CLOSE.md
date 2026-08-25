@@ -207,3 +207,73 @@ Any alias move · any fit · any registry version · any cluster rebuild · any
 new Flyte trigger · the transformer cutover · R-1 (FeatureService, declined
 with reason at the M8 boundary) · the daily drift window (named at F-046,
 needs its own 2019 headroom leg first).
+
+## 6. EPILOGUE CLOSE — the answered inbox, landed (ARCH/Fable · 2026-08-25)
+
+Session model stated: **Fable 5 (claude-fable-5)**. This is the boundary the
+epilogue kickoff's own Exit section charters: re-run the affected gates, close
+with tag **`m9-epilogue-closed`**, flip the README row, re-park. It is dated
+and appended here rather than rewriting anything above (the M4-S2 ledger
+precedent — decisions were made from what §0–§5 said).
+
+**Verify re-run (by the approver, this session, 2026-08-25):** `make verify-m9`
+→ **GREEN — every M9 sub-check passed** (45 sub-checks, 7 sections), the
+closing banner citing the CLOSED-and-cited box (M9-S5's flip) and the
+F-019-both-states leg (M9-S7's). `make readme-check` → GREEN (re-run after
+this close's README row flip). Lineage spot-check (gotcha #20):
+`git merge-base --is-ancestor m9-closed origin/main` → yes, and M9-S9's merge
+`fe0fca2` (PR #70) reaches `origin/main`. Session (cq)'s live reconciliation
+of 2026-08-25 (cluster 3/3 Ready at 7d23h, `@champion` 2/`v2`, no registry
+version after `m7-closed`, `uv.lock` byte-identical, 5 DVC pins up to date)
+stands as read; nothing has run since.
+
+**The five chartered stories, dispositioned:**
+- **M9-S5 (observed box) · S7 (F-062 option (b)) · S8 (README front door) ·
+  S9 (pre-publish audit) — LANDED and merged** (S5 = PR #66 · S7 = #68 ·
+  S8 = #69 · S9 = #70; evidence in each story's records and the AWAITING_PO
+  2026-08-24-2 answer-block notes). F-062, F-067, F-069, F-070, F-071 all
+  CLOSED with evidence.
+- **M9-S6 (F-016 option B) — NOT LANDED, and that is the charter working, not
+  a failure.** Its own replay wall fired: applying ANY positive incumbent
+  margin flips two recorded verdicts whose challenger is numerically identical
+  to the incumbent (+0.0000%), so the chosen 0.50% is not the cause and the
+  identity case needs the PO's word. Raised as **F-068**, parked at
+  **AWAITING_PO 2026-08-24-4** with four costed options (recommendation (b));
+  the measurement itself landed as PR #67 (the probe, its record, four tests) —
+  only the config edit did not.
+  **F-016 and F-068 are the ONLY open findings at this close**, both parked on
+  one entry — named here so the close cannot read as "everything landed".
+
+**Two findings raised AT this boundary, both closed in it (the F-065
+precedent — one-line-class repairs by the approver, priced against a full
+executor session):**
+- **F-072** — the watchdog's inbox baseline is re-stamped only on passes that
+  reach its step 5, so an ANSWERED fork could later read as a new one and a
+  mid-chain crash would latch as a false park, blocking its own heal. Observed
+  live by session (cq); judged a finding, not designed behaviour. Fixed:
+  `next_session.sh` stamps the baseline on every human-initiated resume (the
+  heal path deliberately does not), two tests, the load-bearing one RED
+  against the old scheduler.
+- **F-073** — `verify-m9`'s F-062 ledger leg was green over a CLOSED row while
+  narrating "recorded OPEN" (it grepped the whole row for a word the row's
+  history keeps forever). Re-derived two-state with the drill record deciding
+  which state the ledger must be in; demonstrated RED on a citation-free
+  closure (1 FAIL, 44 sub-checks still passing), restored byte-identically,
+  GREEN 45/45.
+
+**Debt register: still CLOSED** (D-001…D-004; D-001's registry-pattern
+deferral stands as the conditional §0 restated). **Standing-open-on-purpose
+items unchanged**: error memo §7 row 2 · the daily drift window (F-046
+residual) · R-1 · the retrain trigger's activation.
+
+**Verdict: the EPILOGUE CLEANLY CLOSES — tag `m9-epilogue-closed` — with S6
+explicitly parked on the PO.** README's M9 Epilogue row flipped in the same
+commit. The chain RE-PARKS: the two open entries are **2026-08-24-4**
+(F-016/F-068 — answer with a letter) and **2026-08-24-5** (the publish flip is
+the PO's click; plus the `sqlparse` fork, recommendation (b)). The resume for
+ANY answer is now:
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+automation/next_session.sh architect 120   # an ARCH touch charters answered work — the epilogue is closed, so nothing remains pre-chartered
+```

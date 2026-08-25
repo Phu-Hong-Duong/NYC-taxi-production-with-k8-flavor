@@ -39,6 +39,24 @@ if [ -f "${PARK_STATE}" ]; then
   echo "[chain] park latch cleared (was: the chain was waiting on a fork) — resuming."
 fi
 
+# --- the inbox baseline moves with the human's own resume (F-072) -------------
+# The watchdog's park sensor is "AWAITING_PO.md changed since the baseline",
+# but it can only re-stamp that baseline on a pass that REACHES its step 5 —
+# and every pass while a session is alive or STOP is present exits earlier. So
+# entries the PO had demonstrably already SEEN (they resume the chain from an
+# entry's own footer) stayed "unseen" by the sensor, and the next idle pass
+# would read a session CRASH as a deliberate park — an accident dressed as a
+# decision, in the silent direction, and the false park BLOCKS the heal that
+# crash needed (step 5 exits before step 8). Running this script is the
+# documented answer/continue action, so it stamps the inbox as it stands NOW;
+# only edits made after this moment count as a new fork. The heal path does
+# not stamp (the watchdog already re-stamps on any pass that reaches step 5,
+# and the heal must hold no park-shaped eraser — F-066's asymmetry, kept).
+if [ "${WATCHDOG_HEAL:-0}" != "1" ]; then
+  mkdir -p automation/logs
+  sha256sum AWAITING_PO.md 2>/dev/null | awk '{print $1}' > automation/logs/watchdog_awaiting_po.sha || true
+fi
+
 TODAY="$(date +%F)"
 COUNT_FILE="automation/logs/count_${TODAY}"
 mkdir -p automation/logs

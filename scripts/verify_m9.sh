@@ -1131,21 +1131,43 @@ try:
     else:
         no(f"inherited targets found: {inherited}; nested by this gate: {nested}")
 
-    # (e) THE FINDING M9 RAISED AND DID NOT FIX. A program that closes over a
-    # row it quietly dropped is worse than one that closes with an open row, so
-    # the gate requires F-062 to be OPEN, costed, and recommending something.
+    # (e) THE FINDING M9 RAISED AND ROUTED. A program that closes over a row it
+    # quietly dropped is worse than one that closes with an open row — and the
+    # first version of this leg grepped the WHOLE row for the word "OPEN",
+    # which stays true forever because a closed row keeps its history ("Was:
+    # OPEN — routed…"). It went green over the CLOSED row M9-S7 left, narrating
+    # a state the ledger no longer held, and it would have stayed green over a
+    # DISHONEST closure too (F-073, the epilogue boundary — gotcha #99's
+    # family, found by reading the gate's own green output against the ledger).
+    # Re-derived two-state, with the DRILL RECORD deciding which state the
+    # ledger must be in: while the empty-store rider status is 422 (the pre-fix
+    # accounting) the row must be OPEN with its costed options; once it is 503
+    # (option (b) landed, M9-S7) the row must say CLOSED citing M9-S7 and carry
+    # BOTH halves of the discriminator (422 the caller's, 503 ours).
     findings = Path("ledgers/findings.md").read_text()
     row = next((ln for ln in findings.splitlines()
                 if ln.startswith("| F-062 ")), "")
+    f062_rider = next((block.get("rider_status_while_empty")
+                       for p in sorted(Path("automation/runs/m9-store-watch")
+                                       .glob("drill-*.json"))
+                       for name, block in json.loads(p.read_text())
+                       .get("observed", {}).items()
+                       if name == "empty"), None)
     costed = len(re.findall(r"\*\*\([abc]\)\*\*", row))
-    if row and "OPEN" in row and costed >= 3 and "Recommendation" in row:
-        ok(f"F-062 — a dead online store billed to the CALLER as a 4xx — is recorded OPEN with "
-           f"{costed} costed options and a named recommendation, routed to the program close "
-           f"because fixing it changes what a live boundary returns and M9 law 3 keeps the "
-           f"wire still. The gate requires the row to be open rather than tidy")
+    closed = bool(re.search(r"\*\*CLOSED 20\d\d-\d\d-\d\d \(M9-S7\)", row))
+    if f062_rider == 503 and closed and "422" in row and "503" in row:
+        ok(f"F-062 — a dead online store billed to the CALLER as a 4xx — is CLOSED citing "
+           f"M9-S7, and the drill record AGREES (empty-store rider status {f062_rider}): "
+           f"the row carries both halves of the discriminator, so the ledger and the "
+           f"record tell one story. A CLOSED row the record does not support, or an OPEN "
+           f"row after the fix landed, is RED either way")
+    elif f062_rider == 422 and not closed and costed >= 3 and "Recommendation" in row:
+        ok(f"F-062 is recorded OPEN with {costed} costed options and a named "
+           f"recommendation — the honest pre-fix state, and the drill record agrees "
+           f"(empty-store rider status {f062_rider})")
     else:
-        no(f"F-062's row is not an honest open row: present={bool(row)}, "
-           f"costed options={costed}")
+        no(f"F-062's ledger row does not agree with the drill record: "
+           f"rider={f062_rider}, closed-citing-M9-S7={closed}, costed options={costed}")
 
     # (f) The ledger. A cluster mutation with no row is a change nobody can
     # review. WHICH stories owe a row is DERIVED from their own records, and the

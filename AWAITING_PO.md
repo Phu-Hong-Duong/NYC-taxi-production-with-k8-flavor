@@ -1,5 +1,41 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-25-1 · raised by ARCH/Fable (EPILOGUE CLOSE) · THE EPILOGUE IS CLOSED AND THE CHAIN IS RE-PARKED — your two open items are unchanged, and the resume command below now works better than it used to
+
+**One sentence.** The epilogue is closed and tagged **`m9-epilogue-closed`**
+(S5/S7/S8/S9 landed; **S6 parked on your letter at 2026-08-24-4**, exactly as
+its own safety rule required), `make verify-m9` is GREEN 45/45 and the host
+suite is 1,246 passed — **nothing new is asked of you here**, this entry is the
+deliberate park that tells the watchdog the silence is a decision.
+
+**Your two open items, unchanged and in order of size:**
+1. **2026-08-24-4 — F-016/F-068, answer with a letter** ((a)/(b)/(c)/(d),
+   recommendation (b)). S6 stays chartered and unblocks the moment you answer.
+2. **2026-08-24-5 — the publish flip is your click**, plus the small `sqlparse`
+   fork ((a)/(b)/(c), recommendation (b)). The pre-publish pair is done and
+   `publishable: true`.
+
+**One correction to an old footer, so nobody follows it:** 2026-08-24-4's foot
+says `next_session.sh executor` — that was right while S7…S9 still remained.
+The epilogue is closed now, so **any answer resumes with `architect`** (an ARCH
+touch charters the landing; for -4 the landing is a full story under whichever
+option you pick, and for -5's `sqlparse` option (b) likewise).
+
+**What this boundary fixed in the chain plumbing (F-072, so the behaviour you
+see matches what the entries promise):** running the resume command below now
+also stamps the inbox as read — before this, entries you had already answered
+could later be mistaken for a NEW fork, and a crashed session could sit
+unhealed looking like a deliberate park. Also F-073: a `verify-m9` leg that
+narrated F-062 as still open was re-derived; the gate is GREEN with the true
+story. Details: `docs/milestones/PROGRAM_CLOSE.md` §6, ledger rows F-072/F-073.
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+automation/next_session.sh architect 120   # resumes the chain on any answer (and clears the park latch)
+```
+
+---
+
 ## 2026-08-24-5 · raised by EXEC/Opus (M9-S9) · THE PRE-PUBLISH PAIR IS DONE — the public flip is your click, plus one small CVE fork
 
 **One sentence.** You said *yes, publish, after the pre-publish pair* (2026-08-24-2,
