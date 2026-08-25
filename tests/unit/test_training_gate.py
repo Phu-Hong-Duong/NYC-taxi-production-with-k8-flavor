@@ -240,7 +240,8 @@ def test_a_tie_with_the_incumbent_is_REFUSED_from_M9_S10_on():
     assert not decision.passed
     failed = [c for c in decision.checks if not c.passed]
     assert len(failed) == 1 and "serving champion" in failed[0].name
-    assert f"required >= {float(GATE_CFG['incumbent_min_improvement_pct']):.2f}%" in failed[0].detail
+    bar = float(GATE_CFG["incumbent_min_improvement_pct"])
+    assert f"required >= {bar:.2f}%" in failed[0].detail
 
 
 def test_the_champion_re_fitted_is_not_a_regression_against_its_own_rounded_tag():

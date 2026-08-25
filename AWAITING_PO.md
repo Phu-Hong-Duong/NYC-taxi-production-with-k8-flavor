@@ -149,6 +149,8 @@ whoever wants it can start from the list instead of the idea.
 > in-force value for the frozen nine is read from an enumerated set, never a
 > permissive default (F-048's rule). An ARCH touch charters the landing.
 
+> **LANDED 2026-08-25 (M9-S10).** `configs/train.yaml: gate.incumbent_min_improvement_pct: 0.50`, applied to the incumbent KPI-09 condition only, era-aware: all nine recorded verdicts replay against the bar in force when they were taken and **0 flip** (`make verify-m2` GREEN 57/57 · `make verify-m3` GREEN 47/47 · `make verify-m7` GREEN, both planted-edit red teams still PASS), every future verdict records its own bar, and `make gate-margin-redteam` demonstrates the separate margin-never-decreases check going RED on a plausible lowered margin and back GREEN. F-016 and F-068 are CLOSED. Write-up: `docs/incumbent_margin_m9.md`. Nothing was fitted, no alias moved, no registry version was created.
+
 **One sentence.** You chose **option B** for F-016 — a **≥0.50%** margin on the
 gate's incumbent condition — the M9 epilogue chartered it as story S6, and the
 charter's own safety check *fired*: applying B makes **two recorded verdicts
@@ -831,6 +833,8 @@ incumbent margin, still yours and still not blocking until M7; 2026-08-17-1's ho
 > materiality bar), KPI-10 non-regression unchanged. The gate edit is now
 > PO-sanctioned; chartering the landing is ARCH's at the next touch. Chosen with
 > the stated cost accepted: a model genuinely 0.3–0.4% better will not ship.
+
+> **LANDED 2026-08-25 (M9-S10).** `configs/train.yaml: gate.incumbent_min_improvement_pct: 0.50`, applied to the incumbent KPI-09 condition only, era-aware: all nine recorded verdicts replay against the bar in force when they were taken and **0 flip** (`make verify-m2` GREEN 57/57 · `make verify-m3` GREEN 47/47 · `make verify-m7` GREEN, both planted-edit red teams still PASS), every future verdict records its own bar, and `make gate-margin-redteam` demonstrates the separate margin-never-decreases check going RED on a plausible lowered margin and back GREEN. F-016 and F-068 are CLOSED. Write-up: `docs/incumbent_margin_m9.md`. Nothing was fitted, no alias moved, no registry version was created.
 
 **The fork in plain language.** The promotion gate has two conditions. The
 FLOOR condition demands a challenger beat the group-median baseline by
