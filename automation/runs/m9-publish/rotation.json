@@ -144,5 +144,31 @@
     "flyte (helm upgrade via deploy_flyte.sh \u2014 values-rendered credentials)",
     "serving (make serve \u2014 the storage-initializer re-fetches under the new credential)"
   ],
-  "finished_at": "2026-08-25T05:14:46Z"
+  "finished_at": "2026-08-25T05:14:46Z",
+  "old_credentials_refused": {
+    "at": "2026-08-25T05:21:15Z",
+    "checks": [
+      {
+        "check": "minio-root",
+        "refused": true,
+        "detail": "mc alias set with the pre-rotation root password exited 1 (non-zero = refused)"
+      },
+      {
+        "check": "minio-user-serving",
+        "refused": true,
+        "detail": "mc alias set as `serving` with its pre-rotation secret exited 1 (non-zero = refused)"
+      },
+      {
+        "check": "postgres-mlflow",
+        "refused": true,
+        "detail": "psql as `mlflow` at 10.244.2.7 (the scram-sha-256 rule) with its pre-rotation password exited 2 with a password authentication failure"
+      },
+      {
+        "check": "postgres-mlflow-NEW-works",
+        "refused": true,
+        "detail": "the same path with the CURRENT password exited 0 (0 = accepted; this is the control \u2014 and it only discriminates because the address forces real authentication)"
+      }
+    ],
+    "note": "run AFTER the positive sweep: an absence check before a presence check passes against a dead platform"
+  }
 }

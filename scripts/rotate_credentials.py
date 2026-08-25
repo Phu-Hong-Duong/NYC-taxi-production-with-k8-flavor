@@ -81,7 +81,18 @@ from typing import Any
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 ENV_FILE = pathlib.Path(os.environ.get("ENV_FILE", REPO / ".env"))
-PRE_ROTATION = REPO / ".env.pre-rotation"
+# OUTSIDE the repository, and that is the second correction this story's own
+# guards made to its own charter. The charter said "a gitignored path
+# (`.env.pre-rotation`)"; `git check-ignore` said that path was not ignored at
+# all (fixed in .gitignore, first commit), and then `make verify-m2`'s
+# root-stray leg named the file anyway — correctly. A gitignored file is
+# invisible to git and to nothing else: it is still in a directory listing,
+# still in a `tar`, still in an archive of the repo. The strongest place for a
+# file holding every OLD credential in the program is not in the repository at
+# all. Mode 700 on the directory, 600 on the file.
+PRE_ROTATION = pathlib.Path(
+    os.environ.get("PRE_ROTATION_FILE", pathlib.Path.home() / ".nyc-taxi-rotation" / "env.pre-rotation")
+)
 RECORD = REPO / "automation" / "runs" / "m9-publish" / "rotation.json"
 KUBECTL = ["kubectl", "--context", os.environ.get("KUBE_CONTEXT", "kind-mlops-taxi")]
 
@@ -141,7 +152,17 @@ FAMILY_ORDER = ["postgres", "minio-users", "minio-root", "grafana", "metabase-ad
 # is touched by two families, so a naive per-key drain would restart the same
 # workload four times to reach the same state.
 CONSUMERS: dict[str, list[str]] = {
-    "postgres": ["mlflow", "metabase", "flyte"],
+    # `boards` is here because of a consumer this story's charter did not
+    # enumerate and only running it found (the charter's own risk 4). Metabase
+    # stores the WAREHOUSE connection — host, database, user and password — as a
+    # row in its app-db, not as an environment variable, so restarting the pod
+    # converges its own app-db credential and leaves the marts one stale. Every
+    # card then fails with a connection-pool error that names no credential at
+    # all. `metabase_boards.py`'s ensure_marts_database() PUTs the details from
+    # .env on every run, so `make boards` is the in-place mechanism, already
+    # built. It is drained after metabase-admin by FAMILY_ORDER, which is what it
+    # needs: it logs in with the admin password.
+    "postgres": ["mlflow", "metabase", "flyte", "boards"],
     "minio-users": ["mlflow", "flyte", "serving"],
     # minio-root restarts MinIO inside its own rotator, because the restart is
     # what makes the new root credential live and the user read-back that PROVES
@@ -674,6 +695,18 @@ def drain_consumers(pending: set[str], record: dict[str, Any]) -> None:
         # them. A `rollout restart` here would look like it worked and change nothing.
         run_script("scripts/deploy_flyte.sh")
         done.append("flyte (helm upgrade via deploy_flyte.sh — values-rendered credentials)")
+    if "boards" in pending:
+        # Not a restart at all: a converge. See CONSUMERS["postgres"].
+        p = subprocess.run(
+            ["uv", "run", "python", str(REPO / "scripts" / "metabase_boards.py")],
+            cwd=REPO, capture_output=True, text=True,
+        )
+        if p.returncode != 0:
+            raise RotationError(
+                "metabase_boards.py failed — the warehouse connection still holds the OLD "
+                f"marts password:\n{(p.stdout + p.stderr).strip()[-400:]}"
+            )
+        done.append("metabase boards (make boards — converges the stored `marts` warehouse connection)")
     if "serving" in pending:
         # The predictor's storage-initializer fetches the champion under
         # SERVING_S3_SECRET_KEY, so this is the one place the rotation is proved
@@ -726,28 +759,55 @@ def verify_old_refused(record_path: pathlib.Path) -> int:
         note("minio-user-serving", p.returncode != 0,
              f"mc alias set as `serving` with its pre-rotation secret exited {p.returncode} (non-zero = refused)")
 
-    # 3. Postgres, old tenant password, over TCP inside the pod (password auth,
-    #    not the local peer auth the ALTERs used — so this exercises the verifier).
+    # 3/4. Postgres, old then new, over the path that actually CHECKS a password.
+    #
+    # THE ADDRESS IS THE WHOLE TEST, and the first version of this probe got it
+    # wrong in the direction that looks like a finding. pg_hba.conf here reads:
+    #
+    #     host all all 127.0.0.1/32   trust
+    #     host all all all            scram-sha-256
+    #
+    # so a connection to 127.0.0.1 from inside the pod is TRUSTED — the password
+    # is not consulted at all. Probing there, the pre-rotation password was
+    # "accepted" and the probe reported that the rotation had not taken.
+    #
+    # The positive control could not catch it, and that is the lesson worth more
+    # than the fix: a control only discriminates if the mechanism under test is
+    # engaged. Under `trust` BOTH arms pass, so the control agreed with the false
+    # alarm instead of exposing it. It was built to catch "the database is gone",
+    # which is a different failure from "nothing is being authenticated".
+    #
+    # Connecting to the pod's OWN IP leaves 127.0.0.1 behind and falls through to
+    # the scram-sha-256 rule, so the verifier is what answers. Same pod, no extra
+    # workload, and the address is read from the cluster rather than typed.
+    pod_ip = kubectl("-n", "platform", "get", "pod", "postgres-0",
+                     "-o", "jsonpath={.status.podIP}").stdout.strip()
+    if not re.fullmatch(r"[0-9a-fA-F.:]+", pod_ip or ""):
+        raise RotationError(f"could not read the postgres pod IP (got {pod_ip!r})")
+    psql_probe = (
+        'read -r U; read -r P; PGPASSWORD="$P" '
+        f'psql -h {pod_ip} -U "$U" -d mlflow -tAc "select 1"'
+    )
+
     if old["MLFLOW_DB_PASSWORD"] != live["MLFLOW_DB_PASSWORD"]:
         p = kubectl(
-            "-n", "platform", "exec", "-i", "postgres-0", "--", "sh", "-c",
-            'read -r U; read -r P; PGPASSWORD="$P" psql -h 127.0.0.1 -U "$U" -d mlflow -tAc "select 1"',
+            "-n", "platform", "exec", "-i", "postgres-0", "--", "sh", "-c", psql_probe,
             stdin=f"{old['MLFLOW_DB_USER']}\n{old['MLFLOW_DB_PASSWORD']}\n", check=False,
         )
-        refused = p.returncode != 0 and "authentication failed" in (p.stderr + p.stdout).lower()
+        refused = p.returncode != 0 and "password authentication failed" in (p.stderr + p.stdout).lower()
         note("postgres-mlflow", refused,
-             f"psql as `{old['MLFLOW_DB_USER']}` with its pre-rotation password exited {p.returncode}"
-             + (" with an authentication failure" if refused else f" — stderr: {p.stderr.strip()[:120]}"))
+             f"psql as `{old['MLFLOW_DB_USER']}` at {pod_ip} (the scram-sha-256 rule) with its "
+             f"pre-rotation password exited {p.returncode}"
+             + (" with a password authentication failure" if refused
+                else f" — stderr: {p.stderr.strip()[:120]}"))
 
-    # 4. And the NEW password must work over the same path — the positive control
-    #    that stops #3 passing because the database is simply gone.
     p = kubectl(
-        "-n", "platform", "exec", "-i", "postgres-0", "--", "sh", "-c",
-        'read -r U; read -r P; PGPASSWORD="$P" psql -h 127.0.0.1 -U "$U" -d mlflow -tAc "select 1"',
+        "-n", "platform", "exec", "-i", "postgres-0", "--", "sh", "-c", psql_probe,
         stdin=f"{live['MLFLOW_DB_USER']}\n{live['MLFLOW_DB_PASSWORD']}\n", check=False,
     )
     note("postgres-mlflow-NEW-works", p.returncode == 0 and p.stdout.strip() == "1",
-         f"the same path with the CURRENT password exited {p.returncode} (0 = accepted; this is the control)")
+         f"the same path with the CURRENT password exited {p.returncode} (0 = accepted; this is the "
+         "control — and it only discriminates because the address forces real authentication)")
 
     payload = {"at": now(), "checks": checks,
                "note": "run AFTER the positive sweep: an absence check before a presence check passes against a dead platform"}
