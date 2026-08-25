@@ -4844,3 +4844,72 @@ not its working tree — `--all`, every ref — and then read the findings it gi
 you for files that are supposed to contain secrets. The interesting question is
 never "how many"; it is "which of these is git holding, and which is just my
 laptop". Then plant one and check the scanner still says so.
+
+## M9-S10 — a bar that moved without falsifying the record behind it
+
+**The situation.** The promotion gate had two bars that disagreed about what a
+promotion is worth. The FLOOR condition demanded a 2.00% improvement over a
+`GROUP BY` before a booster was worth owning at all; the INCUMBENT condition —
+"is this better than what riders already get?" — was plain non-regression with
+**no margin**, so the alias moved once on **+0.63%**, which is 1.2 seconds of
+mean error over 5.95 million rows. The PO's answer was to add a **0.50%** margin.
+
+**The hard part is not the tightening.** Three of this program's milestone gates
+do not check that a document contains the word REFUSE; they take the numbers
+recorded in old transcripts and feed them back through `gate.decide` **as it
+exists on disk right now**. That is what makes them evidence about today's gate.
+It also means every tightening is a threat to the record: a probe run *before*
+any edit measured that **two of nine** recorded verdicts flip from PROMOTE to
+REFUSE under any positive margin. Both are a champion judged against **itself**,
+at exactly +0.0000%.
+
+**The fix is a sentence this repository had already written, about something
+else.** Since M3-S1 the replay legs have taken the FLOOR's name from the block
+being replayed rather than from the live config, under the rule *a verdict is
+replayed against the bar it was actually taken against, or it is not a replay*.
+Era-awareness is that same rule applied to the margin — with one obligation the
+floor case did not have. **A floor name cannot be silently absent; a margin
+can.** So the pre-B era is an ENUMERATED set of nine rows, and a verdict that is
+neither enumerated nor self-describing **raises**.
+
+**Why raising, when a default would obviously work.** Because the default that
+would work is **zero**, and zero is the loosest bar there is. A permissive
+default would let a *future* verdict — taken under a real margin, recorded
+carelessly — be replayed against nothing at all and pass. The failure mode of
+"assume no margin" is not a slightly wrong replay; it is the exact hole the
+margin was added to close, arriving through the machinery that was supposed to
+protect it.
+
+**And era-awareness alone would have been a hole in the other direction.** If
+every historical verdict is judged against its own old bar, then lowering the
+LIVE bar tomorrow breaks nothing: nine replays stay green over a gate nobody can
+promote past. So the ratchet — *the margin on disk never decreases* — is a
+separate, deliberately unweakened check. Two halves; either alone is worse than
+useless, because either alone looks complete.
+
+**The red team found the defect, and it was in the gate rather than the config.**
+The drill plants a *plausible* lowered margin (0.10 — still positive, still
+refuses the identity case, so it satisfies every arithmetic test while spending
+a PO's letter without one). Its first run produced **two FAILs carrying the same
+sentence**, because the ratchet had been asserted twice — once in the bar block
+and once inside the era-aware summary. Two failures reading as two independent
+witnesses when they are one fact counted twice is a small dishonesty, and the
+only reason it was visible is that the drill's *negative* check demanded the
+era-aware replays stay GREEN while the live bar moved.
+
+**The test that argued the other way was answered, not deleted.** An older unit
+test asserted that re-gating the champion's own numbers must PASS, because
+"`make train` is idempotent and a re-run that cannot reach its own verdict makes
+every promotion a one-way door". That argument is worth keeping visible even
+though the decision went against it — and it does not bite, because the
+idempotence it names lives in the *promotion* code, not the gate: a re-run
+reproducing the champion's numbers changes nothing about the registry under
+either rule. What changed is the exit code, 0 to 1.
+
+**What to try yourself.** Find a threshold in your system that has a history —
+one that alerts, reports or gates on old data. Now change it, and ask what
+happens to every conclusion already drawn under the old value. If the answer is
+"nothing, because we only ever compare against the current threshold", check
+whether that is a property you can state, or just something nobody has looked
+at. Then write down where the old value is recorded. If the answer is "nowhere",
+that is the finding.
