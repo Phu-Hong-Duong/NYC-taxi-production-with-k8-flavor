@@ -1,5 +1,57 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-25-2 · raised by EXEC/Opus (M9-S11) · NOT A FORK, NO ACTION NEEDED — your sqlparse answer has LANDED, and the price you were quoted was wrong by one package
+
+**One sentence.** Option (b) is done — **sqlparse 0.5.5 → 0.6.0, the three HIGH
+CVEs are gone** (repo-tree dependency findings **5 → 1, CRITICAL 0 · HIGH 0**,
+nothing left fixable in our lockfile) — but the bump could not be the one command
+it was priced as, and you should know what it actually cost before the flip.
+
+**What it cost that the estimate did not include: `dbt-core 1.12.2 → 1.12.3.**
+`uv lock --upgrade-package sqlparse` produced an **empty diff** and reported
+success, because dbt-core 1.12.2 declares `sqlparse<0.6.0` — an upper bound the
+resolver honours and does not narrate. dbt-core **1.12.3** is a patch release
+whose relevant change is relaxing that bound to `<0.7.0`. So the minimal
+upstream-sanctioned path moves two packages.
+
+**Why I landed it rather than parking to ask.** Your letter chose the goal (bump
+before the flip) and accepted the cost class (re-baseline the invariant, re-run
+the proofs to show nothing moved). The alternative that keeps the *diff* looking
+like the one you were quoted is a constraint override — force sqlparse past dbt's
+declared bound — which ships dbt running against a version its own metadata
+forbids, untested by anyone. That is a worse trade bought purely to protect an
+estimate, and the proof your letter already required is exactly the one that
+falsifies the honest option: **`make marts` on the new pair returned `dbt build`
+PASS=80 WARN=0 ERROR=0 and republished all six marts to the row** (56,127,878 ·
+44,792 · 8 · 80 · 1,151 · 91). The undo was one `git checkout` throughout.
+
+**If you disagree, the revert is cheap and I will take the letter:** one commit
+reverts the lock and the anchor, and the CVEs go back to being option (a)/(c) from
+2026-08-24-5. Nothing downstream depends on the bump.
+
+**Everything you asked for is proved, not asserted:** `make verify-m8` GREEN
+51/51 · `make verify-m9` GREEN · both red teams PASS with sha256-identical
+restores · `make parity` **0.000e+00** over 16 hazards · host suite **1,277
+passed** · `make readme-check` GREEN · `make security-scan` still
+`publishable: true`, zero secrets. Nothing was fitted, no alias moved, no
+registry version was created, no wire was touched.
+
+**Two things recorded rather than netted out.** (1) The three container images
+still carry the old sqlparse until their next natural rebuild — nothing
+on-cluster parses SQL from an untrusted party, and rebuilding three images to
+close a CVE in a parser nothing points at untrusted input is cost without a
+threat model (`docs/lock_rebaseline_m9.md` §5.1). (2) `verify-m9` emits **46**
+sub-checks and has since M9-S7; the `45/45` in the epilogue-close README row was
+stale and is corrected there with the measurement beside it.
+
+**Your list is UNCHANGED and shrinking on its own:** the publish flip is still
+your click, and it is now waiting on **M9-S12** (credential rotation, in-place)
+and **M9-S13** (pre-commit hook), both already chartered from your own answers.
+**Nothing new is asked of you here.** Detail: `docs/lock_rebaseline_m9.md` ·
+ledger row **F-074**.
+
+---
+
 ## 2026-08-25-1 · raised by ARCH/Fable (EPILOGUE CLOSE) · THE EPILOGUE IS CLOSED AND THE CHAIN IS RE-PARKED — your two open items are unchanged, and the resume command below now works better than it used to
 
 **One sentence.** The epilogue is closed and tagged **`m9-epilogue-closed`**
