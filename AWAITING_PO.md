@@ -1,5 +1,68 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-29-2 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Charter the codebase cleanup — prune the bloat, keep every guarantee**
+
+> **PO 2026-08-29 (in chat, their own words):** "ah, i got another idea, there
+> should be a clean up and optimize code, because Claude has a tendency create
+> code to test thing and check thing, and it pipe up to a tall order, so it's
+> hard to follow the codebase, this is what i call code bloat, code that is
+> unnecessary and need to optimize or prune so it's easy to follow up while
+> still ensure punctuality. Make this one the clean up for this project. Let
+> claude this time optimze the entire codebase for this project"
+
+**What the PO is directing** (their Windows-side session's reading, for the
+ARCH touch that reads this — the 2026-08-29-1 chartering shape): a
+**followability cleanup over the ENTIRE repository** — `src/`, `scripts/`,
+`tests/`, `pipelines/`, `automation/`, `analytics/`, and the navigation
+surface a reader enters through. The complaint is specific and it is fair:
+nine milestones of verify scripts, red teams, twin checkers, probes and
+one-off drills have accreted into a surface where the load-bearing code is
+hard to find. "Optimize" here means the CODEBASE, not the model or the
+latency: followability first; runtime performance only where it falls out
+free. Target classes, in the order the PO's words suggest:
+
+1. **Dead and superseded code** — probes whose findings are banked in tracked
+   records, helpers nothing calls, paths kept "just in case", scripts a later
+   story replaced without deleting.
+2. **Duplication** — the same idiom re-implemented story by story
+   (port-forward blocks, record readers, sha256 restore traps,
+   consume/verdict plumbing, accept-check scaffolding…): consolidate each
+   into ONE shared home, callers migrated.
+3. **Accidentally overlapping checks** — where two checks assert the same
+   property because copies drifted apart, fold them into one home (F-013's
+   one-home rule, generalised). This does NOT touch the program's DELIBERATE
+   two-witness designs — the pairs that argue their own pairing in prose
+   (cache drill, canary counters, …) are load-bearing and stay.
+4. **Navigability** — whatever cheap structure makes the codebase readable
+   (a code map, module docstrings, consistent naming), where it earns its
+   bytes. Historical documents are the record and are not rewritten;
+   corrections go beside originals, as always.
+
+**The floor under all of it — what "while still ensure punctuality" is read
+as; the PO can veto this reading by editing here:** the cleanup must not
+weaken what the program can PROVE. Concretely: all ten gates GREEN after
+every merged slice · every red team still goes RED on its plant · no
+threshold, bar, knob or gate condition moves · no tracked record under
+`automation/runs/` is rewritten · no wire, alias, registry, mart-number or
+`uv.lock` change · the boundary laws hold. **Consolidation is sanctioned;
+deletion of a whole gate, red team, or recorded drill is NOT covered by this
+directive** — if the audit concludes one should go, that specific removal
+comes back here as a fork with options (the constitution already reserves
+it).
+
+**Shape (ARCH's to decide, offered not ordered):** this is bigger than one
+story. An AUDIT leg first — a measured inventory (LOC per area, dead-code
+findings, duplication clusters, each with a costed keep/consolidate/delete
+verdict), committed BEFORE any edit, so the prune list is reviewable and the
+before/after numbers are evidence rather than vibes — then executor slices,
+each a safe stopping point ending with the gate sweep green. The cleanup's
+own write-up carries its numbers: files/LOC before and after, tests before
+and after, what was deleted and WHY each deletion is safe.
+
+**Chain state:** this session removes `automation/STOP` and resumes the chain
+as `architect` so the next ARCH touch charters this directly. Nothing else
+waits on the PO.
+
 ## 2026-08-29-1 · raised by ARCH/Fable (post-publish triage) · **PR #77 TRIAGED AND MERGED — your queue is EMPTY, and the chain re-parks on purpose**
 
 > **PO 2026-08-29 (via the Decision Desk): I want the two-way link anyway.**
