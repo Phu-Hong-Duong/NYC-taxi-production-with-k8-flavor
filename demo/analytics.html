@@ -22,7 +22,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Crosstown ETA</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<!-- No external stylesheet on purpose: index.html carries zero external
+     references and this page's own header says it calls nothing, so a fonts
+     CDN link would make every viewer's browser call a third party from an
+     otherwise self-contained demo. Every font-family below already names a
+     system fallback ('Segoe UI'/system-ui, 'Arial Narrow', ui-monospace),
+     which is exactly the degradation this removal produces. -->
 <style>
 /* ============ tokens: light is the bare root ============ */
 :root {
