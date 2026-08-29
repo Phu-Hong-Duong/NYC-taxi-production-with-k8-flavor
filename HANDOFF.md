@@ -1,5 +1,71 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-29 (dc) — ARCH boundary: PP-S1 triaged PASS, nothing to charter, the chain paused the way the PO left it
+
+### State
+**ARCH, `claude-fable-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (db) · `docs/milestones/POST_PUBLISH_KICKOFF.md` · AWAITING_PO ·
+ledgers · watchdog log. This session was started MANUALLY at 05:41Z — no HEAL
+line in the watchdog log — i.e. the PO ran the exact restart command (db)'s
+handoff named, into a state whose only change was the watchdog's own 05:30
+park heartbeat sitting uncommitted in `AWAITING_PO.md`. **No new PO content
+exists anywhere**; the queue is genuinely empty.
+
+### Reconciliation (every session today accounted for, from the logs)
+(cy) ARCH 04:14 — merged PR #77, wrote entry 2026-08-29-1 · **04:47 architect
+launch DIED on the CLI's monthly spend limit** (102-byte log; external, no
+repo effect; the 04:53 architect ran fine, so transient) · (cz) executor
+04:50 — **started by the watchdog's HEAL**, which read (cy)'s deliberate park
+as a DEAD chain 24 minutes after a fresh AWAITING_PO entry; cz behaved
+correctly (committed the PO's answer, chartered nothing, handed to ARCH) ·
+(da) ARCH 04:53 — chartered PP-S1 · (db) executor 04:59+120s — landed PP-S1,
+merged PR #78, re-parked bare · watchdog 05:20–05:40 — RED parked-on-fork,
+appended the 05:30 notice · this session 05:41. Live state at boot: 3/3 nodes
+Ready v1.36.1 at 12d · tree clean but for the watchdog notice · all 13 tags
+placed · `git branch -r --contains 3f6f232` → `origin/main`.
+
+### Done
+1. **Triage verdict on PP-S1: PASS** — signoffs row appended (Producer EXEC/
+   Opus (db) · Approver ARCH/Fable · producer ≠ approver). Both gates re-run
+   LIVE by the approver AFTER the landing: `make verify-m9` **GREEN** (banner
+   citing the CLOSED-and-cited box; `@champion` 2 / `feature_set v2`; no
+   version after `m7-closed`; `uv.lock` == `lock-rebaselined-m9-publish`; 5
+   pins up to date) · `make readme-check` **GREEN** (incl. `1,320 tests`).
+2. **Dispositions, nothing silent**: F-081 CLOSED by its own story; **F-001
+   the register's only open row** (standing, non-blocking); debt CLOSED; no
+   README row to flip (all 13 flipped at `1bf01f0`, pinned by `STATUS_ROWS`).
+   Full closing triage written as `POST_PUBLISH_KICKOFF.md` **§0.1** (dated
+   addendum; the draft-time §0 kept as written).
+3. **Nothing chartered, with the reason stated** (§0.1): program CLOSED and
+   PUBLIC, §9 names no further scope, inbox EMPTY — a kickoff with no story
+   would be a file pretending otherwise. Any future PO answer gets its
+   kickoff at the ARCH touch that reads it.
+4. **The inbox swept honestly**: the watchdog's 05:30 heartbeat COMMITTED
+   (append-only; a stray checkout must not eat it) with a dated ARCH note
+   beneath saying **no entry waits**, why the notices exist, and the restart
+   command.
+5. **`automation/STOP` restored** — the park upgraded from bare to the
+   designed control, because the bare park measurably cried wolf: false
+   "your decision needed" toasts at an empty inbox, and one HEAL that
+   resurrected a deliberate park into an empty queue (04:50). STOP is the
+   resting state the PO themself kept the closed program in from 2026-08-26
+   until this morning. **No watchdog code touched** — §0's decline stands.
+
+### Defects/Surprises
+- **None in the repo.** Two observations, neither a finding: the 04:47
+  spend-limit launch failure (external budget, self-resolved), and the 04:50
+  HEAL-resurrects-a-park behaviour — real, observed once, cost one gracefully-
+  handled session; addressed by STATE (STOP), not by code, consistent with
+  §0's decline of watchdog plumbing changes on a closed program.
+
+### Next
+**The chain is deliberately PAUSED via `automation/STOP` — nothing is
+scheduled, and that is the design, not an omission.** The watchdog stands
+down (`STOP present — chain paused deliberately`), so no more heartbeat
+notices, toasts, or heals. The program is closed, published, and green; the
+PO's queue is empty. To restart the chain for anything at all:
+`rm automation/STOP && automation/next_session.sh architect 120`.
+
 ## Session 2026-08-29 (db) — PP-S1: the two-way demo link, and a closed record rewritten on purpose
 
 ### State

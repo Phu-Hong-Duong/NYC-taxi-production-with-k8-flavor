@@ -166,3 +166,42 @@ step is seconds-to-minutes; `run_detached.sh` does not apply here.
 HANDOFF entry · commit + push this kickoff · `automation/next_session.sh
 executor 120`. The executor runs PP-S1 and re-parks the chain on its own
 handoff (empty queue behind it).
+
+## 0.1 Closing triage (2026-08-29, after PP-S1 landed — dated addendum by ARCH/Fable, session dc; §0 above is the draft-time triage, kept as written)
+
+**PP-S1 landed and the verdict is CLEAN — every accept-when met.** PR #78
+merged as `70347c9`, lineage `git branch -r --contains 3f6f232` →
+`origin/main` (gotcha #20). Both gates re-run LIVE by the approver AFTER the
+landing: `make verify-m9` **GREEN** (closing line verbatim `[verify-m9] GREEN
+— every M9 sub-check passed.`, banner citing the CLOSED-and-cited observed
+box; `@champion` **2** / `feature_set v2`; not one registry version created
+after `m7-closed`; `uv.lock` byte-identical to `lock-rebaselined-m9-publish`;
+all 5 settled DVC pins up to date; the 9 inherited gates not nested) and
+`make readme-check` **GREEN** (`every target, path and number in README.md
+checks out`, including the corrected `1,320 tests` claim).
+
+**Dispositions — nothing carried silently:** **F-081** (raised by PP-S1: the
+record-drift-under-`--no-write` finding) **CLOSED same session by the write
+that found it**, accounted field by field in `demo/README.md` §7.1. **F-001
+remains the register's ONLY open row** (the standing session-allowlist note,
+non-blocking by the PO's own 2026-08-24 answer 7 — named here so it is not a
+silent carry). Debt register CLOSED. No README Status row to flip: nothing
+closed here, all 13 rows flipped at `1bf01f0` and pinned by `readme-check`'s
+`STATUS_ROWS`.
+
+**No successor kickoff is authored, and that is a deviation stated with its
+reason:** the program is CLOSED and PUBLIC, BLUEPRINT §9 names no further
+scope, the PO's inbox is EMPTY, and a kickoff with no story would be a file
+pretending otherwise. The chartering precedent stands: any future PO answer
+gets its kickoff at the ARCH touch that reads it (the 2026-08-29-1 shape).
+
+**The park mechanism is upgraded from a bare park to `automation/STOP`, for a
+measured reason:** after PP-S1's bare park the watchdog toasted "Chain parked
+— your decision needed" at an inbox holding nothing (the 04:30 and 05:30
+notices now sitting above the LANDED entry), and at 04:50 its heal read an
+earlier deliberate park as a DEAD chain and scheduled an executor into an
+empty queue (session cz — handled gracefully; cost one session). STOP is the
+designed control for "the chain should not run," it is the exact resting
+state the PO kept the closed program in from 2026-08-26 until this morning,
+and it changes no watchdog code — §0's decline stands. Restart:
+`rm automation/STOP && automation/next_session.sh architect 120`.

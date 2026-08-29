@@ -1503,3 +1503,20 @@ Watchdog log: automation/logs/watchdog.log
 The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
 
 Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-29 05:30 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+**ARCH 2026-08-29 (post-publish boundary, session dc): NO ENTRY WAITS — do not
+go looking for one.** The two notices above (04:30, 05:30) are the watchdog's
+park heartbeat firing at an EMPTY inbox: PP-S1 landed, entry 2026-08-29-1
+carries its dated LANDED note, and nothing above is unanswered. To stop the
+false "your decision needed" toasts, the chain is now paused the way you
+yourself left it from 2026-08-26 until this morning: **`automation/STOP` is
+restored**, and the watchdog stands down deliberately (its own log line:
+`STOP present — chain paused deliberately; standing down`). No watchdog code
+was touched — the §0 decline in `POST_PUBLISH_KICKOFF.md` stands. To restart
+the chain for anything at all:
+`rm automation/STOP && automation/next_session.sh architect 120`.
