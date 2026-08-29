@@ -29,6 +29,7 @@ cd "$REPO_ROOT"
 NAMESPACE="serving"
 MANIFEST="infra/manifests/demo.yaml"
 PAGE="demo/index.html"
+ANALYTICS="demo/analytics.html"
 ROUTE="${DEMO_ROUTE:-http://localhost:8081}"
 CONFIGMAP="taxi-demo-page"
 DEPLOYMENT="taxi-demo-page"
@@ -53,6 +54,15 @@ uv run python scripts/build_demo_page.py --check
 PAGE_SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$PAGE")"
 echo "[demo] page $PAGE sha256 ${PAGE_SHA:0:16}…"
 
+# The analytics companion is a second key in the SAME ConfigMap, so the roll
+# trigger must cover it too: a pod rolled only on index.html's sha would keep
+# serving a stale analytics page until kubelet's ConfigMap refresh window. The
+# annotation therefore carries the sha256 over BOTH served files, in a fixed
+# order, and leg 2 compares against that.
+ANALYTICS_SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$ANALYTICS")"
+echo "[demo] page $ANALYTICS sha256 ${ANALYTICS_SHA:0:16}…"
+SERVED_SHA="$(printf '%s%s' "$PAGE_SHA" "$ANALYTICS_SHA" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+
 # ---- F-039's precondition, asked of the cluster and not of the manifest ------
 # A hand-authored object must never take a name an operator GENERATES: the
 # collision is accepted, works for seconds, and is then reconciled away with no
@@ -74,19 +84,20 @@ echo "[demo] ok  no controller owns the four names this story writes"
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   echo "[demo] DRY_RUN=1 — nothing was applied."
-  echo "[demo]   would create configmap/$CONFIGMAP from $PAGE"
-  echo "[demo]   would apply $MANIFEST with PAGE_SHA256=$PAGE_SHA"
+  echo "[demo]   would create configmap/$CONFIGMAP from $PAGE + $ANALYTICS"
+  echo "[demo]   would apply $MANIFEST with PAGE_SHA256=$SERVED_SHA"
   exit 0
 fi
 
 # ---- apply -------------------------------------------------------------------
-echo "[demo] rendering configmap/$CONFIGMAP from $PAGE (the file in git is the only copy)"
+echo "[demo] rendering configmap/$CONFIGMAP from $PAGE + $ANALYTICS (the files in git are the only copies)"
 kubectl -n "$NAMESPACE" create configmap "$CONFIGMAP" \
   --from-file=index.html="$PAGE" \
+  --from-file=analytics.html="$ANALYTICS" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "[demo] applying $MANIFEST"
-sed "s|PAGE_SHA256|$PAGE_SHA|" "$MANIFEST" | kubectl apply -f -
+sed "s|PAGE_SHA256|$SERVED_SHA|" "$MANIFEST" | kubectl apply -f -
 
 echo "[demo] leg 1/3 — the rollout"
 kubectl -n "$NAMESPACE" rollout status deploy/"$DEPLOYMENT" --timeout=180s
@@ -94,11 +105,11 @@ kubectl -n "$NAMESPACE" rollout status deploy/"$DEPLOYMENT" --timeout=180s
 echo "[demo] leg 2/3 — the pod is serving the sha the deploy asked for"
 LIVE_SHA="$(kubectl -n "$NAMESPACE" get deploy "$DEPLOYMENT" \
   -o jsonpath='{.spec.template.metadata.annotations.taxi-mlops\.io/page-sha256}')"
-if [[ "$LIVE_SHA" != "$PAGE_SHA" ]]; then
-  echo "[demo] FAIL: the live pod template carries $LIVE_SHA, not $PAGE_SHA" >&2
+if [[ "$LIVE_SHA" != "$SERVED_SHA" ]]; then
+  echo "[demo] FAIL: the live pod template carries $LIVE_SHA, not $SERVED_SHA" >&2
   exit 1
 fi
-echo "[demo] ok  pod template annotation == the committed page's sha256"
+echo "[demo] ok  pod template annotation == the sha256 over both committed pages"
 
 echo "[demo] leg 3/3 — the ROUTE answers, under the origin the browser will use"
 deadline=$((SECONDS + 120))
@@ -116,6 +127,31 @@ if [[ "$code" != "200" ]]; then
   exit 1
 fi
 echo "[demo] ok  GET $ROUTE/demo/ -> 200"
+
+# ---- the analytics companion serves the committed bytes ----------------------
+# Same property leg 3 protects for index.html, asserted for the second key: a
+# ConfigMap that silently dropped a file would leave /demo/analytics.html a 404
+# that reads exactly like a wrong path (gotcha #106), and a stale key would
+# serve yesterday's numbers under today's sha. Fetch it back through the route
+# and hash what a browser would get — POLLED like leg 3, because this leg's own
+# first run failed on a single fetch: the request landed on the TERMINATING old
+# pod (still in the Service endpoints for a beat after the rollout returns),
+# whose mounted ConfigMap had no analytics.html, and what got hashed was the
+# 404 body. A one-shot fetch here measures the endpoint race, not the page.
+deadline=$((SECONDS + 60))
+FETCHED_SHA=none
+while (( SECONDS < deadline )); do
+  FETCHED_SHA="$(curl -sf "$ROUTE/demo/analytics.html" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+  [[ "$FETCHED_SHA" == "$ANALYTICS_SHA" ]] && break
+  sleep 2
+done
+if [[ "$FETCHED_SHA" != "$ANALYTICS_SHA" ]]; then
+  echo "[demo] FAIL: $ROUTE/demo/analytics.html served sha $FETCHED_SHA after 60s," >&2
+  echo "[demo]   the committed $ANALYTICS is $ANALYTICS_SHA — the route is up but" >&2
+  echo "[demo]   the analytics page is missing or stale in the ConfigMap." >&2
+  exit 1
+fi
+echo "[demo] ok  GET $ROUTE/demo/analytics.html serves the committed bytes (sha256 match)"
 
 # ---- the invariants this route must NOT have disturbed ----------------------
 # The rule is host-less, so it lands in nginx's DEFAULT server block — the same
