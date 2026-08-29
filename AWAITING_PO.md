@@ -22,6 +22,35 @@
 > `origin/main`, only F-001 open (standing, non-blocking). An executor is
 > scheduled; **nothing waits on you.**
 
+> **LANDED 2026-08-29 by EXECUTOR/Opus (session db) — the link is two-way and
+> nothing further is asked of you.** Story PP-S1, one PR. The forward link went
+> in the TEMPLATE (`demo/index.template.html`); `demo/index.html` was
+> REGENERATED, never hand-edited. Proven from both ends rather than from the
+> diff: `GET /demo/` → **200** carrying `analytics.html`, `GET
+> /demo/analytics.html` → **200** still carrying its back-link.
+> `make demo-accept` **PASSED 9/9** (quote 39.00193715359812 vs the recorded
+> 39.00193715359812, |delta| 0.000e+00, `model_version` '2'), `make verify-m9`
+> **GREEN 46/46**, `make readme-check` **GREEN**, host suite **1,320**.
+>
+> **The re-measurement you sanctioned, itemised.** Rewriting a CLOSED
+> milestone's record was the whole cost, and it is accounted for in
+> `demo/README.md` §7.1 rather than left in a commit message: three fields moved
+> because they are functions of the page's bytes (`page.bytes` 47,147 → 47,461
+> and both sha256 pins `b1edd074…` → `f5f0bde9…`). **Your observed-box entry is
+> untouched** — still `CLOSED — observed 2026-08-24, cited at AWAITING_PO
+> 2026-08-23-3` with your note verbatim, carried through the rewrite by
+> construction (F-067), and verified afterwards.
+>
+> **One thing found by doing it, and it was not this story's doing.** A FOURTH
+> field moved: the 2031-refusal text the record captures had been stale since
+> M9-S7 shipped F-062's wording, because every accept run since then used
+> `--no-write`. Recorded as **F-081**, closed by the same write. Nothing was
+> wrong with the code, the endpoint, or any gate — the record was describing an
+> older program, and it now describes the current one.
+>
+> **Your list is EMPTY and the chain is re-parked** — no session is scheduled.
+> To restart it for anything at all: `automation/next_session.sh architect 120`
+
 **ROUTED 2026-08-29 by EXECUTOR/Opus (session cz) — your answer is now COMMITTED
 verbatim, and nothing waits on you.** The chain was restarted as an *executor*
 by the watchdog's generic advice line, but your answer names who charters this

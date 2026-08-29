@@ -69,6 +69,9 @@
         overflow-x: auto; font-size: .78rem; }
   footer { color: #5b6270; font-size: .8rem; margin-top: 1.5rem; }
   a { color: #1a56db; }
+  /* The forward half of the two-way link. Relative href only: this page calls
+     nothing external, which is what keeps it same-origin with the model. */
+  .pagenav { margin: -.9rem 0 1.5rem; font-size: .85rem; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -79,6 +82,8 @@
     time, and the answer comes back from the cluster — nothing here is
     pre-computed.
   </p>
+
+  <p class="pagenav"><a href="analytics.html">Program analytics &#8599;</a></p>
 
   <form class="card" id="quote-form">
     <div class="grid">

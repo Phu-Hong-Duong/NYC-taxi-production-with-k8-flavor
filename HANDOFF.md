@@ -1,5 +1,90 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-29 (db) — PP-S1: the two-way demo link, and a closed record rewritten on purpose
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual:
+CLAUDE.md · HANDOFF (da) · `docs/milestones/POST_PUBLISH_KICKOFF.md` (the ARCH
+touch's one chartered story) · AWAITING_PO (2026-08-29-1). No
+`automation/runs/*.status` was pointed at by the handoff; none read.
+
+**Story executed: PP-S1 — the two-way demo link (role:MLOps), COMPLETE.**
+Refusals declared and held: *no fit · no alias move · no registry version · no
+`uv.lock` change · no gate loosened · no cluster mutation beyond the demo
+ConfigMap roll*. The ONE record rewrite is the sanctioned one, by charter.
+
+### Reconciliation (staleness check — measured)
+(da)'s Next claimed a clean tree at `4e54663` with PP-S1 the whole queue.
+Measured before touching anything: 3/3 nodes `Ready` v1.36.1 at **12d** ·
+`GET /demo/` **200** and `GET /demo/analytics.html` **200** ·
+`grep -c analytics demo/index.template.html` → **0** (the forward link really
+did not exist) · accept record pinning `b1edd074…` on both sha fields with
+`po_observed_run` CLOSED and cited. Nothing had drifted.
+
+### Done — each with the command and what it printed
+1. **The forward link, in the TEMPLATE.** One relative anchor
+   (`<a href="analytics.html">Program analytics &#8599;</a>`, mirroring the
+   analytics page's own back-link) plus one `.pagenav` CSS rule.
+   `make demo-page` regenerated `demo/index.html`; **`TOKEN_COUNTS` did not
+   move** — the link is static markup, not a placeholder token.
+2. **One new law, and it asserts the PAIR.**
+   `test_the_two_pages_link_to_each_other_and_both_hrefs_are_relative`: the
+   forward link in the TEMPLATE **and** in the generated page (a template edit
+   never regenerated and a hand-edit of the output fail differently), the
+   back-link in `analytics.html`, and every `href` on the generated page
+   relative. `uv run pytest tests/unit/test_demo_page.py -q` → **24 passed**
+   (was 23).
+3. **`make deploy-demo` GREEN**, all three wait legs: rollout · pod-template
+   annotation == the sha over BOTH pages · the ROUTE under the browser's own
+   origin. `deploy_serving.sh`'s two invariants still hold (`/healthz` 200,
+   `/` 404).
+4. **The link proven TWO-WAY by fetching both sides, not by reading the diff:**
+   `GET /demo/` → 200, forward-link occurrences **1**;
+   `GET /demo/analytics.html` → 200, back-link occurrences **1**; served page
+   byte-identical to `demo/index.html` (`f5f0bde9…`).
+5. **`make demo-accept` WITH the write — PASSED 9/9.** Quote
+   **39.00193715359812** vs the recorded 39.00193715359812 (**|delta| =
+   0.000e+00**) at `model_version` **'2'**; `X-Taxi-Lookups` equal to the
+   recorded string; the 2031 quote **422**; zone 264→264 quoted at **8.2445**;
+   the champion's own model name **404** on this origin.
+6. **The record diff read FIELD BY FIELD before it was trusted** — see
+   Defects/Surprises. `po_observed_run` untouched.
+7. **`make verify-m9` GREEN 46/46** and **`make readme-check` GREEN** after the
+   write; host suite **1,320 passed**, `make lint` clean.
+8. Ledger row (deployments), **F-081**, field note, `demo/README.md` §7.1, and
+   a dated LANDED note on AWAITING_PO 2026-08-29-1.
+
+### Defects/Surprises
+- **F-081 (new, CLOSED by the write that found it).** The charter priced **two**
+  fields moving in `automation/runs/m9-demo/accept.json`; **four** moved. Three
+  are functions of the page's bytes and expected (`page.bytes` 47,147 → 47,461,
+  both sha pins `b1edd074…` → `f5f0bde9…`). The fourth is the captured
+  2031-refusal text, which gained M9-S7's F-062 sentinel sentence — **stale
+  since `8b6d5c0`**, because every accept run since then used `--no-write`
+  (correctly, by the F-063 habit). A record only ever written when something
+  else forces it drifts from the code it describes, and the drift surfaces
+  inside an unrelated diff. Confirmed by `git log -S "a coverage gap and not an
+  outage" -- src/` → `8b6d5c0`. Accounted for in `demo/README.md` §7.1 so a
+  reader never has to infer which fields were this story's.
+- **`make readme-check` went RED unplanted** on `1,319 tests` the moment the
+  suite reached 1,320 — the M9-S8 twin doing its job, for the second time
+  unplanted. The claim was corrected in README.md **and** in
+  `scripts/readme_check.py`'s claim table (a claim with no anchor on both sides
+  is unchecked), then GREEN.
+- **Observation, not a finding, and deliberately not fixed:**
+  `uv run ruff check .` reports 42 E501s in `scripts/rotate_credentials.py`
+  (M9-S12). `scripts/` has never been inside `make lint`'s scope
+  (`src tests pipelines`, which passes), so this is a scope fact rather than a
+  regression — and a drive-by reformat of a closed milestone's file is exactly
+  the creep the kickoff's Out-of-scope section names.
+
+### Next
+**Nothing is chartered and nothing waits on the PO** — AWAITING_PO's newest
+entry says so in its own words. The post-publish kickoff had exactly one story
+and it is landed, so per its own Exit line the queue behind it is empty and the
+chain **re-parks**: no successor is scheduled. To restart it for anything at
+all: `automation/next_session.sh architect 120`.
+
 ## Session 2026-08-29 (da) — ARCH touch: PP-S1 chartered on the PO's answer, the chain resumes as executor
 
 ### State

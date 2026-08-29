@@ -5090,3 +5090,56 @@ operation — and both are invisible if you only test the thing you just built.
 and commit something. Nothing happens — no error, no scan, no clue. That silence
 is the whole reason the installer reads the bit back off the file it just wrote,
 and it is worth feeling once rather than reading about.
+
+---
+
+## PP-S1 (post-publish) — a closed record, rewritten on purpose, and how that stays different from the mistake
+
+**What was built.** One relative anchor. `demo/index.template.html` gained a
+forward link to `analytics.html` (the back half shipped in PR #77), the page was
+regenerated, the cluster ConfigMap rolled, and `automation/runs/m9-demo/accept.json`
+— a CLOSED milestone's tracked record — was deliberately rewritten so its two
+sha256 pins follow the new bytes. Plus one test law asserting the pair, and a
+dated `demo/README.md` §7.1 saying exactly which fields moved and why.
+
+**Why this way.** ARCH declined this link at PR #77 triage, and the reason was
+good: `index.html` is bound by sha256 into M9's accept record, so a cosmetic line
+forces a re-measurement of a closed byte-identity chain. The PO read that cost and
+asked for it anyway. What makes the difference between *this* rewrite and F-063 —
+where a drill's undo silently re-dated another milestone's evidence — is not the
+diff, which looks identical from the outside. It is that **the rewrite was
+chartered in advance, in writing, naming the fields that were allowed to move**.
+Three habits carried it: the edit went in the TEMPLATE (the generated page has a
+byte-identity test whose whole job is to catch a hand-edit), the accept ran
+*with* the write exactly once and by explicit charter, and the record's diff was
+read field by field before it was committed rather than after it was trusted.
+
+**The concept underneath: an artifact's provenance is a claim about a process,
+not about a hash.** A tracked record that never changes is not automatically
+honest and a tracked record that changes is not automatically corrupt. What
+separates them is whether the change was *predicted before it happened* and
+*explained where a reader will look*. Reading the diff paid immediately: four
+fields moved where the charter had priced two, and the fourth — the recorded 2031
+refusal text — turned out not to be this story's doing at all. It had been stale
+since M9-S7 shipped F-062's sentinel sentence, because every accept run since had
+used `--no-write`. A record that is only ever written when something else forces
+it will quietly drift from the code it describes, and the drift surfaces at the
+worst possible moment: inside an unrelated diff, looking like your fault.
+
+**The smaller lesson, and it is the second time.** `make readme-check` went RED
+unplanted, on `1,319 tests`, the moment the suite reached 1,320 — the same way it
+first proved itself at M9-S8. A number in a document is a claim with a shelf life;
+the only ones worth trusting are the ones something re-derives.
+
+**What to look at.** `demo/README.md` §7.1 (the field-by-field account) ·
+`test_the_two_pages_link_to_each_other_and_both_hrefs_are_relative` in
+`tests/unit/test_demo_page.py` — note it asserts the forward link in the TEMPLATE
+*and* the OUTPUT, because a template edit never regenerated and a hand-edit of the
+output fail differently · `human_box()` in `scripts/demo_accept.py`, which carried
+the PO's CLOSED observed box through a full record rewrite without being asked to.
+
+**What to try yourself.** Add the link to `demo/index.html` instead of the
+template and run `uv run pytest tests/unit/test_demo_page.py -q`. The byte-identity
+test fails and names the generator — which is the moment the difference between a
+generated artifact and a source artifact stops being a convention and becomes
+something the repository enforces on you.

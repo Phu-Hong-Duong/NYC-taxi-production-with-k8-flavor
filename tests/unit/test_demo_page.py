@@ -52,6 +52,7 @@ DEPLOY = REPO / "scripts" / "deploy_demo.sh"
 ACCEPT = REPO / "scripts" / "demo_accept.py"
 LOOKUP = REPO / "data" / "reference" / "taxi_zone_lookup.csv"
 README = REPO / "demo" / "README.md"
+ANALYTICS = REPO / "demo" / "analytics.html"
 
 
 def page_text() -> str:
@@ -214,6 +215,34 @@ def test_the_endpoint_is_relative_which_is_what_dissolves_cors() -> None:
         "demo/README.md §1 argues does not exist here"
     )
     assert "://" not in endpoint
+
+
+def test_the_two_pages_link_to_each_other_and_both_hrefs_are_relative() -> None:
+    """PO-directed 2026-08-29 (AWAITING_PO 2026-08-29-1): the link is TWO-WAY.
+
+    Asserted on BOTH files because each half fails differently. The forward link
+    is checked in the TEMPLATE *and* in the generated page: a template edit that
+    was never regenerated leaves the served page without it, and a hand-edit of
+    the generated page leaves the template without it — and the byte-identity
+    test above catches the second only because this one says what to look for.
+    The back-link is checked because "two-way" is a property of the PAIR; PR
+    #77 shipped it and nothing else asserted it stays.
+    """
+    forward = re.compile(r'<a href="(analytics\.html)"[^>]*>')
+    for path in (TEMPLATE, PAGE):
+        assert forward.search(path.read_text()), (
+            f"{path.name} carries no relative link to analytics.html — the forward "
+            "half of the two-way link the PO asked for"
+        )
+    back = re.compile(r'<a href="(\./)"[^>]*>')
+    assert back.search(ANALYTICS.read_text()), (
+        "demo/analytics.html no longer links back to the quote page; the link is "
+        "two-way or it is not the thing that was asked for"
+    )
+    # Relative only, on the page that argues it: an absolute href here would be
+    # the same external call demo/README.md §1 says this page does not make.
+    for href in re.findall(r'<a href="([^"]+)"', PAGE.read_text()):
+        assert "://" not in href, f"demo/index.html links off-origin: {href}"
 
 
 # --------------------------------------------------------------- the route ---
