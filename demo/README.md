@@ -202,3 +202,28 @@ honest — never to render the box silently green.
 | deploy it (page + route); `DRY_RUN=1` / `TEARDOWN=1` | `make deploy-demo` |
 | the accept check — real requests through the page's own request path | `make demo-accept` |
 | open it | <http://localhost:8081/demo/> |
+
+## 7. The analytics companion page (post-close, PO-directed)
+
+**<http://localhost:8081/demo/analytics.html>** — the program's story told from its
+own records: the M3 bake-off, the 91-day March-2020 collapse (daily volume, MAE
+and signed bias with a shared crosshair and a play scrub), the F-045
+silent-PSI/loud-volume pair, the hour-of-day shift, and the M5 kill drill.
+
+Three properties keep it inside this demo's discipline:
+
+- **Static by design, provenance in the file.** Every number was exported once
+  from the analyst layer and the tracked records — the HTML's own header comment
+  names each source. The page computes nothing and calls nothing: quoting is
+  `index.html`'s job, and this page only links back to it.
+- **Same ConfigMap, same route, no new object.** It rides `/demo`'s existing
+  Prefix rule as a second key in `taxi-demo-page` — no new port, no new Ingress,
+  no new image. The pod-roll annotation covers BOTH pages (a pod rolled only on
+  `index.html`'s sha would serve a stale analytics page until kubelet's refresh
+  window), and the deploy fetches the page back through the route and requires a
+  sha256 match with git.
+- **Not generated, and deliberately outside `make demo-page`'s byte-identity
+  contract** — that contract binds `index.html` to the zone lookup and the
+  server's schema, neither of which this page consumes. Its numbers are a dated
+  snapshot of closed-program records, which do not move; if they ever do, the
+  page is re-exported by hand and the diff IS the review.

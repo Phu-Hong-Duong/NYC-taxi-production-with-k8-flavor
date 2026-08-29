@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en">
+<!--
+  demo/analytics.html - the program's story, told from its own records.
+
+  STATIC BY DESIGN: every number on this page was exported once from the program's
+  own instruments and embedded; the page computes nothing and calls nothing.
+  Sources, exported 2026-08-29:
+    - the read-only DuckDB analyst layer over the DVC-pinned trees:
+        scoring_predictions -> daily trips / MAE / within-5 / bias (91 rows, 15,413,352 trips)
+        scoring_predictions -> hour-of-day share, Mar 1-10 vs Mar 22-31 2020
+        ingest_months       -> the 2019 monthly rows in/out
+    - tracked records, quoted verbatim:
+        automation/runs/m3s5/bakeoff.json
+        automation/runs/m5-load/{headline,ramp-*,selfheal}.json
+        automation/runs/m7-drift/{headroom,drift-2020-03}.json
+  It deliberately does NOT call the live endpoint - quoting is index.html's job;
+  this page is served from the same ConfigMap and links back to it.
+  The source is pure ASCII on purpose: no charset anywhere can mangle it.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crosstown ETA</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* ============ tokens: light is the bare root ============ */
+:root {
+  --cab: #f7b500;            /* taxi yellow &#8212; identity accent, never a data series */
+  --cab-ink: #8a6400;        /* cab hue dark enough for text on light ground */
+  --ground: #fbfaf6;
+  --card: #ffffff;
+  --ink: #161512;
+  --ink-2: #54524b;
+  --ink-3: #8a887f;
+  --grid: #e7e5dc;
+  --axis: #c6c4b8;
+  --border: rgba(22,21,18,.10);
+  --s1: #2a78d6;  --s1-soft: rgba(42,120,214,.14);
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --good: #0ca30c;  --good-text: #006300;
+  --crit: #d03b3b;  --crit-soft: rgba(208,59,59,.12);
+  --tooltip-bg: #23221e;
+  --tooltip-ink: #f4f3ec;
+  --chip-good-bg: rgba(12,163,12,.10);
+  --chip-crit-bg: rgba(208,59,59,.10);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cab: #f7b500;
+    --cab-ink: #f0c440;
+    --ground: #141310;
+    --card: #1d1c17;
+    --ink: #f4f3ec;
+    --ink-2: #b9b7ab;
+    --ink-3: #8a887f;
+    --grid: #2c2b26;
+    --axis: #403e37;
+    --border: rgba(255,255,255,.10);
+    --s1: #3987e5;  --s1-soft: rgba(57,135,229,.18);
+    --s2: #d95926;
+    --s3: #199e70;
+    --good: #0ca30c;  --good-text: #0ca30c;
+    --crit: #e66767;  --crit-soft: rgba(230,103,103,.14);
+    --tooltip-bg: #f4f3ec;
+    --tooltip-ink: #23221e;
+    --chip-good-bg: rgba(12,163,12,.16);
+    --chip-crit-bg: rgba(230,103,103,.14);
+  }
+}
+:root[data-theme="dark"] {
+  --cab: #f7b500;
+  --cab-ink: #f0c440;
+  --ground: #141310;
+  --card: #1d1c17;
+  --ink: #f4f3ec;
+  --ink-2: #b9b7ab;
+  --ink-3: #8a887f;
+  --grid: #2c2b26;
+  --axis: #403e37;
+  --border: rgba(255,255,255,.10);
+  --s1: #3987e5;  --s1-soft: rgba(57,135,229,.18);
+  --s2: #d95926;
+  --s3: #199e70;
+  --good: #0ca30c;  --good-text: #0ca30c;
+  --crit: #e66767;  --crit-soft: rgba(230,103,103,.14);
+  --tooltip-bg: #f4f3ec;
+  --tooltip-ink: #23221e;
+  --chip-good-bg: rgba(12,163,12,.16);
+  --chip-crit-bg: rgba(230,103,103,.14);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+/* ============ nav ============ */
+.nav {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-in { display: flex; align-items: center; gap: 20px; height: 52px; }
+.nav-brand {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-weight: 700; font-size: 19px; letter-spacing: .04em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 9px; color: var(--ink); text-decoration: none;
+  white-space: nowrap;
+}
+.nav-brand .plate {
+  background: var(--cab); color: #161512; border-radius: 3px;
+  padding: 1px 7px; font-size: 15px; letter-spacing: .08em;
+}
+.nav-links { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.nav-links::-webkit-scrollbar { display: none; }
+.nav-links a {
+  color: var(--ink-2); text-decoration: none; font-size: 13.5px; font-weight: 600;
+  padding: 5px 10px; border-radius: 6px; white-space: nowrap;
+}
+.nav-links a:hover { color: var(--ink); background: var(--border); }
+.nav-links a:focus-visible, button:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+/* ============ hero ============ */
+.hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--border); }
+.hero-sky {
+  position: absolute; inset: auto 0 0 0; height: 78%; width: 100%;
+  pointer-events: none; opacity: .5;
+}
+.hero-sky path { fill: var(--cab); opacity: .16; }
+.hero-sky .line { fill: none; stroke: var(--cab); stroke-width: 1.5; opacity: .55; }
+.hero-in { position: relative; padding: 72px 0 40px; }
+.eyebrow {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--cab-ink); font-weight: 600; margin: 0 0 10px;
+}
+h1 {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .015em;
+  font-size: clamp(46px, 7.5vw, 84px); line-height: .95; margin: 0 0 18px;
+  text-wrap: balance;
+}
+h1 .thin { font-weight: 500; color: var(--ink-2); }
+.hero-sub { max-width: 62ch; font-size: 17.5px; color: var(--ink-2); margin: 0 0 8px; }
+.hero-sub strong { color: var(--ink); }
+
+.stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  margin: 34px 0 0;
+}
+.stat { background: var(--card); padding: 16px 16px 13px; }
+.stat b {
+  display: block; font-size: 27px; font-weight: 800; letter-spacing: -.01em; line-height: 1.1;
+  color: var(--ink);
+}
+.stat b small { font-size: 15px; font-weight: 700; color: var(--ink-2); margin-left: 2px; }
+.stat span { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.35; }
+
+/* ============ sections ============ */
+section { padding: 54px 0 8px; }
+.sec-head { max-width: 70ch; margin-bottom: 22px; }
+h2 {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+  font-size: clamp(28px, 3.6vw, 40px); line-height: 1.02; margin: 4px 0 12px;
+  text-wrap: balance;
+}
+.sec-head p { color: var(--ink-2); margin: 0 0 8px; font-size: 16.5px; }
+.sec-head p strong { color: var(--ink); }
+
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px 22px 16px; margin: 0 0 20px;
+}
+.card-top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.card-title { font-weight: 700; font-size: 15.5px; }
+.card-note { color: var(--ink-3); font-size: 13px; }
+.spacer { flex: 1; }
+.btn {
+  font: 600 12.5px 'Barlow', sans-serif; color: var(--ink-2);
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; cursor: pointer;
+}
+.btn:hover { color: var(--ink); border-color: var(--axis); }
+.btn[aria-pressed="true"] { background: var(--border); color: var(--ink); }
+
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin: 2px 0 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+
+svg { display: block; width: 100%; height: auto; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.axisline { stroke: var(--axis); stroke-width: 1; }
+.tick { font: 500 10.5px 'IBM Plex Mono', monospace; fill: var(--ink-3); }
+.axis-name { font: 600 10.5px 'Barlow', sans-serif; fill: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
+.anno-line { stroke: var(--cab); stroke-width: 1.5; }
+.anno-text { font: 600 10.5px 'IBM Plex Mono', monospace; fill: var(--cab-ink); }
+.dlabel { font: 700 11px 'Barlow', sans-serif; }
+
+.chart-wrap { position: relative; }
+.tooltip {
+  position: absolute; pointer-events: none; z-index: 30;
+  background: var(--tooltip-bg); color: var(--tooltip-ink);
+  border-radius: 8px; padding: 9px 12px; font-size: 12.5px; line-height: 1.5;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25); opacity: 0; transition: opacity .12s;
+  max-width: 260px;
+}
+.tooltip.on { opacity: 1; }
+.tooltip b { font-size: 13px; }
+.tooltip .tt-row { display: flex; gap: 10px; justify-content: space-between; white-space: nowrap; }
+.tooltip .tt-row span:last-child { font-family: 'IBM Plex Mono', monospace; }
+
+.tbl { display: none; overflow: auto; max-height: 380px; border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; }
+.tbl.on { display: block; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.tbl th { position: sticky; top: 0; background: var(--card); text-align: right; font-weight: 700; padding: 7px 12px; border-bottom: 1px solid var(--axis); }
+.tbl th:first-child, .tbl td:first-child { text-align: left; }
+.tbl td { padding: 5px 12px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 12px; border-bottom: 1px solid var(--grid); color: var(--ink-2); white-space: nowrap; }
+
+.chip { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 4px 12px 4px 9px; font-size: 12.5px; font-weight: 700; }
+.chip svg { width: 13px; height: 13px; }
+.chip.good { background: var(--chip-good-bg); color: var(--good-text); }
+.chip.crit { background: var(--chip-crit-bg); color: var(--crit); }
+
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 760px) { .duo { grid-template-columns: 1fr; } }
+
+.play {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: 700 13px 'Barlow', sans-serif; color: #161512;
+  background: var(--cab); border: none; border-radius: 999px;
+  padding: 7px 16px; cursor: pointer;
+}
+.play:hover { filter: brightness(1.05); }
+@media (prefers-reduced-motion: reduce) { .play { display: none; } }
+
+.callout {
+  border-left: 3px solid var(--cab); background: var(--card);
+  border-radius: 0 10px 10px 0; padding: 14px 18px; margin: 18px 0;
+  color: var(--ink-2); font-size: 15.5px; max-width: 74ch;
+}
+.callout strong { color: var(--ink); }
+
+/* ============ footer ============ */
+footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 40px 0 56px; }
+footer h3 { font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: .03em; font-size: 22px; margin: 0 0 10px; }
+.prov { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-3); line-height: 1.9; margin: 12px 0 22px; overflow-x: auto; white-space: nowrap; }
+.stack { display: flex; flex-wrap: wrap; gap: 8px; }
+.stack span {
+  font: 600 12.5px 'Barlow', sans-serif; color: var(--ink-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px;
+}
+.foot-note { color: var(--ink-3); font-size: 13.5px; max-width: 74ch; margin-top: 22px; }
+</style>
+
+</head>
+<body>
+<nav class="nav"><div class="wrap nav-in">
+  <a class="nav-brand" href="#top"><span class="plate">NYC</span> Crosstown ETA</a>
+  <div class="nav-links">
+    <a href="#model">The model</a>
+    <a href="#march">March 2020</a>
+    <a href="#signals">The signals</a>
+    <a href="#night">The night</a>
+    <a href="#heal">Self-heal</a>
+    <a href="#prov">Provenance</a>
+    <a href="./" style="color:var(--cab-ink);font-weight:700">Live quote demo &#8599;</a>
+  </div>
+</div></nav>
+
+<header class="hero" id="top">
+  <svg class="hero-sky" id="heroSky" viewBox="0 0 1120 220" preserveAspectRatio="none" aria-hidden="true"></svg>
+  <div class="wrap hero-in">
+    <p class="eyebrow">A production-shaped MLOps program &middot; one laptop &middot; $0 cloud</p>
+    <h1>The model that watched<br><span class="thin">New York stop</span></h1>
+    <p class="hero-sub">A NYC yellow-taxi ETA model, taken from raw TLC parquet to a served, monitored,
+      drift-watched endpoint &#8212; Flyte &rarr; MLflow &rarr; KServe &rarr; Feast &rarr; Prometheus &#8212; and then pointed at
+      <strong>March&nbsp;2020</strong>, the most drifted month it will ever see.
+      Every number below is read back from the program's tracked records, not typed.</p>
+    <div class="stats" id="stats"></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= THE MODEL ================= -->
+<section id="model">
+  <div class="sec-head">
+    <p class="eyebrow">M3 &middot; The bake-off</p>
+    <h2>Five contenders, one untouched month</h2>
+    <p>Two tracks competed for the serving pointer &#8212; an artisan hand-building features, an automated
+      scout&times;sniper tuning hyperparameters &#8212; judged once, on a holdout month
+      <strong>no selection step ever read</strong>. The answer was <strong>features</strong>: the
+      engineered set bought +0.56%, tuning on top of it bought +0.07 points more for 2.8&times; the compute.</p>
+  </div>
+  <div class="card">
+    <div class="card-top">
+      <span class="card-title">Holdout MAE, minutes &middot; Aug 2019, 5.95M trips</span>
+      <span class="card-note">promotion bar: &minus;2.00% vs the group-median floor</span>
+      <span class="spacer"></span>
+      <button class="btn" data-tbl="bakeoffTbl" aria-pressed="false">Data</button>
+    </div>
+    <div class="chart-wrap" id="bakeoffChart"></div>
+    <div class="tbl" id="bakeoffTbl"></div>
+  </div>
+  <div class="callout"><strong>The gate said no more often than yes.</strong> Of every verdict this
+    program's promotion gate ever issued, most were refusals &#8212; including the champion's own re-fit
+    (&minus;0.03%), a scheduled retrain, and a red-team model fitted on shuffled labels that scored
+    exactly the floor. The pointer moved twice in nine months.</div>
+</section>
+
+<!-- ================= MARCH 2020 ================= -->
+<section id="march">
+  <div class="sec-head">
+    <p class="eyebrow">M7 &middot; Scoring 2020 &middot; 15,413,352 trips</p>
+    <h2>91 days, one collapse</h2>
+    <p>The champion &#8212; fitted on 2019 &#8212; scored every trip of Jan&ndash;Mar 2020. Through February it holds
+      ~3 minutes of error. Then the city empties: <strong>240,520 trips on March 5</strong> becomes
+      <strong>5,361 on March 29</strong>, a &minus;97.8% fall in 24 days. The streets clear, the median trip
+      runs 49% faster, and the model keeps quoting the old city &#8212; the signed bias climbs to
+      <strong>+5.3 minutes</strong> and never comes back.</p>
+  </div>
+  <div class="card">
+    <div class="card-top">
+      <span class="card-title">Daily volume &middot; quote error &middot; signed bias</span>
+      <span class="card-note">hover or drag to scrub &middot; arrow keys work too</span>
+      <span class="spacer"></span>
+      <button class="play" id="playBtn">&#9654;&#xFE0E; Play the collapse</button>
+      <button class="btn" data-tbl="dailyTbl" aria-pressed="false">Data</button>
+    </div>
+    <div class="chart-wrap" id="marchChart" tabindex="0" aria-label="Three aligned daily charts for January to March 2020: trips per day, mean absolute error, and signed bias. Use arrow keys to move the reading line."></div>
+    <div class="tbl" id="dailyTbl"></div>
+  </div>
+  <div class="callout"><strong>Bias is the number that reads as a diagnosis.</strong> An absolute error can't
+    tell a model quoting too long from one quoting too short &#8212; opposite failures with opposite fixes. On
+    March 26 the mean real trip took <strong>9.7 minutes</strong> and the model's mean quote was
+    <strong>15.0</strong>. The world changed; the model did not follow.</div>
+</section>
+
+<!-- ================= SIGNALS ================= -->
+<section id="signals">
+  <div class="sec-head">
+    <p class="eyebrow">M7 &middot; Drift detection &middot; finding F-045</p>
+    <h2>The average that lied</h2>
+    <p>Ask the monthly aggregates about March 2020 and they shrug: the most-moved input column scores
+      <strong>PSI 0.0217</strong> &#8212; <em>lower than an ordinary July 2019</em> &#8212; because PSI compares
+      <em>shares</em>, and halving every count changes no share. A row-weighted average of a collapse is
+      weighted by exactly the rows that vanished. <strong>Volume is the one marginal that can't be
+      averaged away</strong> &#8212; so it gets its own alert.</p>
+  </div>
+  <div class="duo">
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">A-8 &middot; input-shape drift (max column PSI)</span>
+        <span class="spacer"></span>
+        <span class="chip good"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 11.2 3.3 8l1.1-1.1 2.1 2.1 5-5L12.6 5z"/></svg>stayed silent &mdash; correctly</span>
+      </div>
+      <div class="chart-wrap" id="psiChart"></div>
+    </div>
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">A-9 &middot; volume vs 2019 trips/day</span>
+        <span class="spacer"></span>
+        <span class="chip crit"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5 15 14H1L8 1.5zm-.9 4.5v4h1.8V6h-1.8zm0 5.2v1.8h1.8v-1.8h-1.8z"/></svg>FIRED for 2020-03</span>
+      </div>
+      <div class="chart-wrap" id="volChart"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-top">
+      <span class="card-title">Drift summary</span>
+      <span class="spacer"></span>
+      <button class="btn" data-tbl="psiTbl" aria-pressed="false">Data</button>
+    </div>
+    <div class="card-note" style="margin-bottom:6px">Bars argued from 2019 headroom <em>before</em> any 2020 month was
+      compared &#8212; the order of work is checkable from git. Had A-9 not existed, this stack would have watched
+      the collapse in silence with every drift panel green.</div>
+    <div class="tbl" id="psiTbl"></div>
+  </div>
+</section>
+
+<!-- ================= NIGHT ================= -->
+<section id="night">
+  <div class="sec-head">
+    <p class="eyebrow">M7 &middot; The drift memo &middot; hour-of-day share</p>
+    <h2>The night ended. The morning moved up.</h2>
+    <p>Same 24 hours, two different cities. Late-March New York loses its nightlife &#8212;
+      <strong>1&nbsp;a.m. falls from 1.9% to 0.7%</strong> of daily trips &#8212; while the early morning more than
+      doubles: essential workers, moving before dawn. The busiest hour slides from 6&nbsp;p.m. to
+      mid-afternoon.</p>
+  </div>
+  <div class="card">
+    <div class="card-top">
+      <span class="card-title">Share of the day's trips, by pickup hour</span>
+      <span class="spacer"></span>
+      <button class="btn" data-tbl="hourTbl" aria-pressed="false">Data</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--s1)"></i>Mar 1&ndash;10 (before)</span>
+      <span><i style="background:var(--s2)"></i>Mar 22&ndash;31 (collapse)</span>
+    </div>
+    <div class="chart-wrap" id="hourChart"></div>
+    <div class="tbl" id="hourTbl"></div>
+  </div>
+</section>
+
+<!-- ================= SELF-HEAL ================= -->
+<section id="heal">
+  <div class="sec-head">
+    <p class="eyebrow">M5 &middot; Serving &middot; the kill drill</p>
+    <h2>Kill the only predictor. Time it.</h2>
+    <p>Under a live 4&nbsp;req/s open-loop load, the drill deletes the model's only serving pod
+      mid-flight. Kubernetes schedules a replacement &#8212; <strong>a different pod, on a different node</strong> &#8212;
+      and the route is answering again in <strong>14.5 seconds</strong>: 58 failed requests out of 720, then
+      559 straight with zero errors. The prediction was written to disk before the kill.</p>
+  </div>
+  <div class="card">
+    <div class="card-top">
+      <span class="card-title">Failed requests per second &middot; 180 s window, 4 req/s</span>
+      <span class="spacer"></span>
+      <button class="btn" data-tbl="healTbl" aria-pressed="false">Data</button>
+    </div>
+    <div class="chart-wrap" id="healChart"></div>
+    <div class="tbl" id="healTbl"></div>
+  </div>
+  <div class="card">
+    <div class="card-top">
+      <span class="card-title">Latency vs offered load &middot; where the CPU quota lives</span>
+      <span class="card-note">p50 flat to 6 req/s, then the ceiling: at 8 req/s the median jumps 6&times; with zero errors &#8212; saturation shows up as latency first</span>
+      <span class="spacer"></span>
+      <button class="btn" data-tbl="rampTbl" aria-pressed="false">Data</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--s1)"></i>p50</span>
+      <span><i style="background:var(--s2)"></i>p95</span>
+    </div>
+    <div class="chart-wrap" id="rampChart"></div>
+    <div class="tbl" id="rampTbl"></div>
+  </div>
+</section>
+
+<!-- ================= FOOTER ================= -->
+<footer id="prov"><div class="wrap">
+  <h3>Provenance</h3>
+  <p style="max-width:74ch;color:var(--ink-2);margin:0 0 6px">Every figure on this page was exported from the
+    program's own instruments &#8212; the read-only DuckDB analyst layer over DVC-pinned parquet, and the tracked
+    JSON records its drills write &#8212; the same sources its ten milestone gates replay. Nothing was fitted,
+    promoted, or re-measured to make this page.</p>
+  <div class="prov">
+    analyst layer &middot; scoring_predictions (15,413,352 rows) &middot; ingest_months<br>
+    automation/runs/m3s5/bakeoff.json &middot; m5-load/{headline,ramp-*,selfheal}.json<br>
+    automation/runs/m7-drift/{headroom,drift-2020-01..03}.json &middot; docs/drift_memo_m7.md
+  </div>
+  <div class="stack">
+    <span>Flyte 2</span><span>MLflow 3</span><span>KServe</span><span>Feast + Redis</span>
+    <span>Prometheus + Alertmanager</span><span>Grafana</span><span>dbt + DuckDB</span>
+    <span>DVC</span><span>LightGBM</span><span>Optuna &times; FLAML</span><span>kind &middot; 3 nodes</span>
+  </div>
+  <p class="foot-note">Crosstown ETA &amp; Reliability Program &#8212; built end-to-end on one laptop as a simulated
+    enterprise engineering org: seven chartered roles, ledgers, red-teamed gates, and a champion that earned
+    its pointer. Records dated Aug 2026. Repo: <span style="font-family:'IBM Plex Mono',monospace">github.com/Phu-Hong-Duong/NYC-taxi-production-with-k8-flavor</span></p>
+</div></footer>
+
+</main>
+
+<script>
+'use strict';
+/* ================= DATA \u2014 read back from records, never typed twice ================= */
+const DAILY = [ // [date, trips, mae, within5, bias, actual_mean, predicted_mean]
+["2020-01-01",165516,3.136,82.631,0.2582,12.581,12.839],["2020-01-02",158675,3.0039,83.676,0.1633,13.142,13.306],
+["2020-01-03",179959,3.5757,77.873,1.8463,12.782,14.628],["2020-01-04",179393,2.8662,84.793,0.8055,12.069,12.874],
+["2020-01-05",160824,2.6187,87.997,0.523,11.937,12.46],["2020-01-06",175587,2.9588,84.208,0.5855,13.087,13.672],
+["2020-01-07",197538,3.086,82.135,1.1116,12.819,13.931],["2020-01-08",213069,3.1593,81.165,1.1681,12.933,14.101],
+["2020-01-09",227345,3.2907,80.102,0.8015,13.744,14.545],["2020-01-10",223556,3.2249,81.092,0.4323,13.892,14.324],
+["2020-01-11",213175,2.7581,86.095,-0.1545,12.864,12.709],["2020-01-12",182925,2.5494,88.511,-0.11,12.516,12.406],
+["2020-01-13",204933,3.2196,82.128,-0.382,13.772,13.39],["2020-01-14",213437,3.0748,82.662,0.1689,13.581,13.75],
+["2020-01-15",212825,3.0923,81.926,0.6147,13.66,14.274],["2020-01-16",235383,3.2094,81.063,0.3917,14.035,14.427],
+["2020-01-17",239177,3.0591,82.993,0.0779,13.866,13.944],["2020-01-18",186451,3.0919,83.443,0.0277,12.122,12.15],
+["2020-01-19",172168,2.397,90.081,-0.3612,11.616,11.255],["2020-01-20",158357,2.4983,89.03,-1.028,12.087,11.059],
+["2020-01-21",209514,2.9576,84.119,-0.1789,13.59,13.411],["2020-01-22",217929,3.157,81.444,0.4469,13.552,13.999],
+["2020-01-23",227985,3.2369,80.562,0.7054,13.928,14.633],["2020-01-24",228913,3.1258,82.048,0.1074,13.932,14.04],
+["2020-01-25",219152,2.7397,86.382,-0.29,12.297,12.007],["2020-01-26",184357,2.5872,88.229,-0.2774,12.516,12.239],
+["2020-01-27",186003,2.8842,85.031,0.3058,13.069,13.374],["2020-01-28",211857,2.9886,83.364,0.5104,13.08,13.59],
+["2020-01-29",223287,3.1449,81.645,0.2355,13.741,13.976],["2020-01-30",238723,3.2721,80.319,0.3856,14.147,14.532],
+["2020-01-31",231793,3.3944,79.888,-0.2829,14.377,14.094],["2020-02-01",207783,2.6607,87.225,0.1621,12.158,12.32],
+["2020-02-02",189797,2.5102,89.033,0.2244,11.747,11.972],["2020-02-03",190468,2.894,84.711,0.1336,13.352,13.486],
+["2020-02-04",212261,3.1035,82.477,0.1716,13.459,13.631],["2020-02-05",227491,3.1357,81.684,0.4355,13.551,13.986],
+["2020-02-06",238616,3.1464,81.647,-0.1568,14.451,14.294],["2020-02-07",247911,3.1706,81.724,-0.5387,14.215,13.677],
+["2020-02-08",215493,2.7721,85.899,-0.494,12.774,12.28],["2020-02-09",178605,2.613,87.826,-0.3073,12.439,12.132],
+["2020-02-10",207820,3.1031,82.585,-1.2072,14.202,12.995],["2020-02-11",216534,3.0894,82.725,-0.519,13.995,13.476],
+["2020-02-12",232559,3.1483,81.546,0.2841,13.731,14.015],["2020-02-13",242362,3.2374,81.21,-0.4115,14.956,14.544],
+["2020-02-14",253802,3.2958,80.796,-0.7999,14.688,13.888],["2020-02-15",198352,2.7967,85.677,-0.0994,12.554,12.455],
+["2020-02-16",162278,2.5557,88.239,-0.8019,12.225,11.423],["2020-02-17",145724,2.4043,89.927,-0.6957,12.161,11.466],
+["2020-02-18",186981,3.0544,82.878,0.3122,13.53,13.842],["2020-02-19",213255,3.1507,81.848,0.6741,13.619,14.293],
+["2020-02-20",233822,3.3021,80.109,0.4819,14.139,14.62],["2020-02-21",232991,3.2004,81.513,-0.0473,14.094,14.047],
+["2020-02-22",205868,2.7108,86.697,-0.1141,12.664,12.55],["2020-02-23",175703,2.5128,88.902,-0.1406,12.554,12.413],
+["2020-02-24",194071,2.8916,84.906,-0.1016,13.735,13.633],["2020-02-25",222900,3.1478,82.157,-0.7516,14.406,13.654],
+["2020-02-26",227511,3.1185,82.196,-0.1532,14.308,14.154],["2020-02-27",251723,3.1493,81.82,-0.0017,14.475,14.473],
+["2020-02-28",246414,3.0726,82.817,-0.3425,14.381,14.038],["2020-02-29",226214,2.699,86.929,-0.2458,12.485,12.239],
+["2020-03-01",175925,2.5161,88.95,-0.039,12.379,12.34],["2020-03-02",190103,2.8922,84.901,-0.1985,13.691,13.493],
+["2020-03-03",219329,3.1828,81.798,-0.6986,14.367,13.668],["2020-03-04",225942,3.0592,82.629,-0.1442,14.32,14.176],
+["2020-03-05",240520,3.2994,80.16,0.0879,14.669,14.757],["2020-03-06",239720,3.4291,79.33,-1.1272,14.878,13.75],
+["2020-03-07",204484,2.769,86.074,-0.2169,12.679,12.462],["2020-03-08",162424,3.1886,87.576,-0.2903,12.627,12.337],
+["2020-03-09",172339,2.8598,85.146,0.0369,13.35,13.387],["2020-03-10",180830,3.0616,82.615,0.3966,13.427,13.823],
+["2020-03-11",179443,3.1536,81.498,0.9242,13.314,14.239],["2020-03-12",167799,3.4456,78.248,1.221,13.754,14.975],
+["2020-03-13",131883,3.5344,77.537,1.6505,12.698,14.349],["2020-03-14",87574,3.4183,78.472,2.141,10.42,12.561],
+["2020-03-15",58245,3.3694,80.457,2.0459,10.581,12.627],["2020-03-16",62513,3.9527,73.399,2.6236,11.613,14.237],
+["2020-03-17",44500,4.8449,63.602,3.8071,11.115,14.922],["2020-03-18",35307,5.4856,58.292,4.5529,10.763,15.315],
+["2020-03-19",29016,5.8571,56.259,4.9249,10.296,15.221],["2020-03-20",26789,5.6054,58.296,4.6288,10.245,14.874],
+["2020-03-21",15652,4.2031,71.09,2.7802,9.9,12.68],["2020-03-22",9998,3.9676,74.805,2.5102,9.993,12.504],
+["2020-03-23",13161,4.8719,65.39,3.7648,9.76,13.525],["2020-03-24",11399,5.7247,57.628,4.7558,9.692,14.448],
+["2020-03-25",10755,6.1419,54.747,5.1128,9.743,14.856],["2020-03-26",10329,6.3693,53.723,5.3197,9.699,15.019],
+["2020-03-27",11307,5.9431,57.009,4.9484,9.676,14.624],["2020-03-28",7374,3.9549,73.841,2.4557,9.369,11.824],
+["2020-03-29",5361,3.828,76.031,2.1506,9.715,11.866],["2020-03-30",9190,5.284,62.318,4.0652,9.571,13.636],
+["2020-03-31",9026,5.9596,55.717,4.8401,9.591,14.431]];
+
+const BAKEOFF = [ // label, family, features, valMAE, testMAE, within5, verdict
+["floor (group-median)","GROUP BY","v1",3.5515,3.3518,80.733,"REFUSE"],
+["auto-on-v1","xgboost","v1",3.7245,3.5038,79.747,"REFUSE"],
+["champion v1","lgbm","v1",3.4760,3.2608,81.480,"PROMOTE"],
+["artisan v2","lgbm","v2",3.3905,3.2425,81.582,"PROMOTE"],
+["auto-on-v2  \u2190 winner","lgbm","v2",3.3823,3.2403,81.577,"PROMOTE"]];
+const GATE_BAR = 3.2848; // \u22642% below the floor's 3.3518
+
+const HOURS = [ // hour, share Mar1-10, share Mar22-31 (%)
+[0,2.688,1.387],[1,1.904,0.676],[2,1.027,0.449],[3,1.101,0.373],[4,0.817,0.527],[5,0.867,1.43],
+[6,2.005,4.461],[7,3.802,6.065],[8,4.896,6.117],[9,4.741,5.478],[10,4.791,5.82],[11,4.871,6.095],
+[12,5.14,5.991],[13,5.263,6.434],[14,5.822,7.018],[15,5.974,6.989],[16,5.5,6.697],[17,6.351,6.865],
+[18,7.059,6.033],[19,6.263,5.02],[20,5.434,3.57],[21,5.324,2.446],[22,4.913,2.114],[23,3.448,1.943]];
+
+const PSI = [ // month, max input-column PSI, volume ratio, note
+["2019-07",0.0323,0.8216,"held-out & ACCEPTED \u2014 sets the bar"],
+["2019-08",0.0137,0.7899,"held-out & ACCEPTED"],
+["2020-01",0.0103,0.8336,"ordinary"],
+["2020-02",0.0087,0.8776,"ordinary"],
+["2020-03",0.0217,0.3913,"the collapse"]];
+const PSI_BAR = 0.10, VOL_BAR = 0.50;
+
+// self-heal: errors/second (only the outage window is nonzero); 4 req/s for 180 s
+const HEAL_ERR = { 25: 2, 26: 4, 27: 4, 28: 4, 29: 4, 30: 4, 31: 4, 32: 4, 33: 4, 34: 4, 35: 4, 36: 4, 37: 4, 38: 4, 39: 4 };
+const HEAL = { kill: 25, firstErr: 25.5, recovered: 40.03, outage: 14.53, sent: 720, ok: 662, errors: 58 };
+
+const RAMP = [ // rate, p50, p95
+[2,18.474,85.495],[4,19.111,108.623],[6,18.073,81.922],[8,115.548,190.14]];
+
+const STATS = [
+  ["3.2403","min","holdout MAE \u00b7 the champion on 5.95M unseen trips"],
+  ["81.6","%","quotes within 5 minutes"],
+  ["0.000e+00","","offline \u2194 online parity, 16 hazard rows"],
+  ["104","ms","p95 latency at 4 req/s"],
+  ["14.5","s","self-heal after killing the only predictor"],
+  ["71.5","M","trips through the data contract"]
+];
+
+/* ================= helpers ================= */
+const $ = (id) => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function lin(d0, d1, r0, r1) { const s = (r1 - r0) / (d1 - d0); return v => r0 + (v - d0) * s; }
+function fmtInt(n) { return n.toLocaleString('en-US'); }
+function makeTooltip(wrap) {
+  const t = document.createElement('div'); t.className = 'tooltip'; wrap.appendChild(t); return t;
+}
+function placeTooltip(t, wrap, x, y) {
+  const w = wrap.clientWidth;
+  t.style.left = Math.min(Math.max(x + 14, 4), w - t.offsetWidth - 4) + 'px';
+  t.style.top = Math.max(y - t.offsetHeight - 12, 2) + 'px';
+}
+function tableInto(id, headers, rows) {
+  const host = $(id);
+  host.innerHTML = '<table><thead><tr>' + headers.map(h => '<th>' + h + '</th>').join('') +
+    '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') +
+    '</tbody></table>';
+}
+document.querySelectorAll('.btn[data-tbl]').forEach(b => {
+  b.addEventListener('click', () => {
+    const t = $(b.dataset.tbl); const on = t.classList.toggle('on');
+    b.setAttribute('aria-pressed', on);
+  });
+});
+
+/* ================= hero: stats + skyline ================= */
+(function heroStats() {
+  const host = $('stats');
+  STATS.forEach(([v, unit, label]) => {
+    const d = document.createElement('div'); d.className = 'stat';
+    d.innerHTML = '<b><span class="v">' + (REDUCED ? v : '0') + '</span><small>' + unit + '</small></b><span>' + label + '</span>';
+    host.appendChild(d);
+    if (!REDUCED) {
+      const numeric = parseFloat(v.replace(/[^0-9.]/g, ''));
+      const isPlain = /^[\d.]+$/.test(v);
+      const span = d.querySelector('.v'); const t0 = performance.now();
+      (function tick(now) {
+        const p = Math.min((now - t0) / 900, 1); const e = 1 - Math.pow(1 - p, 3);
+        span.textContent = isPlain ? (numeric * e).toFixed((v.split('.')[1] || '').length) : (p < 1 ? v.slice(0, Math.ceil(v.length * e)) : v);
+        if (p < 1) requestAnimationFrame(tick); else span.textContent = v;
+      })(t0);
+    }
+  });
+})();
+(function heroSky() {
+  const svg = $('heroSky'), W = 1120, H = 220;
+  const x = lin(0, DAILY.length - 1, 0, W);
+  const y = lin(0, 260000, H, 18);
+  let dTop = '';
+  DAILY.forEach((r, i) => { dTop += (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(r[1]).toFixed(1); });
+  el('path', { d: dTop + 'L' + W + ',' + H + 'L0,' + H + 'Z' }, svg);
+  el('path', { d: dTop, class: 'line' }, svg);
+})();
+
+/* ================= bake-off dot plot ================= */
+(function bakeoff() {
+  const wrap = $('bakeoffChart'), W = 1040, ROW = 44, padL = 210, padR = 60, padT = 14;
+  const H = padT + BAKEOFF.length * ROW + 34;
+  const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Dot plot of holdout MAE for five contenders' });
+  wrap.appendChild(svg);
+  const x = lin(3.15, 3.58, padL, W - padR);
+  // grid + ticks
+  for (let v = 3.2; v <= 3.55; v += 0.05) {
+    const xv = x(v);
+    el('line', { x1: xv, y1: padT, x2: xv, y2: H - 30, class: 'gridline' }, svg);
+    const t = el('text', { x: xv, y: H - 14, class: 'tick', 'text-anchor': 'middle' }, svg);
+    t.textContent = v.toFixed(2);
+  }
+  const tn = el('text', { x: W - padR, y: H - 2, class: 'axis-name', 'text-anchor': 'end' }, svg);
+  tn.textContent = 'holdout MAE, minutes \u2192 lower is better';
+  // gate bar
+  const gx = x(GATE_BAR);
+  el('line', { x1: gx, y1: padT, x2: gx, y2: H - 30, class: 'anno-line' }, svg);
+  const gt = el('text', { x: gx + 5, y: padT + 10, class: 'anno-text' }, svg);
+  gt.textContent = 'promotion bar 3.2848';
+  const tt = makeTooltip(wrap);
+  BAKEOFF.forEach((r, i) => {
+    const cy = padT + i * ROW + ROW / 2;
+    const isWinner = r[4] === 3.2403, isFloor = i === 0;
+    const lbl = el('text', { x: padL - 14, y: cy + 4, 'text-anchor': 'end' }, svg);
+    lbl.textContent = r[0];
+    lbl.setAttribute('style', 'font:' + (isWinner ? '700' : '500') + ' 13px Barlow,sans-serif;fill:var(' + (isWinner ? '--ink' : '--ink-2') + ')');
+    el('line', { x1: padL, y1: cy, x2: x(r[4]), y2: cy, stroke: 'var(--grid)', 'stroke-width': 2 }, svg);
+    const dot = el('circle', { cx: x(r[4]), cy: cy, r: isWinner ? 8 : 6,
+      fill: isWinner ? 'var(--s1)' : (isFloor ? 'var(--axis)' : 'var(--ink-3)'),
+      stroke: 'var(--card)', 'stroke-width': 2 }, svg);
+    if (isWinner) el('circle', { cx: x(r[4]), cy: cy, r: 12, fill: 'none', stroke: 'var(--cab)', 'stroke-width': 2 }, svg);
+    const val = el('text', { x: x(r[4]) + 16, y: cy + 4, class: 'dlabel' }, svg);
+    val.textContent = r[4].toFixed(4);
+    val.setAttribute('style', 'fill:var(' + (isWinner ? '--ink' : '--ink-3') + ');font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:11.5px');
+    // generous hit target
+    const hit = el('rect', { x: 0, y: cy - ROW / 2, width: W, height: ROW, fill: 'transparent' }, svg);
+    hit.addEventListener('mousemove', (e) => {
+      tt.innerHTML = '<b>' + r[0].replace(' \u2190 winner','') + '</b> \u00b7 ' + r[1] + ' \u00b7 features ' + r[2] +
+        '<div class="tt-row"><span>holdout MAE</span><span>' + r[4].toFixed(4) + ' min</span></div>' +
+        '<div class="tt-row"><span>val MAE</span><span>' + r[3].toFixed(4) + ' min</span></div>' +
+        '<div class="tt-row"><span>within 5 min</span><span>' + r[5].toFixed(2) + '%</span></div>' +
+        '<div class="tt-row"><span>gate verdict</span><span>' + r[6] + '</span></div>';
+      const rct = wrap.getBoundingClientRect();
+      tt.classList.add('on'); placeTooltip(tt, wrap, e.clientX - rct.left, e.clientY - rct.top);
+    });
+    hit.addEventListener('mouseleave', () => tt.classList.remove('on'));
+  });
+  tableInto('bakeoffTbl', ['contender', 'family', 'features', 'val MAE', 'holdout MAE', 'within 5 min %', 'verdict'],
+    BAKEOFF.map(r => [r[0].replace(' \u2190 winner',' (winner)'), r[1], r[2], r[3].toFixed(4), r[4].toFixed(4), r[5].toFixed(3), r[6]]));
+})();
+
+/* ================= March 2020: 3 aligned panels + crosshair + play ================= */
+(function march() {
+  const wrap = $('marchChart');
+  const W = 1040, padL = 62, padR = 20;
+  const panels = [
+    { key: 'trips', title: 'TRIPS / DAY', h: 190, min: 0, max: 260000, fmt: v => fmtInt(v), area: true, color: 'var(--s1)', soft: 'var(--s1-soft)', get: r => r[1], ticks: [0, 100000, 200000], tickFmt: v => (v / 1000) + 'k' },
+    { key: 'mae', title: 'QUOTE ERROR \u00b7 MAE MIN', h: 130, min: 2, max: 7, fmt: v => v.toFixed(2) + ' min', area: false, color: 'var(--s2)', get: r => r[2], ticks: [2, 4, 6], tickFmt: v => v },
+    { key: 'bias', title: 'SIGNED BIAS \u00b7 MIN (+ = over-quoting)', h: 150, min: -1.6, max: 5.6, fmt: v => (v > 0 ? '+' : '') + v.toFixed(2) + ' min', area: false, color: 'var(--ink)', diverging: true, get: r => r[4], ticks: [0, 2, 4], tickFmt: v => (v > 0 ? '+' : '') + v }
+  ];
+  const GAP = 30, padT = 22, padB = 26;
+  const totalH = padT + panels.reduce((a, p) => a + p.h, 0) + GAP * (panels.length - 1) + padB;
+  const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + totalH, role: 'img', 'aria-label': 'Aligned daily panels: trips, MAE, signed bias' });
+  wrap.appendChild(svg);
+  const x = lin(0, DAILY.length - 1, padL, W - padR);
+  const monthStarts = [['2020-01-01', 'JAN'], ['2020-02-01', 'FEB'], ['2020-03-01', 'MAR']];
+  const idxOf = (d) => DAILY.findIndex(r => r[0] === d);
+  let yTop = padT;
+  const panelGeo = [];
+  panels.forEach(p => {
+    const y = lin(p.min, p.max, yTop + p.h, yTop);
+    panelGeo.push({ ...p, y, top: yTop, bottom: yTop + p.h });
+    // title
+    const t = el('text', { x: padL, y: yTop - 7, class: 'axis-name' }, svg);
+    t.textContent = p.title;
+    t.setAttribute('style', 'fill:' + (p.diverging ? 'var(--ink-2)' : p.color) + ';font-weight:700');
+    // grid + ticks
+    p.ticks.forEach(v => {
+      el('line', { x1: padL, y1: y(v), x2: W - padR, y2: y(v), class: v === 0 && p.diverging ? 'axisline' : 'gridline' }, svg);
+      const tk = el('text', { x: padL - 8, y: y(v) + 3.5, class: 'tick', 'text-anchor': 'end' }, svg);
+      tk.textContent = p.tickFmt(v);
+    });
+    // month separators
+    monthStarts.forEach(([d]) => {
+      const i = idxOf(d); if (i > 0) el('line', { x1: x(i), y1: yTop, x2: x(i), y2: yTop + p.h, class: 'gridline' }, svg);
+    });
+    // series
+    let path = '';
+    DAILY.forEach((r, i) => { path += (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(p.get(r)).toFixed(1); });
+    if (p.area) {
+      el('path', { d: path + 'L' + x(DAILY.length - 1) + ',' + y(0) + 'L' + x(0) + ',' + y(0) + 'Z', fill: p.soft }, svg);
+    }
+    if (p.diverging) {
+      // tint above/below zero with the diverging pair
+      const zero = y(0), pTop = yTop, pBottom = yTop + p.h;
+      const areaD = path + 'L' + x(DAILY.length - 1) + ',' + zero + 'L' + x(0) + ',' + zero + 'Z';
+      const cpU = el('clipPath', { id: 'clipUp' }, svg); el('rect', { x: 0, y: pTop, width: W, height: zero - pTop }, cpU);
+      const cpD = el('clipPath', { id: 'clipDn' }, svg); el('rect', { x: 0, y: zero, width: W, height: pBottom - zero }, cpD);
+      el('path', { d: areaD, fill: 'var(--crit-soft)', 'clip-path': 'url(#clipUp)' }, svg);
+      el('path', { d: areaD, fill: 'var(--s1-soft)', 'clip-path': 'url(#clipDn)' }, svg);
+    }
+    el('path', { d: path, fill: 'none', stroke: p.color, 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    yTop += p.h + GAP;
+  });
+  // x axis labels (months)
+  monthStarts.forEach(([d, name]) => {
+    const t = el('text', { x: x(idxOf(d)) + 4, y: totalH - 8, class: 'tick' }, svg);
+    t.textContent = name + ' 2020';
+  });
+  // annotations on the trips panel
+  const g0 = panelGeo[0];
+  [ [idxOf('2020-03-05'), 'peak 240,520', 14],
+    [idxOf('2020-03-11'), 'the slide begins', 30],
+    [idxOf('2020-03-22'), 'floor: \u221297.8%', 46]
+  ].forEach(([i, label, dy]) => {
+    el('line', { x1: x(i), y1: g0.top + 6, x2: x(i), y2: g0.bottom, class: 'anno-line', opacity: .8 }, svg);
+    const t = el('text', { x: x(i) - 5, y: g0.top + dy, class: 'anno-text', 'text-anchor': 'end' }, svg);
+    t.textContent = label;
+  });
+  // crosshair
+  const cross = el('g', { opacity: 0 }, svg);
+  const vline = el('line', { y1: padT - 4, y2: totalH - padB, stroke: 'var(--ink-3)', 'stroke-width': 1 }, cross);
+  const dots = panelGeo.map(p => el('circle', { r: 4.5, fill: p.diverging ? 'var(--ink)' : p.color, stroke: 'var(--card)', 'stroke-width': 2 }, cross));
+  const tt = makeTooltip(wrap);
+  let curIdx = -1;
+  function showIdx(i, clientX) {
+    curIdx = i;
+    const r = DAILY[i], xv = x(i);
+    cross.setAttribute('opacity', 1);
+    vline.setAttribute('x1', xv); vline.setAttribute('x2', xv);
+    panelGeo.forEach((p, k) => { dots[k].setAttribute('cx', xv); dots[k].setAttribute('cy', p.y(p.get(r))); });
+    const date = new Date(r[0] + 'T12:00:00');
+    tt.innerHTML = '<b>' + date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '</b>' +
+      '<div class="tt-row"><span>trips</span><span>' + fmtInt(r[1]) + '</span></div>' +
+      '<div class="tt-row"><span>MAE</span><span>' + r[2].toFixed(2) + ' min</span></div>' +
+      '<div class="tt-row"><span>within 5 min</span><span>' + r[3].toFixed(1) + '%</span></div>' +
+      '<div class="tt-row"><span>bias</span><span>' + (r[4] > 0 ? '+' : '') + r[4].toFixed(2) + ' min</span></div>' +
+      '<div class="tt-row"><span>city / model</span><span>' + r[5].toFixed(1) + ' / ' + r[6].toFixed(1) + ' min</span></div>';
+    tt.classList.add('on');
+    const rect = wrap.getBoundingClientRect();
+    const px = (clientX !== undefined) ? clientX - rect.left : (xv / W) * wrap.clientWidth;
+    placeTooltip(tt, wrap, px, panelGeo[0].bottom * (wrap.clientHeight / totalH) * 0.6);
+  }
+  function hide() { cross.setAttribute('opacity', 0); tt.classList.remove('on'); curIdx = -1; }
+  const hit = el('rect', { x: 0, y: 0, width: W, height: totalH, fill: 'transparent' }, svg);
+  hit.addEventListener('mousemove', e => {
+    const rect = svg.getBoundingClientRect();
+    const fx = (e.clientX - rect.left) / rect.width * W;
+    const i = Math.max(0, Math.min(DAILY.length - 1, Math.round((fx - padL) / (W - padL - padR) * (DAILY.length - 1))));
+    stopPlay(); showIdx(i, e.clientX);
+  });
+  hit.addEventListener('mouseleave', () => { if (!playing) hide(); });
+  wrap.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault(); stopPlay();
+    const i = curIdx < 0 ? 0 : Math.max(0, Math.min(DAILY.length - 1, curIdx + (e.key === 'ArrowRight' ? 1 : -1)));
+    showIdx(i);
+  });
+  // play
+  let playing = false, playT = null;
+  function stopPlay() { playing = false; if (playT) { clearInterval(playT); playT = null; } $('playBtn').innerHTML = '&#9654;&#xFE0E; Play the collapse'; }
+  $('playBtn').addEventListener('click', () => {
+    if (playing) { stopPlay(); return; }
+    playing = true; $('playBtn').innerHTML = '&#10074;&#10074;&#xFE0E; Pause';
+    let i = (curIdx >= 0 && curIdx < DAILY.length - 5) ? curIdx : 0;
+    showIdx(i);
+    playT = setInterval(() => {
+      i++;
+      if (i >= DAILY.length) { stopPlay(); return; }
+      showIdx(i);
+    }, 90);
+  });
+  tableInto('dailyTbl', ['date', 'trips', 'MAE min', 'within 5 min %', 'bias min', 'city mean min', 'model mean min'],
+    DAILY.map(r => [r[0], fmtInt(r[1]), r[2].toFixed(3), r[3].toFixed(2), (r[4] > 0 ? '+' : '') + r[4].toFixed(3), r[5].toFixed(2), r[6].toFixed(2)]));
+})();
+
+/* ================= PSI + volume strips ================= */
+function strip(hostId, values, bar, barLabel, domMax, fmt, firedIdx, lowIsBad) {
+  const wrap = $(hostId), W = 500, H = 150, padL = 16, padR = 70, rowH = 22, padT = 14;
+  const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img' }, undefined);
+  wrap.appendChild(svg);
+  const x = lin(0, domMax, padL, W - padR);
+  el('line', { x1: x(bar), y1: padT - 6, x2: x(bar), y2: padT + values.length * rowH, class: 'anno-line' }, svg);
+  const bt = el('text', { x: x(bar), y: H - 4, class: 'anno-text', 'text-anchor': 'middle' }, svg);
+  bt.textContent = barLabel;
+  const tt = makeTooltip(wrap);
+  values.forEach((v, i) => {
+    const cy = padT + i * rowH + rowH / 2;
+    el('line', { x1: padL, y1: cy, x2: W - padR, y2: cy, class: 'gridline' }, svg);
+    const fired = i === firedIdx;
+    el('line', { x1: lowIsBad ? x(v.v) : padL, y1: cy, x2: lowIsBad ? x(domMax) : x(v.v), y2: cy, stroke: 'transparent' }, svg);
+    el('circle', { cx: x(v.v), cy: cy, r: 6, fill: fired ? 'var(--crit)' : 'var(--s3)', stroke: 'var(--card)', 'stroke-width': 2 }, svg);
+    const lb = el('text', { x: W - padR + 10, y: cy + 3.5, class: 'tick' }, svg);
+    lb.textContent = v.m;
+    if (fired) lb.setAttribute('style', 'fill:var(--crit);font-weight:600');
+    const hit = el('rect', { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: 'transparent' }, svg);
+    hit.addEventListener('mousemove', e => {
+      tt.innerHTML = '<b>' + v.m + '</b> \u00b7 ' + v.note +
+        '<div class="tt-row"><span>' + (lowIsBad ? 'volume ratio' : 'max input PSI') + '</span><span>' + fmt(v.v) + '</span></div>' +
+        '<div class="tt-row"><span>bar</span><span>' + (lowIsBad ? '&lt; ' : '&ge; ') + bar + '</span></div>';
+      const rct = wrap.getBoundingClientRect();
+      tt.classList.add('on'); placeTooltip(tt, wrap, e.clientX - rct.left, e.clientY - rct.top);
+    });
+    hit.addEventListener('mouseleave', () => tt.classList.remove('on'));
+  });
+}
+strip('psiChart', PSI.map(r => ({ m: r[0], v: r[1], note: r[3] })), PSI_BAR, 'alert bar 0.10', 0.115, v => v.toFixed(4), -1, false);
+strip('volChart', PSI.map(r => ({ m: r[0], v: r[2], note: r[3] })), VOL_BAR, 'alert bar 0.50', 1.0, v => v.toFixed(4), 4, true);
+tableInto('psiTbl', ['month', 'max input PSI (bar \u2265 0.10)', 'volume ratio (bar &lt; 0.50)', 'note'],
+  PSI.map(r => [r[0], r[1].toFixed(4), r[2].toFixed(4), r[3]]));
+
+/* ================= hour-of-day ================= */
+(function hours() {
+  const wrap = $('hourChart'), W = 1040, H = 260, padL = 46, padR = 16, padT = 16, padB = 34;
+  const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Hourly trip share before and during the collapse' }, undefined);
+  wrap.appendChild(svg);
+  const x = lin(0, 23, padL, W - padR);
+  const y = lin(0, 8, H - padB, padT);
+  for (let v = 0; v <= 8; v += 2) {
+    el('line', { x1: padL, y1: y(v), x2: W - padR, y2: y(v), class: v === 0 ? 'axisline' : 'gridline' }, svg);
+    const t = el('text', { x: padL - 8, y: y(v) + 3.5, class: 'tick', 'text-anchor': 'end' }, svg);
+    t.textContent = v + '%';
+  }
+  for (let h = 0; h <= 23; h += 3) {
+    const t = el('text', { x: x(h), y: H - 12, class: 'tick', 'text-anchor': 'middle' }, svg);
+    t.textContent = (h === 0 ? '12am' : h < 12 ? h + 'am' : h === 12 ? '12pm' : (h - 12) + 'pm');
+  }
+  [[1, 'var(--s1)'], [2, 'var(--s2)']].forEach(([col, color]) => {
+    let d = '';
+    HOURS.forEach((r, i) => { d += (i ? 'L' : 'M') + x(r[0]).toFixed(1) + ',' + y(r[col]).toFixed(1); });
+    el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    HOURS.forEach(r => el('circle', { cx: x(r[0]), cy: y(r[col]), r: 3, fill: color, stroke: 'var(--card)', 'stroke-width': 1.5 }, svg));
+  });
+  // selective direct labels: the two extremes
+  const l1 = el('text', { x: x(1), y: y(HOURS[1][2]) + 18, class: 'dlabel', 'text-anchor': 'middle' }, svg);
+  l1.textContent = '1am \u221265%'; l1.setAttribute('style', 'fill:var(--s2)');
+  const l6 = el('text', { x: x(6) + 6, y: y(HOURS[6][2]) - 10, class: 'dlabel' }, svg);
+  l6.textContent = '6am +122%'; l6.setAttribute('style', 'fill:var(--s2)');
+  const tt = makeTooltip(wrap);
+  const hit = el('rect', { x: 0, y: 0, width: W, height: H, fill: 'transparent' }, svg);
+  hit.addEventListener('mousemove', e => {
+    const rect = svg.getBoundingClientRect();
+    const fx = (e.clientX - rect.left) / rect.width * W;
+    const h = Math.max(0, Math.min(23, Math.round((fx - padL) / (W - padL - padR) * 23)));
+    const r = HOURS[h];
+    tt.innerHTML = '<b>' + (h === 0 ? '12 am' : h < 12 ? h + ' am' : h === 12 ? '12 pm' : (h - 12) + ' pm') + '</b>' +
+      '<div class="tt-row"><span>Mar 1\u201310</span><span>' + r[1].toFixed(2) + '%</span></div>' +
+      '<div class="tt-row"><span>Mar 22\u201331</span><span>' + r[2].toFixed(2) + '%</span></div>';
+    const rct = wrap.getBoundingClientRect();
+    tt.classList.add('on'); placeTooltip(tt, wrap, e.clientX - rct.left, e.clientY - rct.top);
+  });
+  hit.addEventListener('mouseleave', () => tt.classList.remove('on'));
+  tableInto('hourTbl', ['hour', 'share Mar 1\u201310 %', 'share Mar 22\u201331 %'],
+    HOURS.map(r => [r[0] + ':00', r[1].toFixed(3), r[2].toFixed(3)]));
+})();
+
+/* ================= self-heal ================= */
+(function heal() {
+  const wrap = $('healChart'), W = 1040, H = 240, padL = 42, padR = 16, padT = 30, padB = 30;
+  const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Failed requests per second across the kill drill' }, undefined);
+  wrap.appendChild(svg);
+  const x = lin(0, 180, padL, W - padR);
+  const y = lin(0, 4, H - padB, padT);
+  [0, 2, 4].forEach(v => {
+    el('line', { x1: padL, y1: y(v), x2: W - padR, y2: y(v), class: v === 0 ? 'axisline' : 'gridline' }, svg);
+    const t = el('text', { x: padL - 8, y: y(v) + 3.5, class: 'tick', 'text-anchor': 'end' }, svg);
+    t.textContent = v;
+  });
+  for (let s = 0; s <= 180; s += 30) {
+    const t = el('text', { x: x(s), y: H - 12, class: 'tick', 'text-anchor': 'middle' }, svg);
+    t.textContent = 'T+' + s + 's';
+  }
+  // outage band
+  el('rect', { x: x(HEAL.firstErr), y: padT, width: x(HEAL.recovered) - x(HEAL.firstErr), height: (H - padB) - padT, fill: 'var(--crit-soft)' }, svg);
+  // errors as a step path
+  let d = 'M' + x(0) + ',' + y(0);
+  for (let s = 0; s <= 179; s++) {
+    const e = HEAL_ERR[s] || 0;
+    d += 'L' + x(s) + ',' + y(e) + 'L' + x(s + 1) + ',' + y(e);
+  }
+  el('path', { d: d + 'L' + x(180) + ',' + y(0), fill: 'none', stroke: 'var(--crit)', 'stroke-width': 2 }, svg);
+  // kill + recovery markers
+  el('line', { x1: x(HEAL.kill), y1: padT - 12, x2: x(HEAL.kill), y2: H - padB, class: 'anno-line' }, svg);
+  const kt = el('text', { x: x(HEAL.kill) - 6, y: padT - 16, class: 'anno-text', 'text-anchor': 'end' }, svg);
+  kt.textContent = 'pod deleted T+25s';
+  const rt = el('text', { x: x(HEAL.recovered) + 8, y: padT + 2, class: 'anno-text' }, svg);
+  rt.textContent = 'answering again T+40s \u00b7 new pod, new node \u00b7 14.5s';
+  tableInto('healTbl', ['metric', 'value'], [
+    ['requests sent', '720 (4 req/s \u00d7 180 s)'], ['succeeded', '662'], ['failed', '58 (56\u00d7503, 2\u00d7502)'],
+    ['outage', '14.53 s (first failure \u2192 first success)'], ['replacement pod', 'different UID, different node'],
+    ['errors after recovery', '0 in the remaining 559 requests']]);
+})();
+
+/* ================= latency ramp ================= */
+(function ramp() {
+  const wrap = $('rampChart'), W = 1040, H = 250, padL = 52, padR = 16, padT = 18, padB = 34;
+  const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'p50 and p95 latency versus offered load' }, undefined);
+  wrap.appendChild(svg);
+  const x = lin(2, 8, padL + 30, W - padR - 40);
+  const y = lin(0, 200, H - padB, padT);
+  [0, 50, 100, 150, 200].forEach(v => {
+    el('line', { x1: padL, y1: y(v), x2: W - padR, y2: y(v), class: v === 0 ? 'axisline' : 'gridline' }, svg);
+    const t = el('text', { x: padL - 8, y: y(v) + 3.5, class: 'tick', 'text-anchor': 'end' }, svg);
+    t.textContent = v;
+  });
+  RAMP.forEach(r => {
+    const t = el('text', { x: x(r[0]), y: H - 12, class: 'tick', 'text-anchor': 'middle' }, svg);
+    t.textContent = r[0] + ' req/s';
+  });
+  const yn = el('text', { x: padL, y: 12, class: 'axis-name' }, svg); yn.textContent = 'latency ms';
+  // quota annotation
+  el('line', { x1: x(6.6), y1: padT, x2: x(6.6), y2: H - padB, class: 'anno-line', opacity: .8 }, svg);
+  const qa = el('text', { x: x(6.6) - 6, y: padT + 10, class: 'anno-text', 'text-anchor': 'end' }, svg);
+  qa.textContent = 'CPU quota ceiling';
+  const tt = makeTooltip(wrap);
+  [[1, 'var(--s1)', 'p50'], [2, 'var(--s2)', 'p95']].forEach(([col, color, name]) => {
+    let d = '';
+    RAMP.forEach((r, i) => { d += (i ? 'L' : 'M') + x(r[0]).toFixed(1) + ',' + y(r[col]).toFixed(1); });
+    el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2 }, svg);
+    RAMP.forEach(r => {
+      const c = el('circle', { cx: x(r[0]), cy: y(r[col]), r: 5, fill: color, stroke: 'var(--card)', 'stroke-width': 2 }, svg);
+      const hit = el('circle', { cx: x(r[0]), cy: y(r[col]), r: 14, fill: 'transparent' }, svg);
+      hit.addEventListener('mousemove', e => {
+        tt.innerHTML = '<b>' + r[0] + ' req/s</b><div class="tt-row"><span>' + name + '</span><span>' + r[col].toFixed(1) + ' ms</span></div>' +
+          '<div class="tt-row"><span>errors</span><span>0</span></div>';
+        const rct = wrap.getBoundingClientRect();
+        tt.classList.add('on'); placeTooltip(tt, wrap, e.clientX - rct.left, e.clientY - rct.top);
+      });
+      hit.addEventListener('mouseleave', () => tt.classList.remove('on'));
+    });
+    const lb = el('text', { x: x(8) + 12, y: y(RAMP[3][col]) + 4, class: 'dlabel' }, svg);
+    lb.textContent = name; lb.setAttribute('style', 'fill:' + color);
+  });
+  tableInto('rampTbl', ['offered load', 'p50 ms', 'p95 ms', 'errors'],
+    RAMP.map(r => [r[0] + ' req/s', r[1].toFixed(1), r[2].toFixed(1), '0']));
+})();
+</script>
+
+</body>
+</html>

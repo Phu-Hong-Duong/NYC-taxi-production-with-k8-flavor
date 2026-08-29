@@ -84,10 +84,11 @@ spec:
     metadata:
       labels: {app: taxi-demo-page, owner: m9-s1-demo}
       annotations:
-        # The sha256 of demo/index.html, substituted at apply time. Changing the
-        # page changes this string, which changes the pod template, which rolls
-        # the pod — so "the served bytes are the committed bytes" is a property
-        # of the deploy rather than of somebody remembering to restart it.
+        # The sha256 over the served pages (index.html + analytics.html, hashed
+        # in that fixed order), substituted at apply time. Changing EITHER page
+        # changes this string, which changes the pod template, which rolls the
+        # pod — so "the served bytes are the committed bytes" is a property of
+        # the deploy rather than of somebody remembering to restart it.
         taxi-mlops.io/page-sha256: "PAGE_SHA256"
     spec:
       securityContext:
