@@ -133,10 +133,20 @@ echo "[demo] ok  GET $ROUTE/demo/ -> 200"
 # ConfigMap that silently dropped a file would leave /demo/analytics.html a 404
 # that reads exactly like a wrong path (gotcha #106), and a stale key would
 # serve yesterday's numbers under today's sha. Fetch it back through the route
-# and hash what a browser would get.
-FETCHED_SHA="$(curl -s "$ROUTE/demo/analytics.html" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+# and hash what a browser would get — POLLED like leg 3, because this leg's own
+# first run failed on a single fetch: the request landed on the TERMINATING old
+# pod (still in the Service endpoints for a beat after the rollout returns),
+# whose mounted ConfigMap had no analytics.html, and what got hashed was the
+# 404 body. A one-shot fetch here measures the endpoint race, not the page.
+deadline=$((SECONDS + 60))
+FETCHED_SHA=none
+while (( SECONDS < deadline )); do
+  FETCHED_SHA="$(curl -sf "$ROUTE/demo/analytics.html" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+  [[ "$FETCHED_SHA" == "$ANALYTICS_SHA" ]] && break
+  sleep 2
+done
 if [[ "$FETCHED_SHA" != "$ANALYTICS_SHA" ]]; then
-  echo "[demo] FAIL: $ROUTE/demo/analytics.html served sha $FETCHED_SHA," >&2
+  echo "[demo] FAIL: $ROUTE/demo/analytics.html served sha $FETCHED_SHA after 60s," >&2
   echo "[demo]   the committed $ANALYTICS is $ANALYTICS_SHA — the route is up but" >&2
   echo "[demo]   the analytics page is missing or stale in the ConfigMap." >&2
   exit 1
