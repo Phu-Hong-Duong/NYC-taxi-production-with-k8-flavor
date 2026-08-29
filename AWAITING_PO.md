@@ -1,5 +1,40 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-29-1 · raised by ARCH/Fable (post-publish triage) · **PR #77 TRIAGED AND MERGED — your queue is EMPTY, and the chain re-parks on purpose**
+
+**One sentence.** The one item you held for ARCH triage is done: **PR #77 (the
+analytics companion page) is MERGED** as `31e4c48` after review, with one repair
+pushed to your branch first (`30c5345` — the Google Fonts `<link>` removed,
+because the page's own header says it "calls nothing", `index.html` carries zero
+external references, and every font stack already named the system fallbacks the
+removal degrades to; nothing else changed — no number, no chart, no script).
+
+**What the triage verified before merging** (details in the PR comment): all
+five bake-off rows reproduce `automation/runs/m3s5/bakeoff.json` exactly · the
+2020-01-29 daily row (223,287 trips · MAE 3.1449 · bias +0.2355) re-derived live
+from the analyst layer · self-heal anchors 25.5 → 40.03 = 14.53 s match the M5
+records · JS hygiene clean, pure ASCII holds. After the merge, run live:
+`make deploy-demo` **GREEN** (incl. the new analytics sha256 leg) ·
+`make demo-accept --no-write` **9/9** (M9's tracked record untouched — F-063's
+rule) · `make verify-m9` **GREEN** · `make readme-check` **GREEN** after the
+one follow-up you listed (a root-README row for the page) · 23/23 demo tests.
+
+**One follow-up DECLINED with a reason**: the optional two-way link from
+`index.template.html`. `index.html` is bound into M9's closed accept record and
+its byte-identity contract; touching a closed milestone's artifact chain for a
+cosmetic link is not worth the re-measurement it would force. The one-way
+back-link the PR ships stands. Say the word if you want it anyway — it is an
+ordinary chartered story, not a fork.
+
+**Your public flip of 2026-08-29 is now COMMITTED to the inbox** (your note
+under 2026-08-25-3 below, kept verbatim). The page is live at
+<http://localhost:8081/demo/analytics.html>.
+
+**Your list is now EMPTY.** Nothing is chartered, nothing waits on you, and the
+chain is deliberately RE-PARKED — no session is scheduled. To restart it for
+anything at all: `automation/next_session.sh architect 120`
+
+
 ## 2026-08-25-4 · raised by ARCH/Fable (PUBLISH BOUNDARY) · THE PUBLISH PHASE IS CLOSED AND TAGGED — the entry below (2026-08-25-3) is still the whole of your list, and this note only confirms the chain parked on purpose
 
 **One sentence.** The ARCH boundary session your chain scheduled has run: the
@@ -20,6 +55,16 @@ for anything at all: `automation/next_session.sh architect 120`
 
 
 ## 2026-08-25-3 · raised by EXEC/Opus (M9-S13) · **ALL THREE LETTERS ARE LANDED — the public flip is your click, and nothing is blocking it**
+
+> **FLIPPED PUBLIC 2026-08-29 by the PO** — decided on the Decision Desk, confirmed
+> in chat, executed by the PO's Windows-side session with `gh repo edit
+> Phu-Hong-Duong/NYC-taxi-production-with-k8-flavor --visibility public
+> --accept-visibility-change-consequences`, and **verified**: `gh repo view` reads
+> `"visibility": "PUBLIC"`. Nothing else was blocking (this entry's own words); the
+> program's public phase begins here. One open item remains OUTSIDE this inbox:
+> **PR #77** (the analytics demo companion page, PO-directed post-close, live from
+> its branch at `/demo/analytics.html`) — the PO chose **Hold for ARCH triage**, so
+> the next ARCH touch triages it with the follow-ups listed in the PR body.
 
 **One sentence.** Your four answers of 2026-08-24-5 are done and verified —
 sqlparse, the credential rotation, the pre-commit hook, and the publish decision
@@ -1367,6 +1412,26 @@ The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork 
 Watchdog log: automation/logs/watchdog.log
 
 ## 2026-08-25 02:50 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-25 06:30 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-25 07:30 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-25 08:30 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-25 09:30 UTC — watchdog: Chain parked — your decision needed
 The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
 
 Watchdog log: automation/logs/watchdog.log

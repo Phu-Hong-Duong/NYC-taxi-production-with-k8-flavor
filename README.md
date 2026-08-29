@@ -62,6 +62,7 @@ issues no verdict; and a scheduled retrain re-derives a challenger monthly and
 | Drift + retrain | pushgateway · Evidently (2nd witness) | `make drift-drill` — the alert that should fire fires; the four that should not, do not |
 | Feature store | Feast 0.66 in a pinned quarantine · Redis | `make feast-retrieval` — the point-in-time join is proved point-in-time |
 | Front door | a static page on the same origin as the model | `make demo-accept` — the page's own request, replayed |
+| Analytics companion (post-close, PO-directed) | the program's story told from its own records, at `demo/analytics.html` — static, self-contained, every number exported once from the analyst layer and the tracked records | `make deploy-demo` — fetches the served page back through the route and requires a sha256 match with git |
 
 Every one of those has a **red-team twin** that must go RED: the milestone gates
 are `make verify-mN-redteam`, and each plants one plausible edit in a tracked

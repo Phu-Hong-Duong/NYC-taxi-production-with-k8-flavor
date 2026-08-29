@@ -1,5 +1,85 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-29 (cy) — ARCH post-publish triage: the repo is PUBLIC, PR #77 merged with one repair, the chain re-parks on an empty queue
+
+### State
+**ARCH, `claude-fable-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cx) · AWAITING_PO (the PO's own flip note sat UNCOMMITTED in the
+working tree) · `docs/milestones/PROGRAM_CLOSE.md` §7 · ledgers · PR #77.
+**The repo went PUBLIC on 2026-08-29 by the PO's hand** (`gh repo view` read
+`"visibility": "PUBLIC"` per their note); the one item held for this touch was
+**PR #77** — the analytics companion page, PO-directed post-close, flagged
+"Hold for ARCH triage" with its follow-ups in the PR body.
+
+### Reconciliation (staleness check)
+Handoff (cx)'s Next claimed a parked chain, queue = one click, tag
+`m9-publish-closed`. Measured: tree clean at `1bf01f0` except AWAITING_PO.md
+(the PO's flip note + four watchdog park stamps — committed this session,
+verbatim), 3 nodes Ready 12d v1.36.1, `free -h` 39Gi. The click happened;
+nothing else had moved.
+
+### Done
+- **PR #77 TRIAGED and MERGED (`31e4c48`)** — 4 files: `demo/analytics.html`
+  (969 lines, static, the program's story from its own records),
+  `deploy_demo.sh` (the roll annotation now hashes BOTH pages; a new POLLED
+  accept leg fetches the analytics page through the route and requires sha256
+  == git), `demo.yaml` (comment moved with the annotation), `demo/README.md`
+  §7 (the three properties keeping it inside the demo's discipline).
+- **Provenance verified by re-derivation, not by reading**: all five bake-off
+  rows on the page == `automation/runs/m3s5/bakeoff.json` exactly; the
+  2020-01-29 daily row (223,287 · 3.1449 · +0.2355) re-derived live from the
+  analyst layer; self-heal 25.5 → 40.03 = 14.53 s / 58 of 720 == the M5
+  records; PSI 0.0217 · volume 0.3913 · gate bar 3.2848 all match. JS hygiene
+  clean; pure ASCII holds.
+- **One repair, pushed to the PO's branch BEFORE the merge (`30c5345`)**: the
+  page loaded Barlow/IBM Plex Mono from `fonts.googleapis.com` — a third-party
+  call from every stakeholder's browser, directly under a header comment
+  claiming the page "calls nothing", against `index.html`'s zero-external-refs
+  precedent. Removed; every `font-family` stack already named the system
+  fallbacks the removal degrades to. No number, chart or script changed. The
+  M9-S13 hook ran on the commit (`secrets staged: 0`).
+- **Live acceptance on merged main**: `make deploy-demo` GREEN — the new
+  analytics leg passed (`serves the committed bytes (sha256 match)`), both
+  server-block invariants standing (`/healthz` 200, `/` 404) ·
+  `make demo-accept DEMO_ACCEPT_ARGS=--no-write` **PASSED 9/9** (no-write so
+  M9's tracked record is not rewritten — F-063's rule; the PO-observed CLOSED
+  box carried forward unedited) · `make verify-m9` **GREEN** ·
+  `tests/unit/test_demo_page.py` 23/23 (the only test file naming the changed
+  files).
+- **Follow-ups from the PR body dispositioned**: the root-README row LANDED
+  (one line under the What-it-does table naming `demo/analytics.html` and its
+  check; `make readme-check` GREEN, `test_readme.py` 7 passed) · the two-way
+  link from `index.template.html` DECLINED with reason — `index.html` is bound
+  into M9's closed accept record and its byte-identity contract, and a
+  cosmetic link does not justify re-measuring a closed milestone's artifact
+  chain. The one-way back-link the PR ships stands.
+- **The PO's flip note committed verbatim** into AWAITING_PO 2026-08-25-3
+  (with the watchdog park stamps), **2026-08-29-1 added** (queue empty, park
+  confirmed), signoffs row appended (Producer PO/PR #77 · Approver ARCH/Fable
+  · PASS), triage verdict posted as a PR comment.
+
+### Verification
+`make deploy-demo` GREEN · `make demo-accept --no-write` 9/9 ·
+`make verify-m9` GREEN · `make readme-check` GREEN (33 claims now) ·
+demo tests 23/23. `@champion` **2** / `feature_set v2` — this touch fitted
+nothing, moved no alias, created no version; its only wire change is the demo
+ConfigMap gaining its second page, reversible with one `make deploy-demo` from
+any prior commit (`TEARDOWN=1` unchanged).
+
+### Defects/Surprises
+- The fonts link (above) — caught in review, fixed pre-merge, no finding id
+  (never landed on main). Nothing else: the PR's own evidence block was
+  accurate on every point checked, including its first accept leg's
+  terminating-pod race, which the second commit had already fixed with leg 3's
+  poll pattern.
+
+### Next
+**THE CHAIN IS PARKED — nothing is scheduled, and the queue is EMPTY.** The
+program is closed, published, and public; PR #77 was the last held item.
+AWAITING_PO 2026-08-29-1 confirms the park for the watchdog. There is no
+pre-chartered work anywhere — a restart begins with an ARCH touch:
+`automation/next_session.sh architect 120`.
+
 ## Session 2026-08-25 (cx) — ARCH publish boundary: the phase closes, the chain re-parks on the click
 
 ### State
