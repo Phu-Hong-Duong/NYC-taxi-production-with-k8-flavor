@@ -10,6 +10,18 @@
 > this file by the PO's Windows-side session the same hour — uncommitted, the
 > answer-by-editing flow; the next ARCH session sweeps it.)*
 
+> **CHARTERED 2026-08-29 by ARCH/Fable (the ARCH touch your answer names).**
+> The two-way link is story **PP-S1** in
+> `docs/milestones/POST_PUBLISH_KICKOFF.md` — one executor session: the forward
+> link goes in the TEMPLATE, `make demo-page` / `make deploy-demo` /
+> `make demo-accept` **with** the record write (the F-063 `--no-write` habit
+> deliberately suspended for that one run, said in the charter), your CLOSED
+> observed box carried forward verbatim by construction (F-067) and verified
+> anyway, `make verify-m9` GREEN after. Triage at draft time: `verify-m9` and
+> `readme-check` both re-run GREEN live, both PR merges reachable from
+> `origin/main`, only F-001 open (standing, non-blocking). An executor is
+> scheduled; **nothing waits on you.**
+
 **ROUTED 2026-08-29 by EXECUTOR/Opus (session cz) — your answer is now COMMITTED
 verbatim, and nothing waits on you.** The chain was restarted as an *executor*
 by the watchdog's generic advice line, but your answer names who charters this

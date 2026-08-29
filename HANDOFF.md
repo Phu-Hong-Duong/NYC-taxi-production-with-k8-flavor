@@ -1,5 +1,55 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-29 (da) — ARCH touch: PP-S1 chartered on the PO's answer, the chain resumes as executor
+
+### State
+**ARCH, `claude-fable-5` (stated first line).** Boot per the ritual: CLAUDE.md ·
+HANDOFF (cz) · AWAITING_PO (2026-08-29-1, the PO's answer already committed
+verbatim by cz) · `docs/milestones/PROGRAM_CLOSE.md` context · ledgers. The
+queue for this touch was exactly what cz handed over: **one item, already
+answered and already priced — charter the two-way demo link.**
+
+### Reconciliation (staleness check — measured, not assumed)
+cz's Next claimed: tree clean at `da6a920`, queue = one chartering, nothing
+waits on the PO. Measured: tree clean · `make verify-m9` **GREEN** re-run live
+(closing banner citing the CLOSED-and-cited observed box; `@champion` 2 /
+`feature_set v2`; `uv.lock` byte-identical to `lock-rebaselined-m9-publish`;
+all 5 DVC pins up to date) · `make readme-check` **GREEN** · lineage: PR #77's
+merge `31e4c48` and PR #76's `24364ab` both reachable from `origin/main`
+(gotcha #20) · both demo pages **200** through the route · accept record pins
+both `b1edd074…` with `po_observed_run` CLOSED and cited · 23 demo tests pass ·
+`demo/index.template.html` carries **zero** `analytics` mentions (the forward
+link really does not exist yet). Nothing had drifted.
+
+### Done
+1. **Boundary triage, verdict CLEAN** — no milestone to close or tag (both M9
+   tags placed, all README rows flipped at `1bf01f0`); only **F-001** open
+   (standing, non-blocking, by design); debt register closed; cz's watchdog
+   park-notice observation **DECLINED as a change with the reason recorded**
+   (program closed, harm bounded and demonstrated survivable by cz itself).
+   All in the kickoff §0.
+2. **`docs/milestones/POST_PUBLISH_KICKOFF.md` authored** — ONE story,
+   **PP-S1 (role:MLOps)**: forward link in the TEMPLATE (never the generated
+   output; `TOKEN_COUNTS` does not move) → `make demo-page` → demo suite →
+   `make deploy-demo` → **`make demo-accept` WITH the record write** (F-063's
+   `--no-write` habit deliberately suspended for that one run, by charter — the
+   two sha pins MUST move, and saying so is what keeps it distinct from the
+   mistake F-063 named) → the PO's CLOSED box verified carried forward (F-067)
+   → `verify-m9` + `readme-check` GREEN → PR, HANDOFF, a dated LANDED note on
+   AWAITING_PO 2026-08-29-1. Safe stopping point: anywhere before the write;
+   after it, finish the gates before ending. No detached run applies.
+3. **AWAITING_PO 2026-08-29-1 annotated** with a dated CHARTERED note —
+   nothing waits on the PO.
+
+### Defects/Surprises
+None. This session changed no code, no config, no record — its diff is the
+kickoff, the inbox note and this entry.
+
+### Next
+**`automation/next_session.sh executor 120` run at exit.** The executor's queue
+is exactly PP-S1; behind it the queue is empty and that session re-parks the
+chain on its own handoff.
+
 ## Session 2026-08-29 (cz) — the PO answered a DECLINED follow-up: the answer is committed, the work is scoped, and the charter is ARCH's
 
 ### State
