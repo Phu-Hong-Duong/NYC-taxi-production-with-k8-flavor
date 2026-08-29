@@ -79,11 +79,26 @@ did not exist) · accept record pinning `b1edd074…` on both sha fields with
   the creep the kickoff's Out-of-scope section names.
 
 ### Next
+**PR #78 merged as `70347c9`** (merge commit, lineage kept); `git branch -r
+--contains 3f6f232` → `origin/main` (gotcha #20); branch deleted; tree clean;
+`make verify-m9` and `make readme-check` re-run **GREEN on main** after the
+merge.
+
 **Nothing is chartered and nothing waits on the PO** — AWAITING_PO's newest
-entry says so in its own words. The post-publish kickoff had exactly one story
-and it is landed, so per its own Exit line the queue behind it is empty and the
-chain **re-parks**: no successor is scheduled. To restart it for anything at
-all: `automation/next_session.sh architect 120`.
+entry says so in its own words.
+
+**The ending is the PARK, and it is a choice rather than an omission.** The
+standing ritual's (c) would schedule an architect at a milestone's last story;
+this kickoff's own Exit line instead says *"The executor runs PP-S1 and re-parks
+the chain on its own handoff (empty queue behind it)"* — written by the ARCH
+touch that had already done this boundary's triage in §0 and found it CLEAN.
+The program is closed, the queue behind PP-S1 is genuinely empty, and a session
+scheduled into an empty queue would re-park immediately and emit one more
+watchdog notice to a PO whose list is already empty. So: **no successor is
+scheduled**, and the park is legible rather than an accident — AWAITING_PO
+carries the dated LANDED entry the watchdog reads to tell a decision from a
+crash. To restart the chain for anything at all:
+`automation/next_session.sh architect 120`.
 
 ## Session 2026-08-29 (da) — ARCH touch: PP-S1 chartered on the PO's answer, the chain resumes as executor
 
