@@ -1,5 +1,105 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-29 (cz) — the PO answered a DECLINED follow-up: the answer is committed, the work is scoped, and the charter is ARCH's
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Boot per the ritual:
+CLAUDE.md · HANDOFF (cy) · `docs/milestones/PROGRAM_CLOSE.md` §7 (there is no
+open milestone kickoff — the program is closed) · AWAITING_PO. Refusals in
+play: *no fit · no alias move · no registry version · no wire change · no
+cluster mutation · no gate loosened · no tracked record rewritten*. None
+broken — **this session changed no code, no config, no manifest and no
+record.** Its whole diff is this entry plus the PO's own committed words.
+
+**Story executed: NONE, and that is the correct outcome rather than an
+omission.** The program closed at `m9-publish-closed`; handoff (cy) ended with
+an EMPTY queue and no pre-chartered work anywhere. What moved since is one
+thing: **the PO answered the follow-up ARCH declined.**
+
+### Reconciliation (the staleness check — this is what the session is for)
+Handoff (cy)'s Next claimed: chain parked, nothing scheduled, queue empty,
+tree clean at `9dab516`. Measured, not assumed:
+
+- **The PO's answer was sitting UNCOMMITTED** in `AWAITING_PO.md` — the
+  answer-by-editing flow, applied from their Windows-side session, exactly as
+  their own parenthetical says. It is the only diff the tree carried. It is
+  now committed **verbatim** (the (cy) precedent for the public-flip note).
+- **Cluster up and unchanged**: `kubectl get nodes` → 3/3 `Ready` v1.36.1 at
+  **12d**; `free -h` **39Gi**; no `automation/STOP`.
+- **The serving surface is exactly as (cy) left it**: `nyc-taxi-eta` Ready
+  (10d) and `nyc-taxi-eta-transformer` Ready (5d16h); the demo Deployment 1/1
+  with a **2-key** ConfigMap (index + analytics, 5d15h); through the route
+  `GET /demo/` → **200** and `GET /demo/analytics.html` → **200**.
+- **`make verify-m9` → GREEN**, closing banner citing the CLOSED-and-cited
+  observed box. Read live inside it: `@champion` version **2** / `feature_set
+  v2`; **not one of the 2 registry versions created after `m7-closed`**;
+  `uv.lock` byte-identical to `lock-rebaselined-m9-publish`; all **5** settled
+  DVC pins `up to date`.
+- **`make readme-check` → GREEN** (13 signal ids · 10 gates · 8 red teams ·
+  1,319 tests — every claim read back from the record that holds it).
+
+**Nothing had drifted. The state ARCH will charter against is the state on
+disk.**
+
+### Done — and the one judgement call, stated plainly
+**The PO's answer was NOT executed by this session, deliberately.** Their words
+name who charters it — *"Charter it at the next ARCH touch as the ordinary
+story this entry offered"* — and the work touches a CLOSED milestone's
+byte-identity artifact chain, which is precisely why ARCH declined it in the
+first place. An executor improvising that into existence would substitute its
+judgement for the PO's on a process question the PO answered explicitly. The
+watchdog's *generic* advice line (`… then: next_session.sh executor`) is what
+started an executor here; it is a fixed string in a park notice, not a
+chartering.
+
+What this session produced instead:
+
+1. **The PO's answer, committed verbatim**, with a dated ROUTED note beneath
+   it saying where it went and confirming their list is still empty.
+2. **The re-measurement priced, so the charter is one read and not an
+   exploration.** ARCH declined the link on the grounds that it "would force"
+   a re-measurement of a closed chain. That is true, and it is *bounded*:
+   - `demo/index.html` is **generated** (`scripts/build_demo_page.py` from
+     `demo/index.template.html` + the TLC lookup + `transformer.RAW_INPUTS`);
+     `tests/unit/test_demo_page.py` regenerates and demands byte-identity, and
+     guards placeholder **occurrence counts** (`TOKEN_COUNTS`, gotcha #110 —
+     the run that shipped 795 `<option>`s). A forward link must go in the
+     TEMPLATE; hand-editing the output is what those tests exist to catch.
+   - **Two fields** move in one tracked record: `page.committed_sha256` and
+     `page.served_sha256` in `automation/runs/m9-demo/accept.json`, both today
+     `b1edd074b00f7c0c28e331d5ad3b7dde9e06800a80df59150251586a62fceddd`, which
+     I confirmed equals the live file's sha256. Nothing else in that record is
+     a function of the page's bytes.
+   - **The PO's CLOSED observed box survives the rewrite by construction** —
+     `human_box()` carries a CLOSED block forward verbatim and can never
+     author one (F-067). So the honest worry ("re-running the accept erases
+     the human closure") is already answered in code, and `verify-m9` §2 would
+     go RED if it were not.
+   - Cost, in full: one template edit · `make demo-page` · `make deploy-demo`
+     (the roll annotation hashes BOTH pages) · `make demo-accept` **with** the
+     write, because the pins must move · `make verify-m9` · 23 demo tests.
+   - The one thing to decide rather than measure: the accept record's
+     `--no-write` habit (F-063's rule, used at every recent touch) must be
+     **deliberately suspended for this one run** — this is the rare case where
+     the record *should* be rewritten, and saying so in the charter is what
+     keeps it from looking like the mistake F-063 named.
+
+### Defects/Surprises
+- **None in the system.** The one thing worth writing down is procedural: a
+  watchdog park notice ends in a fixed `next_session.sh executor` line, so a
+  PO answering an entry gets an *executor* regardless of what the answer says
+  the next role is. That cost nothing here (the guard is a session reading the
+  answer rather than the notice) but it is a small, real way for the chain to
+  start the wrong role. Not raised as a finding — the program is closed and
+  this is a one-line improvement ARCH can take or leave.
+
+### Next
+**The chain hands to ARCH — one session scheduled, `architect 120`.** The
+queue for that touch is exactly one item, already answered and already
+scoped above: **charter the two-way demo link as an ordinary story** (PO,
+AWAITING_PO 2026-08-29-1). Nothing waits on the PO. Nothing else is open
+except the standing non-blocking F-001 allowlist note.
+
 ## Session 2026-08-29 (cy) — ARCH post-publish triage: the repo is PUBLIC, PR #77 merged with one repair, the chain re-parks on an empty queue
 
 ### State

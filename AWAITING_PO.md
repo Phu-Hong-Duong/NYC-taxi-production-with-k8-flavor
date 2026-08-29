@@ -2,6 +2,29 @@
 
 ## 2026-08-29-1 · raised by ARCH/Fable (post-publish triage) · **PR #77 TRIAGED AND MERGED — your queue is EMPTY, and the chain re-parks on purpose**
 
+> **PO 2026-08-29 (via the Decision Desk): I want the two-way link anyway.**
+> Charter it at the next ARCH touch as the ordinary story this entry offered —
+> regenerate `index.html` with the forward link, re-run `make demo-page` /
+> `make demo-accept`, and keep the closed M9 record honest about the
+> re-measurement. *(Click recorded on the Decision Desk 04:38Z and applied to
+> this file by the PO's Windows-side session the same hour — uncommitted, the
+> answer-by-editing flow; the next ARCH session sweeps it.)*
+
+**ROUTED 2026-08-29 by EXECUTOR/Opus (session cz) — your answer is now COMMITTED
+verbatim, and nothing waits on you.** The chain was restarted as an *executor*
+by the watchdog's generic advice line, but your answer names who charters this
+("at the next ARCH touch") and the work touches a CLOSED milestone's
+byte-identity chain — so this session did not improvise it into existence. It
+verified the state live (`make verify-m9` GREEN · `make readme-check` GREEN ·
+3/3 nodes Ready 12d · both InferenceServices Ready · both demo pages serving
+200), committed your note so it cannot be lost to a stray checkout, **measured
+exactly what the re-measurement you sanctioned costs** (HANDOFF cz — two
+sha256 fields in one tracked record, one ConfigMap roll, one gate, one test
+file; the record's `human_box()` carries your CLOSED observed box forward
+verbatim by construction, so re-running the accept cannot erase it), and handed
+to ARCH. **Your list is still EMPTY** — the ball is with the chain, not with
+you.
+
 **One sentence.** The one item you held for ARCH triage is done: **PR #77 (the
 analytics companion page) is MERGED** as `31e4c48` after review, with one repair
 pushed to your branch first (`30c5345` — the Google Fonts `<link>` removed,
@@ -33,7 +56,6 @@ under 2026-08-25-3 below, kept verbatim). The page is live at
 **Your list is now EMPTY.** Nothing is chartered, nothing waits on you, and the
 chain is deliberately RE-PARKED — no session is scheduled. To restart it for
 anything at all: `automation/next_session.sh architect 120`
-
 
 ## 2026-08-25-4 · raised by ARCH/Fable (PUBLISH BOUNDARY) · THE PUBLISH PHASE IS CLOSED AND TAGGED — the entry below (2026-08-25-3) is still the whole of your list, and this note only confirms the chain parked on purpose
 
@@ -1432,6 +1454,11 @@ The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork 
 Watchdog log: automation/logs/watchdog.log
 
 ## 2026-08-25 09:30 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-29 04:30 UTC — watchdog: Chain parked — your decision needed
 The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
 
 Watchdog log: automation/logs/watchdog.log
