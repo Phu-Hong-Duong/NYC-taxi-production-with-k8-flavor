@@ -8,7 +8,7 @@
   },
   "checks": [
     {
-      "claim": "the page a browser receives is byte-identical to demo/index.html (HTTP 200, 47147 bytes, sha256 b1edd074b00f7c0c\u2026)",
+      "claim": "the page a browser receives is byte-identical to demo/index.html (HTTP 200, 47461 bytes, sha256 f5f0bde92662e9b5\u2026)",
       "ok": true
     },
     {
@@ -65,10 +65,10 @@
     }
   },
   "page": {
-    "bytes": 47147,
-    "committed_sha256": "b1edd074b00f7c0c28e331d5ad3b7dde9e06800a80df59150251586a62fceddd",
+    "bytes": 47461,
+    "committed_sha256": "f5f0bde92662e9b5511369bc5489b9c9dbed552c4d3fec7e0828b99677aa20a2",
     "http_status": 200,
-    "served_sha256": "b1edd074b00f7c0c28e331d5ad3b7dde9e06800a80df59150251586a62fceddd"
+    "served_sha256": "f5f0bde92662e9b5511369bc5489b9c9dbed552c4d3fec7e0828b99677aa20a2"
   },
   "page_url": "http://localhost:8081/demo/",
   "po_observed_run": {
@@ -140,7 +140,7 @@
     }
   },
   "refusal": {
-    "error": "the online feature store has no calendar row for ['2031-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holiday' for an uncovered date looks exactly like a correct answer (F-019, on the store's wire instead of the CSV's). Fix it where the table is defined \u2014 `make holidays HOLIDAYS_TO=<year>` then `make feast-sources && make feast-materialize`.",
+    "error": "the online feature store has no calendar row for ['2031-07-04']. REFUSED rather than quoted: the champion eats holiday flags, and a silent 'not a holiday' for an uncovered date looks exactly like a correct answer (F-019, on the store's wire instead of the CSV's). The store IS answering \u2014 it served the sentinel '2019-01-01' \u2014 so this is a coverage gap and not an outage (F-062's discriminator). Fix it where the table is defined \u2014 `make holidays HOLIDAYS_TO=<year>` then `make feast-sources && make feast-materialize`.",
     "http_status": 422,
     "pickup_datetime": "2031-07-04T09:15:00"
   },

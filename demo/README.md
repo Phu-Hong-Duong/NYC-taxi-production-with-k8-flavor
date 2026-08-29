@@ -227,3 +227,41 @@ Three properties keep it inside this demo's discipline:
   server's schema, neither of which this page consumes. Its numbers are a dated
   snapshot of closed-program records, which do not move; if they ever do, the
   page is re-exported by hand and the diff IS the review.
+
+### 7.1 The link is TWO-WAY from 2026-08-29, and the accept pins moved with it
+
+PR #77 shipped the back-link only (`analytics.html` → `./`), and ARCH declined
+the forward half at triage because `index.html` is bound into M9's CLOSED accept
+record by sha256, so adding one line to the page forces that record to be
+rewritten. The PO read that cost and asked for the link anyway (AWAITING_PO
+**2026-08-29-1**), and it landed as story **PP-S1**.
+
+What moved, stated because a closed milestone's record was rewritten on purpose
+and that must never look like the mistake F-063 named:
+
+- `demo/index.template.html` gained one relative anchor (`analytics.html`) and
+  one CSS rule; `demo/index.html` was **regenerated** by `make demo-page`, never
+  hand-edited. `TOKEN_COUNTS` did not move — the link is static markup, not a
+  placeholder token.
+- `automation/runs/m9-demo/accept.json` was rewritten by `make demo-accept`
+  **with** the write (the `--no-write` habit suspended for exactly one run, by
+  charter). Three fields are functions of the page's bytes and all three moved:
+  `page.bytes` 47,147 → 47,461 and both `page.committed_sha256` /
+  `page.served_sha256` `b1edd074…` → **`f5f0bde9…`**.
+- A fourth field moved and is **not** this story's doing: the recorded 2031
+  refusal text gained M9-S7's F-062 sentence (*"The store IS answering — it
+  served the sentinel…"*). Every accept since M9-S7 ran `--no-write`, so the
+  record had been carrying pre-F-062 wording; this write is it catching up to
+  the code that has been shipped since `8b6d5c0`.
+- `po_observed_run` is **untouched** — still `CLOSED — observed 2026-08-24,
+  cited at AWAITING_PO 2026-08-23-3` with the PO's note verbatim. That is
+  `human_box()` doing its one job (F-067): it carries a CLOSED block forward and
+  can never author one.
+
+The pair is asserted, not assumed: `test_the_two_pages_link_to_each_other_and_
+both_hrefs_are_relative` requires the forward link in the TEMPLATE *and* in the
+generated page (a template edit never regenerated, and a hand-edit of the output,
+fail differently), the back-link in `analytics.html`, and every `href` on the
+generated page relative. Both sides were also fetched through the route —
+`GET /demo/` and `GET /demo/analytics.html`, 200 each, each body carrying its
+link — because "two-way" is a property of the pair as served, not of the diff.
