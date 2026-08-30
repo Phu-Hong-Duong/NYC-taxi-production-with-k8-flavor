@@ -144,9 +144,16 @@ caveat below.
   sufficient. Options, none yet chosen (a PO fork — see AWAITING_PO
   2026-08-30-2): a Windows task holding `wsl.exe -d Ubuntu -e sleep …` open ·
   `vmIdleTimeout` in `.wslconfig` · a Windows-side scheduled launcher.
-  Note also `Crosstown-NightShutdown` runs `wsl --shutdown` daily at 06:50
-  local, and `Crosstown-NightStop` re-creates `automation/STOP` at 05:30 — so
-  overnight the chain is stopped BY DESIGN and cannot self-resume.
+  **Curfew, as amended 2026-08-30 (PO direction — the earlier 05:30 / 06:50
+  pair is superseded and this note replaces it):** `Crosstown-NightStop` now
+  fires at **01:50 local** and runs `chain_park.sh --no-wait`, which arms
+  `automation/STOP` and **leaves the running session alone to finish its story
+  and write its handoff** — the session in flight at 01:50 is the last one of
+  the night. `Crosstown-NightShutdown` (`wsl --shutdown` at 06:50) is
+  **DISABLED**: it was the step that killed work in flight and took cron with
+  it. Re-enable with `schtasks /Change /TN Crosstown-NightShutdown /ENABLE`.
+  So overnight the chain stops BY DESIGN and cannot self-resume — resume it
+  with `bash ~/chain_resume.sh` (see CHAIN_OPS.md in the WSL home).
 - The watchdog restarts the chain; it does not resume a story. A restarted
   executor re-reads HANDOFF.md and the kickoff and picks the next unstarted
   story, so the value of the handoff written before a crash is exactly the
