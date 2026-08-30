@@ -1,5 +1,79 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-30-2 · raised by the PO's Windows-side session · **The watchdog cannot heal a dead chain, because a dead chain lets the VM shut down — one fork, three options**
+
+**Measured today, not theorised.** The PO asked why autonomous mode keeps
+stopping and why they cannot take the reins. Three walls were found stacked,
+and the third is structural:
+
+1. **Ergonomics.** Every resume instruction in the repo names
+   `automation/next_session.sh`, which cannot be run through `wsl.exe` (the
+   `setsid` launcher dies with it). The PO works on Windows. So "the PO
+   restarts it after deciding" was, for a week, a sentence naming a command
+   the PO could not run. **Fixed today** — `automation/README.md` gains a
+   *"Resuming from Windows"* section: touch files only, let cron launch.
+2. **The park latch reads an answer as a question.** Answering a fork by
+   editing this file changes its hash, and the hash IS the park detector — so
+   answering without re-stamping `automation/logs/watchdog_awaiting_po.sha`
+   latches the chain shut. Documented today in the same section.
+3. **The deadlock, and it is the real one.** A live chain session is what
+   keeps the WSL VM alive; the watchdog exists to restart a chain that is no
+   longer alive. Measured: the 04:20:01 heal launched a session, that session
+   died at ~04:23, and by 05:36 `wsl --list --running` reported **"There are
+   no running distributions"** with the watchdog's last line still at
+   04:20:01 — **eight missed ticks.** The one heal that DID fire only fired
+   because a monitoring script happened to be holding the VM open. Nothing
+   crashed: WSL2 idle-terminates when nothing is running in it, and cron dies
+   with it. **So the chain cannot self-recover from any death, ever** — which
+   is the honest answer to "why does agentic coding stop immediately".
+
+**The fork (item 3 only — 1 and 2 are landed, not decisions).** All three
+options are cheap; they differ in blast radius and honesty, so this is the
+PO's call and nothing auto-proceeds:
+
+- **(a) A Windows scheduled task holds the VM open** —
+  `wsl.exe -d Ubuntu -e sleep 86400`, started at login and after the 06:50
+  `wsl --shutdown`. *Cost:* the VM (40 GB budget) stays resident whenever
+  Windows is on, including hours nobody is working; the laptop's own quiet
+  hours were a deliberate PO choice. *Benefit:* nothing inside the repo
+  changes, and the watchdog finally works as designed.
+- **(b) `vmIdleTimeout` in `.wslconfig`** — raise WSL's own idle window
+  instead of adding a process. *Cost:* takes effect only after
+  `wsl --shutdown` (and Docker Desktop restart), and it is a machine-wide
+  setting affecting every distro, not just this program's. *Benefit:*
+  no extra task, no held process.
+- **(c) Move the watchdog OUT of the VM** — a Windows scheduled task that
+  runs the watchdog's checks (or simply boots WSL every 10 minutes) from the
+  side that is always up. *Cost:* a second implementation of liveness logic
+  living outside the repo, i.e. exactly the twin this program spends its
+  gates preventing; the chain's own `tests/unit/test_watchdog.py` would not
+  cover it. *Benefit:* the observer is genuinely outside the thing observed,
+  which is the §3 field lesson stated properly.
+
+**Recommendation, with its honest cost: (b) first, (a) as the fallback.**
+(b) is one line and no new moving parts, and the cost that matters is
+disclosed rather than hidden — it is machine-wide, so it changes WSL
+behaviour for the PO's other work too, and it needs a `wsl --shutdown` (which
+means a Docker Desktop restart and a kind-cluster restart, ~2 minutes). (c)
+is the architecturally *correct* answer and is deliberately not recommended
+here: it buys real independence at the price of a liveness twin that no gate
+in this repo can check, and this program's whole record says the untested
+copy is the one that lies. **Do NOT read (b) as free** — if the PO's answer
+is "the VM must not stay resident", then the truthful conclusion is that this
+chain is not autonomous overnight, and the protocol should say so plainly
+rather than keep a watchdog that cannot fire.
+
+**Also worth the PO's eye, not a fork:** the 04:20 healed session died ~3
+minutes in, mid-boot-ritual, with a **0-byte log and no error in its
+transcript** — and it was NOT the spend limit (the two "spend limit" strings
+in that transcript are it *reading yesterday's logs*). Cause unknown. If
+sessions keep dying that way, the watchdog's 3-strikes rule will ring
+"Chain keeps dying" — that toast is the signal that a restart cannot fix it.
+
+**Chain state:** `automation/STOP` is ABSENT (removed 04:16Z), no session is
+alive, and the VM is down — so nothing will happen until WSL is next touched.
+Nothing else waits on the PO.
+
 ## 2026-08-30-1 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Scope the protocol — chartered ceremony vs everyday help**
 
 > **PO 2026-08-30 (in chat, their own words, trimmed):** "based on our

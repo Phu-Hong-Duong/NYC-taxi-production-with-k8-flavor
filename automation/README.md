@@ -93,12 +93,60 @@ try healing again after a heal-loop, delete `watchdog_heal_state`.
   pid) · `pending_successor` (one queued) · `automation/runs/*.status` (long
   jobs). Absent all three with no STOP = dead, and the watchdog will act.
 
+## Resuming from Windows, when you cannot open an Ubuntu terminal (PO path)
+
+Every resume instruction above names `automation/next_session.sh`, and that
+command **cannot be run through `wsl.exe`**: the `setsid` launcher is killed
+the moment `wsl.exe` exits, leaving an orphaned `pending_successor` that then
+blocks retries for 900 s (2026-08-24, re-confirmed 2026-08-29). The PO is on
+Windows, so for a whole week "resume the chain" was a command the PO had no
+way to run — the chain was not parked on policy, it was parked on ergonomics.
+
+**Touch FILES only, and let cron do the launching.** Cron is a context where
+`setsid` survives, proven repeatedly. In order:
+
+1. If you answered a fork **by editing `AWAITING_PO.md`**, re-stamp the
+   watchdog's baseline — write `sha256sum AWAITING_PO.md`'s hash into
+   `automation/logs/watchdog_awaiting_po.sha`. **This step is not optional and
+   it is the trap:** the park detector is a hash of that file, so answering an
+   entry without re-stamping is read as a BRAND-NEW park and latches the chain
+   shut — the answer itself looks like the question.
+2. `rm -f automation/logs/watchdog_parked` (the latch), once the entry really
+   is answered.
+3. `rm -f automation/STOP`.
+4. Wait for a cron tick (≤10 min) and verify by `automation/logs/running_session`
+   naming a live pid — never by a "scheduled" line.
+
+All four are short synchronous commands and are safe through `wsl.exe`.
+
+**Step 5, and it is the one that bites: something must KEEP WSL ALIVE for at
+least one 10-minute tick, or none of the above fires.** See the first honest
+caveat below.
+
 ## Honest caveats (read once)
 - The `sleep`-based scheduler and the cron watchdog both live inside WSL:
   **WSL must stay running**. If WSL shuts down, pending sessions and detached
   runs die with it and cron is not there to notice — restart by hand with
   `automation/next_session.sh executor`. A Windows Task Scheduler variant
   (schtasks.exe) is the hardening option if this bites; gotcha #24.
+  **It bites, and it is worse than "if": the VM shuts ITSELF down, and it does
+  so exactly when the watchdog is the only thing that could help.** Measured
+  2026-08-30 from the Windows side: a healed session died at 04:23, and by
+  05:36 `wsl --list --running` answered *"There are no running distributions"*
+  with the watchdog's last log line still reading 04:20:01 — **eight ticks
+  missed, because there was nothing left in the VM to keep it up.** Nothing
+  had crashed; WSL2 simply idle-terminates when no process is running.
+  The deadlock, stated plainly: *a live chain session is what keeps WSL alive,
+  and the watchdog exists to restart a chain that is no longer alive.* So the
+  watchdog can only heal while something ELSE holds the VM open — during the
+  one successful heal above, that something was a monitoring script that
+  happened to be running. On its own, removing `STOP` from Windows is NOT
+  sufficient. Options, none yet chosen (a PO fork — see AWAITING_PO
+  2026-08-30-2): a Windows task holding `wsl.exe -d Ubuntu -e sleep …` open ·
+  `vmIdleTimeout` in `.wslconfig` · a Windows-side scheduled launcher.
+  Note also `Crosstown-NightShutdown` runs `wsl --shutdown` daily at 06:50
+  local, and `Crosstown-NightStop` re-creates `automation/STOP` at 05:30 — so
+  overnight the chain is stopped BY DESIGN and cannot self-resume.
 - The watchdog restarts the chain; it does not resume a story. A restarted
   executor re-reads HANDOFF.md and the kickoff and picks the next unstarted
   story, so the value of the handoff written before a crash is exactly the
