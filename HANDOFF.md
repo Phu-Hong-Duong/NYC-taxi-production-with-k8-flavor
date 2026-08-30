@@ -1,5 +1,107 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-30 (dd) — executor healed into an EMPTY charter: nothing executed, state re-measured, handed to ARCH
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Session MODE: **CHARTERED**
+(chain-launched — the new scope rule in CLAUDE.md, PO directive 2026-08-30-1),
+so the ceremony below is in its lane. Boot per the ritual: CLAUDE.md · HANDOFF
+(dc) · `docs/milestones/POST_PUBLISH_KICKOFF.md` · AWAITING_PO · watchdog log.
+No `automation/runs/*.status` was pointed at by the handoff; none read.
+
+**No story was executed, and that is the correct outcome, not a shortfall.**
+`POST_PUBLISH_KICKOFF.md` charters exactly ONE story (PP-S1) and session (db)
+landed it; §0.1 says nothing further was chartered. **There is no unstarted,
+unblocked story for an executor anywhere in `docs/milestones/`.** The two PO
+directives that arrived since (dc) both need an ARCH touch before an executor
+has anything to run. An executor that invented a slice out of a directive would
+be authoring its own kickoff — the one thing the constitution does not let it do.
+
+### Reconciliation (staleness check — measured, and (dc)'s Next has moved)
+(dc)'s Next said the chain was **paused via `automation/STOP`**. That is no
+longer true and three things changed while nobody was in the room:
+
+- **`automation/STOP` is ABSENT** (`ls` → no such file). The watchdog log shows
+  `11:40:01 STOP present … standing down` then `11:50:01 chain is DEAD …
+  healing, attempt 1 → HEAL scheduled executor` — i.e. the PO removed STOP
+  between those ticks and the **watchdog's heal launched me**. `HEAD` is
+  `89e049a`, committed **11:45:16Z**, five minutes before the heal.
+- **Four PO Windows-side commits landed since (dc)** (`2d70a98`, `7bf821c`,
+  `63348ba`, `19370f1`, `89e049a`): PO directive **2026-08-29-2** (charter the
+  codebase cleanup), PO directive **2026-08-30-1** (scope the protocol —
+  chartered ceremony vs everyday help, already landed in CLAUDE.md), the
+  curfew/watchdog notes, and `docs/cleanup_audit_seed.md` (141 lines, an
+  ADVISORY read-only audit; ARCH's own measurement wins where they disagree).
+- **A new OPEN FORK exists: AWAITING_PO 2026-08-30-2** — the WSL VM
+  idle-terminates when no chain session is alive, so cron dies with it and the
+  watchdog cannot heal a chain that is properly dead (measured: eight missed
+  ticks after the 04:20 heal). Options (a)/(b)/(c) with a recommendation are
+  written; **it is unanswered and I did not touch it.**
+
+Live state, re-measured rather than remembered: 3/3 nodes `Ready` v1.36.1 at
+**13d** · `git status` clean, `main` in sync with `origin/main` · HEAD reachable
+from `origin/main`.
+
+### Done — each with the command and what it printed
+1. **`make readme-check` → GREEN** — *every target, path and number in
+   README.md checks out*; 29 claims re-read from their records, including
+   `13 signal ids` · `16 rules` · `10 gates` · `8 red teams` · `1,320 tests` ·
+   `57,688 keys` · `PSI 0.0217`. This is the check that matters after doc-only
+   commits from outside the chain, and it passed over all five of them.
+2. **`make verify-m9` → GREEN** (46/46, closing banner citing the
+   CLOSED-and-cited observed box). Read inside it: `@champion` version **2** /
+   `feature_set v2` · **not one** of the 2 registry versions created after
+   `m7-closed` · F-032's served-version-eats-`v2` invariant live · `uv.lock`
+   byte-identical to `lock-rebaselined-m9-publish` · all **5** settled DVC pins
+   up to date · the 9 inherited gates not nested.
+3. **Nothing else was run and nothing was changed.** No fit, no alias move, no
+   registry version, no cluster mutation, no record rewritten, no `uv.lock`
+   change, no threshold moved. The only diff this session makes is this entry.
+4. **No AWAITING_PO entry was written, deliberately.** Nothing new waits on the
+   PO from here — and the park detector is a hash of that file, so an
+   executor writing a "nothing waits" note into it would latch the chain shut
+   (2026-08-30-2 item 2). Silence is the correct signal.
+
+### Defects/Surprises
+- **The heal's role is fixed at `executor`, so "resume as architect" does not
+  survive a STOP-removal.** AWAITING_PO 2026-08-29-2 ends *"this session removes
+  `automation/STOP` and resumes the chain as `architect`"*; what actually
+  happens when the PO removes STOP and lets cron do the work is
+  `HEAL — scheduled executor`. Cost here: one short session (this one), handled
+  gracefully — the same shape session (cz) hit on 2026-08-29 and the same
+  conclusion. **Recorded as an observation, NOT re-opened as a change**:
+  `POST_PUBLISH_KICKOFF.md` §0 already DECLINED editing chain plumbing on a
+  closed program, and the guard works — a session reads the ANSWER, not the
+  notice, and hands off. If ARCH wants it fixed it now has a second data point.
+- **No repo defect found.** Both live gates green at HEAD.
+
+### Next
+**ARCH is scheduled (+120 s) and it has two things to charter, in this order.**
+1. **PO directive 2026-08-29-2 — the codebase cleanup.** The directive itself
+   proposes the shape: an **AUDIT leg first**, committed BEFORE any edit, then
+   executor slices each ending with the gate sweep green. `docs/cleanup_audit_seed.md`
+   is the PO's advisory input — **verify before trusting** (it is grep-and-count,
+   nothing was run, sampled LOC carries ±30%). The floor is in the directive and
+   is not ARCH's to soften: ten gates GREEN per slice · every red team still RED
+   on its plant · no threshold/bar/knob/gate condition moves · no tracked record
+   under `automation/runs/` rewritten · no wire, alias, registry, mart number or
+   `uv.lock` change. **Deleting a whole gate, red team or recorded drill is NOT
+   covered** — that comes back to the PO as a fork.
+2. **PO directive 2026-08-30-1 — the scope rule.** Already landed in CLAUDE.md
+   by the PO; what remains is folding CHARTERED-vs-EVERYDAY into
+   `docs/org/ORG.md` and whichever templates instruct ceremony, so a chartered
+   session states its MODE the way it already states its model. The directive
+   says this can ride the cleanup charter as one small slice.
+
+**Do NOT wait on AWAITING_PO 2026-08-30-2** (the VM/watchdog deadlock). It is a
+genuine open fork and it is the PO's call, but the cleanup is independent of it
+and 2026-08-29-2 says in terms that nothing else waits on the PO. **Its practical
+consequence for the chain, though, is real and worth knowing before scheduling
+anything long:** if a session dies, the VM idle-terminates and no heal will ever
+fire — so a park or a crash tonight stays parked until the PO next touches WSL.
+Prefer short, self-contained slices with a scheduled successor over anything that
+depends on being rescued.
+
 ## Session 2026-08-29 (dc) — ARCH boundary: PP-S1 triaged PASS, nothing to charter, the chain paused the way the PO left it
 
 ### State
