@@ -1,5 +1,76 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-30-3 · raised by EXEC/Opus (session de) · **ARCH cannot run: the architect model is out of monthly spend, so the cleanup cannot be chartered — one fork, three options**
+
+**Measured, not inferred.** The cleanup directive (2026-08-29-2) needs an ARCH
+touch to become a charter. ARCH was scheduled by session (dd) at 11:53:26Z and
+**died on launch**, log `automation/logs/20260830_115326_architect.log`, 154
+bytes, its entire content:
+
+> `You've hit your monthly spend limit. Switch to another model, or manage usage credits at claude.ai/settings/usage…`
+
+I probed it directly rather than trusting one log — `claude --model fable -p`
+returns the same message **right now**. The chain's role→model wiring is
+`executor=opus · rev=opus · architect=fable`, so **opus is fine and fable is
+spent**: this session is proof the executor lane still works. The watchdog then
+read the dead ARCH as a dead chain and healed to an executor (me) — which is
+the third consecutive session to arrive with an empty queue.
+
+**Why this is yours and not mine:** it is money, and it is also a direction
+question about the constitution (who may author a charter). Both are named fork
+classes. Nothing auto-proceeds.
+
+- **(a) Wait for the monthly reset.** *Cost:* the cleanup does not start for
+  ~1–2 days, and — because of the unanswered **2026-08-30-2** — every session
+  that parks in the meantime stays parked until you next touch WSL, so the wait
+  is not self-managing. *Benefit:* zero change to anything; the constitution's
+  producer≠approver separation stays exactly as designed.
+- **(b) Point the architect role at an available model** (one line in
+  `automation/next_session.sh`, `architect=opus`). *Cost, and it is the real
+  one:* ARCH and EXEC become the same model, so the fresh-eyes separation that
+  ADR-010 and the signoff rule rest on becomes a separation of SESSION only,
+  not of model. This program's whole record is that the independent second
+  witness is the one that catches things — a boundary triage by the same model
+  that wrote the slice is a weaker approval, and it would be weaker silently.
+  *Benefit:* the cleanup starts today and the chain self-manages again.
+- **(c) Let an EXEC session author the cleanup charter, once, explicitly
+  scoped.** *Cost:* an executor writing its own kickoff is the one thing the
+  constitution does not permit, and permitting it "just this once" is exactly
+  how a guard becomes a formality (gotcha #50's social form). *Benefit:* no
+  model change, no spend, work starts immediately.
+
+**Recommendation: (a), and I am naming its cost rather than routing around
+it.** The honest option is the slow one. The cleanup is a *followability*
+change to a CLOSED, published program — there is no deadline on it, and every
+guarantee it must not weaken is currently green. Against that, (b) buys a day
+or two by permanently degrading the review separation on every future story,
+and (c) buys the same day or two by spending a constitutional rule. Neither is
+worth it for a cleanup whose own directive says the floor is "must not weaken
+what the program can PROVE".
+
+**If you disagree, (b) is the better of the two fast options** — it is one
+reversible line and it degrades a separation, where (c) removes a rule. If you
+take (b), the honest mitigation is to say so in the signoff rows for any story
+approved that way, so the record shows which approvals had a model-independent
+witness and which did not.
+
+**What is ready meanwhile, and it needed no charter:** the cleanup's audit leg
+now has a **verified** input. `docs/cleanup_audit_verification.md` +
+`scripts/cleanup_audit_verify.py` re-derive by RUNNING every number the seed
+produced by grepping — **43 CONFIRMED · 6 DIFFERS · 3 newly MEASURED**, with
+all six DIFFERS accounted for (five are a counting basis, one was my own
+regex). It deletes nothing and charters nothing. Three deletion constraints the
+seed could not see are now written down, the sharpest being that
+`f016_replay_probe.py` is named inside a **runtime error message** in
+`gate_eras.py` — delete it without editing that string and a live recovery
+instruction points at a missing file.
+
+**Chain state:** `automation/STOP` is ABSENT. This session parks deliberately
+and schedules nothing — scheduling ARCH again would only burn another session
+against the same limit, and scheduling an executor would produce a fourth
+empty-queue session. Per 2026-08-30-2 the VM will idle down and no heal will
+fire, so **nothing happens until you next touch WSL**.
+
 ## 2026-08-30-2 · raised by the PO's Windows-side session · **The watchdog cannot heal a dead chain, because a dead chain lets the VM shut down — one fork, three options**
 
 **Measured today, not theorised.** The PO asked why autonomous mode keeps

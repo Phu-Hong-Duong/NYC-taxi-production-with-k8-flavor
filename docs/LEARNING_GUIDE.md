@@ -5143,3 +5143,66 @@ template and run `uv run pytest tests/unit/test_demo_page.py -q`. The byte-ident
 test fails and names the generator — which is the moment the difference between a
 generated artifact and a source artifact stops being a convention and becomes
 something the repository enforces on you.
+
+---
+
+## Session (de) — the checker that made the mistake it was hired to find
+
+**What happened.** The cleanup directive needs an ARCH charter; ARCH was out of
+monthly spend, so the chain healed to an executor with an empty queue for the
+third time running. Rather than park bare, I verified the PO's advisory audit
+seed — which states in its own §6 that it ran nothing and grepped for
+references. Forty-three of its claims reproduced exactly, including the ones a
+prune list would be argued from.
+
+**The lesson is what the checker did on its first run.** The seed's key claim is
+that six scripts are referenced by **prose only**. My verifier reported three of
+them as having *executing* references — a result that, taken at face value,
+would have removed three files from the deletable list for no reason. All three
+were comments and docstrings. The classifier had sorted reference sites by
+**file extension**: a hit in `src/` was "code", a hit in `docs/` was "prose".
+In a repository whose modules argue their own design at length, that is exactly
+backwards, and it is the same defect as gotchas #53, #60, #68 and #99 — *a check
+about code structure must parse code.* The instrument written to audit a
+codebase for accreted mistakes reproduced the house mistake on its first
+execution.
+
+**Fixing it at the cause paid immediately.** Once comments and docstrings were
+found with `ast` rather than guessed from a path, a third class fell out that
+neither the seed nor the first draft had: a name inside a **non-docstring string
+literal** — a sentence a *running* program prints. That class has exactly one
+member, and it is the most useful line in the audit:
+`f016_replay_probe.py` is named inside `GateEraError`'s recovery message. Delete
+the file and a live instruction read by a human at the worst possible moment
+points at nothing (gotcha #91). A grep sees that line. A file-type classifier
+mislabels it. Only a parser tells you it is neither prose nor a caller.
+
+**The second defect is the one that nearly retired a real finding.** The
+fingerprinter deciding what each `_calls()` helper *means* contained
+`a and b or c` — whose precedence makes the whole expression true for almost any
+input. It reported **two** semantics where the seed claimed three, which reads
+like the seed over-stating a hazard. Reading the seven implementations by hand
+showed the seed was right: `test_tuning.py`'s version has no `ast.Call` guard at
+all. And that matters beyond the count — it backs a *forbidding* assertion, so
+being broader makes it **stronger**, and folding all seven onto the guarded
+helper would weaken a live guard inside a diff that reads as pure deduplication.
+
+**The concept underneath: a disagreement between an instrument and its subject
+is a question, not a verdict, and the instrument is the likelier suspect.** Both
+findings here came from the checker losing an argument with the code. The
+temptation in each case was the cheap resolution — widen the claim, drop the
+row, trust the fresh measurement over the old document. Both would have
+destroyed real information: one a deletion constraint, one a correctness hazard.
+
+**What to look at.** `_prose_lines()` and `classify_references()` in
+`scripts/cleanup_audit_verify.py` — note that `runtime-message` is a separate
+class from `code-prose` on purpose, and that `is_prose_only()` deliberately does
+*not* count a runtime message as a caller · §5 of
+`docs/cleanup_audit_verification.md`, which records the instrument's own defects
+beside its findings.
+
+**What to try yourself.** Revert `_calls_semantics` to
+`dotted = "Attribute" in src and "join" in src or "'.'" in src` and re-run. It
+reports two semantics, cleanly and confidently, and nothing anywhere goes red —
+which is what a measurement that has quietly stopped measuring looks like from
+the outside.
