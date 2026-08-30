@@ -11,6 +11,24 @@ PROTOCOL_MODE: learning
      confirmed in the Session-1 kickoff prompt (docs/PROMPTS.md). Production
      signals appearing later (real cloud, real data) reopen this. -->
 
+## Scope of this protocol (PO directive 2026-08-30-1)
+Two session modes, and the ceremony belongs to exactly one:
+- **CHARTERED** — launched by the chain (`automation/next_session.sh`) or opened
+  by the PO with an explicit role/story. Everything below applies: roles,
+  kickoffs, ledgers, handoff entries, field notes, gates, chaining.
+- **EVERYDAY** — the default for every other session that happens to load this
+  file: ad-hoc troubleshooting (AWS, tooling, sync), browser-driven tasks,
+  learning exercises, viewing-copy sessions. Use the knowledge here (gotchas,
+  version pins, environment facts) so solved problems stay solved — and produce
+  NONE of the ceremony: no handoff entry, no ledger row, no field note, no role
+  header, no chaining. A browser task ends with the task done, not with a
+  record of it. When a symptom smells familiar (files behind, a duplicate
+  error), check gotchas/memory and the viewing-copy sync BEFORE re-deriving a
+  fix.
+
+If in doubt, the session is EVERYDAY — ceremony is opt-in by the PO, never
+inferred from context.
+
 ## Project in one line
 Enterprise-simulated MLOps program on local kind: NYC taxi ETA model through
 Flyte → MLflow (+ FLAML scout × Optuna sniper) → KServe, with SLOs/gamedays,

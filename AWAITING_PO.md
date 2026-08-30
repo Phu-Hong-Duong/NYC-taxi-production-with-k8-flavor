@@ -1,5 +1,57 @@
 # AWAITING_PO — the one inbox (newest on top; the chain parks affected paths here)
 
+## 2026-08-30-1 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Scope the protocol — chartered ceremony vs everyday help**
+
+> **PO 2026-08-30 (in chat, their own words, trimmed):** "based on our
+> development in this project so far, i want to update and modify the
+> developing protocol to makes it more suitable to my own need. […] that
+> Claude mistake between my own need programing and coding in autonomous mode
+> completely versus every day occurrents, i.e. asking Claude to troubleshot
+> problems on AWS, and at the end of that session a handoff entry appear out
+> of nowhere, that even I am puzzled why there is a need to do that in the
+> first place. In that situation, isn't it better for Claude to take the
+> control of the browser and help me to complete the exercises on the book
+> without a need of having the extra handoff entry in the end."
+
+**What the PO is directing:** the protocol's ceremony leaked out of its lane.
+Sessions that were never part of the chain — everyday troubleshooting, a
+browser session working book exercises — picked the protocol up from their
+context and produced chain artifacts (a handoff entry) nobody asked for,
+while the actual task went under-served. The amendment is a SCOPE rule:
+ceremony (roles, ledgers, handoffs, field notes, chaining) applies to
+CHARTERED sessions only — chain-launched or PO-opened with an explicit role;
+every other session is EVERYDAY mode — it uses the program's knowledge
+(gotchas, pins, memory) so solved problems stay solved, and produces none of
+the ceremony. If in doubt: EVERYDAY.
+
+**Landed immediately by this session** (a PO edit, not a chain edit): the
+"Scope of this protocol" block at the top of CLAUDE.md, and §11 of the
+field-lessons memo (`~/.claude/templates/FIELD_LESSONS_crosstown.md`,
+Windows side). **For the next ARCH touch:** fold the scope rule into the
+constitution (docs/org/ORG.md) and into whichever templates instruct
+ceremony, so a chartered session states its MODE the way it already states
+its model. This can ride the 2026-08-29-2 cleanup charter as one small slice
+— it is the same complaint (accretion outrunning followability), aimed at
+the protocol instead of the code.
+
+Recorded from the same PO message, for the lessons file rather than for
+chartering:
+- **Recurring-symptom rule:** the WSL↔Windows viewing-copy desync has now
+  cost the PO the same debugging twice. When a symptom smells familiar
+  ("files/commits behind", a duplicate of a solved problem), check
+  gotchas/memory and the viewing-copy sync FIRST, before re-deriving a fix.
+- **Two container dialects, one machine:** Kubernetes nodes speak containerd
+  (`crictl`), docker speaks docker. The chain already practices this
+  (M4-S3 reads images back with the nodes' own `crictl`); everyday sessions
+  must not paste one dialect's commands at the other's daemon.
+
+**Chain state:** untouched by this session — `automation/STOP` is PRESENT
+(dated 2026-08-29 22:30Z, i.e. the restart attempted for 2026-08-29-2 did
+not survive; the wsl.exe launch path is the known-fatal one). The cleanup
+charter is therefore NOT being worked on right now. To restart, from a real
+Ubuntu session: `rm automation/STOP && automation/next_session.sh architect
+120`. Nothing in this entry blocks it.
+
 ## 2026-08-29-2 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Charter the codebase cleanup — prune the bloat, keep every guarantee**
 
 > **PO 2026-08-29 (in chat, their own words):** "ah, i got another idea, there
