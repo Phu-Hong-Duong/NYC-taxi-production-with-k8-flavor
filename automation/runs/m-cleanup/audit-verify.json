@@ -1,0 +1,368 @@
+{
+  "results": [
+    {
+      "claim": "scripts/ file count",
+      "seed": 141,
+      "measured": 141,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "scripts/ line count",
+      "seed": 41848,
+      "measured": 41848,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "docs/ file count",
+      "seed": 111,
+      "measured": 112,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "docs/ line count",
+      "seed": 34653,
+      "measured": 34794,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "tests/ file count",
+      "seed": 74,
+      "measured": 74,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "tests/ line count",
+      "seed": 22411,
+      "measured": 22411,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "src/ file count",
+      "seed": 54,
+      "measured": 54,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "src/ line count",
+      "seed": 12867,
+      "measured": 12867,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "automation/ file count",
+      "seed": 137,
+      "measured": 135,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "automation/ line count",
+      "seed": 45255,
+      "measured": 45264,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "verify gate LOC (10 gates)",
+      "seed": 9055,
+      "measured": 9055,
+      "verdict": "CONFIRMED",
+      "note": "10 gate files"
+    },
+    {
+      "claim": "red team LOC",
+      "seed": 1970,
+      "measured": 2957,
+      "verdict": "DIFFERS",
+      "note": "16 files match scripts/*redteam*.sh; the seed's 1,970 is a narrower population ('the nine red teams'), so this is a different count, not a contradiction"
+    },
+    {
+      "claim": "Tier A rev_rederive_m7.py LOC",
+      "seed": 239,
+      "measured": 239,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier A rev_rederive_m7.py status",
+      "seed": "prose-only",
+      "measured": "prose-only",
+      "verdict": "CONFIRMED",
+      "note": "make=0 code=0 test=0 ci=0 docs=9 code-prose=1 runtime-msg=0"
+    },
+    {
+      "claim": "Tier A f016_replay_probe.py LOC",
+      "seed": 296,
+      "measured": 296,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier A f016_replay_probe.py status",
+      "seed": "prose-only",
+      "measured": "prose-only",
+      "verdict": "CONFIRMED",
+      "note": "make=0 code=0 test=0 ci=0 docs=10 code-prose=1 runtime-msg=1"
+    },
+    {
+      "claim": "Tier A retrain_proof_record.py LOC",
+      "seed": 193,
+      "measured": 193,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier A retrain_proof_record.py status",
+      "seed": "prose-only",
+      "measured": "prose-only",
+      "verdict": "CONFIRMED",
+      "note": "make=0 code=0 test=0 ci=0 docs=8 code-prose=0 runtime-msg=0"
+    },
+    {
+      "claim": "Tier A cpu_request_resize_record.py LOC",
+      "seed": 148,
+      "measured": 148,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier A cpu_request_resize_record.py status",
+      "seed": "prose-only",
+      "measured": "prose-only",
+      "verdict": "CONFIRMED",
+      "note": "make=0 code=0 test=0 ci=0 docs=3 code-prose=0 runtime-msg=0"
+    },
+    {
+      "claim": "Tier A marts_reach_probe.py LOC",
+      "seed": 99,
+      "measured": 99,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier A marts_reach_probe.py status",
+      "seed": "prose-only",
+      "measured": "prose-only",
+      "verdict": "CONFIRMED",
+      "note": "make=0 code=0 test=0 ci=0 docs=4 code-prose=1 runtime-msg=0"
+    },
+    {
+      "claim": "Tier A canary_split_paste.py LOC",
+      "seed": 75,
+      "measured": 75,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier A canary_split_paste.py status",
+      "seed": "prose-only",
+      "measured": "prose-only",
+      "verdict": "CONFIRMED",
+      "note": "make=0 code=0 test=0 ci=0 docs=4 code-prose=0 runtime-msg=0"
+    },
+    {
+      "claim": "Tier A total LOC",
+      "seed": 1050,
+      "measured": 1050,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B marts_peak_probe.sh LOC",
+      "seed": 125,
+      "measured": 125,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B marts_peak_probe.sh anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 0 code, 0 test",
+      "verdict": "CONFIRMED",
+      "note": "docs=3"
+    },
+    {
+      "claim": "Tier B feast_registry_dump.py LOC",
+      "seed": 97,
+      "measured": 97,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B feast_registry_dump.py anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 0 code, 0 test",
+      "verdict": "CONFIRMED",
+      "note": "docs=1"
+    },
+    {
+      "claim": "Tier B feast_serve_probe.sh LOC",
+      "seed": 66,
+      "measured": 66,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B feast_serve_probe.sh anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 0 code, 0 test",
+      "verdict": "CONFIRMED",
+      "note": "docs=1"
+    },
+    {
+      "claim": "Tier B contract_probe_fixtures.sh LOC",
+      "seed": 62,
+      "measured": 62,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B contract_probe_fixtures.sh anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 0 code, 0 test",
+      "verdict": "CONFIRMED",
+      "note": "docs=1"
+    },
+    {
+      "claim": "Tier B f008_guard_exercise.py LOC",
+      "seed": 61,
+      "measured": 61,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B f008_guard_exercise.py anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 0 code, 0 test",
+      "verdict": "CONFIRMED",
+      "note": "docs=1"
+    },
+    {
+      "claim": "Tier B total LOC",
+      "seed": 411,
+      "measured": 411,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "_to_delete/ exists",
+      "seed": true,
+      "measured": true,
+      "verdict": "CONFIRMED",
+      "note": "2 entries, 5 tracked by git"
+    },
+    {
+      "claim": "RAW_2019_DTYPES is dead",
+      "seed": true,
+      "measured": true,
+      "verdict": "CONFIRMED",
+      "note": "2 occurrence(s) in tracked files = definition + the seed's own mention"
+    },
+    {
+      "claim": "Makefile targets missing from .PHONY",
+      "seed": 11,
+      "measured": 11,
+      "verdict": "CONFIRMED",
+      "note": "board-cards, boards, canary-spike, contract-probe-fixtures, deploy-metabase, deploy-serving, feast-online-parity-redteam, marts-redteam, shadow, shadow-run, verify-m1"
+    },
+    {
+      "claim": "test files (.py, tracked)",
+      "seed": 72,
+      "measured": 72,
+      "verdict": "CONFIRMED",
+      "note": "seed's 74 counts every tracked file under tests/, .py or not"
+    },
+    {
+      "claim": "`def test_` count",
+      "seed": 1212,
+      "measured": 1212,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "REPO = Path(...) re-declared",
+      "seed": 57,
+      "measured": 47,
+      "verdict": "DIFFERS",
+      "note": ""
+    },
+    {
+      "claim": "strip-comments helper copies",
+      "seed": 13,
+      "measured": 13,
+      "verdict": "CONFIRMED",
+      "note": "code_onlyx6, without_commentsx7"
+    },
+    {
+      "claim": "_calls() defining files",
+      "seed": 7,
+      "measured": 7,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "_calls() distinct semantics",
+      "seed": 3,
+      "measured": 3,
+      "verdict": "CONFIRMED",
+      "note": "called-name-segments: ['test_canary_and_rollback.py', 'test_gameday_and_restore.py', 'test_shadow_and_spike.py', 'test_store_watchdog.py']; dotted-call-paths: ['test_load.py', 'test_parity.py']; every-Attribute/Name-regardless-of-call: ['test_tuning.py']"
+    },
+    {
+      "claim": "pytest collected",
+      "seed": 1320,
+      "measured": 1320,
+      "verdict": "CONFIRMED",
+      "note": "RUN, not grepped"
+    },
+    {
+      "claim": "shell files defining consume()",
+      "seed": null,
+      "measured": 8,
+      "verdict": "MEASURED",
+      "note": "1 DISTINCT body/bodies \u2014 byte-identical as the seed claims"
+    },
+    {
+      "claim": "shell files using kubectl port-forward",
+      "seed": null,
+      "measured": 15,
+      "verdict": "MEASURED",
+      "note": ""
+    },
+    {
+      "claim": "shell files with KUBECTL=( preamble",
+      "seed": 30,
+      "measured": 30,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "python files using kubectl port-forward",
+      "seed": null,
+      "measured": 12,
+      "verdict": "MEASURED",
+      "note": ""
+    },
+    {
+      "claim": "python files defining a kubectl wrapper",
+      "seed": 8,
+      "measured": 8,
+      "verdict": "CONFIRMED",
+      "note": "any indent; _kubectl/kubectl/_kubectl_json spellings"
+    },
+    {
+      "claim": "src/ modules unreferenced outside themselves",
+      "seed": 0,
+      "measured": 0,
+      "verdict": "CONFIRMED",
+      "note": ""
+    }
+  ]
+}
