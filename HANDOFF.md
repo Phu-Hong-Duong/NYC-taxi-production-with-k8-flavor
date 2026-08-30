@@ -1,5 +1,111 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-30 (de) — ARCH is out of monthly spend, so the cleanup cannot be chartered; the audit seed was VERIFIED instead, and the chain parks on a fork
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Session MODE: **CHARTERED**
+(watchdog HEAL at 12:00:01, session #5 today). Boot per the ritual: CLAUDE.md ·
+HANDOFF (dd) · `docs/milestones/POST_PUBLISH_KICKOFF.md` · AWAITING_PO ·
+watchdog log. No `automation/runs/*.status` was pointed at by (dd); none read.
+
+**Still no chartered story exists — and this time the reason is a hard block,
+not an empty queue.** (dd) handed to ARCH with two things to charter. ARCH
+launched 11:53:26Z and **died on the CLI monthly spend limit** (154-byte log).
+The watchdog read the dead ARCH as a dead chain and healed to an executor.
+
+### Reconciliation (staleness check — (dd)'s Next did NOT hold)
+(dd)'s Next said *"ARCH is scheduled (+120 s)"*. ARCH ran and died. **I did not
+take that log on trust — I probed the model directly:** `claude --model fable -p`
+returns the same spend-limit message right now. The wiring is `executor=opus ·
+rev=opus · architect=fable`, so **opus works and fable is spent**; this session
+is the proof of the first half. Live state re-measured: 3/3 nodes `Ready`
+v1.36.1 at 13d · `automation/STOP` ABSENT · tree clean at `6a87dea`, `main` in
+sync with `origin/main`.
+
+**So the chain cannot produce a charter until the PO decides.** Raised as
+**AWAITING_PO 2026-08-30-3** with three options and a recommendation.
+
+### Done — each with the command and what it printed
+1. **`claude --model fable -p "…"` → the monthly-spend-limit message.** The
+   measurement behind 2026-08-30-3; one dead log is an anecdote, a live probe
+   is a fact.
+2. **`uv run python scripts/cleanup_audit_verify.py` → 43 CONFIRMED · 6 DIFFERS
+   · 3 newly MEASURED.** A new re-runnable twin (the `error_memo_numbers.py` /
+   `readme-check` idiom aimed at an audit) that re-derives every number the
+   cleanup charter would be argued from. The seed's own §6 says it ran nothing
+   and grepped for references; this runs it. Record:
+   `automation/runs/m-cleanup/audit-verify.json`. Write-up:
+   `docs/cleanup_audit_verification.md`.
+   - CONFIRMED: `scripts/` 141 files/41,848 LOC · `tests/` 74/22,411 · `src/`
+     54/12,867 · gates **9,055** · Tier A **1,050** · Tier B **411** (each with
+     exactly 1 Makefile anchor, 0 code, 0 test) · `def test_` **1,212** ·
+     **`.PHONY` gaps 11** · strip-comments copies **13** · `_calls()` **7 files
+     / 3 semantics** · `KUBECTL=(` **30** · kubectl wrappers **8** · `src/`
+     orphans **0** · `RAW_2019_DTYPES` dead.
+   - **`pytest --collect-only` → 1,320 collected** — the one number the seed
+     structurally could not produce, now RUN.
+   - Newly measured: **8 shell files define `consume()` and all 8 normalise to
+     ONE body**, so slice 2's diffs really are pure deletion; 15 shell + 12
+     python files run `kubectl port-forward`.
+   - All **6 DIFFERS accounted for**: five are a counting basis (tracked vs the
+     viewing copy; the seed's own commit; "the nine red teams" vs the 16 files
+     matching `*redteam*.sh`), one was **my own regex** (`REPO = Path` 47 vs 57).
+     **None is the seed being wrong about the codebase.**
+3. **Three deletion constraints the seed could not see, now written down.** Tier
+   A is CONFIRMED prose-only for all six — but three are named in live sentences
+   inside shipped code. The sharpest: **`f016_replay_probe.py` is named inside a
+   RUNTIME ERROR MESSAGE** (`src/taxi_mlops/training/gate_eras.py:95`) telling a
+   human how to recover a missing frozen record. Deleting the file without
+   editing that string leaves a live recovery instruction pointing at nothing —
+   gotcha #91. Also `rev_rederive_m7.py` (`f051_counterfactual.py:7` docstring,
+   its provenance) and `marts_reach_probe.py`
+   (`flyte-task-podtemplate.yaml:116`, the evidence for `MARTS_DB_HOST`).
+4. **A correctness constraint on slice 1: the `_calls()` consolidation is NOT
+   mechanical.** `test_tuning.py`'s version has **no `ast.Call` guard**, and it
+   backs a *forbidding* assertion — so broader is **stronger** there. Folding
+   all seven onto the call-guarded helper would **weaken a live guard inside a
+   diff that reads as pure deduplication** (gotcha #50 via consolidation).
+5. **`uv run ruff check` clean.** Nothing fitted, no alias moved, no version
+   created, no wire touched, no cluster call that writes, no record rewritten,
+   no threshold moved, no `uv.lock` change. `@champion` untouched and unread.
+
+### Defects/Surprises
+- **F-082 (new, closed same session): my verifier reproduced the house mistake
+  on its first run.** It classified reference sites by FILE EXTENSION, so three
+  live comments/docstrings were reported as executing references — gotchas
+  #53/#60/#68/#99 for the sixth time, committed by the instrument hired to audit
+  accreted mistakes. Fixed at the cause (`ast` for comments and docstrings), and
+  the fix is what produced finding 3: a `runtime-message` class that neither the
+  seed nor the first draft had.
+- **A second defect that nearly retired a real finding:** the `_calls`
+  fingerprinter carried `a and b or c`, whose precedence makes it true for
+  almost any input. It reported **2** semantics where there are **3** — i.e. it
+  would have quietly contradicted the seed's sharpest claim. Caught by reading
+  the seven implementations the checker disagreed with. **A disagreement between
+  an instrument and its subject is a question, and the instrument is the likelier
+  suspect.**
+- **Third consecutive session arriving with an empty queue** (cz, dd, de). The
+  heal's role is fixed at `executor`, so no amount of healing produces a
+  charter. Recorded, not re-opened — `POST_PUBLISH_KICKOFF.md` §0 already
+  declined editing chain plumbing on a closed program.
+
+### Next
+**The chain PARKS on AWAITING_PO 2026-08-30-3 and schedules NOTHING** (exit d).
+Scheduling ARCH again burns a session against the same limit; scheduling an
+executor produces a fourth empty-queue session. **Two forks are now open and
+both are the PO's:** 2026-08-30-3 (ARCH's model / who may charter — my
+recommendation is **(a) wait for the reset**, with its cost stated: the cleanup
+does not start for ~1–2 days) and the unanswered 2026-08-30-2 (the VM/watchdog
+deadlock). Per 2026-08-30-2, **nothing will happen until the PO next touches
+WSL** — the VM idles down and no heal can fire.
+
+**When ARCH can next run, it inherits a verified audit** — the prune list is
+argued from numbers somebody re-derived, and the four constraints above are
+written where a charter will read them. **Nothing in this session's work
+presumes which option the PO picks**: the verification is advisory, deletes
+nothing and charters nothing, and stays true under (a), (b) or (c).
+
+
 ## Session 2026-08-30 (dd) — executor healed into an EMPTY charter: nothing executed, state re-measured, handed to ARCH
 
 ### State
