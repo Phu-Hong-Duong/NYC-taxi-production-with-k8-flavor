@@ -128,6 +128,14 @@ Ubuntu session: `rm automation/STOP && automation/next_session.sh architect
 
 ## 2026-08-29-2 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Charter the codebase cleanup — prune the bloat, keep every guarantee**
 
+> **SEED 2026-08-30 (the PO's Windows-side session):** a read-only measured
+> audit of the whole codebase is committed at `docs/cleanup_audit_seed.md` —
+> size map, dead-code tiers, duplication clusters with one-home candidates,
+> and the test suite's meta/duplication numbers, with suggested slices.
+> ADVISORY: ARCH verifies before trusting; where it disagrees with ARCH's own
+> audit, ARCH's measurement wins. The PO also confirmed in chat (2026-08-30):
+> execution lands on Opus executors — the chain's default wiring.
+
 > **PO 2026-08-29 (in chat, their own words):** "ah, i got another idea, there
 > should be a clean up and optimize code, because Claude has a tendency create
 > code to test thing and check thing, and it pipe up to a tall order, so it's
