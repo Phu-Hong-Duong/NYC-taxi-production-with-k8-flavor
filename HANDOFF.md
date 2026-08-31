@@ -69,6 +69,12 @@ is no longer firing.
    ran on all three commits (`secrets staged for commit: 0`).
    Measured, not a delta I caused: `-m 'not needs_records'` deselects **67**
    (`git diff main -- tests/` adds no marker).
+6. **PR #82 opened and HELD** — `gh pr checks 82 --watch` → `lint-test pass
+   1m45s`. Title carries the hold; the body's first section is the
+   do-not-merge precondition and what is owed. **No ledger signoff row is
+   owed**: a signoff records a gate CROSSING and no gate was crossed.
+   `ledgers/findings.md` gained F-083; deployments and debt are untouched
+   (nothing deployed, register closed).
 
 ### Decisions
 - **The `.PHONY` count is 6, not the charter's 11** — the slice's own
