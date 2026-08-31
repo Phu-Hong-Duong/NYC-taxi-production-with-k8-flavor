@@ -1,5 +1,126 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (di) — EXEC: the cluster came back mid-session, so CU-S1's queued PR merged and CU-S2 landed behind it; one name carried two meanings twice more
+
+### State
+**EXECUTOR, `claude-opus-5` · Session MODE: CHARTERED** (chain-launched, +120 s
+from (dh)). Boot per the ritual: CLAUDE.md · HANDOFF (dh, dg) ·
+`docs/milestones/CLEANUP_KICKOFF.md` · AWAITING_PO. No `.status` file was
+pointed at by (dh); none read. Story: **CU-S2** — the whole slice, all four
+steps, plus the F-083 follow-up (dh) routed here. Branch
+`story/cu-s2-test-infrastructure`, six commits, **PR #83 MERGED** (`fff70bf`).
+
+### Reconciliation (staleness check — reality moved twice, in opposite directions)
+At boot `docker ps` still failed on the socket, but **`kubectl get nodes`
+answered**: three Ready nodes, 14d, and the whole platform Running with a ~10
+minute age (a host restart). That combination is NEW — gotcha #34 records the
+docker CLI and the cluster going down together, and (dg)/(dh) both read
+"daemon dead" as "cluster dead". They had come apart: Docker Desktop was running
+on Windows with **WSL integration off for this distro**, so the CLI's sockets
+under `/mnt/wsl/docker-desktop/shared-sockets/` were all permission-denied while
+kubectl reached the API through a published loopback port.
+
+I ran the sweep against that state on purpose, and **Docker Desktop finished
+starting mid-session** — `docker ps` answered at the sixth gate. So the charter's
+precondition **path 1** applies and nothing was held. Recorded because it changes
+what a future boot should check: **`docker ps` is not a proxy for "is the
+cluster up"**; ask kubectl too, and re-ask docker before concluding a gate is
+unrunnable.
+
+### Done — each with the command and what it printed
+1. **PR #82's owed floor discharged and the PR MERGED.** `verify-m0` … `verify-m9`
+   **GREEN 10/10** at CU-S1's tip, then the two red teams (dh) named as owed:
+   `make gate-margin-redteam` → *PASSED: the M2 gate went RED on a lowered
+   incumbent margin … returned GREEN when the config was restored*, and
+   `make verify-m2-redteam` → *PASSED*. Merged `668635c`,
+   `git branch -r --contains 6407518` → `origin/main` (gotcha #20). The merge
+   queue is drained; no CU PR is now waiting on anything.
+2. **The charter's own instruction for CU-S2 is impossible — F-085.**
+   `tests/unit/conftest.py` SHADOWS `tests/conftest.py` for every test under
+   `tests/unit/`, and seven modules already import `raw_frame` from the latter.
+   Probed before migrating anything: the file with one constant in it →
+   `1185 tests collected, 7 errors`, each an ImportError. The nine helpers went
+   into `tests/conftest.py` instead (F-013's one-home rule), with the reason in
+   its module docstring.
+3. **The helpers, and the three splits.** `REPO` 54 → 1 · strip-comments 12
+   definitions → 2 · `_calls` 7 → 3 (`called_names` / `called_paths` /
+   `referenced_names`) · `invokes` 4 → 1 · `_imported_roots` 3 → 1 · `_record`
+   4 → 1. `test_tuning` takes the all-attributes form per the charter's explicit
+   decision — its guard FORBIDS the registry API, so broader is stronger.
+4. **F-084: `code_only` was the same hazard, twice more.** Five definitions, TWO
+   behaviours (three drop blank lines, two do not) — so two tests reading
+   `code_only(script)` were reading different files. Split, not merged:
+   `without_comments` and `executable_lines`. And `_record`'s leading underscore
+   was load-bearing — as a bare `record` it collides with the local variable at
+   every call site; ruff F823 caught it at twelve sites and no passing test would
+   have.
+5. **F-083's follow-up landed** (the one (dh) routed here). Six `.PHONY` guards
+   read one line at a time and compared by SUBSTRING; all six now ask
+   `phony_targets()`. **Re-derived, then WATCHED FAIL**: removing
+   `verify-m6-redteam` from the Makefile turned `test_verify_m6` RED naming it,
+   16 tests still passing, Makefile restored **sha256-identical**
+   (`1c5db776a9c46633` both sides), GREEN again.
+6. **The floor, over the changed tree**: `verify-m0`…`verify-m9` **GREEN 10/10**
+   · `make verify-m4-redteam` and `make verify-m6-redteam` PASSED (RED on plant,
+   GREEN restored) · `uv run pytest tests/unit -q` → **1,332 passed, 0 skipped**
+   · `uv run ruff check src tests pipelines` → All checks passed! ·
+   `make readme-check` GREEN · tree clean after every drill · CI `lint-test pass
+   1m26s`.
+7. **Test count 1,320 → 1,332, nothing lost.** The 12 added are
+   `test_conftest_helpers.py`, and every one asserts a DIFFERENCE between
+   helpers — a test checking each in isolation passes on a file where all three
+   were collapsed into one. `-m 'not needs_records'` deselects **67**, unchanged.
+
+### Decisions
+- **Two strip-comments helpers, where the accept-when asked for one.** The
+  deviation IS the finding: merging the blank-dropping and blank-keeping forms
+  would have changed what four callers see. Zero definitions remain under
+  `tests/unit/`; both live in the one home, named for what they do.
+- **Three sites deliberately NOT migrated** and the stopping line is in the PR:
+  the inline strips in `test_demo_page`/`test_marts` carry a line number in
+  their message, and `test_gate_eras._record` argues about why regenerating a
+  frozen replay record would not be a measurement of the old gate.
+- **The sweep was run BEFORE the story as well as after** — once at CU-S1's tip
+  to discharge #82's floor, once at CU-S2's. Two sweeps, because a merge and a
+  new slice are two claims.
+- **AWAITING_PO was NOT touched** (its hash is the park detector, 2026-08-30-2
+  item 2). No ledger signoff row: a signoff records a gate CROSSING and no
+  milestone gate was crossed.
+
+### Defects/Surprises
+- **F-085 (new, CLOSED same session, ledgered):** the charter's
+  `tests/unit/conftest.py` cannot be created — see Done 2. Loud at collection,
+  so not dangerous; but it is the second CU charter instruction in two sessions
+  that was wrong in a way only running it reveals, and both times the guard
+  clause caught it.
+- **F-084 (new, CLOSED same session, ledgered):** one name / several semantics
+  is this suite's dominant copy-paste failure, not a one-off — the audit found
+  it once, this slice found it twice more. The generalisable half: **in a
+  consolidation the unit of duplication is the BEHAVIOUR, never the name**, so
+  fingerprint the bodies before trusting that N definitions are N copies.
+- **`make readme-check` caught its own session's diff again** — RED naming the
+  claim (`1,320 tests`), the record (`1,332`) and both values, before anyone
+  looked. Second time that twin has done this (M9-S8 was the first). Both sides
+  moved: the README's number and the checker's claim table, which holds the
+  rendered text so the presence half has an anchor.
+
+### Next
+**CU-S3** (`scripts/lib/verify_harness.sh` + `redteam_restore.sh`, the 8 gates
+and 8 red-team drills) is the next unlanded slice. It branches from **`main`** —
+the queue is empty, both CU PRs are merged, and `main` is at `fff70bf`.
+
+Two things CU-S3 should carry from here:
+- **The cluster is UP and the daemon answers**, so precondition path 1 applies
+  and CU-S3 can merge on its own sweep. Re-check both at boot anyway — this
+  session watched the state change twice in ninety minutes.
+- **CU-S3's accept-when is the full gate/red-team battery** (it touches all 16
+  of those files). Budget for it: the ten gates are ~8 minutes together, and
+  each red team is 1–3 minutes. Expect `tests/unit/test_verify_m*.py` to trip —
+  those files now import from `conftest`, and several pin per-file gate
+  structure that a shared harness will move. **Re-derive to the lib-level
+  property, never widen**, and watch each re-derived guard fail before trusting
+  it (the drill in Done 5 is the pattern).
+
 ## Session 2026-08-31 (dh) — EXEC: CU-S1 landed; two of the charter's own instructions were wrong and its guard clauses caught both; PR held unmerged on a dead daemon
 
 ### State
