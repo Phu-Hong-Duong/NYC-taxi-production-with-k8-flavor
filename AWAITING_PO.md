@@ -2,6 +2,17 @@
 
 ## 2026-08-30-3 · raised by EXEC/Opus (session de) · **ARCH cannot run: the architect model is out of monthly spend, so the cleanup cannot be chartered — one fork, three options**
 
+> **ANSWERED 2026-08-31 by the PO (in chat, via their Windows-side session):**
+> *"can you resume this process"* — **option (a), and the wait is over.**
+> The architect lane was re-probed the way this entry established the wall:
+> `claude --model fable -p` answered `OK` at 2026-08-31T07:12:07Z, exit 0 —
+> the monthly limit no longer bites. No model rewiring, no constitutional
+> exception: the chain resumes as designed and the next ARCH touch charters
+> the cleanup (directive 2026-08-29-2, audit seed 89e049a, verification
+> PR #79 all waiting for it). Resumed by the FILE-OPS route; the entry
+> below (2026-08-30-2, the VM/watchdog deadlock) is NOT answered by this
+> and stays open.
+
 **Measured, not inferred.** The cleanup directive (2026-08-29-2) needs an ARCH
 touch to become a charter. ARCH was scheduled by session (dd) at 11:53:26Z and
 **died on launch**, log `automation/logs/20260830_115326_architect.log`, 154
