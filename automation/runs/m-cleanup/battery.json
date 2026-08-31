@@ -42,12 +42,12 @@
   },
   {
    "target": "security-scan-redteam",
-   "returncode": 2,
-   "seconds": 0.0,
+   "returncode": 0,
+   "seconds": 93.6,
    "tail": [
-    "[sec-redteam] FAIL: the working tree is dirty. This drill commits and then",
-    "[sec-redteam]       destroys history; it refuses to run over uncommitted work.",
-    "make: *** [Makefile:367: security-scan-redteam] Error 2"
+    "[sec-redteam] and in a commit no branch pointed at, redacted both, and came back",
+    "[sec-redteam] clean once the plant was destroyed.",
+    "[sec-redteam] restoring"
    ]
   },
   {
