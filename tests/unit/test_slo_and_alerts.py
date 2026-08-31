@@ -59,8 +59,15 @@ pytestmark = pytest.mark.unit
 CPU_REQUEST = "1500m"
 
 
-def code_only(text: str) -> str:
-    """Everything a shell would execute, comments and blank lines removed."""
+def executable_lines(text: str) -> str:
+    """Everything a shell would execute, comments AND blank lines removed.
+
+    Deliberately NOT `conftest.without_comments`, and the name now says so. This
+    one also drops blank lines, so it is a different function that happened to
+    share a name with `test_task_image`'s copy — the same one-name-two-meanings
+    shape the `_calls()` split was about (CU-S2). Kept local and renamed rather
+    than merged: unifying it would have changed what one of the two callers sees.
+    """
     return "\n".join(
         line
         for line in text.splitlines()
@@ -160,7 +167,7 @@ def test_the_values_file_holds_no_rules_because_the_rules_file_does(prom_values_
 
 def test_the_deploy_provisions_the_rules_file_and_validates_it_first():
     """The rules reach the cluster from git, and a malformed file fails early."""
-    body = code_only(DEPLOY.read_text())
+    body = executable_lines(DEPLOY.read_text())
     # The invocation is a quoted absolute path, so the flag does not sit adjacent
     # to the script name in the text — match the two together rather than as one
     # literal (gotcha #68's tokenisation lesson, on a test this time).

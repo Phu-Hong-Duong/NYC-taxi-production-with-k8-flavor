@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 import pytest
+from conftest import without_comments
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "infra" / "manifests" / "metabase.yaml"
@@ -36,21 +37,6 @@ BOARD_FILES = sorted(BOARDS_DIR.glob("*.json"))
 
 def boards():
     return [json.loads(p.read_text()) for p in BOARD_FILES]
-
-
-def without_comments(path: Path) -> str:
-    """The file with its ``#`` comment lines removed.
-
-    Every "this string must NOT appear" assertion below reads through this. The
-    repo has now paid this tuition three times — M1-S3's KPI-10 regex, M1-S4's
-    ``monthly_kpis.sql``, and two tests in this very file — and the shape is
-    always identical: a comment explaining *why we do not do X* contains the
-    word X, so the assertion fires for the wrong reason and the author "fixes"
-    working code. A test that reads prose is testing prose.
-    """
-    return "\n".join(
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("#")
-    )
 
 
 # ------------------------------------------------------------- the manifest --

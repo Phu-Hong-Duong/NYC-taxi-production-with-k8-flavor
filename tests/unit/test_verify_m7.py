@@ -42,19 +42,13 @@ import re
 import subprocess
 
 import pytest
+from conftest import without_comments
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M7 = REPO / "scripts" / "verify_m7.sh"
 REDTEAM = REPO / "scripts" / "verify_m7_redteam.sh"
 MAKEFILE = REPO / "Makefile"
 RULES = REPO / "infra" / "monitoring" / "alerting_rules.yml"
-
-
-def without_comments(path: pathlib.Path) -> str:
-    """Drop whole-line comments (shell and the embedded Python alike)."""
-    return "\n".join(
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("#")
-    )
 
 
 def invokes(body: str, command: str) -> bool:
@@ -536,4 +530,3 @@ def test_the_scoring_manifest_contract_when_the_batch_path_has_been_run():
         for key in ("kpi_14_mae_minutes", "kpi_15_within_tolerance_pct",
                     "kpi_16_mean_signed_error_minutes", "kpi_17_scored_trips"):
             assert key in month, f"{month['month']} lost {key} — a monitoring id with no value"
-

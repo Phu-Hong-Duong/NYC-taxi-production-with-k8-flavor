@@ -32,21 +32,12 @@ from __future__ import annotations
 import pathlib
 import re
 
+from conftest import without_comments
+
 REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M4 = REPO / "scripts" / "verify_m4.sh"
 REDTEAM = REPO / "scripts" / "verify_m4_redteam.sh"
 MAKEFILE = REPO / "Makefile"
-
-
-def without_comments(path: pathlib.Path) -> str:
-    """Drop whole-line comments (shell and the embedded Python alike).
-
-    Trailing comments are left in place deliberately: stripping them needs a
-    quoting-aware parser, and a half-parser is how gotcha #35 happened.
-    """
-    return "\n".join(
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("#")
-    )
 
 
 def invokes(body: str, command: str) -> bool:

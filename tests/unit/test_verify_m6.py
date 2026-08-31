@@ -41,19 +41,13 @@ import re
 import subprocess
 
 import pytest
+from conftest import without_comments
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M6 = REPO / "scripts" / "verify_m6.sh"
 REDTEAM = REPO / "scripts" / "verify_m6_redteam.sh"
 MAKEFILE = REPO / "Makefile"
 RULES = REPO / "infra" / "monitoring" / "alerting_rules.yml"
-
-
-def without_comments(path: pathlib.Path) -> str:
-    """Drop whole-line comments (shell and the embedded Python alike)."""
-    return "\n".join(
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("#")
-    )
 
 
 def invokes(body: str, command: str) -> bool:

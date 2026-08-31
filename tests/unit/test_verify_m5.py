@@ -37,6 +37,7 @@ import pathlib
 import re
 
 import pytest
+from conftest import without_comments
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M5 = REPO / "scripts" / "verify_m5.sh"
@@ -44,13 +45,6 @@ REDTEAM = REPO / "scripts" / "verify_m5_redteam.sh"
 MAKEFILE = REPO / "Makefile"
 RUNBOOK = REPO / "docs" / "runbooks" / "serving.md"
 REHEARSAL = REPO / "scripts" / "serving_stop_start_rehearsal.py"
-
-
-def without_comments(path: pathlib.Path) -> str:
-    """Drop whole-line comments (shell and the embedded Python alike)."""
-    return "\n".join(
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("#")
-    )
 
 
 def invokes(body: str, command: str) -> bool:
