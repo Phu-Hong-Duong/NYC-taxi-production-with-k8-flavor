@@ -38,7 +38,7 @@ import ast
 from pathlib import Path
 
 import pytest
-from conftest import REPO, called_paths
+from conftest import REPO, called_paths, phony_targets
 
 from taxi_mlops.serving import load as load_mod
 
@@ -480,8 +480,5 @@ def test_the_makefile_wires_both_targets() -> None:
     # backslash continuations the way GNU make does (F-083) and ask every
     # `.PHONY` declaration for membership, so the guard survives the targets
     # being regrouped and still fails if either is dropped.
-    declared: set[str] = set()
-    for line in makefile.replace("\\\n", " ").splitlines():
-        if line.startswith(".PHONY:"):
-            declared.update(line.split(":", 1)[1].split())
+    declared = phony_targets(makefile)
     assert {"load", "load-drill"} <= declared, f"not declared .PHONY: {declared}"

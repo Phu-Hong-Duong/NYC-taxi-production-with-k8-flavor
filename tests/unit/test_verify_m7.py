@@ -41,7 +41,7 @@ import re
 import subprocess
 
 import pytest
-from conftest import REPO, invokes, without_comments
+from conftest import REPO, invokes, phony_targets, without_comments
 
 VERIFY_M7 = REPO / "scripts" / "verify_m7.sh"
 REDTEAM = REPO / "scripts" / "verify_m7_redteam.sh"
@@ -58,8 +58,12 @@ def test_the_m7_targets_are_real_and_no_longer_echo_todo():
         assert "TODO" not in recipe, f"{target} still echoes TODO"
     assert "bash scripts/verify_m7.sh" in text
     assert "bash scripts/verify_m7_redteam.sh" in text
-    assert any(
-        "verify-m7-redteam" in line for line in text.splitlines() if line.startswith(".PHONY")
+    # Membership across EVERY `.PHONY` declaration, continuation lines joined the
+    # way GNU make joins them (F-083, CU-S1). The idiom this replaces read one
+    # line at a time — blind to a wrapped declaration — and compared by SUBSTRING,
+    # so a longer target name merely containing this one would have satisfied it.
+    assert "verify-m7-redteam" in phony_targets(text), (
+        "verify-m7-redteam is not declared .PHONY"
     )
 
 

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 
-from conftest import REPO, without_comments
+from conftest import REPO, phony_targets, without_comments
 
 VERIFY_M3 = REPO / "scripts" / "verify_m3.sh"
 REDTEAM = REPO / "scripts" / "verify_m3_redteam.sh"
@@ -43,9 +43,14 @@ def test_the_m3_targets_are_real_and_no_longer_echo_todo():
         assert "TODO" not in recipe, f"{target} still echoes TODO"
     assert "bash scripts/verify_m3.sh" in text
     assert "bash scripts/verify_m3_redteam.sh" in text
-    assert "verify-m3-redteam" in text.split(".PHONY:", 1)[1].split("\n", 20)[0] or any(
-        "verify-m3-redteam" in line for line in text.splitlines() if line.startswith(".PHONY")
-    ), "verify-m3-redteam is not declared .PHONY"
+    # Membership across EVERY `.PHONY` declaration, continuation lines joined the
+    # way GNU make joins them (F-083, CU-S1). The idiom this replaces looked only
+    # at the first declaration's first 20 lines and used a SUBSTRING test, so it
+    # was blind to a wrapped declaration and would have accepted a longer target
+    # name that merely contains this one.
+    assert "verify-m3-redteam" in phony_targets(text), (
+        "verify-m3-redteam is not declared .PHONY"
+    )
 
 
 # ----------------------------------------------- the gate has no side effects ---

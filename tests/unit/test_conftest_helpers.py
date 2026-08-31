@@ -20,6 +20,7 @@ from conftest import (
     REPO,
     called_names,
     called_paths,
+    executable_lines,
     imported_roots,
     invokes,
     phony_targets,
@@ -96,6 +97,18 @@ def test_without_comments_reads_a_path_or_text_alike(tmp_path) -> None:
 def test_without_comments_keeps_trailing_comments_deliberately() -> None:
     """Stripping them needs a quoting-aware parser; a half-parser is gotcha #35."""
     assert without_comments("run --flag  # why") == "run --flag  # why"
+
+
+def test_executable_lines_differs_from_without_comments_by_the_blank_lines() -> None:
+    """The pair that shared the name `code_only` in five modules with two meanings.
+
+    Merging them would have changed what four callers see, so they are split and
+    named. If a later session collapses one onto the other, this goes red.
+    """
+    text = "alpha\n\n# comment\nomega\n"
+    assert without_comments(text).splitlines() == ["alpha", "", "omega"]
+    assert executable_lines(text).splitlines() == ["alpha", "omega"]
+    assert executable_lines(text) != without_comments(text)
 
 
 def test_invokes_separates_running_a_command_from_naming_one() -> None:
