@@ -5340,3 +5340,69 @@ into three piles: *executes it* (blocks the deletion), *tells an operator to run
 it* (must be rewritten in the same commit), *records that it once ran* (keep,
 and date the retirement). Most deletion regressions live in the second pile, and
 nothing about a grep tells you which pile a line is in — you have to read it.
+
+---
+
+## CU-S2 (cleanup) — the unit of duplication is the behaviour, never the name (2026-08-31, role:MLE)
+
+**What was built.** Nine shared helpers in `tests/conftest.py`, and the deletion
+of the 84 copies that used to stand in for them: `REPO` (54 declarations → 1),
+the strip-comments family (12 definitions → 2), `_calls` (7 → 3), `invokes`
+(4 → 1), `_imported_roots` (3 → 1), `_record` (4 → 1), and one
+continuation-aware `.PHONY` parser replacing six hand-rolled ones. Plus
+`tests/unit/test_conftest_helpers.py`, twelve tests whose only job is to assert
+that the helpers still DIFFER from each other.
+
+**Why this way.** The charter's instruction was "create `tests/unit/conftest.py`".
+That file cannot exist. Seven modules already say `from conftest import
+raw_frame`, which resolves to `tests/conftest.py` because pytest puts `tests/`
+on `sys.path` when it imports it; a second conftest one directory down wins the
+lookup for everything in `tests/unit/` and all seven fail at collection. Two
+minutes of probing — create the file with one constant in it, run
+`--collect-only` — turned a plausible instruction into a measured refusal
+(1185 collected + 7 errors, against 1320 clean). The helpers went into the home
+that already existed.
+
+**The concept underneath.** *In a consolidation, the unit of duplication is the
+behaviour, not the name.* The audit had already found `_calls` defined seven
+times with three semantics under one name — two tests that read identically
+asserting different things. Fingerprinting the bodies rather than trusting the
+names found the same shape twice more in one session: `code_only`, five
+definitions and two behaviours (three drop blank lines, two do not), so two
+tests reading `code_only(script)` were reading different files; and `_record`,
+whose leading underscore turned out to be load-bearing rather than stylistic —
+as a bare `record` the shared helper collides with the local variable at every
+call site (`record = record(...)`), which ruff caught as F823 at twelve sites
+and which no passing test would ever have noticed.
+
+The tempting move in all three cases is the one that makes the diff smallest:
+one function, one name, N call sites updated. It is also the move that silently
+changes what somebody's guard asserts. So the rule this slice ran on: **split by
+behaviour, name each for what it does, and prove the split with a test that
+compares the helpers to each other.** A test that exercises each helper in
+isolation passes perfectly well on a file where all three have been collapsed
+into one — which is precisely the regression worth preventing, because it
+arrives inside a diff that reads as tidying.
+
+**What this cost, honestly.** Two helpers where the charter's accept-when asked
+for one, and the deviation is the finding rather than a shortfall. Three sites
+were deliberately NOT migrated — the two inline strips in `test_demo_page` and
+`test_marts` carry a line number in their failure message, and
+`test_gate_eras._record` argues about why regenerating a frozen replay record
+would not be a measurement of the old gate. A bespoke failure message that is
+doing work is not duplication.
+
+**What to look at.** `tests/conftest.py`'s helper section (each docstring states
+its semantics AND which kind of assertion it is for) · `tests/unit/
+test_conftest_helpers.py` (every assertion is about a DIFFERENCE) ·
+`ledgers/findings.md` F-084 and F-085 · the six commits, each independently green.
+
+**What to try yourself.** Before deduplicating N definitions of one name, hash
+their bodies with `ast` and print the distinct groups. If N definitions produce
+more than one group you do not have N copies — you have a name collision, and
+the correct output of the exercise is *more* functions than you started with,
+not fewer. Then, for each guard you re-derive, break the thing it guards and
+watch it fail: removing `verify-m6-redteam` from the Makefile's `.PHONY` turned
+`test_verify_m6` red with sixteen tests still passing, and the Makefile restored
+sha256-identical. A re-derivation nobody has watched fail is a weakening with
+better prose.
