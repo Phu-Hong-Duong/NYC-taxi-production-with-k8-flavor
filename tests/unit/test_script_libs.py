@@ -21,7 +21,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from conftest import REPO, without_comments
 
 HARNESS = REPO / "scripts" / "lib" / "verify_harness.sh"
@@ -61,6 +60,24 @@ def test_the_library_says_what_deliberately_does_not_live_in_it(lib: Path) -> No
     in has to delete the sentence saying not to."""
     header = lib.read_text().split("\n\n")[0] + lib.read_text()
     assert "DELIBERATELY DOES NOT LIVE HERE" in header
+
+
+def test_the_libraries_reach_the_task_image() -> None:
+    """CU-S3 created this repo's first scripts→scripts source edge, and a sourced
+    file that does not travel is a caller that dies at run time rather than at
+    build time. `.dockerignore`'s rule is "the image contains what git contains"
+    and it names no path under `scripts/`; the F-026 guard already treats
+    `scripts/` as an image input, so an edit here refuses a stale image."""
+    excluded = [
+        line for line in (REPO / ".dockerignore").read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#") and "scripts" in line
+    ]
+    assert not excluded, f".dockerignore excludes something under scripts/: {excluded}"
+    for guarded in (REPO / "scripts" / "run_pipeline.sh", REPO / "scripts" / "retrain_schedule.sh"):
+        assert "docker scripts" in guarded.read_text(), (
+            f"{guarded.name}'s F-026 IMAGE_PATHS no longer covers scripts/ — an edit "
+            "to a sourced lib would not refuse a stale image"
+        )
 
 
 # --------------------------------------------------------------------------
