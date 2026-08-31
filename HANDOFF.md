@@ -1,5 +1,124 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (dm) — EXEC: the pause was lifted and the WRONG ROLE arrived; no story executed, the floor re-verified, handed to ARCH
+
+### State
+**EXECUTOR, `claude-opus-5` · Session MODE: CHARTERED** (watchdog HEAL, +15 s,
+session #13 today, log `automation/logs/20260831_145001_executor.log`). Boot per
+the ritual: CLAUDE.md · HANDOFF (dl, dk) ·
+`docs/milestones/CLEANUP_KICKOFF.md` + `POST_PUBLISH_KICKOFF.md` ·
+AWAITING_PO. No `.status` file was pointed at by (dl); none read.
+**No story was executed, and that is the correct outcome — the queue is
+empty.** All five cleanup slices are merged (PRs #82–#87), PP-S1 landed, M9 and
+its publish phase are closed. Exit ritual **(c)**.
+
+### Reconciliation (staleness check) — (dl)'s Next was HALF executed, by the watchdog
+(dl) ended with the chain **paused by hand** (`automation/STOP` present, created
+at 13:08) and named the whole recovery: *"`rm automation/STOP`, then
+`automation/next_session.sh architect 120` … ARCH's boundary triage is what
+should run — not another executor, since no story remains."*
+
+**STOP is now ABSENT and an EXECUTOR arrived instead.** Evidence, from the
+watchdog's own log rather than from inference:
+
+- `14:40:01  STOP present — chain paused deliberately; standing down.`
+- `14:50:01  chain is DEAD (no session, no successor, no detached run, no new
+  fork) — healing, attempt 1`
+- `14:50:01  HEAL — [chain] scheduled executor (+15s, model=opus, … session #13
+  today)`
+
+So STOP was removed by hand between 14:40 and 14:50 (nothing in this repository
+creates or deletes it — (dl) established that with `grep`), and **the heal path
+then picked the role, not the handoff**: `automation/watchdog.sh:237` is a
+hardcoded `WATCHDOG_HEAL=1 automation/next_session.sh executor 15`. **I did not
+remove STOP** and no session should; the PO lifted their own pause, and the
+half that did not carry is which role resumes.
+
+Everything else is exactly where (dl) left it: `docker ps` lists the three
+`mlops-taxi` node containers (Up 6 h — the restart predates (dl)'s own gate
+sweep), `kubectl get nodes` shows three **Ready** at 14d v1.36.1, the working
+tree is **clean**, `main` == `origin/main` at **`e786ee0`**, CU-S5's merge
+`dd4464f` is reachable from `origin/main` (gotcha #20), and there is **no
+`automation/logs/pending_successor`** — nothing was queued behind me.
+
+### Done — each with the command and what it printed
+1. **`make verify-m5` → GREEN**, exit 0 — including the live prediction leg
+   (`@champion` version **2**, the M3 bake-off's recorded winner, derived and
+   never typed; both registry versions carrying `gate_verdict=PROMOTE`; the
+   rollback target v1 present with the feature set it eats). The wire answers
+   after the pause.
+2. **`make verify-m9` → GREEN**, exit 0, closing banner citing the
+   **CLOSED-and-cited** PO-observed box (AWAITING_PO 2026-08-23-3).
+3. **`make readme-check` → GREEN** — *every target, path and number in
+   README.md checks out*, including `claim '1,408 tests'` and
+   `claim '10 gates' · '8 red teams'`.
+4. **`uv run pytest tests/unit -q` → `1408 passed in 64.95s`**, 0 skipped —
+   the exact count (dl) recorded and the one the README declares, so the
+   suite's own claim is checked from both ends.
+5. **Nothing was mutated**: no fit, no alias move, no version created, no
+   deploy, no record rewritten. `git status` clean at exit.
+
+### Decisions
+- **I did not invent a story, and that is the decision.** An executor authoring
+  its own charter is option **(c)** of AWAITING_PO **2026-08-30-3** — the one
+  the entry named as *"the one thing the constitution does not permit"*, and
+  the PO chose **(a)** instead. Arriving in the wrong lane is not a licence to
+  take the forbidden option; it is a reason to hand over cleanly.
+- **I ran four cheap READ gates rather than none, and rather than all ten.**
+  The floor (dl) claimed was re-measured on this cluster after the pause, so
+  ARCH's triage starts from measurement; but `verify-m1` alone re-derives ~1 GB
+  of parquet (162.9 s) and re-running the full sweep would spend an ARCH
+  responsibility from the wrong seat. The four chosen are the ones that ask the
+  LIVE system (a prediction, the demo path, the store) plus the two that check
+  the repo's own claims about itself.
+- **No field note was written.** The field-note law is per STORY
+  (`docs/LEARNING_GUIDE.md`), and no story was executed — saying so here so the
+  absence reads as a decision rather than an omission.
+- **No AWAITING_PO entry was written.** Nothing forked: the pause is lifted, the
+  queue is empty, and the role mismatch is a known, already-DECLINED item (see
+  below) — not a question the chain must not answer for itself.
+
+### Defects/Surprises
+- **The heal path's fixed role is now an OBSERVED cost, not a hypothetical
+  one.** Session cz raised exactly this shape at the post-publish triage (the
+  watchdog's park notice ends in a fixed `next_session.sh executor` line, so a
+  PO answer can start the wrong role) and ARCH **DECLINED it as a change**,
+  recorded in `POST_PUBLISH_KICKOFF.md` §0: the program is closed, the harm is
+  bounded, and editing chain plumbing buys a cosmetic improvement with a
+  maintenance surface that outlives the program. **That reasoning still holds
+  and I am not re-opening it** — but the decline was priced on the *notice*
+  line, and the mechanism that fired today is the *heal* line
+  (`watchdog.sh:237`), which no human reads before it runs. The measured cost
+  of the second occurrence is one executor session against an empty queue.
+  ARCH may re-price it or re-decline it; either way the evidence is now real.
+- **The 08:14 architect log is 40 bytes** (`20260831_081428_architect.log`)
+  while 08:28's is 2,466 and is the touch that chartered the cleanup — so the
+  ARCH lane demonstrably works today (the PO's 07:12Z `claude --model fable -p`
+  probe answered `OK`, AWAITING_PO 2026-08-30-3), and scheduling ARCH will not
+  burn a session against the spend limit that stopped it on 2026-08-30.
+- **No wall, no fork, no detached run.**
+
+### Next
+**ARCH boundary triage — scheduled: `automation/next_session.sh architect 120`.**
+What it inherits is (dl)'s list, unchanged and now with a re-measured floor:
+
+1. **`docs/cleanup_report.md` is the deliverable to review** — §5 (every
+   re-derived guard, old property → new property) and §6 (the guarantees,
+   re-checked) answer the directive's floor: *must not weaken what the program
+   can PROVE*.
+2. **The cleanup's signoff row is ARCH's to write** — producer ≠ approver, and
+   (dl) produced all five slices. No signoff row exists yet, deliberately.
+3. **Re-run the full sweep from the approving seat if the triage wants it**:
+   `make verify-m0` … `verify-m9`. Four of the ten (**m5, m9** live · plus
+   `readme-check` and the 1,408-test suite) are green as of 14:5x today.
+4. **AWAITING_PO 2026-08-30-2** (the VM/watchdog deadlock) is still **OPEN** and
+   still the PO's; no session has touched it. **2026-08-30-3 is ANSWERED** and
+   its work is done.
+5. **The lint gap is recorded, not closed** (report §9): `scripts/` sits outside
+   `ruff check src tests pipelines`, and CU-S4 produced a real `F821` there that
+   CI would not have caught. Out of scope by the cleanup charter; a clean small
+   slice if ARCH wants it chartered (42 E501s at charter time).
+
 ## Session 2026-08-31 (dl) — EXEC: CU-S5 landed; the cleanup is COMPLETE, and its own close-out battery rewrote two other milestones' records
 
 ### State
