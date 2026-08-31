@@ -51,6 +51,16 @@
    ]
   },
   {
+   "target": "leakage-redteam",
+   "returncode": 0,
+   "seconds": 461.6,
+   "tail": [
+    "[redteam] the leak BOUGHT +0.0551 min on the month it saw (val) and -0.1367 min on the month it did not (holdout).",
+    "[redteam] inflation = +0.1917 min of val improvement that no untouched month reproduces. That difference is the whole finding: arm B would have been reported as the better model.",
+    "[redteam] REMOVED: feature set v2 is fitted by `aggregates.fit(...)` with point_in_time defaulting to True, and only this script may pass False."
+   ]
+  },
+  {
    "target": "marts-redteam",
    "returncode": 0,
    "seconds": 21.6,
@@ -88,6 +98,16 @@
     "[sec-redteam] and in a commit no branch pointed at, redacted both, and came back",
     "[sec-redteam] clean once the plant was destroyed.",
     "[sec-redteam] restoring"
+   ]
+  },
+  {
+   "target": "train-redteam",
+   "returncode": 0,
+   "seconds": 161.2,
+   "tail": [
+    "2026/08/31 12:56:40 INFO mlflow.utils.uv_utils: Exported 238 dependencies via uv",
+    "2026/08/31 12:56:40 INFO mlflow.utils.environment: Successfully exported 238 requirements from uv project. Skipping package capture based inference.",
+    "2026/08/31 12:56:40 WARNING mlflow.utils.environment: Failed to resolve installed pip version. ``pip`` will be added to conda.yaml environment spec without a version specifier."
    ]
   },
   {

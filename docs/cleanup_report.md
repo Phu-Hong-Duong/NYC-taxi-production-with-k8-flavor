@@ -264,7 +264,36 @@ Record: `automation/runs/m-cleanup/battery.json`, written by
 `automation/runs/m-cleanup/battery.py` (a runner, not a judge: it records exit
 code and wall-clock and asserts nothing the drills do not already assert).
 
-<!-- BATTERY TABLE -->
+**19 of 19 green, 1,593.6 s (26.6 min) of wall-clock, 2026-08-31.**
+
+| target | verdict | wall-clock |
+|---|---|---:|
+| `make leakage-redteam` | **RED on plant, GREEN on restore** | 461.6 s |
+| `make predictions-redteam` | **RED on plant, GREEN on restore** | 406.0 s |
+| `make gate-redteam` | **RED on plant, GREEN on restore** | 246.0 s |
+| `make train-redteam` | **RED on plant, GREEN on restore** | 161.2 s |
+| `make security-scan-redteam` | **RED on plant, GREEN on restore** | 93.6 s |
+| `make hook-redteam` | **RED on plant, GREEN on restore** | 47.9 s |
+| `make feast-online-parity-redteam` | **RED on plant, GREEN on restore** | 23.2 s |
+| `make marts-redteam` | **RED on plant, GREEN on restore** | 21.6 s |
+| `make verify-m4-redteam` | **RED on plant, GREEN on restore** | 20.2 s |
+| `make verify-m2-redteam` | **RED on plant, GREEN on restore** | 19.2 s |
+| `make gate-margin-redteam` | **RED on plant, GREEN on restore** | 17.2 s |
+| `make parity-redteam` | **RED on plant, GREEN on restore** | 16.0 s |
+| `make verify-m5-redteam` | **RED on plant, GREEN on restore** | 12.4 s |
+| `make verify-m7-redteam` | **RED on plant, GREEN on restore** | 10.6 s |
+| `make verify-m8-redteam` | **RED on plant, GREEN on restore** | 9.7 s |
+| `make verify-m3-redteam` | **RED on plant, GREEN on restore** | 9.4 s |
+| `make verify-m9-redteam` | **RED on plant, GREEN on restore** | 9.2 s |
+| `make image-smoke-redteam` | **RED on plant, GREEN on restore** | 4.3 s |
+| `make verify-m6-redteam` | **RED on plant, GREEN on restore** | 4.3 s |
+
+The four most expensive are the four that FIT something — `leakage-redteam`
+fits an aggregate table across the val month on purpose and measures **+0.0551
+min on the month it saw against −0.1367 on the month it did not**;
+`train-redteam` puts a permuted-label challenger through the real gate and gets
+**VERDICT: REFUSE**, exit 1, with the registry read before and after and found
+identical. Both still say what they said when they were written.
 
 **Two things the battery taught that the charter did not anticipate:**
 
@@ -291,7 +320,27 @@ code and wall-clock and asserts nothing the drills do not already assert).
 The charter's floor, and the last line of this report: no CU slice may merge
 until `verify-m0`…`verify-m9` run GREEN over it.
 
-<!-- GATES LINE -->
+**All ten GREEN over the finished cleanup, 2026-08-31, exit 0 every one.** Run
+live against the cluster at CU-S5's HEAD, after every slice had landed:
+
+| gate | `ok` lines | gate | `ok` lines |
+|---|---:|---|---:|
+| `verify-m0` | 25 | `verify-m5` | 49 |
+| `verify-m1` | 45 | `verify-m6` | 63 |
+| `verify-m2` | 58 | `verify-m7` | 63 |
+| `verify-m3` | 47 | `verify-m8` | 51 |
+| `verify-m4` | 39 | `verify-m9` | 46 |
+
+(The counts are `ok`-prefixed transcript lines, counted from each gate's own
+output at this HEAD — the same quantity each gate's GREEN banner is read off.
+`verify-m1` is the slow one at 162.9 s, because it deletes and re-derives ~1 GB
+of processed parquet: byte-identity checked against data that was never
+re-derived is not a check, and M1's rule that a gate has no fast mode has now
+been inherited nine times.)
+
+Plus, at the same HEAD: host suite **1,408 passed, 0 skipped** (1,320 at charter
+time) · `ruff check src tests pipelines` **All checks passed!** ·
+`make readme-check` **GREEN**.
 
 ---
 
