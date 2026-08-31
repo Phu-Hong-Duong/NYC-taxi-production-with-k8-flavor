@@ -5406,3 +5406,71 @@ watch it fail: removing `verify-m6-redteam` from the Makefile's `.PHONY` turned
 `test_verify_m6` red with sixteen tests still passing, and the Makefile restored
 sha256-identical. A re-derivation nobody has watched fail is a weakening with
 better prose.
+
+## CU-S3 (cleanup) — the guards that moved with the code, and the pin that got stronger for it (2026-08-31, role:MLOps)
+
+**What was built.** Two shell libraries and the deletion of the sixteen copies
+they replace. `scripts/lib/verify_harness.sh` holds the counting harness — the
+two counters, the four printers, `consume`, `expect_verdicts` — that
+`verify_m2.sh`…`verify_m9.sh` each carried byte-identically. `scripts/lib/
+redteam_restore.sh` holds the snapshot / restore / verify-sha scaffold that the
+eight record-editing drills (`verify_m3..m9_redteam` and `gate_margin_redteam`)
+each carried, differing only in the name of the variable holding the target path.
+Sixteen files, **10,296 → 9,878 lines**, plus 177 lines of library — and every
+deleted line is a copy. Plus `tests/unit/test_script_libs.py`, 29 tests.
+
+**Why this way — what did NOT move is the decision.** The gates' LEGS stayed per
+gate, and so did their verdict blocks. That is not caution: `verify-m6` and
+`verify-m7` ask about the same Prometheus in deliberately different ways, and a
+shared leg would turn two witnesses into one. Same rule one floor down — the
+drills' PLANTS stayed bespoke, because a red team's plant *is* its argument
+(which field, chosen from the record rather than typed, wrong in the direction
+that still reads as a pass), as did each drill's refusal when its record is
+missing, which names the command that produces it. Both library headers carry a
+"WHAT DELIBERATELY DOES NOT LIVE HERE" section, and a test requires it, so the
+next session that wants to move a leg in has to delete the sentence saying not to.
+
+**The concept underneath: a guard that follows its code out of the file can come
+back stronger, and that is the test of whether the re-derivation was honest.**
+Eight meta-tests tripped, exactly the eight expected. Each asserted, of one
+drill, that the strings `trap restore EXIT` and `sha256sum` appear in it. That
+is what a check looks like when the implementation lives in the file under test:
+a text pin standing in for a behaviour, because the behaviour is expensive to
+provoke eight times. With ONE implementation there is no reason to settle. The
+re-derived property is two halves — *this drill uses the scaffold on the record
+it plants in* (per drill, still eight witnesses) and *the scaffold restores
+across an abnormal exit and refuses to call a failed put-back a restore* (once,
+and **watched**, not read).
+
+The second half found something the old pin could not have. The natural way to
+prove "the restore is verified" is to make the put-back fail — so replace the
+target with a directory. `cp` then **returns 0**, because it happily copies
+*into* a directory. An exit-code check would have called that a successful
+restore; the sha comparison is the only thing standing between a drill and
+silently damaged evidence, and now there is a test that says so by watching it
+happen. The counting harness got the same treatment: `… | consume` is now
+*measured* losing its FAIL count in a subshell, where the reason it must be
+`consume < <(` had been a comment since M2-S5.
+
+**What this cost, honestly.** One drill's transcript changed shape: the
+gate-margin drill printed its file's sha and the incumbent margin on one line,
+and now prints the library's standard sha line and its own margin line beneath.
+Cosmetic, in a drill's own narration, and named here rather than left to be
+noticed. Nothing else about any drill's output moved.
+
+**What to look at.** The two libraries' headers (what lives there, what must not,
+and why `REPO_ROOT` cannot be computed in a sourced file) · `tests/unit/
+test_script_libs.py` — most of it RUNS the libraries rather than reading them ·
+the eight re-derived guards, each carrying a dated comment naming its old and new
+property.
+
+**What to try yourself.** After re-deriving a guard, plant the defect it now
+claims to catch and watch it go red — three plants here, each restored from a
+byte copy and verified by sha256: a drill that stops sourcing the scaffold
+(2 tests red from two independent angles), a drill that sources it and never
+arms it (2 red), and the scaffold itself losing its EXIT trap (1 red — the
+guarantee for all eight drills at once, which is exactly the leverage a shared
+library gives you and exactly the reason its own tests have to run it). Then ask
+the sharper question: is the new guard *stronger* than the pin it replaced, or
+only differently worded? If you cannot name a failure the new one catches and
+the old one did not, you have moved a check, not re-derived it.
