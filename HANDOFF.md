@@ -127,9 +127,52 @@ nothing queued. `main` was at `83fc768` (two docs commits past (dk)'s stated
 
 ### Next
 **The cleanup charter is COMPLETE — all five slices landed and merged (PRs
-#82, #83, #84, #85, #86, #87).** No story remains. Per exit ritual (c) — last
-story done, no ◆ on this charter — an **ARCH** session is scheduled at +120 s
-for the boundary triage.
+#82, #83, #84, #85, #86, #87).** No story remains.
+
+### ⚠ THE CHAIN IS PAUSED BY HAND — `automation/STOP` is PRESENT, and NO successor was scheduled
+
+Exit ritual (c) applies (last story, no ◆) and I ran
+`automation/next_session.sh architect 120`. It answered **`[chain] STOP file
+present — not scheduling.`** and exited 0, which is the kill switch working
+exactly as designed.
+
+**This is a deliberate PO action taken mid-session, not a crash and not
+something this session did.** The evidence, because a claim like this should not
+rest on inference:
+
+- `automation/STOP` is **0 bytes**, mtime **2026-08-31 13:08**, and
+  **gitignored** (`git check-ignore -v` → `.gitignore:51`), so it has no git
+  history to read.
+- This session is pid **210299**, started **12:13:19Z**
+  (`automation/logs/running_session`).
+- `automation/logs/watchdog.log` shows `GREEN — session alive (pid 210299,
+  executor)` at 12:20 through **13:00**, then **`STOP present — chain paused
+  deliberately; standing down.`** at 13:10 and 13:20.
+- **Nothing in this repository creates that file.** `grep -rn "automation/STOP"`
+  over `automation/*.sh`, `scripts/`, and the Makefile returns six hits and all
+  six are READS — `next_session.sh` (refuse to schedule), `run_detached.sh`
+  (abandon a queued successor), `watchdog.sh` (stand down). The unit tests that
+  exercise STOP use a sandboxed scheduler.
+
+So it was created by hand at 13:08, between the battery finishing and the gate
+sweep ending. **I did not remove it, and no future session should remove it to
+keep the chain moving** — deleting the PO's kill switch to schedule a successor
+is the one thing it exists to prevent.
+
+**To resume: `rm automation/STOP`, then `automation/next_session.sh architect
+120`.** That is the whole recovery, and ARCH's boundary triage is what should
+run — not another executor, since no story remains.
+
+**Nothing is lost or half-done by the pause.** CU-S5 is merged (`dd4464f`),
+`main` is pushed at `7d7c07a`, the working tree is clean, the ten gates are
+GREEN over the finished cleanup, and the report is written. The pause costs a
+boundary triage, not any work.
+
+**No AWAITING_PO entry was written for this, deliberately.** That inbox is for
+FORKS the chain must not decide on its own; a PO pausing their own chain is a
+decision already made, not a question waiting for one. The watchdog reads STOP
+directly and stands down, so the park cannot be mistaken for a crash — which is
+the failure an inbox entry would otherwise be guarding against.
 
 What ARCH inherits, precisely:
 
