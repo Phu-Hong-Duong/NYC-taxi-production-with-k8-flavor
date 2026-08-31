@@ -73,34 +73,13 @@ set -uo pipefail   # deliberately NOT -e: a failing check must be counted, not f
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-FAILS=0
-CONSUMED=0
-pass() { printf '  \033[32mok  \033[0m %s\n' "$1"; }
-fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1" >&2; FAILS=$((FAILS + 1)); }
-note() { printf '       %s\n' "$1"; }
-section() { printf '\n== %s ==\n' "$1"; }
-
-# Reads `PASS|msg` / `FAIL|msg` lines from a leg and counts them here, so the
-# tally lives in exactly one place. ALWAYS call as `consume < <(...)`: a pipeline
-# would run this in a subshell and throw the counters away at the closing brace.
-consume() {
-  CONSUMED=0
-  local line
-  while IFS= read -r line; do
-    case "$line" in
-      "PASS|"*) pass "${line#PASS|}"; CONSUMED=$((CONSUMED + 1)) ;;
-      "FAIL|"*) fail "${line#FAIL|}"; CONSUMED=$((CONSUMED + 1)) ;;
-      *) note "$line" ;;
-    esac
-  done
-}
-
-expect_verdicts() {
-  local want="$1" label="$2"
-  if [[ "$CONSUMED" -lt "$want" ]]; then
-    fail "$label emitted $CONSUMED verdict(s), expected at least $want — the check did not run"
-  fi
-}
+# The counting harness — the two counters, the four printers, `consume` and
+# `expect_verdicts` — lives in ONE place from CU-S3 on. `consume` must still be
+# called as `consume < <(...)` and never through a pipe; the reason, and what
+# deliberately did NOT move (this gate's legs, its verdict block), are in the
+# lib's own header.
+# shellcheck source=lib/verify_harness.sh
+source "$REPO_ROOT/scripts/lib/verify_harness.sh"
 
 printf '\n\033[1m[verify-m8]\033[0m the M8 gate — a wall that must hold, four seams measured against\n'
 printf '            bars argued before them, a point-in-time join proved by its own\n'
