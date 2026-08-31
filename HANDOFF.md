@@ -1,5 +1,126 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (dk) — EXEC: CU-S4 landed; two services had reserved the same port, and a consolidation that cost lines
+
+### State
+**EXECUTOR, `claude-opus-5` · Session MODE: CHARTERED** (chain-launched, +120 s
+from (dj)). Boot per the ritual: CLAUDE.md · HANDOFF (dj, di) ·
+`docs/milestones/CLEANUP_KICKOFF.md` · AWAITING_PO. No `.status` file was pointed
+at by (dj); none read. Story: **CU-S4** — the whole slice bar two deliberately
+stated cuts. Branch `story/cu-s4-python-plumbing`, seven commits, **PR #86
+MERGED** (`f6a576c`), `git branch -r --contains fb83b15` → `origin/main`
+(gotcha #20).
+
+### Reconciliation (staleness check)
+(dj) said to re-check both signals at boot. Both answer: `docker ps` lists the
+three `mlops-taxi` node containers, `kubectl get nodes` shows three Ready at 14d.
+**Precondition path 1** — the slice merged on its own sweep, nothing queued.
+
+### Done — each with the command and what it printed
+1. **`scripts/_lib/` — five modules** (`ports`, `k8s`, `monitoring`, `records`,
+   `__init__`), 231 code lines. Ten scripts migrated onto them.
+2. **The fingerprint came FIRST and it changed the slice.** CU-S3 found eight
+   byte-identical bodies; this cluster is not that. Normalised-AST grouping
+   (docstrings stripped, signature hashed with the body): **`http_get`/`http` 5
+   copies / 3 bodies · `prom_query`/`promql` 5 / 4 · `kubectl` 8 / 6 ·
+   `port_forward`/`_forward`/`forward` 6 / 6 · `prom_rules` 4 / 2.** Same names,
+   different code — CU-S2's `_calls()` hazard sitting in `scripts/`. So the rule
+   applied was CU-S2's: split by behaviour (`http_get` raises on an unreachable
+   endpoint, `http_probe` reports it), never merge on a shared name.
+3. **The finding: `gameday_m6.py` reserved 9096 for Alertmanager and
+   `drift_fire_drill.py` reserved 9096 for the pushgateway.** Twelve ephemeral
+   ports were coordinated by comments, and each comment enumerated the
+   neighbours its author had checked — the drift drill's cites the alert drill's
+   9095 as the precedent it is *avoiding*; the store drill's names four
+   neighbours and misses gameday. **Latent, not live** (nothing runs those two
+   concurrently; gameday's delegation to the alert drill is 9096-vs-9095).
+   Drift's pushgateway moved to **9103** (verified free); `_lib/ports.py` holds
+   all twelve with a reason each and `assert_unique()` is run by a test.
+4. **The honest LOC number, because the flattering one was available.** Eleven
+   migrated scripts **4,575 → 4,359 code lines (−216)**; the library **+231**;
+   **net +15**. Total lines incl. prose −187/+537 = **+350**. The lines came back
+   because each copy had dropped something the merge keeps: the forward now
+   **waits for its socket** instead of sleeping 3–4 s and proceeding, `prom_query`
+   refuses an HTTP 200 carrying `status: error` (two copies read a mistyped
+   metric as an empty result — #78 through a client), and `kubectl` always pins
+   `--context` (gameday's did not).
+5. **Three things deliberately did not move, each with its reason in the code**:
+   `store_watch_drill.http()` POSTs a body (a request client, not a GET);
+   `store_watch.py`'s pushgateway refusal ARGUES M9 law 1, so the lib's raise is
+   caught rather than replaced by a generic message; `store_watch_headroom.py`'s
+   persistence record is genuinely optional, so it must NOT go through the
+   presence-checking loader — **that one has its own test** so a later sweep
+   cannot "finish the job" by breaking it (gotcha #50 via consolidation).
+6. **The floor**: `verify-m0`…`verify-m9` **GREEN 10/10** live · red teams for
+   the gates whose subject drills this slice migrated — `verify-m6-redteam`
+   (gameday), `verify-m7-redteam` (drift), `verify-m9-redteam` (store watchdog) —
+   **all PASSED**, RED on plant then GREEN restored · `uv run pytest tests/unit -q`
+   **1,393 passed, 0 skipped** (was 1,361) · `ruff check src tests pipelines`
+   All checks passed! · `make readme-check` GREEN · CI `lint-test pass 1m35s`.
+7. **End state unmoved**: `@champion` **2** / `feature_set v2`, nothing fitted,
+   no alias moved, no version created, no wire changed, no tracked record
+   rewritten · `uv.lock` byte-identical to `lock-rebaselined-m9-publish` and
+   `git diff main -- uv.lock` empty · all 5 DVC pins `up to date` · README Status
+   table byte-unmoved.
+
+### Decisions
+- **`scripts/_lib/` (python, imported) sits beside `scripts/lib/` (shell,
+  sourced), not merged into it** — (dj) asked for this to be argued rather than
+  quietly decided. They are reached by different mechanisms and neither can
+  source the other; one directory holding both would put two unrelated import
+  contracts under one name. Named in the PR.
+- **Each entry point declares its lib path** (`sys.path.insert(0, REPO_ROOT /
+  "scripts")`) the way it already declares `src`. Not cosmetic: several of these
+  files are loaded by the suite through `spec_from_file_location`, which puts
+  NOTHING on `sys.path`, so a plain `from _lib import ...` imports fine under
+  `uv run` and dies under the loader the tests use. A parametrised test runs that
+  loader over all ten migrated scripts.
+- **`load_record` took only the *is it there?* question.** Readers whose
+  shape-check or fail-message is doing work keep it beside their artifact.
+
+### Defects/Surprises
+- **`scripts/` is outside the house lint net and this slice produced a real
+  `F821 Undefined name 'subprocess'` that CI would not have caught.** The net is
+  `ruff check src tests pipelines` (Makefile:395 + ci.yml); the charter records
+  the gap in §0 and rules widening it out of scope. Found only by linting the
+  touched files by hand. **Any slice touching `scripts/` should do the same.**
+- **`make readme-check` caught this session's diff — fourth slice running** (RED
+  at `1,361 tests` against 1,393), and then caught the half-fix: the claim string
+  is declared on BOTH sides (README row + `scripts/readme_check.py:418`), so
+  moving one alone goes RED with a different message.
+- **One over-cut, caught by ruff, not by a test**: slicing the reader block out
+  of `drift_fire_drill.py` took `champion_version()` with it. Restored verbatim
+  from `HEAD`. A migration done by text slicing needs the lint pass before the
+  suite, because the suite does not import that module.
+- **No wall, no fork, no detached run.**
+
+### Next
+**CU-S5** — the last slice: `scripts/lib/isvc_deploy.sh` (the ROUTE_PORT heredoc
+×5, the alias no-move guard, the three wait legs), **`docs/cleanup_report.md`**,
+and **the full red-team battery**. It branches from **`main`** — the queue is
+empty and `main` is at `f6a576c`.
+
+Four things CU-S5 should carry from here:
+- **The cluster is UP and the daemon answers**, so precondition path 1 applies.
+  Re-check both at boot anyway.
+- **Two clusters were left partial ON PURPOSE and the report owes them a line.**
+  (a) The **record readers**: only the presence question moved; bespoke
+  shape-checks and fail-messages stayed. (b) The **feast trio**
+  (`feast_online_parity.py`, `feast_retrieval.py`, `feast_server_parity.py`)
+  still carry their own forwards, because "exactly ONE subprocess call" AST pins
+  guard them and re-deriving those deserves its own argument. **No AST pin was
+  tripped or widened in CU-S4** — if CU-S5 takes the feast trio, that changes.
+- **The report's before-numbers come from `automation/runs/m-cleanup/
+  audit-verify.json`, and the after-numbers from re-running
+  `scripts/cleanup_audit_verify.py --json` to a NEW file** — the before record is
+  evidence and is not rewritten (F-053/F-063's shape, gotcha #48).
+- **Report the LOC honestly.** CU-S4's is **net +15 code lines**, and a report
+  quoting only the −216 would be quoting half a subtraction. Where a
+  consolidation costs lines, the reason is that the copies had diverged and the
+  merged version keeps the strictest behaviour — that is the finding, not an
+  embarrassment.
+
+
 ## Session 2026-08-31 (dj) — EXEC: CU-S3 landed; eight text pins became one watched behaviour, and `cp` into a directory returns 0
 
 ### State
