@@ -53,6 +53,11 @@ SEED_AREAS = {
     "automation": (137, 45_255),
 }
 
+# These six names are the seed's BEFORE claim and must survive their own files:
+# CU-S1 deleted all six (2026-08-31), so the instrument now reports each ABSENT
+# and a Tier A total of 0 — which is the after-number CU-S5's report is owed.
+# Editing this dict to match today's tree would delete the only thing the
+# instrument measures against.
 SEED_TIER_A = {
     "rev_rederive_m7.py": 239,
     "f016_replay_probe.py": 296,

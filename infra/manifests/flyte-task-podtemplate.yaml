@@ -113,9 +113,11 @@ template:
           # (the port family annotates it "in-cluster only"), and a pod has neither
           # kubectl nor a kubeconfig. So the pod's route is the only one it has, and
           # it is a route the host does not have — the split horizon, a third time.
-          # Measured before the tail task was built: scripts/marts_reach_probe.py
-          # connected from a throwaway pod on THIS image and printed
-          # `PROBE-OK ('marts', 'marts')`.
+          # Measured before the tail task was built: a throwaway pod on THIS image
+          # connected and printed `PROBE-OK ('marts', 'marts')`. The instrument
+          # that did it (scripts/marts_reach_probe.py) was retired at CU-S1
+          # (2026-08-31); the measurement is the evidence, and the tail task
+          # running in production is the standing re-proof of it.
           - name: MARTS_DB_HOST
             value: "postgres.platform.svc.cluster.local"
           - name: MARTS_DB_PORT

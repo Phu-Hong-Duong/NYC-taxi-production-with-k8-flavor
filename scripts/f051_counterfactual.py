@@ -4,10 +4,11 @@
 M8-S1 leg 1. REV raised F-051 at the M7 review by re-implementing the ratio from
 `drift.py`'s docstring and deleting 2020-03's quietest days one at a time — a
 strictly WORSE shutdown — then showing the ratio RISE back across A-9's bar
-(`scripts/rev_rederive_m7.py` §3, which deliberately does not import the module
-under review). That script is the review's record and is left untouched; running
-it again would print the same two columns it printed then, because it never
-imported the code that was wrong.
+(`scripts/rev_rederive_m7.py` §3, which deliberately did not import the module
+under review). *Dated note, CU-S1 2026-08-31: that instrument was RETIRED — its
+measurement is banked in the M7 review's tracked record, and the record is the
+artifact. The sentence above stays because it is the provenance of the number
+this file exists to answer; only the affordance of re-running it is gone.*
 
 So this is the other side of the same measurement: the SAME counterfactual,
 computed through the shipped functions (`drift.calendar_days`, `drift.trips_per_day`)

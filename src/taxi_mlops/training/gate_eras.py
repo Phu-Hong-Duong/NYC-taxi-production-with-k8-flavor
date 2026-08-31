@@ -61,10 +61,13 @@ PRE_B_MARGIN_PCT = 0.0
 #: RED gate rather than a diff nobody read.
 SANCTIONED_MARGIN_PCT = 0.50
 
-#: The enumerated set. Written by `scripts/f016_replay_probe.py` BEFORE the edit
-#: — which is what makes it a measurement of the pre-B era rather than a list
-#: assembled to make today's gate green — and tracked, so a row added to it is a
-#: diff a reviewer sees (F-029's option A, landed at M5-S1).
+#: The enumerated set. Measured BEFORE the edit — which is what makes it a
+#: measurement of the pre-B era rather than a list assembled to make today's
+#: gate green — and tracked, so a row added to it is a diff a reviewer sees
+#: (F-029's option A, landed at M5-S1). Its producer, `scripts/
+#: f016_replay_probe.py`, was RETIRED at CU-S1 (2026-08-31): the record is the
+#: artifact and re-running the probe against today's gate would not reproduce
+#: it anyway. Restore is `git`, never a re-run.
 FROZEN_RECORD = Path("automation/runs/m9-f016/replay-wall.json")
 
 
@@ -91,11 +94,12 @@ def frozen_margins(record: Path | str = FROZEN_RECORD) -> dict[tuple[str, str, s
     path = Path(record)
     if not path.exists():
         raise GateEraError(
-            f"the frozen pre-B verdict set is missing: {path}. It is a TRACKED record "
-            "written by scripts/f016_replay_probe.py before the F-016 margin landed, and "
-            "without it no recorded verdict from before M9-S10 can be attributed to the "
-            "bar it was taken against. Restore it from git rather than regenerating it — "
-            "a set regenerated against today's gate is not a measurement of the old one."
+            f"the frozen pre-B verdict set is missing: {path}. It is a TRACKED record, "
+            "measured before the F-016 margin landed, and without it no recorded verdict "
+            "from before M9-S10 can be attributed to the bar it was taken against. "
+            f"Restore it from git — `git checkout -- {path}` — and do not try to "
+            "regenerate it: nothing in this repository can, and a set produced against "
+            "today's gate would not be a measurement of the old one."
         )
     payload = json.loads(path.read_text(encoding="utf-8"))
     return {
