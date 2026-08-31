@@ -1,5 +1,124 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (dj) — EXEC: CU-S3 landed; eight text pins became one watched behaviour, and `cp` into a directory returns 0
+
+### State
+**EXECUTOR, `claude-opus-5` · Session MODE: CHARTERED** (chain-launched, +120 s
+from (di)). Boot per the ritual: CLAUDE.md · HANDOFF (di, dh) ·
+`docs/milestones/CLEANUP_KICKOFF.md` · AWAITING_PO. No `.status` file was pointed
+at by (di); none read. Story: **CU-S3** — the whole slice, all four steps. Branch
+`story/cu-s3-shell-libs`, five commits, **PR #85 MERGED** (`d95c5a1`),
+`git branch -r --contains 1afa50f` → `origin/main` (gotcha #20).
+
+### Reconciliation (staleness check)
+(di) warned to re-check both signals at boot because it watched them move twice
+in ninety minutes. Both answer: `docker ps` lists the three `mlops-taxi` node
+containers, `kubectl get nodes` shows three Ready at 14d, 36 pods Running / 1
+Completed. **Precondition path 1** — the slice merged on its own sweep, nothing
+queued.
+
+### Done — each with the command and what it printed
+1. **`scripts/lib/verify_harness.sh`, sourced by all eight gates.** The two
+   counters, the four printers, `consume` and `expect_verdicts` were
+   byte-identical across `verify_m2…m9.sh` (fingerprinted first: the eight
+   `consume()` bodies normalise to ONE string). **8,512 → 8,342 lines**, and
+   **each gate's diff is exactly ONE hunk** — measured, so "zero diff lines inside
+   any leg" is checkable rather than claimed.
+2. **`scripts/lib/redteam_restore.sh`, sourced by all eight record-editing
+   drills** (`verify_m3…m9_redteam`, `gate_margin_redteam`): the byte copy, the
+   EXIT trap, the sha-verified put-back, `say`/`ok`/`bad`. **1,784 → 1,536**.
+   The sixteen migrated files go **10,296 → 9,878** against 177 lines of library.
+3. **What did not move is the decision, and both headers say so under a
+   `WHAT DELIBERATELY DOES NOT LIVE HERE` heading a test requires.** The gates'
+   LEGS and verdict blocks stayed per gate (m6 and m7 ask about the same
+   Prometheus differently on purpose — a shared leg makes two witnesses one); the
+   drills' PLANTS, their RED-run assertions and their record-missing refusals
+   stayed bespoke; `REPO_ROOT` cannot be computed in a sourced file at all.
+4. **Eight meta-guards tripped — exactly the eight expected — and each was
+   RE-DERIVED, not widened.** Old property: the strings `trap restore EXIT` and
+   `sha256sum` appear in this drill. New: two halves — the drill sources the
+   scaffold and calls `redteam_snapshot "$RECORD"` and `redteam_assert_restored`
+   (per drill, eight witnesses), and the scaffold **restores across an abnormal
+   exit and refuses to call a failed put-back a restore** (once, in
+   `tests/unit/test_script_libs.py`, and RUN rather than read). Each carries a
+   dated comment naming old and new property; all eight are tabled in the PR.
+5. **Every re-derived guard was watched failing.** Three plants, each restored
+   from a byte copy and sha256-verified identical: a drill that stops sourcing
+   the scaffold → **2 FAILED from two independent angles**, 61 passed; a drill
+   that sources it and never arms it → **2 FAILED**, 43 passed; the scaffold
+   losing its EXIT trap → **1 FAILED**, which is the guarantee for all eight
+   drills at once.
+6. **The floor, over the changed tree**: `verify-m0`…`verify-m9` **GREEN 10/10**
+   live (m1 132.9 s, everything else ≤ 8.5 s) · the **full gate/red-team battery
+   9/9 PASSED** (`verify-m2-redteam`…`verify-m9-redteam` + `gate-margin-redteam`,
+   each RED on its plant then GREEN restored, tree clean after every one) ·
+   `uv run pytest tests/unit -q` → **1,361 passed, 0 skipped** ·
+   `uv run ruff check src tests pipelines` → All checks passed! ·
+   `make readme-check` GREEN · CI `lint-test pass 1m31s`.
+7. **The new source edge is guarded.** This is the repo's first `scripts/` →
+   `scripts/` source edge. `.dockerignore` names nothing under `scripts/`, and
+   both F-026 guards (`run_pipeline.sh`, `retrain_schedule.sh`) already carry
+   `scripts` in `IMAGE_PATHS` — so editing a lib refuses a stale image. Both
+   asserted by test. `bash -n` on both libs and all 16 migrated scripts; a gate
+   run from a foreign working directory still exits 0.
+
+### Decisions
+- **The re-derivation was held to a higher bar than "still passes": it had to
+  catch a failure the old pin could not.** It does, and the demonstration is the
+  session's best find — see Defects.
+- **`verify_m0.sh`/`verify_m1.sh` were deliberately left alone.** Neither has
+  `consume` or `expect_verdicts`, and their verdict blocks are a different
+  vintage. The charter says eight gates; eight is `m2…m9`.
+- **`verify_m2_redteam.sh` is not in the scaffold set and was not migrated** — it
+  restores an ALIAS, not a file, so it has no byte copy and no sha. It was still
+  run in the battery, because it executes the migrated `verify_m2.sh`.
+- **AWAITING_PO was NOT touched** (its hash is the park detector, 2026-08-30-2
+  item 2); it carries two uncommitted watchdog park notices from before this
+  session and they are left exactly as found. No ledger rows: no defect in the
+  program was found (so no `findings.md` row), nothing was deployed, and a
+  signoff records a gate CROSSING, which this is not.
+
+### Defects/Surprises
+- **`cp` into a directory returns 0, and that is why the sha check exists.** The
+  natural way to prove "the restore is verified, not assumed" is to make the
+  put-back fail — replace the target with a directory. `cp` then succeeds,
+  because it copies *into* it. An exit-code check would report a restore; only
+  the sha comparison catches it. The old text pin (`"sha256sum" in body`) could
+  never have shown that. There is now a test that watches it happen, and a second
+  arm for the branch where `cp` really does fail (target mode 400).
+- **`… | consume` is measured losing its count now**, where the reason for
+  `consume < <(` had been a comment since M2-S5. The test asserts `FAILS=0` after
+  a piped FAIL — i.e. it asserts the hazard still exists, and says in its message
+  that if it ever stops existing the pin should be re-argued, not kept.
+- **`make readme-check` caught this session's own diff, for the third slice
+  running** — RED naming `1,332 tests` against `1,361`. It then caught me a second
+  time in the same session: I fixed both sides to 1,360, added one more test, and
+  it went RED again at 1,361. A claim about the suite that the suite can change is
+  exactly what that twin is for.
+- **No wall, no fork, no detached run.** The whole slice is edits plus host
+  checks plus the sweep, as the charter predicted.
+
+### Next
+**CU-S4** (`scripts/_lib/` python package: port-forwards + the port registry,
+prom/alertmanager readers, the `_kubectl` wrapper, `load_record`; plus
+`scripts/lib/forward.sh` and `pg.sh`) is the next unlanded slice. It branches from
+**`main`** — the queue is empty and `main` is at `d95c5a1`.
+
+Three things CU-S4 should carry from here:
+- **The cluster is UP and the daemon answers**, so precondition path 1 applies and
+  CU-S4 can merge on its own sweep. Re-check both at boot anyway.
+- **`scripts/lib/` now exists** with two sourced shell libraries in it. CU-S4's
+  charter suggests a *python* package at `scripts/_lib/`; if that split feels
+  wrong once the code is in front of you, say so in the PR rather than quietly
+  merging the two — the shell libs are sourced by `bash`, the python ones are
+  imported, and one directory holding both is a choice worth arguing either way.
+- **The re-derivation bar this slice set**: when an AST pin trips (CU-S4 expects
+  several — "exactly ONE subprocess call" in the feast/store scripts), re-derive
+  to the property, then **name the failure the new guard catches that the old one
+  did not**. If you cannot, you have moved a check rather than re-derived it. And
+  watch it fail before trusting it; the three-plant drill in Done 5 is the pattern
+  and it costs about a minute.
+
 ## Session 2026-08-31 (di) — EXEC: the cluster came back mid-session, so CU-S1's queued PR merged and CU-S2 landed behind it; one name carried two meanings twice more
 
 ### State
