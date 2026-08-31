@@ -5474,3 +5474,79 @@ library gives you and exactly the reason its own tests have to run it). Then ask
 the sharper question: is the new guard *stronger* than the pin it replaced, or
 only differently worded? If you cannot name a failure the new one catches and
 the old one did not, you have moved a check, not re-derived it.
+
+## CU-S4 (cleanup) — when the copies have DIVERGED, consolidating is not a deletion (2026-08-31, role:MLOps)
+
+CU-S3 found eight byte-identical `consume()` bodies and deleted seven of them.
+This slice looked like the same job one language along, and the fingerprint said
+otherwise before an edit was made: **five `http_get`s with three behaviours, four
+`prom_query`s with two error checks, eight `kubectl`s with six bodies, six
+port-forwards with six.** Same names, different code, in files nobody reads side
+by side.
+
+That is CU-S2's `_calls()` hazard — one name, three meanings — sitting in
+`scripts/` the whole time, and it changes what consolidation *is*. When copies
+are identical, the merged version is one of them and the diff is a deletion.
+When they have diverged, **every difference is a decision somebody made and
+somebody else did not**, and merging silently picks a winner. So the rule was
+CU-S2's: split by behaviour, name each for what it does. `http_get` lets an
+unreachable endpoint raise; `http_probe` reports it as `(0, reason)`. The
+difference between those two is exactly whether a dead forward is a bug or an
+expected state — not something a caller should get by accident.
+
+**The measurement that justified the whole slice was a collision nobody could
+see.** Twelve ephemeral port-forward ports lived one per script, each with a
+comment naming the neighbours its author had checked. `gameday_m6.py` reserved
+**9096** for Alertmanager; `drift_fire_drill.py` reserved **9096** for the
+pushgateway. Neither author was careless — the drift drill's comment cites the
+alert drill's 9095 as the precedent it is *avoiding*, and the store drill's
+comment enumerates four neighbours and misses gameday entirely. Every comment
+was accurate about what its author read. **None could be accurate about the
+set.** Coordination by comment is only ever as complete as one reading, and it
+degrades in silence.
+
+The blast radius, stated honestly rather than dramatised: **latent, not live** —
+no target runs those two drills concurrently, and gameday's delegation to the
+alert drill is 9096-vs-9095, which does not clash. It was one overlapping
+invocation from being real. `_lib/ports.py` holds all twelve with the reason for
+each, and `assert_unique()` — run by a test — is the guard the comments
+structurally could not be.
+
+**The honest number, because the flattering one is available.** The eleven
+migrated scripts lose **216 code lines**; the library adds **231**. Net **+15**.
+A slice that reported "-216 lines of duplication" would be quoting half a
+subtraction. The lines came back because the copies had each dropped something
+the merged version keeps: the forward now *waits for its socket* instead of
+sleeping three seconds and proceeding (a forward that never came up used to
+surface as a connection error attributed to whatever the drill asked next —
+#55, #70), `prom_query` now refuses an HTTP 200 carrying `status: error` (two of
+the four copies read a mistyped metric name as an empty result, which is
+gotcha #78 arriving through a client), and `kubectl` always pins `--context`
+(gameday's did not). **The deliverable of a divergent consolidation is the
+properties, not the byte count.**
+
+**What deliberately did not move**, and each refusal has a reason a future
+sweep has to argue with: `store_watch_drill.http()` POSTs an optional body, so
+it is a request client and not a GET; `store_watch.py`'s pushgateway refusal
+*argues M9 law 1* ("the gateway has no hostPort; pass `--pushgateway` from
+inside the cluster"), so the library's raise is caught rather than allowed to
+replace it with a generic one; and `store_watch_headroom.py`'s persistence
+record is genuinely optional, so it must NOT go through the presence-checking
+loader — forcing it would turn a correct system red, which is gotcha #50
+arriving through consolidation. That last one has its own test, so a later
+session cannot "finish the job" by breaking it.
+
+**What to look at.** `scripts/_lib/ports.py` — the twelve reservations, each
+arguing its own number · `_lib/monitoring.py`'s two HTTP readers and why they
+are two · `tests/unit/test_python_libs.py`, most of which RUNS the library
+(including a real forward into a namespace that does not exist, to watch the
+refusal name itself).
+
+**What to try yourself.** Before consolidating anything, **fingerprint it**:
+parse each candidate, strip docstrings, hash signature+body, and group. It takes
+five minutes and it answers the only question that matters — *are these copies,
+or are these near-copies?* — because the two need opposite treatments and they
+are indistinguishable by name. Then, for every difference the fingerprint
+reveals, ask which copy is right rather than which is shortest. Here the answer
+was "the strictest one" four times out of four, and each of those is a behaviour
+the other copies had been quietly missing for milestones.
