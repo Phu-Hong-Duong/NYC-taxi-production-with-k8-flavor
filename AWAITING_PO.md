@@ -13,6 +13,15 @@
 > below (2026-08-30-2, the VM/watchdog deadlock) is NOT answered by this
 > and stays open.
 
+> **SWEPT 2026-08-31 by ARCH/Fable (the ARCH touch your answer names).** The
+> cleanup is chartered: `docs/milestones/CLEANUP_KICKOFF.md`, five executor
+> slices (CU-S1…S5) over the verified audit, an executor scheduled. Nothing
+> further waits on you in THIS entry. One thing you can do that the chain
+> cannot: **Docker Desktop is down**, and no slice can MERGE until the
+> ten-gate sweep runs — launching it (one click, ~15 s for the kind nodes to
+> return) unblocks acceptance; until then executors will work, open PRs, and
+> hold merges, exactly as the charter instructs.
+
 **Measured, not inferred.** The cleanup directive (2026-08-29-2) needs an ARCH
 touch to become a charter. ARCH was scheduled by session (dd) at 11:53:26Z and
 **died on launch**, log `automation/logs/20260830_115326_architect.log`, 154
@@ -158,6 +167,12 @@ Nothing else waits on the PO.
 
 ## 2026-08-30-1 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Scope the protocol — chartered ceremony vs everyday help**
 
+> **CHARTERED 2026-08-31 by ARCH/Fable** — rides the cleanup charter exactly as
+> this entry offered: the constitutional fold (ORG.md + the ceremony-instructing
+> templates, a MODE line beside the model line) is **CU-S1 step 1** in
+> `docs/milestones/CLEANUP_KICKOFF.md`. Your CLAUDE.md scope block stays as you
+> wrote it — the fold cites it rather than rewriting it.
+
 > **PO 2026-08-30 (in chat, their own words, trimmed):** "based on our
 > development in this project so far, i want to update and modify the
 > developing protocol to makes it more suitable to my own need. […] that
@@ -209,6 +224,21 @@ Ubuntu session: `rm automation/STOP && automation/next_session.sh architect
 120`. Nothing in this entry blocks it.
 
 ## 2026-08-29-2 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Charter the codebase cleanup — prune the bloat, keep every guarantee**
+
+> **CHARTERED 2026-08-31 by ARCH/Fable** — `docs/milestones/CLEANUP_KICKOFF.md`:
+> five executor slices (CU-S1 scope-rule fold + dead code · CU-S2 test
+> infrastructure incl. the `_calls` 3-semantics correctness fix · CU-S3 verify
+> harness + red-team restore libs · CU-S4 python forward/prom/record plumbing ·
+> CU-S5 isvc deploy lib + the numbers write-up + the full red-team battery),
+> each ending in the ten-gate sweep, argued from your seed AND session (de)'s
+> run-verification (43 CONFIRMED · 6 DIFFERS accounted · 3 newly MEASURED).
+> Your floor is restated verbatim in the charter and binds every slice.
+> **Two ARCH readings you can veto by editing here:** (1) the per-slice
+> red-team clause is read as "red teams whose files the slice touched, plus
+> the complete battery at CU-S5"; (2) Tier B (411 LOC, five probe scripts with
+> Makefile anchors, four cited VERIFIED in CLAUDE.md) is a conscious KEEP, and
+> Tier A (1,050 LOC, six prose-only instruments) is deleted with the three
+> live reference-site edits landing in the same commits.
 
 > **SEED 2026-08-30 (the PO's Windows-side session):** a read-only measured
 > audit of the whole codebase is committed at `docs/cleanup_audit_seed.md` —
