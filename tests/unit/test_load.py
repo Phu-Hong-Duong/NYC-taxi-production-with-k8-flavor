@@ -38,34 +38,15 @@ import ast
 from pathlib import Path
 
 import pytest
+from conftest import REPO, called_paths, phony_targets
 
 from taxi_mlops.serving import load as load_mod
 
-REPO = Path(__file__).resolve().parents[2]
 LOAD_SOURCE = REPO / "src" / "taxi_mlops" / "serving" / "load.py"
 DRILL_SOURCE = REPO / "scripts" / "serving_load_drill.py"
 MAKEFILE = REPO / "Makefile"
 
 pytestmark = pytest.mark.unit
-
-
-def _calls(source: Path) -> list[str]:
-    """Every dotted callee name actually INVOKED in a module (gotchas #53/#68)."""
-    tree = ast.parse(source.read_text())
-    names = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        target = node.func
-        parts = []
-        while isinstance(target, ast.Attribute):
-            parts.append(target.attr)
-            target = target.value
-        if isinstance(target, ast.Name):
-            parts.append(target.id)
-        if parts:
-            names.append(".".join(reversed(parts)))
-    return names
 
 
 def _function(source: Path, name: str) -> ast.FunctionDef:
@@ -442,7 +423,7 @@ def test_a_drill_that_disturbed_nothing_cannot_be_green() -> None:
 )
 def test_neither_the_client_nor_the_drill_touches_the_registry(verb: str) -> None:
     for source in (LOAD_SOURCE, DRILL_SOURCE):
-        calls = _calls(source)
+        calls = called_paths(source)
         assert not any(call.endswith(verb) for call in calls), f"{source.name} calls {verb}"
 
 
@@ -499,8 +480,5 @@ def test_the_makefile_wires_both_targets() -> None:
     # backslash continuations the way GNU make does (F-083) and ask every
     # `.PHONY` declaration for membership, so the guard survives the targets
     # being regrouped and still fails if either is dropped.
-    declared: set[str] = set()
-    for line in makefile.replace("\\\n", " ").splitlines():
-        if line.startswith(".PHONY:"):
-            declared.update(line.split(":", 1)[1].split())
+    declared = phony_targets(makefile)
     assert {"load", "load-drill"} <= declared, f"not declared .PHONY: {declared}"

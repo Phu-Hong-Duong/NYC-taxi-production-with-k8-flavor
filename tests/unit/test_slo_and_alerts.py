@@ -23,12 +23,11 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO, executable_lines
 
-REPO = Path(__file__).resolve().parents[2]
 RULES = REPO / "infra" / "monitoring" / "alerting_rules.yml"
 RENDERER = REPO / "scripts" / "render_alert_rules.py"
 DRILL = REPO / "scripts" / "alert_fire_drill.py"
@@ -57,15 +56,6 @@ pytestmark = pytest.mark.unit
 # reads it from the manifest or the document, so this is the single place a future
 # change has to come through.
 CPU_REQUEST = "1500m"
-
-
-def code_only(text: str) -> str:
-    """Everything a shell would execute, comments and blank lines removed."""
-    return "\n".join(
-        line
-        for line in text.splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    )
 
 
 @pytest.fixture(scope="module")
@@ -160,7 +150,7 @@ def test_the_values_file_holds_no_rules_because_the_rules_file_does(prom_values_
 
 def test_the_deploy_provisions_the_rules_file_and_validates_it_first():
     """The rules reach the cluster from git, and a malformed file fails early."""
-    body = code_only(DEPLOY.read_text())
+    body = executable_lines(DEPLOY.read_text())
     # The invocation is a quoted absolute path, so the flag does not sit adjacent
     # to the script name in the text — match the two together rather than as one
     # literal (gotcha #68's tokenisation lesson, on a test this time).

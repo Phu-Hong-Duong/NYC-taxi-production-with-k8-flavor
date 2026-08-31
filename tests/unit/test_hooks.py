@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import json
 import os
 import re
 import stat
@@ -39,8 +38,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import REPO, read_record
 
-REPO = Path(__file__).resolve().parents[2]
 HOOK = REPO / "scripts" / "hooks" / "pre-commit"
 INSTALLER = REPO / "scripts" / "install_hooks.sh"
 DRILL = REPO / "scripts" / "hook_redteam.sh"
@@ -59,16 +58,6 @@ def _module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _record(path: Path) -> dict:
-    # An assertion, never a skip (F-054): the record is tracked, so its absence
-    # means deleted or lost, not "the drill has not been run here".
-    assert path.exists(), (
-        f"{path.relative_to(REPO)} is missing. It is a TRACKED record — its absence "
-        "means it was deleted, not that this clone has not run the drill."
-    )
-    return json.loads(path.read_text())
 
 
 # --------------------------------------------------------------------------- #
@@ -325,7 +314,7 @@ def test_the_make_targets_exist():
 
 @pytest.mark.needs_records
 def test_the_drill_record_says_it_passed_and_what_it_does_not_prove():
-    rec = _record(HOOK_RECORD)
+    rec = read_record(HOOK_RECORD)
     assert rec["verdict"] == "PASSED"
     assert rec["failures"] == 0
     assert rec["checks"] >= 15
@@ -343,6 +332,7 @@ def test_the_record_holds_no_credential_shaped_value():
     it — not the value, not a long digest under a credential-shaped key."""
     text = HOOK_RECORD.read_text()
     assert not re.search(r"AKIA[A-Z0-9]{16}", text)
-    assert not re.search(r"[A-Za-z0-9]{40,}", text.replace(_record(HOOK_RECORD)["git_head"], "")), (
+    without_head = text.replace(read_record(HOOK_RECORD)["git_head"], "")
+    assert not re.search(r"[A-Za-z0-9]{40,}", without_head), (
         "a long high-entropy run in a tracked record is what `generic-api-key` is for"
     )

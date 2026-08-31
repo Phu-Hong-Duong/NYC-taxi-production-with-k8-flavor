@@ -19,7 +19,8 @@ import subprocess
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+from conftest import REPO
+
 CHAIN_SH = REPO / "automation" / "next_session.sh"
 
 DELAY = "2"  # seconds the sandbox session sleeps before it would launch

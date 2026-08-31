@@ -35,8 +35,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxi_mlops.serving.transformer import RAW_INPUTS  # noqa: E402

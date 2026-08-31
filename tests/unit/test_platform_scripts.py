@@ -21,8 +21,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 CHARTERS = REPO / "scripts" / "check_charters.sh"
 SECRETS = REPO / "scripts" / "platform_secrets.sh"
 KIND_CONFIG = REPO / "infra" / "kind" / "kind-config.yaml"

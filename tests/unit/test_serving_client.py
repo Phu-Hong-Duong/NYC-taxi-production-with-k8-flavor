@@ -32,17 +32,16 @@ red run or would have gone unnoticed until a wrong number reached a rider:
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
 import pandas as pd
 import pytest
 import yaml
+from conftest import REPO
 
 from taxi_mlops.features import calendar, quote_time
 from taxi_mlops.serving import client
 from taxi_mlops.training.run import load_train_config
 
-REPO = Path(__file__).resolve().parents[2]
 CLIENT_SOURCE = REPO / "src" / "taxi_mlops" / "serving" / "client.py"
 KSERVE_VALUES = REPO / "infra" / "helm" / "kserve" / "values.yaml"
 ISVC_MANIFEST = REPO / "infra" / "manifests" / "inferenceservice-champion.yaml"

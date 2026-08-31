@@ -37,30 +37,16 @@ against a comment-stripped copy, with the needle in command position.
 from __future__ import annotations
 
 import json
-import pathlib
 import re
 import subprocess
 
 import pytest
+from conftest import REPO, invokes, phony_targets, without_comments
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M7 = REPO / "scripts" / "verify_m7.sh"
 REDTEAM = REPO / "scripts" / "verify_m7_redteam.sh"
 MAKEFILE = REPO / "Makefile"
 RULES = REPO / "infra" / "monitoring" / "alerting_rules.yml"
-
-
-def without_comments(path: pathlib.Path) -> str:
-    """Drop whole-line comments (shell and the embedded Python alike)."""
-    return "\n".join(
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("#")
-    )
-
-
-def invokes(body: str, command: str) -> bool:
-    """Is `command` RUN here, or merely named?"""
-    pattern = rf"(?:^|\||&&|;|\$\()\s*{re.escape(command)}(?:\s|$)"
-    return bool(re.search(pattern, body, re.M))
 
 
 # ------------------------------------------------------- the Makefile contract --
@@ -72,8 +58,12 @@ def test_the_m7_targets_are_real_and_no_longer_echo_todo():
         assert "TODO" not in recipe, f"{target} still echoes TODO"
     assert "bash scripts/verify_m7.sh" in text
     assert "bash scripts/verify_m7_redteam.sh" in text
-    assert any(
-        "verify-m7-redteam" in line for line in text.splitlines() if line.startswith(".PHONY")
+    # Membership across EVERY `.PHONY` declaration, continuation lines joined the
+    # way GNU make joins them (F-083, CU-S1). The idiom this replaces read one
+    # line at a time — blind to a wrapped declaration — and compared by SUBSTRING,
+    # so a longer target name merely containing this one would have satisfied it.
+    assert "verify-m7-redteam" in phony_targets(text), (
+        "verify-m7-redteam is not declared .PHONY"
     )
 
 
@@ -536,4 +526,3 @@ def test_the_scoring_manifest_contract_when_the_batch_path_has_been_run():
         for key in ("kpi_14_mae_minutes", "kpi_15_within_tolerance_pct",
                     "kpi_16_mean_signed_error_minutes", "kpi_17_scored_trips"):
             assert key in month, f"{month['month']} lost {key} — a monitoring id with no value"
-

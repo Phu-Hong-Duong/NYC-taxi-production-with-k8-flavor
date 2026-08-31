@@ -30,8 +30,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import REPO, without_comments
 
-REPO = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO / "docker" / "Dockerfile.pipeline"
 DOCKERIGNORE = REPO / ".dockerignore"
 BUILD_LOAD = REPO / "scripts" / "image_build_load.sh"
@@ -41,23 +41,9 @@ MAKEFILE = REPO / "Makefile"
 DECISION = REPO / "docker" / "DECISION-D001-image-delivery.md"
 
 
-def code_only(text: str) -> str:
-    """Drop whole-line `#` comments. gotcha #53, and it bit again in this file.
-
-    Both the Dockerfile and these scripts carry more prose than instructions — by
-    design, it is where the reasoning lives — and a naive `"chown -R" not in text`
-    or `":latest" not in text` goes RED on the comment that EXPLAINS why neither is
-    used. Four of this file's assertions failed that way on their first run. In a
-    repo where prose is load-bearing, a check about structure must read structure.
-    """
-    return "\n".join(
-        line for line in text.splitlines() if not line.lstrip().startswith("#")
-    )
-
-
 @pytest.fixture(scope="module")
 def dockerfile() -> str:
-    return code_only(DOCKERFILE.read_text())
+    return without_comments(DOCKERFILE.read_text())
 
 
 @pytest.fixture(scope="module")
@@ -191,7 +177,7 @@ def test_the_venv_and_git_history_stay_out_of_the_context(
 
 def test_the_tag_is_immutable_by_construction(dockerfile: str) -> None:
     """A mutable tag is what lets a node hold stale bytes under the right name."""
-    script = code_only(BUILD_LOAD.read_text())
+    script = without_comments(BUILD_LOAD.read_text())
     assert "git rev-parse --short HEAD" in script, "the tag must come from the git sha"
     assert "-dirty" in script, "an uncommitted tree must be visible in the tag"
     assert ":latest" not in script.replace("latest-local", ""), (
@@ -201,7 +187,7 @@ def test_the_tag_is_immutable_by_construction(dockerfile: str) -> None:
 
 def test_the_load_is_read_back_from_the_nodes_with_their_own_tool() -> None:
     """`kind load` exiting 0 and containerd holding the image are two claims."""
-    script = code_only(BUILD_LOAD.read_text())
+    script = without_comments(BUILD_LOAD.read_text())
     assert "crictl images" in script, "the read-back must ask containerd, not docker"
     assert "kind load docker-image" in script
     assert "BEFORE" in script, (
@@ -211,11 +197,11 @@ def test_the_load_is_read_back_from_the_nodes_with_their_own_tool() -> None:
 
 def test_the_smoke_cannot_pass_by_skipping_the_unit_suite() -> None:
     """SKIP_UNIT is a debugging lever; a gate with a fast mode runs in fast mode."""
-    script = code_only(SMOKE.read_text())
+    script = without_comments(SMOKE.read_text())
     skip_block = script[script.index("SKIP_UNIT:-0") :]
     # Bounded by the next section's own header call, not by a `# ---` rule: the
-    # rules are comments, and code_only() has just removed them. Same lesson as
-    # code_only()'s own docstring, one level in.
+    # rules are comments, and without_comments() has just removed them. Same lesson as
+    # without_comments()'s own docstring, one level in.
     skip_block = skip_block[: skip_block.index("head2 ")]
     assert "bad " in skip_block, "the SKIP_UNIT branch must count as a FAILURE, never a pass"
 
@@ -228,7 +214,7 @@ def test_no_container_in_either_script_uses_a_login_shell() -> None:
     story one wrong RED verdict in the sensor drill.
     """
     for script in (SMOKE, REDTEAM):
-        text = code_only(script.read_text())
+        text = without_comments(script.read_text())
         assert "bash -lc" not in text, f"{script.name} must use `bash -c`, never a login shell"
 
 

@@ -33,12 +33,11 @@ is docs/monitoring_m6.md.
 import ast
 import json
 import re
-from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO, executable_lines
 
-REPO = Path(__file__).resolve().parents[2]
 DEPLOY = REPO / "scripts" / "deploy_monitoring.sh"
 ACCEPT = REPO / "scripts" / "monitoring_accept.py"
 PROBE = REPO / "scripts" / "probe_mlserver_metrics.py"
@@ -51,17 +50,6 @@ SECRETS = REPO / "scripts" / "platform_secrets.sh"
 MAKEFILE = REPO / "Makefile"
 
 pytestmark = pytest.mark.unit
-
-
-def code_only(text: str) -> str:
-    """Everything a shell would execute, comments and blank lines removed.
-
-    This repo's scripts argue their own design at length, so a grep for a word
-    hits the argument as often as the code (gotchas #35, #53, #60, #68)."""
-    return "\n".join(
-        line for line in text.splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    )
 
 
 @pytest.fixture(scope="module")
@@ -91,7 +79,7 @@ def test_the_predictor_is_scraped_on_the_port_that_was_probed(prom_values):
     # code_only, because the block ARGUES its own port at length and names the
     # wrong one four times while doing so — gotcha #53 for the sixth time, and
     # it caught this test on its first run.
-    scrape = code_only(prom_values["extraScrapeConfigs"])
+    scrape = executable_lines(prom_values["extraScrapeConfigs"])
     assert ":8082" in scrape, (
         "the predictor scrape config no longer names port 8082. KServe's own pod "
         "annotation says 8080 and that port answers 404 on mlserver 1.7.1 — "
@@ -199,7 +187,7 @@ def test_the_uis_ride_the_existing_ingress_and_ask_for_no_new_host_port(
     assert grafana_values["ingress"]["hosts"] == ["grafana.local"]
     for values in (prom_values, grafana_values):
         assert "hostPort" not in yaml.dump(values)
-    assert "NodePort" not in code_only(deploy)
+    assert "NodePort" not in executable_lines(deploy)
     # The kind config is read at cluster-CREATE only; a monitoring hostPort would
     # mean a rebuild, and the cluster's PVCs are the only copy of the registry.
     kind = KIND_CONFIG.read_text()
@@ -208,13 +196,13 @@ def test_the_uis_ride_the_existing_ingress_and_ask_for_no_new_host_port(
 
 
 def test_the_deploy_never_edits_the_kind_config(deploy):
-    assert "kind-config" not in code_only(deploy)
+    assert "kind-config" not in executable_lines(deploy)
 
 
 # --- secrets -------------------------------------------------------------------
 
 def test_the_grafana_password_never_reaches_a_command_line(deploy, grafana_values):
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert "--set" not in body, "a --set on a helm command is readable by `ps`"
     assert grafana_values["admin"]["existingSecret"] == "grafana-admin"
     assert "adminPassword" not in yaml.dump(grafana_values), (
@@ -231,14 +219,14 @@ def test_the_secrets_script_converges_the_grafana_credential():
 
 
 def test_no_secret_value_is_echoed(deploy):
-    for line in code_only(deploy).splitlines():
+    for line in executable_lines(deploy).splitlines():
         assert "PASSWORD" not in line.upper() or "echo" not in line.lower()
 
 
 # --- DRY_RUN (gotcha #30) ------------------------------------------------------
 
 def test_dry_run_guards_every_mutation_including_helm(deploy):
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert 'DRY_RUN="${DRY_RUN:-0}"' in body
     # Every helm invocation that changes the cluster goes through `run`, which is
     # the single place DRY_RUN is honoured.
@@ -252,14 +240,14 @@ def test_dry_run_guards_every_mutation_including_helm(deploy):
 
 
 def test_dry_run_exits_before_anything_is_read_back(deploy):
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert body.index('if [[ "$DRY_RUN" == "1" ]]; then') < body.index("get pods")
 
 
 # --- M6 law 3: nothing here knows the registry exists --------------------------
 
 def test_the_monitoring_stack_cannot_touch_the_registry(deploy):
-    body = code_only(deploy) + code_only(PROM_VALUES.read_text())
+    body = executable_lines(deploy) + executable_lines(PROM_VALUES.read_text())
     for forbidden in ("champion", "models:/", "set_registered_model_alias",
                       "mlflow models"):
         assert forbidden not in body, (
@@ -346,7 +334,7 @@ def test_the_board_draws_no_threshold_line():
 
 
 def test_the_deploy_builds_the_dashboard_configmap_from_those_files(deploy):
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert "analytics/grafana/dashboards" in DEPLOY.read_text()
     assert "--from-file=" in body
     assert "grafana_dashboard=1" in body

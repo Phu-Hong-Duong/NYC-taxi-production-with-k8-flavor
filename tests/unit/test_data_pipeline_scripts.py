@@ -20,7 +20,8 @@ from __future__ import annotations
 import configparser
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+from conftest import REPO
+
 PIPELINE = (REPO / "scripts" / "data_pipeline.sh").read_text()
 PROOF = (REPO / "scripts" / "rebuild_proof.sh").read_text()
 CLUSTER = (REPO / "scripts" / "cluster.sh").read_text()

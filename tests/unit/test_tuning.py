@@ -9,10 +9,10 @@ in. Those are the claims this file keeps true between runs.
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import pytest
+from conftest import referenced_names
 
 from taxi_mlops.data.config import load_yaml, repo_root
 from taxi_mlops.tuning import fit as fit_mod
@@ -208,17 +208,6 @@ def test_a_pruned_trial_really_raises_out_of_the_boosters_callback(family):
 # ------------------------------------------------------- the story's refusal ----
 
 
-def _calls(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text())
-    names = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Attribute):
-            names.add(node.attr)
-        elif isinstance(node, ast.Name):
-            names.add(node.id)
-    return names
-
-
 REGISTRY_API = {
     "register_model",
     "create_model_version",
@@ -233,11 +222,11 @@ def test_no_automation_script_can_touch_the_registry():
     """M3-S4 promotes nothing. The gate sees these contenders at S5, or never."""
     for name in SCRIPTS:
         path = repo_root() / "scripts" / name
-        overlap = _calls(path) & REGISTRY_API
+        overlap = referenced_names(path) & REGISTRY_API
         assert not overlap, f"{name} names the registry API: {sorted(overlap)}"
     for module in ("storage.py", "space.py", "fit.py"):
         path = repo_root() / "src" / "taxi_mlops" / "tuning" / module
-        assert not _calls(path) & REGISTRY_API, module
+        assert not referenced_names(path) & REGISTRY_API, module
 
 
 def test_no_automation_script_reads_the_test_month():

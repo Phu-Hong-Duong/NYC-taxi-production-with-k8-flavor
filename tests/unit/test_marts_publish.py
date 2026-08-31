@@ -19,8 +19,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
 import marts_publish  # noqa: E402, I001 — scripts/ is not a package; the path insert above is the import

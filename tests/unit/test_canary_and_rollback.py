@@ -16,14 +16,13 @@ Same three families as M6-S3's suite, for the same reasons:
 from __future__ import annotations
 
 import ast
-import json
 import re
 from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO, called_names, read_record
 
-REPO = Path(__file__).resolve().parents[2]
 DRILL = REPO / "scripts/canary_release_drill.py"
 REHEARSAL = REPO / "scripts/alias_rollback_rehearsal.py"
 DEPLOY_CANARY = REPO / "scripts/deploy_canary.sh"
@@ -35,36 +34,6 @@ RUNBOOK = REPO / "docs/runbooks/serving.md"
 DRILL_RECORD = REPO / "automation/runs/m6-canary/release_drill.json"
 ROLLBACK_RECORD = REPO / "automation/runs/m6-rollback/alias_rollback.json"
 ATTEMPT1 = REPO / "automation/runs/m6-canary/attempt1-ingress-name-collision/release_drill.json"
-
-
-def _record(path: Path) -> dict:
-    """Read a tracked drill record, and REFUSE if it is not there — F-054.
-
-    These reads used to sit under `skipif(not RECORD.exists())`, which made the
-    in-image run green by SKIPPING. On the host that is the weaker answer: an
-    absent record means the drill was never run, and a silent skip is how a check
-    stops being one. The records are git-tracked from M5-S1 (F-029 option A), so
-    a fresh clone has them and the only thing this assertion can catch is a
-    deleted or lost record — loudly. Where a test can run is now the marker's job
-    (`needs_records`, F-047); whether it must pass is not negotiable.
-    """
-    assert path.exists(), (
-        f"{path.relative_to(REPO)} is a TRACKED record (F-029 option A) — its absence "
-        "means it was deleted or lost, not that this clone lacks local artifacts"
-    )
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _calls(path: Path) -> set[str]:
-    names: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name):
-                names.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                names.add(func.attr)
-    return names
 
 
 def _string_args(path: Path, call_name: str) -> list[list[str]]:
@@ -110,12 +79,12 @@ def test_the_canary_drill_touches_no_registry_state() -> None:
     business anywhere near it, so the two are checked with different bans rather
     than one loose one.
     """
-    offenders = _calls(DRILL) & (MUTATING_REGISTRY_VERBS | {"set_registered_model_alias"})
+    offenders = called_names(DRILL) & (MUTATING_REGISTRY_VERBS | {"set_registered_model_alias"})
     assert not offenders, f"{DRILL.name} calls {sorted(offenders)}"
 
 
 def test_the_rollback_moves_the_alias_and_promotes_nothing() -> None:
-    calls = _calls(REHEARSAL)
+    calls = called_names(REHEARSAL)
     assert "set_registered_model_alias" in calls, (
         "the rehearsal must move the alias with the RAW client call the runbook §4.3 "
         "types — a rollback that went through registry.promote would be a gate bypass"
@@ -159,7 +128,7 @@ def test_the_canary_route_is_not_a_kserve_generated_name() -> None:
         "for the InferenceService of that name — the annotations are accepted and then "
         "reverted, and the split reads 0% with no error anywhere (F-039)"
     )
-    assert "refuse_an_owned_ingress" in _calls(DRILL), (
+    assert "refuse_an_owned_ingress" in called_names(DRILL), (
         "the drill must refuse to weight an Ingress that carries ownerReferences — the "
         "name is only half of F-039's fix, and the guard is the half that survives a rename"
     )
@@ -260,7 +229,7 @@ def test_the_recorded_split_agrees_with_the_weight_the_drill_applied() -> None:
     The applied weights are read out of the drill's own events and the tolerance
     out of the module on disk, so loosening either shows up here.
     """
-    record = _record(DRILL_RECORD)
+    record = read_record(DRILL_RECORD)
     tolerance = float(
         re.search(r"^SHARE_TOLERANCE_POINTS\s*=\s*([\d.]+)", DRILL.read_text(), re.M).group(1)
     )
@@ -283,7 +252,7 @@ def test_the_recorded_split_agrees_with_the_weight_the_drill_applied() -> None:
 @pytest.mark.needs_records
 def test_the_two_witnesses_agree_in_the_record() -> None:
     """A split claimed by the router and denied by the pods is not a measurement."""
-    record = _record(DRILL_RECORD)
+    record = read_record(DRILL_RECORD)
     for phase in ("canary_10", "canary_100"):
         ingress = record["phases"][phase]["ingress"]["canary_share_pct"]
         pods = record["phases"][phase]["pods"]["canary_share_pct"]
@@ -295,7 +264,7 @@ def test_the_two_witnesses_agree_in_the_record() -> None:
 
 @pytest.mark.needs_records
 def test_the_revert_is_inside_the_budget_the_drill_declares() -> None:
-    record = _record(DRILL_RECORD)
+    record = read_record(DRILL_RECORD)
     budget = float(
         re.search(r"^REVERT_BUDGET_SECONDS\s*=\s*([\d.]+)", DRILL.read_text(), re.M).group(1)
     )
@@ -309,7 +278,7 @@ def test_the_revert_is_inside_the_budget_the_drill_declares() -> None:
 @pytest.mark.needs_records
 def test_the_failed_first_attempt_is_kept_with_its_cause() -> None:
     """The M5-S4 `attempt1-at-the-ceiling` precedent, third milestone running."""
-    record = _record(ATTEMPT1)
+    record = read_record(ATTEMPT1)
     assert record["verdict"] == "FAIL"
     assert "F-039" in record["why_this_run_is_kept"]["cause"]
     assert record["phases"]["canary_10"]["ingress"]["canary_share_pct"] == 0.0, (
@@ -320,7 +289,7 @@ def test_the_failed_first_attempt_is_kept_with_its_cause() -> None:
 
 @pytest.mark.needs_records
 def test_the_rollback_record_ends_where_it_started() -> None:
-    record = _record(ROLLBACK_RECORD)
+    record = read_record(ROLLBACK_RECORD)
     end = record["end_state"]
     assert end["alias_version"] == "2" and end["features_version"] == "v2"
     assert end["configs_train_yaml_sha_before"] == end["configs_train_yaml_sha_after"], (
@@ -338,7 +307,7 @@ def test_the_coherence_check_was_green_at_BOTH_states() -> None:
     `configs/train.yaml: features.version`. Green at v2 alone is satisfiable by a
     literal; green at v1 as well is what makes it a coherence check (F-017).
     """
-    record = _record(ROLLBACK_RECORD)
+    record = read_record(ROLLBACK_RECORD)
     assert record["at_the_half_way_state"]["coherence_green"]
     assert record["at_the_end_state"]["coherence_green"]
     assert record["at_the_half_way_state"]["exit_code"] != 0, (
@@ -374,7 +343,7 @@ def test_every_rollback_number_the_runbook_quotes_is_in_the_record() -> None:
     the comparison is on whole TOKENS, because a bare substring search would find
     `14` inside `14.53`.
     """
-    record = _record(ROLLBACK_RECORD)
+    record = read_record(ROLLBACK_RECORD)
     body = re.search(r"##\s*4\..*?(?=\n---|\n##\s*5\.)", RUNBOOK.read_text(), re.S).group(0)
     tokens = set(re.findall(r"\d+\.\d+", body))
     for label, value in (
@@ -392,7 +361,7 @@ def test_every_rollback_number_the_runbook_quotes_is_in_the_record() -> None:
 
 @pytest.mark.needs_records
 def test_every_canary_number_the_runbook_quotes_is_in_the_record() -> None:
-    record = _record(DRILL_RECORD)
+    record = read_record(DRILL_RECORD)
     body = re.search(r"###\s*4\.5.*?(?=\n---|\n##\s*5\.)", RUNBOOK.read_text(), re.S).group(0)
     tokens = set(re.findall(r"\d+\.\d+", body))
     for label, value in (

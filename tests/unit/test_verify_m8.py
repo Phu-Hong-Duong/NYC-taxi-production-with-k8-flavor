@@ -25,11 +25,10 @@ them.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
+from conftest import REPO, without_comments
 
-REPO = Path(__file__).resolve().parents[2]
 GATE = REPO / "scripts" / "verify_m8.sh"
 REDTEAM = REPO / "scripts" / "verify_m8_redteam.sh"
 
@@ -47,10 +46,7 @@ def gate_code(gate_text: str) -> str:
     the raw text: the header argues at length about the commands it refuses to
     run, and half of those arguments name the command.
     """
-    return "\n".join(
-        line for line in gate_text.splitlines()
-        if not line.lstrip().startswith("#")
-    )
+    return without_comments(gate_text)
 
 
 def test_the_gate_and_its_red_team_exist_and_are_wired() -> None:

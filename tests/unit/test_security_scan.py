@@ -31,13 +31,11 @@ import ast
 import base64
 import hashlib
 import importlib.util
-import json
 import re
-from pathlib import Path
 
 import pytest
+from conftest import REPO, read_record
 
-REPO = Path(__file__).resolve().parents[2]
 SCANNER = REPO / "scripts" / "security_scan.py"
 REDTEAM = REPO / "scripts" / "security_scan_redteam.sh"
 TOOLS_SH = REPO / "scripts" / "security_tools.sh"
@@ -54,17 +52,6 @@ def _module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _record(path: Path) -> dict:
-    # An assertion, never a skip (F-054, closed at M9-S3): these records are
-    # tracked, so their absence means deleted or lost and not "the drill has not
-    # been run here".
-    assert path.exists(), (
-        f"{path.relative_to(REPO)} is missing. It is a TRACKED record — its absence "
-        "means it was deleted, not that this clone has not run the scan."
-    )
-    return json.loads(path.read_text())
 
 
 # --------------------------------------------------------------------------- #
@@ -138,7 +125,7 @@ def test_the_record_carries_no_long_value_under_a_credential_shaped_key():
             for i, v in enumerate(node):
                 walk(v, f"{where}[{i}]")
 
-    walk(_record(SCAN_RECORD))
+    walk(read_record(SCAN_RECORD))
     assert not offenders, (
         f"the tracked scan record has a long unbroken value under {offenders} — that is "
         "exactly what `generic-api-key` matches, and the record is tracked, so the next "
@@ -170,12 +157,12 @@ def test_the_record_carries_no_working_fields():
             for i, v in enumerate(node):
                 walk(v, f"{where}[{i}]")
 
-    walk(_record(SCAN_RECORD))
+    walk(read_record(SCAN_RECORD))
 
 
 @pytest.mark.needs_records
 def test_no_finding_carries_a_value():
-    rec = _record(SCAN_RECORD)
+    rec = read_record(SCAN_RECORD)
     for leg in rec["legs"].values():
         for bucket in ("blocking", "local_only", "acknowledged"):
             for finding in leg.get(bucket, []):
@@ -274,7 +261,7 @@ def test_the_redteam_restores_and_proves_the_object_is_gone():
 # --------------------------------------------------------------------------- #
 @pytest.mark.needs_records
 def test_the_pinned_versions_and_the_record_are_twins():
-    rec = _record(TOOLS_RECORD)
+    rec = read_record(TOOLS_RECORD)
     sh = TOOLS_SH.read_text()
     for tool, key in (("trivy", "TRIVY_VERSION"), ("gitleaks", "GITLEAKS_VERSION")):
         pinned = re.search(rf'^{key}="([^"]+)"', sh, re.M)
@@ -290,7 +277,7 @@ def test_the_pinned_versions_and_the_record_are_twins():
 @pytest.mark.needs_records
 def test_the_image_refs_in_the_record_are_the_ones_their_sources_name():
     mod = _module()
-    rec = _record(SCAN_RECORD)
+    rec = read_record(SCAN_RECORD)
     recorded = {i["image"] for i in rec["legs"]["images"]["images"]}
     derived = {mod._image_ref(name, src, key) for name, src, key in mod.OUR_IMAGES}
     assert recorded == derived, (
@@ -301,7 +288,7 @@ def test_the_image_refs_in_the_record_are_the_ones_their_sources_name():
 
 @pytest.mark.needs_records
 def test_the_verdict_is_publishable_and_says_what_that_excludes():
-    rec = _record(SCAN_RECORD)
+    rec = read_record(SCAN_RECORD)
     verdict = rec["verdict"]
     assert verdict["secrets_in_git"] == 0
     assert verdict["publishable"] is True
@@ -319,7 +306,7 @@ def mod_stages():
 @pytest.mark.needs_records
 def test_every_leg_recorded_the_inputs_it_looked_at():
     """gotcha #59: a scan that found nothing has to prove it looked."""
-    rec = _record(SCAN_RECORD)
+    rec = read_record(SCAN_RECORD)
     legs = rec["legs"]
     assert legs["history-secrets"]["inputs"]["commits_reachable_from_all_refs"] > 400
     assert legs["history-secrets"]["inputs"]["refs"] >= 1

@@ -24,8 +24,8 @@ import re
 from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 PODTEMPLATE = REPO / "infra" / "manifests" / "flyte-task-podtemplate.yaml"
 DATA_PVC = REPO / "infra" / "manifests" / "flyte-task-data-pvc.yaml"
 STAGER_POD = REPO / "infra" / "manifests" / "flyte-data-stager.yaml"

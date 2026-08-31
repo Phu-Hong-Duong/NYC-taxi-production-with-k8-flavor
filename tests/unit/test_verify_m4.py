@@ -29,40 +29,13 @@ comment-stripped copy.
 
 from __future__ import annotations
 
-import pathlib
 import re
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
+from conftest import REPO, invokes, phony_targets, without_comments
+
 VERIFY_M4 = REPO / "scripts" / "verify_m4.sh"
 REDTEAM = REPO / "scripts" / "verify_m4_redteam.sh"
 MAKEFILE = REPO / "Makefile"
-
-
-def without_comments(path: pathlib.Path) -> str:
-    """Drop whole-line comments (shell and the embedded Python alike).
-
-    Trailing comments are left in place deliberately: stripping them needs a
-    quoting-aware parser, and a half-parser is how gotcha #35 happened.
-    """
-    return "\n".join(
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("#")
-    )
-
-
-def invokes(body: str, command: str) -> bool:
-    """Is `command` RUN here, or merely named?
-
-    The house rule, made mechanical. This gate prints advice — "run
-    `make pipeline-cache-drill`" is exactly what a reader of a RED cache leg needs
-    — and `kubectl -n flyte get deploy` contains the substring "flyte get". A
-    plain `in` test calls both of those violations, which is gotcha #35 wearing a
-    third hat. So the needle must sit where a shell would START a command: at the
-    beginning of a line, or after a pipe, `&&`, `;` or `$(`. A backtick is
-    deliberately NOT a command position here: in this repo backticks appear inside
-    message strings far more often than in command substitutions.
-    """
-    pattern = rf"(?:^|\||&&|;|\$\()\s*{re.escape(command)}(?:\s|$)"
-    return bool(re.search(pattern, body, re.M))
 
 
 # ------------------------------------------------------- the Makefile contract --
@@ -76,9 +49,13 @@ def test_the_m4_targets_are_real_and_no_longer_echo_todo():
         assert "TODO" not in recipe, f"{target} still echoes TODO"
     assert "bash scripts/verify_m4.sh" in text
     assert "bash scripts/verify_m4_redteam.sh" in text
-    assert any(
-        "verify-m4-redteam" in line for line in text.splitlines() if line.startswith(".PHONY")
-    ), "verify-m4-redteam is not declared .PHONY"
+    # Membership across EVERY `.PHONY` declaration, continuation lines joined the
+    # way GNU make joins them (F-083, CU-S1). The idiom this replaces read one
+    # line at a time — blind to a wrapped declaration — and compared by SUBSTRING,
+    # so a longer target name merely containing this one would have satisfied it.
+    assert "verify-m4-redteam" in phony_targets(text), (
+        "verify-m4-redteam is not declared .PHONY"
+    )
 
 
 # ----------------------------------------------- the gate has no side effects ---

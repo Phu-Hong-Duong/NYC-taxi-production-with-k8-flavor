@@ -29,15 +29,14 @@ from __future__ import annotations
 import ast
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import REPO
 
 from taxi_mlops.training import registry as R
 from taxi_mlops.training import retrain as RT
 
-REPO = Path(__file__).resolve().parents[2]
 BACKFILL = REPO / "scripts" / "backfill_version_provenance.py"
 REGISTRY_SOURCE = (REPO / "src/taxi_mlops/training/registry.py").read_text()
 RETRAIN_SOURCE = (REPO / "src/taxi_mlops/training/retrain.py").read_text()

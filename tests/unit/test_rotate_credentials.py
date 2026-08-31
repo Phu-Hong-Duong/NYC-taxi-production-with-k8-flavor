@@ -17,8 +17,8 @@ import subprocess
 import sys
 
 import pytest
+from conftest import REPO
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "rotate_credentials.py"
 SECRETS_SH = REPO / "scripts" / "platform_secrets.sh"
 

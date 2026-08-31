@@ -23,12 +23,11 @@ against the real cluster; the transcript is docs/serving_m5.md §2.
 """
 
 import re
-from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO, executable_lines
 
-REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "deploy_serving.sh"
 KIND_CONFIG = REPO / "infra" / "kind" / "kind-config.yaml"
 INGRESS_VALUES = REPO / "infra" / "helm" / "ingress-nginx" / "values.yaml"
@@ -37,18 +36,6 @@ KSERVE_VALUES = REPO / "infra" / "helm" / "kserve" / "values.yaml"
 MAKEFILE = REPO / "Makefile"
 
 pytestmark = pytest.mark.unit
-
-
-def code_only(text: str) -> str:
-    """Everything a shell would execute, with comments and blank lines removed.
-
-    This repo's scripts argue their own design at length, so a grep for a word is
-    a grep of the argument as often as of the code (gotchas #35, #53, #60, #68).
-    Anything asserting what the script DOES gets this; anything asserting what it
-    SAYS reads the raw text on purpose."""
-    return "\n".join(
-        line for line in text.splitlines() if line.strip() and not line.strip().startswith("#")
-    )
 
 
 @pytest.fixture(scope="module")
@@ -205,7 +192,7 @@ def test_the_accept_check_asserts_positively_on_the_controller(script: str) -> N
     version of this check demanded a `Server: nginx` header, which modern
     ingress-nginx omits on purpose, and it went RED over a perfectly good
     install. `/healthz` is the controller's own endpoint on the same port."""
-    code = code_only(script)
+    code = executable_lines(script)
     assert "/healthz" in code
     assert 'HEALTHZ_CODE" != "200"' in code
     assert "server:" not in code.lower(), (
@@ -267,7 +254,7 @@ def test_the_deploy_never_touches_the_registry_or_the_alias(script: str) -> None
     every one of those sentences. #53/#68's rule: in a repo where prose is
     load-bearing, a check about code must look only where code is."""
     for needle in ("champion", "models:/", "mlflow"):
-        assert needle not in code_only(script).lower(), (
+        assert needle not in executable_lines(script).lower(), (
             f"the serving platform deploy names '{needle}' in CODE — it has no "
             "business reading or moving the serving pointer"
         )
@@ -279,6 +266,6 @@ def test_the_deploy_reads_no_secret(script: str) -> None:
     artifacts. Nothing here reads .env, so nothing here can leak it.
 
     Code only, for the same reason as the test above."""
-    code = code_only(script)
+    code = executable_lines(script)
     assert ".env" not in code
     assert "--set" not in code, "a --set argument is visible in ps and in history"

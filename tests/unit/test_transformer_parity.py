@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import ast
 import sys
-from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
 pytestmark = pytest.mark.unit

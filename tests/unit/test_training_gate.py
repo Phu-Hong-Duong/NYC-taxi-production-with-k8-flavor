@@ -13,15 +13,14 @@ dangerous half is exercised against a fake that records what was called.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
+from conftest import REPO
 
 from taxi_mlops.data.config import load_yaml
 from taxi_mlops.training import gate, gate_eras, registry
 from taxi_mlops.training.evaluate import Metrics
 
-REPO = Path(__file__).resolve().parents[2]
 TRAIN_CFG = load_yaml("configs/train.yaml")
 GATE_CFG = TRAIN_CFG["gate"]
 

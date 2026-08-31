@@ -32,11 +32,9 @@ from __future__ import annotations
 
 import re
 import subprocess
-from pathlib import Path
 
 import pytest
-
-REPO = Path(__file__).resolve().parents[2]
+from conftest import REPO
 
 # The anchor the PO sanctioned. Written here ONCE; every script is checked
 # against it, and this literal is what a future sanctioned move must edit.

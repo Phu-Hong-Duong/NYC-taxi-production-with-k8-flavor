@@ -30,8 +30,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO, imported_roots
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
 ONLINE_READER = REPO / "infra" / "feast" / "online.py"
@@ -59,17 +59,6 @@ MATERIALIZE_RECORD = REPO / "automation" / "runs" / "m8-online" / "materialize.j
 
 INHERITED_ROWS = 88
 DECLARED_PAIRS = 100
-
-
-def _imported_roots(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    roots: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            roots.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            roots.add(node.module.split(".")[0])
-    return roots
 
 
 def _called_names(path: Path) -> set[str]:
@@ -102,7 +91,7 @@ def _pairs() -> list[dict[str, str]]:
 
 # ------------------------------------------------------------- the wall ---
 def test_the_online_reader_is_on_the_far_side_of_the_wall() -> None:
-    roots = _imported_roots(ONLINE_READER)
+    roots = imported_roots(ONLINE_READER)
     assert "feast" in roots, "the reader must be the one that imports feast"
     assert "taxi_mlops" not in roots, (
         "one import across the quarantine line is how a quarantine stops being one — "
@@ -111,13 +100,13 @@ def test_the_online_reader_is_on_the_far_side_of_the_wall() -> None:
 
 
 def test_the_online_redteam_is_on_the_far_side_too() -> None:
-    roots = _imported_roots(ONLINE_REDTEAM)
+    roots = imported_roots(ONLINE_REDTEAM)
     assert {"feast", "redis"} <= roots
     assert "taxi_mlops" not in roots
 
 
 def test_the_comparer_is_on_our_side_of_the_wall() -> None:
-    roots = _imported_roots(PARITY)
+    roots = imported_roots(PARITY)
     assert "taxi_mlops" in roots
     assert "feast" not in roots, (
         "the comparison happens where taxi_mlops.features lives; parquet is the only "
