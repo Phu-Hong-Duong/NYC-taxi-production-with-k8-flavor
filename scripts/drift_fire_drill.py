@@ -43,15 +43,22 @@ import json
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _lib import ports  # noqa: E402
+from _lib.k8s import start_forward, stop_forward  # noqa: E402
+from _lib.monitoring import (  # noqa: E402
+    alertmanager_alerts,
+    firing_labels,
+    prom_query,
+    prom_rules,
+)
 
 from taxi_mlops.monitoring.__main__ import PUSH_JOB, build_metrics  # noqa: E402
 from taxi_mlops.monitoring.drift import compute_drift  # noqa: E402
@@ -69,8 +76,8 @@ PROM_HOST = "prometheus.local"
 #: port family: the family lists ports this program DECLARES, and a forward
 #: that exists for ten minutes inside one drill is not a declared route (the
 #: `make flyte-actions` 8092 precedent, and `alert_fire_drill.py`'s 9095).
-PUSHGATEWAY_LOCAL_PORT = 9096
-ALERTMANAGER_LOCAL_PORT = 9097
+PUSHGATEWAY_LOCAL_PORT = ports.port("PUSHGATEWAY_DRIFT_DRILL")
+ALERTMANAGER_LOCAL_PORT = ports.port("ALERTMANAGER_DRIFT_DRILL")
 
 MONTHS = ("2020-01", "2020-02", "2020-03")
 
@@ -200,63 +207,28 @@ def say(msg: str) -> None:
     print(f"[drift-drill] {msg}", flush=True)
 
 
-def http_get(host: str, url: str, timeout: float = 20.0) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"Host": host})  # noqa: S310
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            return response.status, response.read().decode()
-    except urllib.error.HTTPError as error:
-        return error.code, error.read().decode()
-
-
-def prom_rules() -> dict[str, dict[str, Any]]:
-    status, body = http_get(PROM_HOST, f"{ROUTE}/api/v1/rules")
-    if status != 200:
-        raise RuntimeError(f"Prometheus /api/v1/rules -> {status}")
-    out: dict[str, dict[str, Any]] = {}
-    for group in json.loads(body)["data"]["groups"]:
-        for rule in group["rules"]:
-            if rule.get("type") == "alerting":
-                out[rule["name"]] = rule
-    return out
-
-
-def firing_months(rules: dict[str, dict[str, Any]], alert: str) -> set[str]:
-    """Which MONTHS this alert is firing for — not merely whether it is firing.
-
-    THIS IS THE CHECK, AND THE FIRST VERSION OF THIS DRILL GOT IT WRONG. A-9 is
-    predicted to fire for 2020-03 and to stay quiet for 2020-01 and 2020-02 —
-    three predictions about ONE rule name. A judge keyed on the name alone
-    cannot express that, and mine reported `A-9 fired and was predicted
-    INACTIVE` while the system was behaving exactly as predicted (gotcha #67's
-    family: a checker whose unit of judgement is coarser than the fact it is
-    judging).
-
-    Reading the per-series `alerts` array is also strictly the STRONGER claim: a
-    rule that fired for all three months — i.e. a bar so low that an ordinary
-    January trips it — would pass a name-level check and fails this one.
-    """
-    rule = rules.get(alert) or {}
-    return {
-        instance.get("labels", {}).get("month", "")
-        for instance in rule.get("alerts") or []
-        if instance.get("state") == "firing"
-    }
-
-
-def prom_query(expr: str) -> list[dict[str, Any]]:
-    url = f"{ROUTE}/api/v1/query?query={urllib.parse.quote(expr)}"
-    status, body = http_get(PROM_HOST, url)
-    if status != 200:
-        raise RuntimeError(f"Prometheus query -> {status}: {body[:200]}")
-    return json.loads(body)["data"]["result"]
-
-
-def alertmanager_alerts(port: int) -> list[dict[str, Any]]:
-    status, body = http_get("localhost", f"http://localhost:{port}/api/v2/alerts")
-    if status != 200:
-        return []
-    return json.loads(body)
+# --- readers ---------------------------------------------------------------
+# `http_get`, `prom_rules`, `prom_query`, `alertmanager_alerts` and the
+# port-forward moved to `_lib` at CU-S4. `firing_months` became
+# `_lib.monitoring.firing_labels(rules, alert, label)` — the LABEL is the
+# parameter, so this drill's `month` read and the store watchdog's `check`
+# read are one reader without either losing the per-series property. The
+# argument for that property is kept here, where the drill that paid for it
+# is:
+#
+#   Which MONTHS this alert is firing for — not merely whether it is firing.
+#
+#       THIS IS THE CHECK, AND THE FIRST VERSION OF THIS DRILL GOT IT WRONG. A-9 is
+#       predicted to fire for 2020-03 and to stay quiet for 2020-01 and 2020-02 —
+#       three predictions about ONE rule name. A judge keyed on the name alone
+#       cannot express that, and mine reported `A-9 fired and was predicted
+#       INACTIVE` while the system was behaving exactly as predicted (gotcha #67's
+#       family: a checker whose unit of judgement is coarser than the fact it is
+#       judging).
+#
+#       Reading the per-series `alerts` array is also strictly the STRONGER claim: a
+#       rule that fired for all three months — i.e. a bar so low that an ordinary
+#       January trips it — would pass a name-level check and fails this one.
 
 
 def champion_version() -> str:
@@ -271,19 +243,6 @@ def champion_version() -> str:
     if out.returncode != 0:
         return "unreadable"
     return str(json.loads(out.stdout)["version"])
-
-
-def port_forward(service: str, namespace: str, local: int, remote: int) -> subprocess.Popen:
-    process = subprocess.Popen(
-        [
-            "kubectl", "-n", namespace, "port-forward",
-            service, f"{local}:{remote}",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    time.sleep(3)
-    return process
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -333,12 +292,12 @@ def main(argv: list[str] | None = None) -> int:
     failures: list[str] = []
     try:
         forwards.append(
-            port_forward(
+            start_forward(
                 f"svc/{SERVICE_NAME}", "monitoring", PUSHGATEWAY_LOCAL_PORT, 9091
             )
         )
         forwards.append(
-            port_forward(
+            start_forward(
                 "svc/prometheus-alertmanager", "monitoring", ALERTMANAGER_LOCAL_PORT, 9093
             )
         )
@@ -359,14 +318,15 @@ def main(argv: list[str] | None = None) -> int:
         say("reset: the gateway's drift groups are cleared; waiting for the rules to settle …")
         for _ in range(24):
             time.sleep(10)
+            states = prom_rules(PROM_HOST, ROUTE)
             if all(
-                prom_rules().get(name, {}).get("state") == "inactive" for name in DRIFT_ALERTS
+                states.get(name, {}).get("state") == "inactive" for name in DRIFT_ALERTS
             ):
                 break
         say("    the board is clean")
 
         # --- phase 1: the rules are loaded before anything is pushed ----------
-        rules = prom_rules()
+        rules = prom_rules(PROM_HOST, ROUTE)
         missing = sorted(DRIFT_ALERTS - set(rules))
         if missing:
             failures.append(f"Prometheus has not loaded {missing}")
@@ -408,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
         seen: list[dict[str, Any]] = []
         for _ in range(12):
             time.sleep(5)
-            seen = prom_query('taxi_drift_volume_ratio{job="taxi-drift"}')
+            seen = prom_query(PROM_HOST, ROUTE, 'taxi_drift_volume_ratio{job="taxi-drift"}')
             if len(seen) >= len(MONTHS):
                 break
         if len(seen) < len(MONTHS):
@@ -432,11 +392,11 @@ def main(argv: list[str] | None = None) -> int:
         deadline = time.time() + args.observe_seconds
         last: dict[str, str] = {}
         while time.time() < deadline:
-            rules = prom_rules()
+            rules = prom_rules(PROM_HOST, ROUTE)
             states = {name: rules[name]["state"] for name in DRIFT_ALERTS if name in rules}
             elapsed = time.time() - pushed_at
             for name in DRIFT_ALERTS:
-                for month in firing_months(rules, name):
+                for month in firing_labels(rules, name, "month"):
                     key = f"{name}@{month}"
                     if key not in fired_at:
                         fired_at[key] = elapsed
@@ -527,7 +487,8 @@ def main(argv: list[str] | None = None) -> int:
         say("clearing: deleted the 2020-03 group; watching A-9 …")
         for _ in range(30):
             time.sleep(10)
-            if prom_rules().get("ScoringVolumeCollapse", {}).get("state") == "inactive":
+            collapse = prom_rules(PROM_HOST, ROUTE).get("ScoringVolumeCollapse", {})
+            if collapse.get("state") == "inactive":
                 clear_seconds = time.time() - cleared_at
                 break
         if clear_seconds is None:
@@ -562,7 +523,7 @@ def main(argv: list[str] | None = None) -> int:
 
     finally:
         for process in forwards:
-            process.terminate()
+            stop_forward(process)
 
     record["finished_at"] = now()
     record["failures"] = failures

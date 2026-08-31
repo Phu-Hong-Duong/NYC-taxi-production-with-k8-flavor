@@ -71,23 +71,26 @@ def _forward_is_up(process: subprocess.Popen, deadline: float, local: int) -> bo
     return False
 
 
-@contextlib.contextmanager
-def port_forward(
+def start_forward(
     target: str, namespace: str, local: int, remote: int, timeout: float = 20.0
-) -> Iterator[subprocess.Popen]:
-    """An ephemeral `kubectl port-forward`, waited for and always torn down.
+) -> subprocess.Popen:
+    """Start an ephemeral `kubectl port-forward` and WAIT for it to listen.
 
-    **It waits rather than sleeps, and that is the one behaviour change CU-S4
-    made here.** The copies this replaced slept a fixed 3 or 4 seconds and then
-    proceeded regardless, so a forward that never came up produced a connection
-    error attributed to whatever the drill asked next — the failure lands on the
-    wrong component, which is the shape this program keeps paying for (#55, #70).
-    Asking a socket instead is strictly stronger in both directions: a forward
-    that is ready in 0.3 s stops costing four seconds, and one that is not ready
-    at all raises HERE, naming itself.
+    **The wait is the one behaviour change CU-S4 made here.** The copies this
+    replaces slept a fixed 3 or 4 seconds and then proceeded regardless, so a
+    forward that never came up produced a connection error attributed to
+    whatever the drill asked next — the failure lands on the wrong component,
+    which is the shape this program keeps paying for (#55, #70). Asking a socket
+    instead is strictly stronger in both directions: a forward ready in 0.3 s
+    stops costing four seconds, and one that is not ready at all raises HERE,
+    naming itself.
 
-    The local port must come from `_lib.ports` — see that module for why a
-    number chosen per file is coordination that degrades silently.
+    Prefer `port_forward()`. This form exists for the drills that already own a
+    `try/finally` around a long timeline, where wrapping the body in a `with`
+    would re-indent a hundred lines and bury the change under the diff.
+
+    The local port must come from `_lib.ports` — see that module for why a number
+    chosen per file is coordination that degrades silently.
     """
     process = subprocess.Popen(  # noqa: S603
         [
@@ -97,17 +100,31 @@ def port_forward(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    if not _forward_is_up(process, time.time() + timeout, local):
+        stop_forward(process)
+        raise RuntimeError(
+            f"the port-forward {target} {local}:{remote} in namespace {namespace} "
+            f"never started listening within {timeout:.0f}s (exit code "
+            f"{process.poll()}). Nothing downstream of this ran, so any error you "
+            "were about to read would have named the wrong component."
+        )
+    return process
+
+
+def stop_forward(process: subprocess.Popen) -> None:
+    """Tear a forward down and WAIT for it, so the port is free for the next caller."""
+    process.terminate()
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        process.wait(timeout=5)
+
+
+@contextlib.contextmanager
+def port_forward(
+    target: str, namespace: str, local: int, remote: int, timeout: float = 20.0
+) -> Iterator[subprocess.Popen]:
+    """`start_forward`, always torn down. The form to reach for."""
+    process = start_forward(target, namespace, local, remote, timeout=timeout)
     try:
-        if not _forward_is_up(process, time.time() + timeout, local):
-            raise RuntimeError(
-                f"the port-forward {target} {local}:{remote} in namespace "
-                f"{namespace} never started listening within {timeout:.0f}s "
-                f"(exit code {process.poll()}). Nothing downstream of this ran, "
-                "so any error you were about to read would have named the wrong "
-                "component."
-            )
         yield process
     finally:
-        process.terminate()
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            process.wait(timeout=5)
+        stop_forward(process)
