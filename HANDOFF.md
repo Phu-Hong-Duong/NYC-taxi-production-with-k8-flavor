@@ -1,5 +1,107 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (df) — the fork is ANSWERED and the architect lane is live again (re-probed, not taken on trust); the chain resumes to ARCH, and the cluster is down
+
+### State
+**EXECUTOR, `claude-opus-5` (stated first line).** Session MODE: **CHARTERED**
+(watchdog HEAL at 08:20:01, session #5 today). Boot per the ritual: CLAUDE.md ·
+HANDOFF (de) · `docs/milestones/POST_PUBLISH_KICKOFF.md` · AWAITING_PO ·
+watchdog log. No `automation/runs/*.status` was pointed at by (de); none read.
+
+**No chartered story exists for an executor, for the fourth session running —
+but the REASON changed overnight, and that is this session's whole point.**
+(de) parked on **AWAITING_PO 2026-08-30-3** (ARCH could not run: the architect
+model was out of monthly spend). **The PO answered it** in commit `3c16506`
+(2026-08-31 07:12:44Z, their Windows-side session): *"can you resume this
+process"* — **option (a), and the wait is over.** So the block that made the
+last three sessions empty is gone, and the correct successor is **ARCH**, which
+the PO's answer names explicitly: *"the next ARCH touch charters the cleanup"*.
+
+### Reconciliation (staleness check — (de)'s Next no longer holds, and one new fact)
+1. **The park is over.** (de)'s Next said *"the chain PARKS on 2026-08-30-3 and
+   schedules NOTHING"*. Answered. `automation/STOP` is **ABSENT**; the watchdog
+   healed four times between 07:30 and 08:20 (two of those successors never
+   launched — `pending_successor is 1200s old … it never launched; clearing`,
+   the 2026-08-30-2 deadlock visible in the log).
+2. **I re-probed the architect lane rather than trusting the answer.**
+   `claude --model fable -p "Reply with exactly: OK"` → **`OK`, exit 0**, run in
+   this session. The PO's note records a probe at 07:12:07Z; a successor is
+   spent on the strength of that claim, so it is worth the twenty seconds to
+   ask again at the moment of scheduling. (de) established the wall by probing;
+   this confirms its removal the same way.
+3. **NEW: the cluster is DOWN, and it is gotcha #34, confirmed at the
+   mechanism.** `kubectl` and `docker` are both `command not found`;
+   `/usr/local/bin/kubectl` is a **dangling** symlink into
+   `/mnt/wsl/docker-desktop/cli-tools/usr/local/bin/kubectl`, and that
+   `cli-tools` directory is **empty** (`os.listdir` → `[]`). Docker Desktop is
+   not running. Not inferred from the error string — the error string is the
+   part that misleads.
+4. Tree clean, `HEAD` = `3c16506` = `origin/main`.
+
+### Done — each with the command and what it printed
+1. **`claude --model fable -p …` → `OK`, exit 0.** The measurement behind
+   scheduling ARCH rather than parking again.
+2. **`uv run pytest tests/unit -q` → `1319 passed, 1 skipped in 68.49s`.** HEAD
+   is host-green after the PO's five Windows-side commits and PR #79's merge.
+3. **`uv run pytest tests/unit -q -rs` → the skip is
+   `tests/unit/test_task_image.py:252: the DRY_RUN preview needs git for the tag
+   and docker on PATH for its precheck`.** That one skip **is** finding 3's
+   fingerprint inside the suite — see the field note. With Docker Desktop up it
+   is 1,320 passed, which is the number `readme-check` claims.
+4. **`make readme-check` → GREEN**, 29 claims re-read from their records
+   (`13 signal ids` · `10 gates` · `8 red teams` · `1,320 tests` · `~932 MiB` ·
+   `zero unacknowledged`).
+5. **Nothing was changed but this entry and a field note.** No fit, no alias
+   move, no registry version, no wire touched, no cluster call at all (none is
+   possible), no record under `automation/runs/` rewritten, no threshold moved,
+   no `uv.lock` change. `@champion` untouched and unread.
+6. **`AWAITING_PO.md` was deliberately NOT touched.** Nothing new waits on the
+   PO from here, and per 2026-08-30-2 item 2 that file's hash IS the park
+   detector — an executor writing a "nothing waits" note into it while
+   scheduling a successor would tell the watchdog it had parked and scheduled at
+   the same time. Silence is the correct signal.
+
+### Defects/Surprises
+- **The cluster being down is a PRECONDITION of the cleanup charter's own
+  floor, not a nuisance.** PO directive 2026-08-29-2 sets the floor at *"ten
+  gates GREEN per slice"* and `verify-m0…m9` ask the live cluster (M9 alone asks
+  three live questions). **So no cleanup slice can be accepted until Docker
+  Desktop is running.** This is NOT a fork — there is no decision, only one
+  action (launch Docker Desktop; kind's node containers restart themselves,
+  gotcha #34) — so it is recorded here and not in the inbox. It is also
+  self-healing in practice: a prior session recorded Docker Desktop coming back
+  mid-session once the PO touched the machine.
+- **No repo defect found.** HEAD is host-green; the only unrunnable checks are
+  unrunnable for an environmental reason that names itself.
+
+### Next
+**ARCH is scheduled (+120 s)** — exit (c): the post-publish queue's only story
+(PP-S1) landed at session (db), no executor story exists anywhere in
+`docs/milestones/`, and the fork that blocked ARCH is answered. **ARCH inherits
+a strictly better starting position than (dd) handed it:**
+
+1. **Charter PO directive 2026-08-29-2 (the codebase cleanup)** — and the audit
+   leg it wanted **already has a verified input**: `docs/cleanup_audit_verification.md`
+   + `scripts/cleanup_audit_verify.py` (PR #79) re-derive by RUNNING what
+   `docs/cleanup_audit_seed.md` produced by grepping — 43 CONFIRMED · 6 DIFFERS
+   (all accounted for) · 3 newly MEASURED. **Read (de)'s four constraints before
+   writing slices**, especially that `f016_replay_probe.py` is named inside a
+   RUNTIME ERROR MESSAGE (`src/taxi_mlops/training/gate_eras.py:95`) and that the
+   `_calls()` consolidation would *weaken* a live guard in `test_tuning.py`.
+2. **State the cluster precondition IN the charter.** Each slice ends with the
+   ten-gate sweep, and that sweep needs Docker Desktop. A slice authored as if
+   the gates were runnable today will be accepted against a sweep nobody could
+   run — which is exactly the shape this program spends its gates preventing.
+   The host-only half (suite + `ruff` + `readme-check`) runs regardless and is
+   green at `3c16506`.
+3. **Fold PO directive 2026-08-30-1 (the CHARTERED/EVERYDAY scope rule) into
+   `docs/org/ORG.md` and the ceremony-instructing templates** — the directive
+   says it can ride the cleanup charter as one small slice.
+4. **2026-08-30-2 (the VM/watchdog deadlock) is still OPEN and is not ARCH's to
+   answer.** Until the PO decides it, any park stays parked until they next
+   touch WSL — so ARCH should charter enough work that the chain does not need
+   to park to make progress.
+
 ## Session 2026-08-30 (de) — ARCH is out of monthly spend, so the cleanup cannot be chartered; the audit seed was VERIFIED instead, and the chain parks on a fork
 
 ### State

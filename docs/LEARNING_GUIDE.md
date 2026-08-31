@@ -5206,3 +5206,59 @@ beside its findings.
 reports two semantics, cleanly and confidently, and nothing anywhere goes red —
 which is what a measurement that has quietly stopped measuring looks like from
 the outside.
+
+## Session (df) — the one skipped test was the environment talking
+
+**What happened.** A short reconciliation session: the fork that had emptied the
+queue for three sessions was answered overnight, so the job was to confirm the
+block was really gone and hand the chain to ARCH. Two things came out of it that
+are worth more than the handoff line they occupy.
+
+**First: re-probe a "the wall is gone" claim before you spend a session on it.**
+Session (de) established that the architect lane was dead by running
+`claude --model fable -p` itself rather than trusting one 154-byte log — one
+dead log is an anecdote, a live probe is a fact. The removal of a wall deserves
+exactly the same treatment, and it is easy to skip because the news is good: the
+PO's answer recorded a successful probe at 07:12:07Z, and it would have felt
+rude to check. But a successor is scheduled on the strength of that claim, and
+on this machine a successor that dies takes the whole chain with it (the VM
+idles down, cron dies with it, no heal can fire — AWAITING_PO 2026-08-30-2). So
+the probe was re-run at the moment of scheduling: `OK`, exit 0. Twenty seconds
+against a chain that cannot self-recover. **Symmetry is the rule: whatever
+evidence standard established a blocker is the standard that retires it.**
+
+**Second, and this is the transferable one: the suite's single skip was the
+environment's fingerprint, and the default reading hides it.** `uv run pytest
+tests/unit -q` printed `1319 passed, 1 skipped`. One skip in thirteen hundred
+reads as noise — the suite is green, move on. Adding `-rs` cost one flag and
+printed the reason: *"the DRY_RUN preview needs git for the tag and docker on
+PATH for its precheck."* Docker is not on PATH because Docker Desktop is not
+running, which is the same fact that presents elsewhere as `kubectl: command not
+found` (gotcha #34) — and that fact is a **precondition of the cleanup
+charter's own floor**, which demands ten gates GREEN per slice from gates that
+all ask the live cluster.
+
+So a number that looked like housekeeping was actually the answer to a question
+nobody had asked yet: *can the work that is about to be chartered be accepted at
+all today?* This repo already treats an empty dashboard panel as a failure
+because it is indistinguishable from a quiet system (gotcha #78). A skip is the
+same disease at test grain — it renders as success, it is *counted* as success
+by every summary line, and its reason is the only part that carries information.
+This suite deliberately uses `skipif`-on-a-binary as its idiom for `ss`, `git`,
+`make` and `docker` (F-054 narrowed the record-existence form away precisely so
+the remaining skips would mean something), which means **every remaining skip in
+this suite is a sensor**. Reading them is not diligence; it is reading the
+instrument you already built.
+
+**The near miss.** The alternative session writes "host suite green, 1319
+passed", schedules ARCH, and ARCH charters cleanup slices whose acceptance
+criterion is a gate sweep that cannot run. Nothing would have been *wrong* in
+that handoff. It would simply have omitted the one thing the next session needed
+to know, and the omission was sitting in the output the whole time under a
+one-word label.
+
+**What to try yourself.** Run `uv run pytest tests/unit -q` and then the same
+command with `-rs`, with Docker Desktop up and down. The pass count moves by one
+and the summary line's meaning moves entirely. Then ask of any suite you own:
+how many of its skips are load-bearing, and would you notice if one of them
+started firing?
