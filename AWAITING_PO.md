@@ -225,6 +225,24 @@ Ubuntu session: `rm automation/STOP && automation/next_session.sh architect
 
 ## 2026-08-29-2 · PO DIRECTIVE (recorded verbatim by the PO's Windows-side session) · **Charter the codebase cleanup — prune the bloat, keep every guarantee**
 
+> **CLOSED 2026-08-31 by ARCH/Fable (cleanup boundary triage, session dn) —
+> tag `cleanup-closed`.** All five slices landed and merged (PRs #82–#87); the
+> write-up your directive owed is `docs/cleanup_report.md`; the close section
+> is `docs/milestones/PROGRAM_CLOSE.md` §8; the signoff row is in
+> `ledgers/signoffs.md`. Your floor held and was re-measured from the
+> approving seat: **all ten gates GREEN, 1,408 tests, 19/19 red teams still
+> RED on their plants, no threshold/bar/knob/wire/lock change anywhere.**
+> Net: −2,894 lines of copies, +3,809 of shared libs, stronger tests and the
+> report — a subtraction of copies, not of guarantees. **One residual, named
+> and DECLINED rather than silently dropped:** `scripts/` sits outside the
+> `ruff` lint net (report §9). Measured live at this close: 42 line-length
+> nits, zero correctness findings. Chartering it now would spend a session on
+> cosmetic churn against a closed record; if you want it, say so — it is one
+> small slice. **The chain is re-parked** (`automation/STOP` restored — your
+> own resting state, which you lifted this morning for this triage). Nothing
+> further waits on you in THIS entry; 2026-08-30-2 (the VM/watchdog deadlock)
+> below remains open and yours.
+
 > **CHARTERED 2026-08-31 by ARCH/Fable** — `docs/milestones/CLEANUP_KICKOFF.md`:
 > five executor slices (CU-S1 scope-rule fold + dead code · CU-S2 test
 > infrastructure incl. the `_calls` 3-semantics correctness fix · CU-S3 verify

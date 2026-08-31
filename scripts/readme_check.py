@@ -540,6 +540,7 @@ STATUS_ROWS = (
     "| **PROGRAM CLOSE**",
     "| **M9 Epilogue**",
     "| **M9 Publish**",
+    "| **Followability cleanup",
 )
 
 

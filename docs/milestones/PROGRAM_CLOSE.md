@@ -356,3 +356,112 @@ Change visibility → Public — and the resume for anything after it is:
 cd ~/NYC-taxi-production-with-k8-flavor
 automation/next_session.sh architect 120
 ```
+
+## 8. CLEANUP CLOSE — the followability cleanup, five slices, nothing weakened (ARCH/Fable · 2026-08-31)
+
+**Verdict: the CLEANUP CLEANLY CLOSES — tag `cleanup-closed`.** All five
+chartered slices (`docs/milestones/CLEANUP_KICKOFF.md`, PO directive
+2026-08-29-2) landed and merged as PRs **#82–#87** (CU-S4 in two PRs' worth of
+commits, CU-S5 as #87, merge `dd4464f`), the write-up the directive owed the PO
+is committed (`docs/cleanup_report.md`), and the directive's floor — *prune the
+bloat, keep every guarantee* — is answered by measurement on both sides: **net
+−2,894 lines of copies against +3,809 of libs, tests and report** (130 files;
+the cleanup is not a net subtraction of lines, it is a subtraction of copies),
+with **every guarantee row in report §6 unmoved** and twelve guards re-derived
+to STRONGER instruments (§5 — nine of twelve moved from reading a file to
+running a behaviour; two rewritten in place with their old assertion kept in
+the docstring; none widened, none deleted).
+
+**The sweep this boundary ran itself, from the approving seat (2026-08-31,
+after the pause was lifted):**
+
+```
+make verify-m0 … verify-m9   → GREEN, all ten, exit 0 each
+uv run pytest tests/unit -q  → 1408 passed in 67.47s   (0 skipped)
+make readme-check            → GREEN — every target, path and number checks out.
+uv run ruff check src tests pipelines → All checks passed!
+```
+
+The battery is the executor's record and was not re-run — **19 of 19 red teams
+RED on plant, GREEN on restore, 1,593.6 s**
+(`automation/runs/m-cleanup/battery.json`); re-running it would rewrite the two
+records F-086 documents, which is that finding's own lesson. Lineage (gotcha
+#20): `git merge-base --is-ancestor dd4464f origin/main` → yes.
+
+**The five slices, dispositioned:**
+- **CU-S1 (scope rule + dead code) — LANDED, PR #82.** Tier A's six prose-only
+  instruments (1,050 LOC) deleted with all three live reference-site edits in
+  the same commits; Tier B's five kept consciously; the CHARTERED/EVERYDAY
+  mode rule folded into ORG.md and the templates.
+- **CU-S2 (one conftest, honest helper names) — LANDED, PR #83.** The
+  `_calls()` three-semantics hazard resolved by SPLITTING; `test_tuning.py`'s
+  broad form kept deliberately (broader is stronger behind a forbidding
+  assertion).
+- **CU-S3 (verify harness + red-team restore libs) — LANDED, PR #84.** ~710
+  LOC of byte-identical scaffolding into two sourced libs; gate LEGS untouched
+  (the deliberate second witnesses); the `consume < <(` subshell lesson now
+  MEASURED by a test rather than asserted in a comment.
+- **CU-S4 (python plumbing) — LANDED, PR #86.** Forwards, prom readers,
+  kubectl wrappers, record loader into `scripts/_lib/`; the port registry made
+  named constants; net **+15** lines because that cluster had genuinely
+  diverged — reported at the size it happened.
+- **CU-S5 (isvc deploy lib + report + battery) — LANDED, PR #87.** Five
+  deploys onto `scripts/lib/isvc_deploy.sh` (net −67); **F-087** found by the
+  fingerprint (the transformer's route wait fell through silently — closed by
+  the consolidation taking the STRICTEST behaviour, named as a behaviour
+  change); **F-086** (the battery rewrites two other milestones' records —
+  timestamp-only, restored from git, the ordering constraint written into
+  report §7); the report complete.
+
+**Dispositions at this boundary (nothing carried silently):**
+- **F-086, F-087** — both raised and CLOSED by CU-S5, both ledgered with
+  evidence; verified at this triage. Approved as closed.
+- **F-001** — the register's only open row; stays open BY DESIGN (session
+  allowlist, the PO's, non-blocking since M0).
+- **Debt register** — CLOSED; nothing due, nothing intaken.
+- **The lint gap (report §9) — DECLINED to charter, with the measurement that
+  decides it taken live at this close:** `ruff check scripts` today reports
+  **42 E501 (line-too-long) and nothing else** — zero correctness-class
+  findings. The `F821` that motivated the concern was CU-S4's and is fixed;
+  post-close, `scripts/` changes only under PO directive, so the net's
+  marginal coverage is small against the cost of an executor session spending
+  mechanical churn on a closed, published record. The gap stays NAMED in
+  report §9 and here; if the PO wants it, it is one small slice (widen the
+  net with a per-directory E501 policy, or fix the 42) and the resume is one
+  command.
+- **The heal path's fixed role (watchdog.sh:237) — RE-DECLINED, re-priced
+  with the second occurrence in evidence.** Session (dm) measured it: the PO
+  lifted their pause, the heal launched an EXECUTOR against an empty queue,
+  and the cost was one read-only session that verified four gates and handed
+  off cleanly. The POST_PUBLISH decline's reasoning holds (closed program,
+  bounded harm, chain plumbing whose maintenance surface outlives the
+  program) — and with the chain re-parked on `automation/STOP` below, the
+  heal path stands down entirely while the park lasts. If the chain ever runs
+  a new program, re-price it then; the evidence is now real on both
+  occurrences.
+- **AWAITING_PO 2026-08-30-2** (the VM/watchdog deadlock) — stays OPEN and
+  stays the PO's. No slice touched it; nothing in this close needs it
+  answered.
+
+**One repair made AT this boundary (the publish-close precedent):** the
+cleanup's README Status row joins `readme_check.py`'s `STATUS_ROWS` pin
+(13 → 14) in the same commit that adds it, and the unit test's count is
+re-derived with it (gotcha #50). A closed row is history, and history that is
+not pinned can be dropped by a rewrite without any check noticing.
+
+**End state, read live at this close:** `@champion` **2** / `feature_set v2`,
+versions `['1','2']` — no version 3; nothing fitted, no alias moved, no wire
+changed by any slice; `uv.lock` byte-identical to
+`lock-rebaselined-m9-publish`; all 5 DVC pins `up to date`; host suite
+**1,408 passed, 0 skipped**; `make readme-check` GREEN over the new row.
+
+**The chain PARKS — `automation/STOP` restored (the PP-S1 close precedent:
+the PO's own resting state, not a new mechanism).** The queue is empty, the
+findings register holds one open row and it is the PO's, and everything that
+could resume the chain is a PO decision. Nothing is scheduled. To resume:
+
+```bash
+cd ~/NYC-taxi-production-with-k8-flavor
+rm automation/STOP
+automation/next_session.sh architect 120
+```

@@ -1,5 +1,95 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (dn) — ARCH: the CLEANUP is CLOSED (tag `cleanup-closed`); ten gates re-run GREEN from the approving seat; the chain re-parks on the PO's own resting state
+
+### State
+**ARCH, `claude-fable-5` · Session MODE: CHARTERED** (chain-launched by (dm)'s
+`automation/next_session.sh architect 120`). Boot per the ritual: CLAUDE.md ·
+HANDOFF (dm, dl) · `docs/milestones/CLEANUP_KICKOFF.md` · `AWAITING_PO.md` ·
+ledgers (findings/debt/signoffs/deployments) · `docs/cleanup_report.md`.
+Reconciliation at boot: three `mlops-taxi` node containers Up 6h, 3/3 nodes
+Ready v1.36.1 at 14d, tree clean, `main` == `origin/main` at `672b348`,
+lineage `git merge-base --is-ancestor dd4464f origin/main` → yes (gotcha #20).
+**This is the cleanup's boundary triage — the touch (dl) and (dm) both named.**
+
+### Done — the close, with the evidence produced by the approver, not inherited
+1. **The full sweep, re-run from the approving seat**: `make verify-m0` …
+   `verify-m9` → **GREEN, all ten, exit 0 each** (m9's banner citing the
+   CLOSED-and-cited observed box) · `uv run pytest tests/unit -q` →
+   **1408 passed in 67.47s, 0 skipped** · `make readme-check` → GREEN ·
+   `uv run ruff check src tests pipelines` → clean. The 19/19 battery was NOT
+   re-run, deliberately: re-running it rewrites the two records F-086
+   documents, which is that finding's own lesson.
+2. **The report reviewed against the directive's floor**
+   (`docs/cleanup_report.md`): §5's twelve re-derived guards each carry old
+   property → new property, nine moved from reading a file to RUNNING a
+   behaviour, none widened, none deleted; §6's guarantee table re-verified
+   live (`@champion` 2 / `feature_set v2`, no version 3, `uv.lock`
+   byte-identical to `lock-rebaselined-m9-publish`, all 5 DVC pins up to
+   date). The floor — *must not weaken what the program can PROVE* — holds.
+3. **The close written**: `docs/milestones/PROGRAM_CLOSE.md` **§8** (verdict,
+   sweep paste, the five slices dispositioned, every open item dispositioned)
+   · README Status row **added** for the cleanup and joined to
+   `readme_check.py`'s `STATUS_ROWS` pin (13 → 14) with
+   `tests/unit/test_readme.py` re-derived in the same commit (the
+   publish-close precedent) — `make readme-check` GREEN and
+   `test_readme.py` 7/7 AFTER the flip · **signoff row** written
+   (producer EXEC/Opus on all five slices, approver ARCH/Fable — rule 2
+   honored) · dated CLOSED note under AWAITING_PO **2026-08-29-2** · tag
+   **`cleanup-closed`** on the close commit, pushed.
+
+### Decisions
+- **The lint gap (report §9) — DECLINED to charter, on a measurement taken
+  live**: `ruff check scripts` today = **42 E501, zero correctness-class
+  findings**. The F821 that motivated the concern was CU-S4's and is fixed;
+  post-close, `scripts/` moves only under PO directive, so the net's marginal
+  coverage is small against an executor session of mechanical churn on a
+  closed, published record. Named in §8 and in the PO's inbox note — one small
+  slice if the PO ever directs it.
+- **The heal path's fixed role (watchdog.sh:237) — RE-DECLINED, re-priced with
+  (dm)'s observed second occurrence**: measured cost is one read-only executor
+  session against an empty queue; the POST_PUBLISH decline's reasoning stands
+  (closed program, bounded harm, chain plumbing whose maintenance surface
+  outlives the program), and with STOP restored the heal path stands down
+  entirely while the park lasts. Evidence is now real on both occurrences; if
+  the chain ever runs a new program, re-price it then.
+- **Nothing is chartered.** BLUEPRINT §9 ends at M9; the program, its publish,
+  the post-publish story and now the cleanup are all closed; every remaining
+  open item is the PO's (F-001 standing · 2026-08-30-2 the VM/watchdog
+  deadlock · the lint offer). An ARCH inventing post-close work without a
+  directive is the same shape as an executor inventing a story — the
+  constitution's answer is the same: it WAITS.
+- **The park mechanism is `automation/STOP`, restored** — the PP-S1 close
+  precedent (the PO's own resting state, which the PO lifted by hand this
+  morning precisely so this triage could run). With STOP present the watchdog
+  stands down cleanly (`STOP present — chain paused deliberately`), so the
+  park cannot be misread as a crash and no wrong-role heal can fire.
+
+### Defects/Surprises
+- **None on the milestone.** All ten gates GREEN on the first run of each from
+  this seat; no repair was needed at this boundary (the first boundary since
+  M8 with nothing to fix — the F-065/F-072/F-073 precedent went unused).
+- F-086 and F-087 were verified ledgered and CLOSED with evidence; the
+  findings register's only open row is **F-001** (standing, the PO's,
+  non-blocking since M0). Debt register CLOSED.
+- **No field note** — the field-note law is per STORY and this session
+  executed none.
+
+### Next
+**Nothing. The chain is PARKED — deliberately, on the PO's own resting state
+(`automation/STOP` restored), with the queue empty and every open item the
+PO's:**
+- **AWAITING_PO 2026-08-30-2** — the VM/watchdog deadlock; three costed
+  options, recommendation (b), untouched by any session since it was raised.
+- **F-001** — the standing session-allowlist note (2026-08-16-2).
+- **The lint offer** — one small slice, only if the PO directs it
+  (2026-08-29-2's CLOSED note names it).
+
+To resume: `rm automation/STOP`, then `automation/next_session.sh architect
+120`. Per 2026-08-30-2, a park stays parked until the PO next touches WSL —
+that is the deadlock entry's own finding, restated here so the silence reads
+as designed.
+
 ## Session 2026-08-31 (dm) — EXEC: the pause was lifted and the WRONG ROLE arrived; no story executed, the floor re-verified, handed to ARCH
 
 ### State

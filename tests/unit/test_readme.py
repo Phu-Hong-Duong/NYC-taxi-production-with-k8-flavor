@@ -172,10 +172,11 @@ def test_the_cli_default_still_collects():
 
 def test_the_status_table_keeps_every_row(checker):
     """Append-only history: the front door gains an audience, it does not lose
-    its ledger. Ten milestone rows plus the three close rows (program, epilogue,
-    publish — the publish row joined the pin at its own close, 2026-08-25)."""
+    its ledger. Ten milestone rows plus the four close rows (program, epilogue,
+    publish, and the followability cleanup — each row joined the pin at its own
+    close; the cleanup's on 2026-08-31)."""
     text = README.read_text()
-    assert len(checker.STATUS_ROWS) == 13
+    assert len(checker.STATUS_ROWS) == 14
     missing = [row for row in checker.STATUS_ROWS if row not in text]
     assert not missing, f"the Status table has lost rows: {missing}"
 
