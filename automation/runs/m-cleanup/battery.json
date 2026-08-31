@@ -12,12 +12,42 @@
   },
   {
    "target": "hook-redteam",
+   "returncode": 0,
+   "seconds": 47.9,
+   "tail": [
+    "[hook-redteam] credential, let an ordinary commit through, and --no-verify walked",
+    "[hook-redteam] straight past it \u2014 which is why the audit, not the hook, is the gate.",
+    "[hook-redteam] restoring"
+   ]
+  },
+  {
+   "target": "image-smoke-redteam",
+   "returncode": 0,
+   "seconds": 4.3,
+   "tail": [
+    "== verdict =====================================================",
+    "  6 flipped-as-predicted \u00b7 0 did not",
+    "GREEN \u2014 all 6 observations flipped. The smoke's D-004 checks measure something."
+   ]
+  },
+  {
+   "target": "parity-redteam",
+   "returncode": 0,
+   "seconds": 16.0,
+   "tail": [
+    "ok    the untampered parity run is GREEN again (exit 0), so the drill left nothing behind",
+    "[redteam] 7 check(s), 0 failure(s)",
+    "[redteam] PASSED \u2014 `make parity` goes RED for a planted cause and GREEN without one."
+   ]
+  },
+  {
+   "target": "security-scan-redteam",
    "returncode": 2,
    "seconds": 0.0,
    "tail": [
-    "[hook-redteam] FAIL: the working tree is dirty. This drill commits and then",
-    "[hook-redteam]       destroys history; it refuses to run over uncommitted work.",
-    "make: *** [Makefile:379: hook-redteam] Error 2"
+    "[sec-redteam] FAIL: the working tree is dirty. This drill commits and then",
+    "[sec-redteam]       destroys history; it refuses to run over uncommitted work.",
+    "make: *** [Makefile:367: security-scan-redteam] Error 2"
    ]
   },
   {
