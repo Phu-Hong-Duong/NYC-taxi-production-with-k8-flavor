@@ -416,8 +416,12 @@ def test_the_records_the_gate_replays_are_tracked_by_git():
 def test_the_red_team_breaks_exactly_one_field_and_restores_it():
     body = REDTEAM.read_text()
     assert 'RECORD="automation/runs/m7-drift/drift-2020-03.json"' in body
-    assert "trap restore EXIT" in body, "the restore is not guaranteed on an unexpected exit"
-    assert "sha256sum" in body, "the restore is asserted rather than verified"
+    # Re-derived at CU-S3: the EXIT-trap guarantee and the sha verification moved
+    # into scripts/lib/redteam_restore.sh, where test_script_libs.py watches them
+    # work. What stays here is that this drill uses the scaffold on that record.
+    assert "scripts/lib/redteam_restore.sh" in body, "the drill carries no restore scaffold"
+    assert 'redteam_snapshot "$RECORD"' in body, "nothing arms the restore"
+    assert "redteam_assert_restored" in body, "the drill never proves the restore"
     # The planted value is DERIVED from the record, never typed: a hand-picked
     # number is a fault nobody would ever make, and this one is F-045 itself.
     assert 'rec["current_rows"] /' in body

@@ -40,38 +40,14 @@ cd "$REPO_ROOT"
 
 CONFIG="configs/train.yaml"
 PLANTED="0.10"
-BACKUP="$(mktemp)"
-RESTORED=0
-PROBLEMS=0
 
-say() { printf '\n\033[1m[gate-margin-redteam] %s\033[0m\n' "$1"; }
-ok()  { printf '  \033[32mok  \033[0m %s\n' "$1"; }
-bad() { printf '  \033[31mFAIL\033[0m %s\n' "$1" >&2; PROBLEMS=$((PROBLEMS + 1)); }
-
-restore() {
-  [[ "$RESTORED" -eq 1 ]] && return 0
-  if cp "$BACKUP" "$CONFIG"; then
-    RESTORED=1
-    local now before
-    now="$(sha256sum "$CONFIG" | cut -d' ' -f1)"
-    before="$(sha256sum "$BACKUP" | cut -d' ' -f1)"
-    if [[ "$now" == "$before" ]]; then
-      printf '  restored %s (sha256 %s…)\n' "$CONFIG" "${now:0:12}"
-    else
-      printf '\033[31m  RESTORE DID NOT MATCH — %s is not what it was.\033[0m\n' "$CONFIG" >&2
-    fi
-  else
-    printf '\033[31m[gate-margin-redteam] COULD NOT RESTORE %s.\033[0m\n' "$CONFIG" >&2
-    # The byte copy is named FIRST because it is right under every condition;
-    # `git checkout --` is right only if the file was committed as this drill
-    # found it, which a failing restore path may not assume.
-    printf 'Copy it back by hand:  cp %s %s\n' "$BACKUP" "$CONFIG" >&2
-    printf '  (or, if it was committed as found:  git checkout -- %s)\n' "$CONFIG" >&2
-    return 0
-  fi
-  rm -f "$BACKUP"
-}
-trap restore EXIT
+# The snapshot / restore / verify-sha scaffold — the byte copy, the EXIT trap,
+# the sha-verified put-back, and the say/ok/bad printers — lives in ONE place
+# from CU-S3 on. What deliberately did NOT move: this drill's PLANT, its
+# assertions about the RED run, and its refusal when the record is missing.
+REDTEAM_LABEL="[gate-margin-redteam]"
+# shellcheck source=lib/redteam_restore.sh
+source "$REPO_ROOT/scripts/lib/redteam_restore.sh"
 
 # ------------------------------------------------------ 0. snapshot the truth --
 say "0. the config as it stands (restored to exactly this, whatever happens)"
@@ -79,13 +55,12 @@ if [[ ! -s "$CONFIG" ]]; then
   echo "$CONFIG is missing — there is no gate config to red-team." >&2
   exit 2
 fi
-cp "$CONFIG" "$BACKUP"
-BEFORE_SHA="$(sha256sum "$CONFIG" | cut -d' ' -f1)"
+redteam_snapshot "$CONFIG"
 BEFORE_MARGIN="$(uv run python -c "
 from taxi_mlops.data.config import load_yaml
 print(f\"{float(load_yaml('configs/train.yaml')['gate']['incumbent_min_improvement_pct']):.2f}\")
 ")"
-printf '  %s  sha256 %s…  incumbent margin %s%%\n' "$CONFIG" "${BEFORE_SHA:0:12}" "$BEFORE_MARGIN"
+printf '  incumbent margin %s%%\n' "$BEFORE_MARGIN"
 
 # ------------------------------------------------------------ 1. break it -----
 say "1. lower the incumbent margin ${BEFORE_MARGIN}% -> ${PLANTED}% — a plausible number, typed without a letter"
@@ -149,14 +124,7 @@ fi
 
 # ------------------------------------------------------------ 3. put it back --
 say "3. restore the config and re-run — expected GREEN again"
-restore
-trap - EXIT
-after_sha="$(sha256sum "$CONFIG" | cut -d' ' -f1)"
-if [[ "$after_sha" == "$BEFORE_SHA" ]]; then
-  ok "$CONFIG is byte-identical to what the drill found (sha256 ${after_sha:0:12}…)"
-else
-  bad "$CONFIG changed across the drill — ${BEFORE_SHA:0:12}… -> ${after_sha:0:12}…"
-fi
+redteam_assert_restored
 green_log="$(bash scripts/verify_m2.sh 2>&1)"
 green_rc=$?
 printf '%s\n' "$green_log" | tail -5

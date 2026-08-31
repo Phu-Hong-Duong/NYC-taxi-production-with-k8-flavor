@@ -53,35 +53,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 RECORD="automation/runs/m5-load/selfheal.json"
-BACKUP="$(mktemp)"
-RESTORED=0
-PROBLEMS=0
 
-say() { printf '\n\033[1m[verify-m5-redteam] %s\033[0m\n' "$1"; }
-ok()  { printf '  \033[32mok  \033[0m %s\n' "$1"; }
-bad() { printf '  \033[31mFAIL\033[0m %s\n' "$1" >&2; PROBLEMS=$((PROBLEMS + 1)); }
-
-restore() {
-  [[ "$RESTORED" -eq 1 ]] && return 0
-  if cp "$BACKUP" "$RECORD"; then
-    RESTORED=1
-    local now before
-    now="$(sha256sum "$RECORD" | cut -d' ' -f1)"
-    before="$(sha256sum "$BACKUP" | cut -d' ' -f1)"
-    if [[ "$now" == "$before" ]]; then
-      printf '  restored %s (sha256 %s…)\n' "$RECORD" "${now:0:12}"
-    else
-      printf '\033[31m  RESTORE DID NOT MATCH — %s is not what it was.\033[0m\n' "$RECORD" >&2
-    fi
-  else
-    printf '\033[31m[verify-m5-redteam] COULD NOT RESTORE %s.\033[0m\n' "$RECORD" >&2
-    printf 'The drill kept a copy at %s — copy it back by hand.\n' "$BACKUP" >&2
-    printf '  (or, since it is tracked:  git checkout -- %s)\n' "$RECORD" >&2
-    return 0
-  fi
-  rm -f "$BACKUP"
-}
-trap restore EXIT
+# The snapshot / restore / verify-sha scaffold — the byte copy, the EXIT trap,
+# the sha-verified put-back, and the say/ok/bad printers — lives in ONE place
+# from CU-S3 on. What deliberately did NOT move: this drill's PLANT, its
+# assertions about the RED run, and its refusal when the record is missing.
+REDTEAM_LABEL="[verify-m5-redteam]"
+# shellcheck source=lib/redteam_restore.sh
+source "$REPO_ROOT/scripts/lib/redteam_restore.sh"
 
 # ------------------------------------------------------ 0. snapshot the truth --
 say "0. the record as it stands (restored to exactly this, whatever happens)"
@@ -89,9 +68,7 @@ if [[ ! -s "$RECORD" ]]; then
   echo "$RECORD is missing — there is no self-heal record to red-team. Run make load-drill." >&2
   exit 2
 fi
-cp "$RECORD" "$BACKUP"
-BEFORE_SHA="$(sha256sum "$RECORD" | cut -d' ' -f1)"
-printf '  %s  sha256 %s…\n' "$RECORD" "${BEFORE_SHA:0:12}"
+redteam_snapshot "$RECORD"
 
 # ------------------------------------------------------------ 1. break it -----
 say "1. rewrite ONE number: the outage becomes the error SPAN — gotcha #75's mistake, re-made"
@@ -177,14 +154,7 @@ fi
 
 # ------------------------------------------------------------ 3. put it back --
 say "3. restore the record and re-run — expected GREEN again"
-restore
-trap - EXIT
-after_sha="$(sha256sum "$RECORD" | cut -d' ' -f1)"
-if [[ "$after_sha" == "$BEFORE_SHA" ]]; then
-  ok "$RECORD is byte-identical to what the drill found (sha256 ${after_sha:0:12}…)"
-else
-  bad "$RECORD changed across the drill — ${BEFORE_SHA:0:12}… -> ${after_sha:0:12}…"
-fi
+redteam_assert_restored
 green_log="$(bash scripts/verify_m5.sh 2>&1)"
 green_rc=$?
 printf '%s\n' "$green_log" | tail -5
