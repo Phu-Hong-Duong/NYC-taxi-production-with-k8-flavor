@@ -23,12 +23,10 @@ comment-stripped copy.
 
 from __future__ import annotations
 
-import pathlib
 import re
 
-from conftest import without_comments
+from conftest import REPO, without_comments
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M3 = REPO / "scripts" / "verify_m3.sh"
 REDTEAM = REPO / "scripts" / "verify_m3_redteam.sh"
 MAKEFILE = REPO / "Makefile"

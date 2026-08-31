@@ -37,24 +37,16 @@ against a comment-stripped copy, with the needle in command position.
 from __future__ import annotations
 
 import json
-import pathlib
 import re
 import subprocess
 
 import pytest
-from conftest import without_comments
+from conftest import REPO, invokes, without_comments
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M7 = REPO / "scripts" / "verify_m7.sh"
 REDTEAM = REPO / "scripts" / "verify_m7_redteam.sh"
 MAKEFILE = REPO / "Makefile"
 RULES = REPO / "infra" / "monitoring" / "alerting_rules.yml"
-
-
-def invokes(body: str, command: str) -> bool:
-    """Is `command` RUN here, or merely named?"""
-    pattern = rf"(?:^|\||&&|;|\$\()\s*{re.escape(command)}(?:\s|$)"
-    return bool(re.search(pattern, body, re.M))
 
 
 # ------------------------------------------------------- the Makefile contract --

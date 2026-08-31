@@ -21,11 +21,10 @@ import hashlib
 import importlib.util
 import json
 import math
-from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 REF = REPO / "data" / "reference"
 CENTROIDS = REF / "taxi_zone_centroids.csv"
 MANIFEST = REF / "reference_manifest.json"

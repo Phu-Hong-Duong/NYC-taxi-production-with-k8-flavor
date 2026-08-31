@@ -169,6 +169,26 @@ def without_comments(source: str | Path) -> str:
     )
 
 
+def executable_lines(text: str) -> str:
+    """Everything a shell would execute: comment lines AND blank lines removed.
+
+    The sibling of `without_comments`, and the difference is not cosmetic — this
+    one collapses blank lines, so a caller asserting on line structure sees a
+    different file. They were the same name (`code_only`) in five modules with
+    TWO behaviours until CU-S2 measured it: three dropped blanks, two did not.
+    That is the `_calls()` hazard for the third time in this suite, so the fix is
+    the same one — split by behaviour, name each for what it does, and never
+    merge two functions because they share a name.
+
+    Use this for "what does this script DO"; use `without_comments` when blank
+    lines are part of what you are reading.
+    """
+    return "\n".join(
+        line for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    )
+
+
 def called_names(path: Path) -> set[str]:
     """Every callable NAME invoked in a file, however it is spelled.
 
@@ -258,7 +278,7 @@ def imported_roots(path: Path) -> set[str]:
     return roots
 
 
-def record(path: Path, produced_by: str | None = None) -> dict:
+def read_record(path: Path, produced_by: str | None = None) -> dict:
     """Read a tracked drill record, and REFUSE if it is not there — F-054.
 
     These reads used to sit under `skipif(not RECORD.exists())`, which made the

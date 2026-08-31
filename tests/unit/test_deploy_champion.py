@@ -22,12 +22,11 @@ docs/serving_m5.md §3. What is here is what a diff can be wrong about:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO, executable_lines
 
-REPO = Path(__file__).resolve().parents[2]
 DEPLOY = REPO / "scripts" / "deploy_champion.sh"
 RESOLVER = REPO / "scripts" / "resolve_champion_storage.py"
 RUNTIME = REPO / "infra" / "manifests" / "serving-runtime-mlserver.yaml"
@@ -43,16 +42,6 @@ PLACEHOLDERS = (
     "RESOLVED-AT-DEPLOY-TIME-FROM-THE-CHAMPION-ALIAS",
     "CHAMPION-VERSION-RESOLVED-AT-DEPLOY-TIME",
 )
-
-
-def code_only(text: str) -> str:
-    """Everything a shell would execute, comments and blank lines removed.
-
-    These scripts argue their own design at length, so a grep for a word finds
-    the argument as often as the code (gotchas #35, #53, #60, #68)."""
-    return "\n".join(
-        line for line in text.splitlines() if line.strip() and not line.strip().startswith("#")
-    )
 
 
 @pytest.fixture(scope="module")
@@ -91,7 +80,7 @@ def test_neither_the_deploy_nor_the_resolver_names_a_mutating_registry_verb(depl
         "transition_model_version_stage(",
         "register_model(",
     )
-    for source in (code_only(deploy), code_only(RESOLVER.read_text())):
+    for source in (executable_lines(deploy), executable_lines(RESOLVER.read_text())):
         for needle in forbidden:
             assert needle not in source, f"{needle} must not appear in the serving path"
 
@@ -99,7 +88,7 @@ def test_neither_the_deploy_nor_the_resolver_names_a_mutating_registry_verb(depl
 def test_the_deploy_reads_the_champion_version_before_and_after_its_own_changes(deploy):
     """A claim nobody checks is a sentence. The script reads the alias first,
     reads it again at the end, and treats a difference as a FAILURE."""
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert body.count("champion_version)") >= 2, "the alias must be read on both sides"
     assert "ALIAS_BEFORE" in body and "ALIAS_AFTER" in body
     assert re.search(r'if \[\[ "\$ALIAS_BEFORE" != "\$ALIAS_AFTER" \]\]', body)
@@ -109,7 +98,7 @@ def test_the_deploy_reads_the_champion_version_before_and_after_its_own_changes(
 def test_the_resolver_is_a_reader():
     """`verify-m5` is meant to reuse it, so it must be safe to call from a gate —
     the same property `flyte_run_actions.py` is pinned for."""
-    body = code_only(RESOLVER.read_text())
+    body = executable_lines(RESOLVER.read_text())
     for verb in ("delete_", "create_", ".log_", "set_tag(", "update_"):
         assert verb not in body, f"a reader must not call {verb}"
 
@@ -139,13 +128,13 @@ def test_no_committed_serving_file_names_a_run_id_a_logged_model_id_or_a_bucket_
         re.compile(r"s3://mlflow-artifacts/\d"),  # a resolved artifact prefix
     )
     for path in (ISVC, RUNTIME, DEPLOY):
-        body = code_only(path.read_text())
+        body = executable_lines(path.read_text())
         for pattern in patterns:
             assert not pattern.search(body), f"{path.name} names a literal that will rot"
 
 
 def test_the_deploy_refuses_to_render_if_a_placeholder_has_gone(deploy):
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert "refusing to guess" in body
 
 
@@ -167,13 +156,13 @@ def invocations_only(text: str) -> str:
     assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
     return "\n".join(
         line
-        for line in code_only(text).splitlines()
+        for line in executable_lines(text).splitlines()
         if not line.strip().startswith("echo") and not assignment.match(line.strip())
     )
 
 
 def test_dry_run_returns_before_any_mutating_verb(deploy):
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     marker = "DRY_RUN — nothing was applied"
     assert marker in body
     preview = invocations_only(deploy[: deploy.index(marker)])
@@ -235,18 +224,18 @@ def test_no_secret_value_reaches_a_command_line(deploy):
     """The deploy pipes `create secret --dry-run=client -o yaml` into apply, the
     shape platform_secrets.sh uses. A `--from-literal` on a `kubectl create`
     that is not `--dry-run` would put the value where `ps` can read it."""
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     for line in body.splitlines():
         if "--from-literal" in line:
             assert "SERVING_S3_" in line, "only the serving keys, by name, never a value"
     assert "--dry-run=client -o yaml" in body
-    assert "echo" not in code_only(deploy).split("SERVING_S3_SECRET_KEY")[1].splitlines()[0]
+    assert "echo" not in executable_lines(deploy).split("SERVING_S3_SECRET_KEY")[1].splitlines()[0]
 
 
 def test_the_predictor_reaches_minio_by_its_IN_CLUSTER_name(deploy):
     """F-023's lesson from the other side: split horizon is the HOST's problem
     and never a pod's. A pod handed `localhost:9000` resolves it to itself."""
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert "minio.platform.svc.cluster.local:9000" in body
     assert "localhost:9000" not in body
 
@@ -314,7 +303,7 @@ def test_the_deploy_waits_for_the_ROLLOUT_and_not_only_the_isvc_condition(deploy
     actually asserts is the ORDER of two waits, so that is what is asserted now,
     derived rather than typed: whatever form the InferenceService-level wait
     takes, it must come after the rollout."""
-    body = code_only(deploy)
+    body = executable_lines(deploy)
     assert "rollout status" in body
     rollout = body.index("rollout status")
     isvc_waits = [

@@ -15,12 +15,10 @@ the script DOES is made against a comment-stripped copy.
 
 from __future__ import annotations
 
-import pathlib
 import re
 
-from conftest import without_comments
+from conftest import REPO, without_comments
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M2 = REPO / "scripts" / "verify_m2.sh"
 REDTEAM = REPO / "scripts" / "verify_m2_redteam.sh"
 MAKEFILE = REPO / "Makefile"

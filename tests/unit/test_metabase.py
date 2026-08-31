@@ -15,12 +15,10 @@ Each test's docstring names the failure it prevents.
 
 import json
 import re
-from pathlib import Path
 
 import pytest
-from conftest import without_comments
+from conftest import REPO, without_comments
 
-REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "infra" / "manifests" / "metabase.yaml"
 NAMESPACES = REPO / "infra" / "manifests" / "namespaces.yaml"
 DEPLOY = REPO / "scripts" / "deploy_metabase.sh"

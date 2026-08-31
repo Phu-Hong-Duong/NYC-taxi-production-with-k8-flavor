@@ -30,11 +30,10 @@ import importlib.util
 import re
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 CHECKER = REPO / "scripts" / "readme_check.py"
 README = REPO / "README.md"
 

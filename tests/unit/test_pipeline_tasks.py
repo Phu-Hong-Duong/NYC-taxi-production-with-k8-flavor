@@ -22,11 +22,10 @@ import ast
 import importlib.util
 import json
 import sys
-from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 TASKS = REPO / "pipelines" / "tasks.py"
 
 pytestmark = pytest.mark.unit

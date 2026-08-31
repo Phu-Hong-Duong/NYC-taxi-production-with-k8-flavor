@@ -18,9 +18,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
-from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+from conftest import REPO
+
 SHELL = REPO / "scripts" / "champion_transition.sh"
 HELPER = REPO / "scripts" / "champion_transition_winner.py"
 SCRIPT_TEXT = SHELL.read_text(encoding="utf-8")

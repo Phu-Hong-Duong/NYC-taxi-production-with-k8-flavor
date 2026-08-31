@@ -26,16 +26,14 @@ from __future__ import annotations
 
 import ast
 import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
-from conftest import called_paths
+from conftest import REPO, called_paths
 
 from taxi_mlops.serving import client, parity
 
-REPO = Path(__file__).resolve().parents[2]
 PARITY_SOURCE = REPO / "src" / "taxi_mlops" / "serving" / "parity.py"
 REDTEAM = REPO / "scripts" / "parity_redteam.sh"
 MAKEFILE = REPO / "Makefile"

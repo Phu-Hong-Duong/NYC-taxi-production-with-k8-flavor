@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts/retrain_prediction_check.py"
 PREDICTION = REPO / "automation/runs/m7-retrain/rerun-prediction.json"
 RECORD = REPO / "automation/runs/m7-retrain/latest.json"

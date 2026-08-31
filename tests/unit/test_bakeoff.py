@@ -17,11 +17,10 @@ import importlib.util
 import json
 import re
 import sys
-from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "bakeoff_m3.py"
 
 

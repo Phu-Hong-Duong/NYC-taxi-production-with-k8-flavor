@@ -32,8 +32,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 MAKEFILE = (REPO / "Makefile").read_text(encoding="utf-8")
 
 

@@ -23,11 +23,10 @@ import ast
 import json
 import re
 import sys
-from pathlib import Path
 
 import pytest
+from conftest import REPO, imported_roots
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
 DEFINITIONS = REPO / "infra" / "feast" / "feature_repo" / "definitions.py"
@@ -44,21 +43,9 @@ PLAN_RECORD = REPO / "automation" / "runs" / "m8-feast" / "plan.json"
 VERDICTS = {"in-champion", "catalog-only", "candidate"}
 
 
-def _imported_roots(path: Path) -> set[str]:
-    """Top-level package names this module imports, from the AST and nowhere else."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    roots: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            roots.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            roots.add(node.module.split(".")[0])
-    return roots
-
-
 # ------------------------------------------------------------- the wall ---
 def test_the_producer_is_on_our_side_of_the_wall() -> None:
-    roots = _imported_roots(PRODUCER)
+    roots = imported_roots(PRODUCER)
     assert "taxi_mlops" in roots, "the producer must build sources through the ONE feature path"
     assert "feast" not in roots, (
         "scripts/feast_sources.py runs under pandas 3.0.5 and must never import feast — "
@@ -67,7 +54,7 @@ def test_the_producer_is_on_our_side_of_the_wall() -> None:
 
 
 def test_the_definitions_are_on_the_other_side() -> None:
-    roots = _imported_roots(DEFINITIONS)
+    roots = imported_roots(DEFINITIONS)
     assert "feast" in roots
     assert "taxi_mlops" not in roots, (
         "definitions.py is imported by .venv-feast (pandas 2.3.3); importing taxi_mlops "

@@ -29,31 +29,13 @@ comment-stripped copy.
 
 from __future__ import annotations
 
-import pathlib
 import re
 
-from conftest import without_comments
+from conftest import REPO, invokes, without_comments
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_M4 = REPO / "scripts" / "verify_m4.sh"
 REDTEAM = REPO / "scripts" / "verify_m4_redteam.sh"
 MAKEFILE = REPO / "Makefile"
-
-
-def invokes(body: str, command: str) -> bool:
-    """Is `command` RUN here, or merely named?
-
-    The house rule, made mechanical. This gate prints advice — "run
-    `make pipeline-cache-drill`" is exactly what a reader of a RED cache leg needs
-    — and `kubectl -n flyte get deploy` contains the substring "flyte get". A
-    plain `in` test calls both of those violations, which is gotcha #35 wearing a
-    third hat. So the needle must sit where a shell would START a command: at the
-    beginning of a line, or after a pipe, `&&`, `;` or `$(`. A backtick is
-    deliberately NOT a command position here: in this repo backticks appear inside
-    message strings far more often than in command substitutions.
-    """
-    pattern = rf"(?:^|\||&&|;|\$\()\s*{re.escape(command)}(?:\s|$)"
-    return bool(re.search(pattern, body, re.M))
 
 
 # ------------------------------------------------------- the Makefile contract --

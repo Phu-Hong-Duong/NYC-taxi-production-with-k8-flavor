@@ -20,13 +20,12 @@ import http.client
 import json
 import sys
 import threading
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxi_mlops.features import calendar as calendar_mod  # noqa: E402

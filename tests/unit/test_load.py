@@ -38,11 +38,10 @@ import ast
 from pathlib import Path
 
 import pytest
-from conftest import called_paths
+from conftest import REPO, called_paths
 
 from taxi_mlops.serving import load as load_mod
 
-REPO = Path(__file__).resolve().parents[2]
 LOAD_SOURCE = REPO / "src" / "taxi_mlops" / "serving" / "load.py"
 DRILL_SOURCE = REPO / "scripts" / "serving_load_drill.py"
 MAKEFILE = REPO / "Makefile"

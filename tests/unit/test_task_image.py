@@ -30,9 +30,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import without_comments
+from conftest import REPO, without_comments
 
-REPO = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO / "docker" / "Dockerfile.pipeline"
 DOCKERIGNORE = REPO / ".dockerignore"
 BUILD_LOAD = REPO / "scripts" / "image_build_load.sh"

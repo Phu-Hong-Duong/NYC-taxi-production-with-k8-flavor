@@ -23,9 +23,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import called_names
+from conftest import REPO, called_names
 
-REPO = Path(__file__).resolve().parents[2]
 MODULE = REPO / "src" / "taxi_mlops" / "monitoring" / "store_health.py"
 READER = REPO / "scripts" / "store_watch.py"
 HEADROOM = REPO / "scripts" / "store_watch_headroom.py"

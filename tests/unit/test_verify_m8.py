@@ -25,12 +25,10 @@ them.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-from conftest import without_comments
+from conftest import REPO, without_comments
 
-REPO = Path(__file__).resolve().parents[2]
 GATE = REPO / "scripts" / "verify_m8.sh"
 REDTEAM = REPO / "scripts" / "verify_m8_redteam.sh"
 

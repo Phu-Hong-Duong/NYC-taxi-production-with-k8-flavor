@@ -18,13 +18,12 @@ nothing to see"), applied to a bar instead of a divisor.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
+from conftest import REPO
 
 from taxi_mlops.training import gate_eras
 
-REPO = Path(__file__).resolve().parents[2]
 RECORD = REPO / "automation/runs/m9-f016/replay-wall.json"
 
 

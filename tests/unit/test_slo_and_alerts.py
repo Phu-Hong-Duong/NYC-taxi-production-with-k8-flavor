@@ -23,12 +23,11 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO, executable_lines
 
-REPO = Path(__file__).resolve().parents[2]
 RULES = REPO / "infra" / "monitoring" / "alerting_rules.yml"
 RENDERER = REPO / "scripts" / "render_alert_rules.py"
 DRILL = REPO / "scripts" / "alert_fire_drill.py"
@@ -57,22 +56,6 @@ pytestmark = pytest.mark.unit
 # reads it from the manifest or the document, so this is the single place a future
 # change has to come through.
 CPU_REQUEST = "1500m"
-
-
-def executable_lines(text: str) -> str:
-    """Everything a shell would execute, comments AND blank lines removed.
-
-    Deliberately NOT `conftest.without_comments`, and the name now says so. This
-    one also drops blank lines, so it is a different function that happened to
-    share a name with `test_task_image`'s copy — the same one-name-two-meanings
-    shape the `_calls()` split was about (CU-S2). Kept local and renamed rather
-    than merged: unifying it would have changed what one of the two callers sees.
-    """
-    return "\n".join(
-        line
-        for line in text.splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    )
 
 
 @pytest.fixture(scope="module")

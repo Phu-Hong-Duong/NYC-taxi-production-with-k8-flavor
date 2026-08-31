@@ -21,11 +21,10 @@ from __future__ import annotations
 
 import ast
 import json
-from pathlib import Path
 
 import pytest
+from conftest import REPO, without_comments
 
-REPO = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO / "docker" / "feast-server.Dockerfile"
 ENTRYPOINT = REPO / "docker" / "feast-server-entrypoint.sh"
 BUILD = REPO / "scripts" / "build_feast_server.sh"
@@ -35,19 +34,6 @@ MANIFEST = REPO / "infra" / "manifests" / "feast-server.yaml"
 DOC = REPO / "docs" / "feast_server_m8.md"
 PINS = REPO / "infra" / "feast" / "requirements-feast.txt"
 RECORD = REPO / "automation" / "runs" / "m8-transformer" / "server-parity.json"
-
-
-def code_only(text: str) -> str:
-    """Drop whole-line `#` comments — gotcha #53, and these files are mostly prose.
-
-    Every artifact in this slice argues its own design at length, and several of
-    those arguments quote the thing they are arguing against ("a baked registry
-    would be...", "a default would be..."). A naive substring check reads the
-    argument as the practice. Same rule as tests/unit/test_task_image.py.
-    """
-    return "\n".join(
-        line for line in text.splitlines() if not line.strip().startswith("#")
-    )
 
 
 # ---------------------------------------------------------------- the image ---
@@ -71,13 +57,13 @@ def test_the_base_is_the_same_digest_pinned_interpreter_as_the_task_image() -> N
 
 def test_the_image_installs_from_the_one_pin_file_with_no_deps() -> None:
     """Two consumers, one pin file, no twin — and no resolver in the build path."""
-    code = code_only(DOCKERFILE.read_text())
+    code = without_comments(DOCKERFILE.read_text())
     assert "infra/feast/requirements-feast.txt" in code
     assert "--no-deps" in code, (
         "a resolver consulted at build time can legally answer differently from the "
         "one that was reviewed; --no-deps is what makes the image reproduce the pins"
     )
-    quarantine = code_only((REPO / "scripts" / "feast_quarantine.sh").read_text())
+    quarantine = without_comments((REPO / "scripts" / "feast_quarantine.sh").read_text())
     assert "requirements-feast.txt" in quarantine, (
         "the host quarantine must still read the same file this image installs from"
     )
@@ -85,7 +71,7 @@ def test_the_image_installs_from_the_one_pin_file_with_no_deps() -> None:
 
 def test_the_image_bakes_no_registry_and_no_store_address() -> None:
     """The two things that would make the image a second home."""
-    code = code_only(DOCKERFILE.read_text())
+    code = without_comments(DOCKERFILE.read_text())
     assert "registry.db" not in code, (
         "the registry is generated and gitignored because definitions.py in git is "
         "the source of truth; baking one in would be F-013's second home"
@@ -97,7 +83,7 @@ def test_the_image_bakes_no_registry_and_no_store_address() -> None:
 
 def test_the_entrypoint_derives_the_registry_and_refuses_an_unset_store() -> None:
     text = ENTRYPOINT.read_text()
-    code = code_only(text)
+    code = without_comments(text)
     assert "feast apply" in code, "the registry must be DERIVED at every start"
     assert code.index("feast apply") < code.index("feast serve"), (
         "apply must precede serve, or the pod can serve an empty registry — which "
@@ -116,7 +102,7 @@ def test_the_entrypoint_is_copied_executable() -> None:
     `exec: "...": permission denied`, which reads like a missing binary or a
     broken PATH rather than a missing execute bit. It cost one deploy.
     """
-    code = code_only(DOCKERFILE.read_text())
+    code = without_comments(DOCKERFILE.read_text())
     entrypoint_copy = [ln for ln in code.splitlines() if "feast-server-entrypoint.sh" in ln]
     assert entrypoint_copy, "the entrypoint must be copied into the image"
     assert "--chmod=" in entrypoint_copy[0], entrypoint_copy[0]
@@ -124,7 +110,7 @@ def test_the_entrypoint_is_copied_executable() -> None:
 
 def test_the_image_tag_carries_a_git_sha_and_marks_dirty() -> None:
     """M4-S3's rule: a mutable tag makes a stale node a wrong number, not an error."""
-    code = code_only(BUILD.read_text())
+    code = without_comments(BUILD.read_text())
     assert "git rev-parse --short HEAD" in code
     assert "-dirty" in code
     assert ":latest" not in code
@@ -136,14 +122,14 @@ def test_the_image_tag_carries_a_git_sha_and_marks_dirty() -> None:
 def test_the_deploy_refuses_a_dirty_image() -> None:
     """A -dirty image carries work that is not in git, so nothing it produces
     can be attributed to a commit. M8-S1 leg 2 spent a rebuild learning this."""
-    code = code_only(DEPLOY.read_text())
+    code = without_comments(DEPLOY.read_text())
     assert '== *-dirty' in code or '"-dirty"' in code or "-dirty" in code
     assert "exit 3" in code
 
 
 def test_the_accept_asserts_the_null_half_from_another_pod() -> None:
     """Gotcha #59 and its sibling: an answer, and an answer that must be absent."""
-    code = code_only(DEPLOY.read_text())
+    code = without_comments(DEPLOY.read_text())
     assert "get-online-features" in code, "the accept must be a real lookup"
     assert "exec deploy/redis" in code, (
         "the accept must be asked from a pod that is NOT the server, or Service DNS "
@@ -160,7 +146,7 @@ def test_the_server_is_stateless_no_volume_no_hostport() -> None:
     # PERSISTENCE" at length — and a naive substring check reads the argument as
     # the practice. Gotcha #53, caught by this test on its own first run, in the
     # same session as the two other places it is guarded against.
-    manifest = code_only(MANIFEST.read_text())
+    manifest = without_comments(MANIFEST.read_text())
     assert "hostPort" not in manifest, "M8 law 1: no tenant gets a hostPort"
     assert "PersistentVolumeClaim" not in manifest and "volumeMounts" not in manifest, (
         "the feature server holds no data: its registry is derived at start and every "
@@ -247,7 +233,7 @@ def test_the_reader_pairs_by_name_never_by_position() -> None:
     """The server does not preserve the request's column order — observed on the
     accept run. A client zipping by position sends valid values under the wrong
     names, which is arm A of make parity-redteam, self-inflicted (gotcha #73)."""
-    code = code_only(PARITY.read_text())
+    code = without_comments(PARITY.read_text())
     assert "metadata" in code and "feature_names" in code, (
         "the server's own feature_names must be the authority on which result "
         "block is which"
@@ -257,7 +243,7 @@ def test_the_reader_pairs_by_name_never_by_position() -> None:
 def test_the_row_set_is_imported_from_parity_never_retyped() -> None:
     """One row set across four seams: the wire, the store, the offline join, and
     now the HTTP door."""
-    code = code_only(PARITY.read_text())
+    code = without_comments(PARITY.read_text())
     assert "from taxi_mlops.serving.parity import HAZARDS" in code
 
 

@@ -24,9 +24,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import called_names
+from conftest import REPO, called_names
 
-REPO = Path(__file__).resolve().parents[2]
 GAMEDAY = REPO / "scripts/gameday_m6.py"
 RESTORE = REPO / "scripts/restore_rehearsal.py"
 RULES = REPO / "infra/monitoring/alerting_rules.yml"

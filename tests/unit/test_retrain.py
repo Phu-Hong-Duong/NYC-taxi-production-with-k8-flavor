@@ -8,14 +8,13 @@ knob does not raise; it produces a model that is merely different, reported besi
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO
 
 from taxi_mlops.training import retrain as R
 
-REPO = Path(__file__).resolve().parents[2]
 SOURCE = (REPO / "src/taxi_mlops/training/retrain.py").read_text()
 RUN_SOURCE = (REPO / "src/taxi_mlops/training/retrain_run.py").read_text()
 

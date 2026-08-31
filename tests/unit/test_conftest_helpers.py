@@ -23,7 +23,7 @@ from conftest import (
     imported_roots,
     invokes,
     phony_targets,
-    record,
+    read_record,
     referenced_names,
     without_comments,
 )
@@ -121,7 +121,9 @@ def test_phony_targets_reads_the_real_makefile_and_agrees_with_its_targets() -> 
 def test_record_refuses_a_missing_record_and_names_what_writes_it(tmp_path) -> None:
     """F-054: an absent tracked record is a deletion, never a reason to skip."""
     with pytest.raises(AssertionError) as excinfo:
-        record(REPO / "automation" / "runs" / "does-not-exist.json", produced_by="make thing")
+        read_record(
+            REPO / "automation" / "runs" / "does-not-exist.json", produced_by="make thing"
+        )
     assert "TRACKED record" in str(excinfo.value)
     assert "make thing" in str(excinfo.value), (
         "the failure message must name the command that writes the record — "

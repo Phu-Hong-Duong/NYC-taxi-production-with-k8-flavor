@@ -31,8 +31,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import REPO, imported_roots
 
-REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
 RETRIEVER = REPO / "infra" / "feast" / "retrieve.py"
@@ -43,17 +43,6 @@ DOC = REPO / "docs" / "feast_pit_m8.md"
 
 PARITY_RECORD = REPO / "automation" / "runs" / "m8-pit" / "retrieval_parity.json"
 PROOF_RECORD = REPO / "automation" / "runs" / "m8-pit" / "pit_proof.json"
-
-
-def _imported_roots(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    roots: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            roots.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            roots.add(node.module.split(".")[0])
-    return roots
 
 
 def _called_names(path: Path) -> set[str]:
@@ -77,7 +66,7 @@ def _called_names(path: Path) -> set[str]:
 
 # ----------------------------------------------------------- the wall ---
 def test_the_retriever_imports_feast_and_never_the_project() -> None:
-    roots = _imported_roots(RETRIEVER)
+    roots = imported_roots(RETRIEVER)
     assert "feast" in roots, "infra/feast/retrieve.py is the quarantine's side; it needs feast"
     assert "taxi_mlops" not in roots, (
         "retrieve.py runs under .venv-feast (pandas 2.3.3) and must never import taxi_mlops — "
@@ -87,7 +76,7 @@ def test_the_retriever_imports_feast_and_never_the_project() -> None:
 
 @pytest.mark.parametrize("path", [COMPARER, ROWS_SCRIPT])
 def test_this_side_imports_the_project_and_never_feast(path: Path) -> None:
-    roots = _imported_roots(path)
+    roots = imported_roots(path)
     assert "taxi_mlops" in roots
     assert "feast" not in roots, (
         f"{path.name} runs under pandas 3.0.5, where feast cannot be installed at all "

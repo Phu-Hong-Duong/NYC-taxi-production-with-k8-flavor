@@ -9,7 +9,6 @@ in. Those are the claims this file keeps true between runs.
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import pytest

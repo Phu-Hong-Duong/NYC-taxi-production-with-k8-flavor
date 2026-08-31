@@ -15,8 +15,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 PRECHECK = REPO / "scripts" / "port_precheck.sh"
 CLUSTER_SH = REPO / "scripts" / "cluster.sh"
 NEEDS_SS = pytest.mark.skipif(shutil.which("ss") is None, reason="iproute2 'ss' not installed")

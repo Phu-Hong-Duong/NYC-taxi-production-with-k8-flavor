@@ -18,14 +18,11 @@ Three families of check, in ascending order of what they are worth:
 from __future__ import annotations
 
 import ast
-import json
 import re
-from pathlib import Path
 
 import pytest
-from conftest import called_names
+from conftest import REPO, called_names, read_record
 
-REPO = Path(__file__).resolve().parents[2]
 SHADOW_MODULE = REPO / "src/taxi_mlops/serving/shadow.py"
 DEPLOY_SHADOW = REPO / "scripts/deploy_shadow.sh"
 SPIKE_PROBE = REPO / "scripts/canary_spike_probe.py"
@@ -34,25 +31,6 @@ ADR = REPO / "docs/decisions/ADR-011-canary-and-shadow-mechanism.md"
 MEMO = REPO / "docs/shadow_analysis_m6.md"
 SPIKE_RECORD = REPO / "automation/runs/m6-spike/canary_spike.json"
 SHADOW_RECORD = REPO / "automation/runs/m6-shadow/disagreement.json"
-
-
-def _record(path: Path) -> dict:
-    """Read a tracked drill record, and REFUSE if it is not there — F-054.
-
-    These reads used to sit under `skipif(not RECORD.exists())`, which made the
-    in-image run green by SKIPPING. On the host that is the weaker answer: an
-    absent record means the drill was never run, and a silent skip is how a check
-    stops being one. The records are git-tracked from M5-S1 (F-029 option A), so
-    a fresh clone has them and the only thing this assertion can catch is a
-    deleted or lost record — loudly. Where a test can run is now the marker's job
-    (`needs_records`, F-047); whether it must pass is not negotiable.
-    """
-    assert path.exists(), (
-        f"{path.relative_to(REPO)} is a TRACKED record (F-029 option A) — its absence "
-        "means it was deleted or lost, not that this clone lacks local artifacts"
-    )
-    return json.loads(path.read_text(encoding="utf-8"))
-
 
 
 # --------------------------------------------------------------- structural --
@@ -241,7 +219,7 @@ def _numbers(text: str) -> set[str]:
 @pytest.mark.needs_records
 def test_adr_011_quotes_the_spike_record() -> None:
     """Every load-bearing claim in the ADR must be true of the record it cites."""
-    record = _record(SPIKE_RECORD)
+    record = read_record(SPIKE_RECORD)
     text = ADR.read_text()
     phases = record["phases"]
 
@@ -280,7 +258,7 @@ def test_adr_011_quotes_the_spike_record() -> None:
 
 @pytest.mark.needs_records
 def test_the_memo_quotes_the_disagreement_record() -> None:
-    record = _record(SHADOW_RECORD)
+    record = read_record(SHADOW_RECORD)
     text = MEMO.read_text()
     quoted = _numbers(text)
 
@@ -304,7 +282,7 @@ def test_the_memo_carries_a_named_verdict_and_does_not_claim_a_bakeoff() -> None
         "a stratified sample scored on the wire must say it is not the measurement of "
         "record — gotcha #15's discipline (a number from a sample is labelled as one)."
     )
-    record = _record(SHADOW_RECORD)
+    record = read_record(SHADOW_RECORD)
     assert record["overall"]["champion_mae_min"] > 3.2403, (
         "sanity: the stratified sample over-weights hard segments, so its MAE must be "
         "well above the full holdout's. If it is not, the sample is not stratified."
@@ -313,7 +291,7 @@ def test_the_memo_carries_a_named_verdict_and_does_not_claim_a_bakeoff() -> None
 
 @pytest.mark.needs_records
 def test_the_served_versions_were_read_off_the_answers() -> None:
-    record = _record(SHADOW_RECORD)
+    record = read_record(SHADOW_RECORD)
     assert record["served_versions"] == {"champion": "2", "shadow": "1"}, (
         "the record must carry the versions the ENDPOINTS stamped on their own "
         "responses — which model produced this number travels with the number."

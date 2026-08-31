@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 DBT = REPO / "analytics" / "dbt"
 MODELS = DBT / "models" / "marts"
 

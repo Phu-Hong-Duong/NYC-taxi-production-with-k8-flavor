@@ -42,7 +42,8 @@ import ast
 import re
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+from conftest import REPO
+
 SMOKE = REPO / "scripts" / "image_smoke.sh"
 PYPROJECT = REPO / "pyproject.toml"
 TEST_FILES = sorted((REPO / "tests" / "unit").glob("test_*.py"))

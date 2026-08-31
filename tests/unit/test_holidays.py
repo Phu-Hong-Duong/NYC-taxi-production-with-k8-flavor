@@ -28,10 +28,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import REPO
 
 from taxi_mlops.features import calendar
 
-REPO = Path(__file__).resolve().parents[2]
 TABLE = REPO / "data" / "reference" / "us_federal_holidays.csv"
 DERIVER = REPO / "scripts" / "derive_us_federal_holidays.py"
 
