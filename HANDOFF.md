@@ -77,6 +77,16 @@ three `mlops-taxi` node containers, `kubectl get nodes` shows three Ready at 14d
   loader over all ten migrated scripts.
 - **`load_record` took only the *is it there?* question.** Readers whose
   shape-check or fail-message is doing work keep it beside their artifact.
+- **AWAITING_PO.md: two watchdog park notices got COMMITTED, by a `git add -A`
+  in `eb5c0cc`, and (dj) had deliberately left them uncommitted.** Naming it
+  because a returning human should not find them in history with no explanation.
+  **Nothing about the file's content changed** — those lines were already on disk
+  at boot, written by the watchdog before this session, so the park detector
+  (2026-08-30-2 item 2) reads the same bytes it read before. No inbox entry was
+  answered, edited or swept, and 2026-08-30-2 stays open and untouched. The
+  lesson for the next slice is narrower than the incident: **`git add -A` in a
+  repo whose inbox is a machine-written signal picks up whatever the watchdog
+  left there** — stage by path when the tree has files you did not put there.
 
 ### Defects/Surprises
 - **`scripts/` is outside the house lint net and this slice produced a real
