@@ -200,9 +200,15 @@ def test_the_records_the_gate_replays_are_tracked_by_git():
 
 # ------------------------------------------------------------ the red team ------
 def test_the_red_team_restores_under_a_trap_and_verifies_the_restore():
+    # Re-derived at CU-S3: "a crashed drill still puts the record back" and "the
+    # restore is verified, not assumed" are now properties of
+    # scripts/lib/redteam_restore.sh, watched running in test_script_libs.py.
+    # This drill's half is that it uses the scaffold — and the clean-tree
+    # assertion, which is its own and stays here.
     body = REDTEAM.read_text()
-    assert "trap restore EXIT" in body, "a crashed drill must still put the record back"
-    assert "sha256sum" in body, "the restore must be verified, not assumed"
+    assert "scripts/lib/redteam_restore.sh" in body, "the drill carries no restore scaffold"
+    assert 'redteam_snapshot "$RECORD"' in body, "nothing takes the byte copy or arms the trap"
+    assert "redteam_assert_restored" in body, "the drill never proves the restore"
     assert "git status --porcelain" in body, "a clean drill leaves a clean tree (F-029)"
 
 

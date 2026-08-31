@@ -266,9 +266,16 @@ def test_consume_is_never_called_through_a_pipe(gate_text: str, gate_code: str) 
 # --------------------------------------------------------------------------
 
 def test_the_red_team_restores_under_a_trap_and_verifies_by_sha(gate_text: str) -> None:
+    # Re-derived at CU-S3: the trap and the sha check are scripts/lib/
+    # redteam_restore.sh's, and test_script_libs.py watches the scaffold restore
+    # across an abnormal exit rather than reading the word `trap` in a file.
     text = REDTEAM.read_text()
-    assert "trap restore EXIT" in text, "the red team can leave a tampered record behind"
-    assert "sha256sum" in text, "the restore is assumed rather than verified"
+    assert "scripts/lib/redteam_restore.sh" in text, "the red team carries no restore scaffold"
+    assert 'redteam_snapshot "$RECORD"' in text, (
+        "nothing takes the byte copy, so nothing arms the trap — the red team can "
+        "leave a tampered record behind"
+    )
+    assert "redteam_assert_restored" in text, "the restore is assumed rather than verified"
     assert re.search(r"git status --porcelain", text), (
         "the red team does not assert a clean tree — the property F-029 bought"
     )

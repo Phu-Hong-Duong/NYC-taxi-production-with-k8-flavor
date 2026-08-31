@@ -234,13 +234,20 @@ def test_the_gate_reads_the_optuna_storage_rather_than_a_log():
 def test_the_redteam_restores_from_a_byte_copy_under_a_trap():
     """A drill that damages the record it borrowed is worse than no drill. The
     restore must be trapped (so a Ctrl-C still restores) and VERIFIED (so a
-    silent write failure is not read as success)."""
+    silent write failure is not read as success).
+
+    Re-derived at CU-S3: those two guarantees moved into
+    `scripts/lib/redteam_restore.sh`, and `test_script_libs.py` now WATCHES the
+    scaffold restore across an abnormal exit and reports a put-back that did not
+    put anything back — where this test used to read the words `trap` and
+    `sha256sum` in a file. What is still this drill's to prove is that it uses
+    the scaffold, on the record it tampers with."""
     body = without_comments(REDTEAM)
-    assert "trap restore EXIT" in body, (
-        "the restore is not trapped — a Ctrl-C would leave the tamper on disk"
+    assert "scripts/lib/redteam_restore.sh" in body, "the drill carries no restore scaffold"
+    assert 'redteam_snapshot "$RECORD"' in body, (
+        "nothing takes the byte copy — and the snapshot is what arms the EXIT trap"
     )
-    assert "sha256sum" in body, "the restore is assumed rather than verified"
-    assert 'cp "$BACKUP" "$RECORD"' in body, "the restore does not come from a byte copy"
+    assert "redteam_assert_restored" in body, "the drill never proves it put the record back"
 
 
 def test_the_redteam_asserts_the_untampered_replays_still_pass():

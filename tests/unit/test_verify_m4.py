@@ -278,12 +278,16 @@ def test_the_gate_names_the_gitignored_dependency_rather_than_hiding_it():
 # ------------------------------------------------------------- the red team ----
 def test_the_redteam_restores_from_a_byte_copy_under_a_trap():
     """A drill that damages the evidence is worse than no drill. The restore must
-    survive a Ctrl-C, so it hangs off EXIT and is verified by sha256, not assumed."""
+    survive a Ctrl-C, so it hangs off EXIT and is verified by sha256, not assumed.
+
+    Re-derived at CU-S3: the scaffold lives in `scripts/lib/redteam_restore.sh`
+    and `test_script_libs.py` watches it do both — restore after an abnormal
+    exit, and refuse to call a failed put-back a restore. This test keeps the
+    half that is about THIS drill: it uses the scaffold on the record it edits."""
     body = without_comments(REDTEAM)
-    assert "trap restore EXIT" in body
-    assert "sha256sum" in body
-    assert 'cp "$RECORD" "$BACKUP"' in body
-    assert 'cp "$BACKUP" "$RECORD"' in body
+    assert "scripts/lib/redteam_restore.sh" in body
+    assert 'redteam_snapshot "$RECORD"' in body
+    assert "redteam_assert_restored" in body
 
 
 def test_the_redteam_breaks_a_record_and_never_the_cluster():

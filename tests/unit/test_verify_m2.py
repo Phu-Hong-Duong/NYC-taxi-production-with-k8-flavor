@@ -248,8 +248,14 @@ def test_the_margin_drill_plants_a_plausible_number_and_restores_it_verifiably()
     parser works and teaches nobody anything."""
     body = without_comments(MARGIN_REDTEAM)
     assert 'PLANTED="0.10"' in body
-    assert "trap restore EXIT" in body
-    assert 'sha256sum "$CONFIG"' in body
+    # Re-derived at CU-S3. The trapped, sha-verified byte copy moved out of this
+    # drill and into scripts/lib/redteam_restore.sh, where test_script_libs.py
+    # WATCHES it restore across an abnormal exit — a stronger check than the text
+    # pin it replaces. What is still this drill's to prove is that it uses the
+    # scaffold, on the file it plants in.
+    assert "scripts/lib/redteam_restore.sh" in body
+    assert 'redteam_snapshot "$CONFIG"' in body
+    assert "redteam_assert_restored" in body
     # It touches the config and NOTHING else — no registry verb, no cluster
     # mutation, no record rewritten.
     for forbidden in ("set_registered_model_alias", "delete_", "kubectl", "rm -rf", "--json"):
