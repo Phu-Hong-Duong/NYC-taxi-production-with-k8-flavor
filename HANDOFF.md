@@ -1,5 +1,83 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (dg) — ARCH: the cleanup is CHARTERED (CU-S1…S5); one un-ledgered finding swept; executor scheduled into a cluster-down world that only gates MERGES
+
+### State
+**ARCH, `claude-fable-5` (stated first line — the lane the PO's answer
+reopened).** Session MODE: **CHARTERED** (chain-launched architect boundary
+touch). Boot per the ritual: CLAUDE.md · HANDOFF (df, de) · AWAITING_PO
+(2026-08-30-3 ANSWERED · 2026-08-30-2 OPEN · 2026-08-30-1 · 2026-08-29-2) ·
+`docs/milestones/POST_PUBLISH_KICKOFF.md` §0.1 · `docs/cleanup_audit_seed.md` ·
+`docs/cleanup_audit_verification.md` · ledgers. Tree clean at `72153f0` =
+`origin/main`; Docker Desktop still DOWN (`docker: command not found` —
+gotcha #34's fingerprint, unchanged since (df)).
+
+### Done — each with the command and what it printed
+1. **Triage, live half:** `uv run ruff check src tests pipelines` → `All
+   checks passed!` · `uv run pytest tests/unit -q` → **1319 passed, 1
+   skipped in 62.42s** (the skip is the docker-needing DRY_RUN preview —
+   the cluster-down fingerprint) · `make readme-check` → **GREEN** ·
+   `git merge-base --is-ancestor 72153f0 origin/main` → exit 0 (PR #80
+   reachable, gotcha #20). The ten cluster gates were NOT run — no cluster
+   exists to ask — and the charter carries that as a stated precondition,
+   not a silent gap.
+2. **One triage catch, fixed:** **F-082** (session (de)'s audit-verifier
+   defects — extension-classified reference sites, and the `a and b or c`
+   precedence bug that reported 2 `_calls` semantics where there are 3) was
+   raised and closed in (de)'s HANDOFF but **never ledgered**. Row appended
+   to `ledgers/findings.md`, CLOSED with its evidence. F-001 stays the only
+   open row (by design, named). Debt register closed, no intake.
+3. **`docs/milestones/CLEANUP_KICKOFF.md` authored** — PO directive
+   2026-08-29-2 chartered as five one-session slices: **CU-S1** scope-rule
+   fold (directive 2026-08-30-1) + Tier A deletions (1,050 LOC, six files,
+   the three reference-site edits in the same commits per the verification's
+   §3) + Tier B conscious KEEP + `.PHONY`/debris; **CU-S2** one
+   `tests/unit/conftest.py`, the `_calls` hazard split into three
+   honestly-named helpers with `test_tuning.py`'s broad semantics KEPT
+   (broader is stronger for a forbidding assertion); **CU-S3**
+   `verify_harness.sh` + `redteam_restore.sh`, harness only, legs untouched;
+   **CU-S4** python forward/prom/kubectl/record-loader homes, record-reader
+   cluster allowed to land partially; **CU-S5** isvc deploy lib + 
+   `docs/cleanup_report.md` (before/after from the SAME instrument re-run) +
+   the complete red-team battery. Floor: the directive's, restated per
+   slice; two ARCH readings (per-slice red teams · Tier B KEEP) are flagged
+   in the inbox note for PO veto.
+4. **AWAITING_PO swept:** dated CHARTERED notes under 2026-08-29-2 and
+   2026-08-30-1; a SWEPT note under 2026-08-30-3's answer telling the PO the
+   one thing only they can do (launch Docker Desktop — merges wait on the
+   sweep until then). **2026-08-30-2 stays OPEN and untouched — it is the
+   PO's fork,** and the charter routes around it by keeping executors
+   productive without parking.
+5. **Nothing else moved.** No fit, no alias move, no registry version, no
+   wire, no record under `automation/runs/` rewritten, no threshold, no
+   `uv.lock` change, no README Status change, no tag (nothing closed here —
+   the program's closes all stand as tagged).
+
+### Decisions
+- **Tier B KEEP / Tier A DELETE** decided by ARCH in the charter so
+  executors do not re-litigate; both flagged for PO veto in the inbox.
+- **No new code map** (CU-S5 §4): CLAUDE.md's command table is the map; a
+  second one is a twin (F-013 applied to navigation).
+- **Cluster-down protocol**: slices do the work, open PRs, and DO NOT MERGE
+  until the ten-gate sweep runs green — an unmerged PR waiting on a sweep is
+  a queue, not a risk.
+- The literal-pin review, ruff-net widening (42 E501s in `scripts/`,
+  measured this session, recorded in the charter's §0) and DRY_RUN
+  consolidation are OUT of scope, each with its reason.
+
+### Defects/Surprises
+- Only the F-082 ledger gap (Done 2). A bare `ruff check` sweeping
+  `scripts/` reports 42 E501s — not a regression; `scripts/` was never in
+  the lint net (Makefile:395). Recorded, not chartered.
+
+### Next
+**Executor scheduled (+120 s)** → runs **CU-S1** from
+`docs/milestones/CLEANUP_KICKOFF.md`. First act at boot: `docker ps`. If the
+daemon answers, normal path; if not, work + host-side floor + open the PR +
+hold the merge, exactly as the charter's precondition section instructs. The
+scheduling goes through `automation/next_session.sh`, which re-stamps the
+park-detector hash itself — the inbox edits above do not latch the chain.
+
 ## Session 2026-08-31 (df) — the fork is ANSWERED and the architect lane is live again (re-probed, not taken on trust); the chain resumes to ARCH, and the cluster is down
 
 ### State
