@@ -50,13 +50,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _lib.k8s import kubectl as _kubectl  # noqa: E402
+from _lib.records import load_record  # noqa: E402
 
 RECORD_DIR = REPO_ROOT / "automation" / "runs" / "m9-store-watch"
 RECORD = RECORD_DIR / "headroom.json"
@@ -90,16 +93,8 @@ TRANSFORMER_VIEWS = ("zone_static", "calendar_day_flags")
 NAMESPACE = "feast"
 
 
-def _kubectl(*args: str) -> str:
-    out = subprocess.run(  # noqa: S603
-        ["kubectl", "--context", "kind-mlops-taxi", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if out.returncode != 0:
-        raise RuntimeError(f"kubectl {' '.join(args)} failed: {out.stderr.strip()}")
-    return out.stdout.strip()
+# `kubectl` moved to `_lib.k8s` at CU-S4 (it was defined eight times, six
+# distinct bodies, all pinning the same context).
 
 
 def derived_expected_keys() -> dict[str, Any]:
@@ -170,9 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-write", action="store_true", help="print; record nothing")
     args = parser.parse_args(argv)
 
-    materialize = json.loads(MATERIALIZE_RECORD.read_text())
-    accept = json.loads(TRANSFORMER_ACCEPT.read_text())
-    persistence = json.loads(PERSISTENCE_RECORD.read_text()) if PERSISTENCE_RECORD.exists() else {}
+    materialize = load_record(MATERIALIZE_RECORD, produced_by='make feast-materialize')
+    accept = load_record(TRANSFORMER_ACCEPT, produced_by='make deploy-transformer')
+    # NOT load_record: this one is genuinely optional and its absence is not an
+    # error, so forcing it through a presence-checking loader would turn a
+    # correct system red (gotcha #50 through consolidation).
+    persistence = (
+        json.loads(PERSISTENCE_RECORD.read_text()) if PERSISTENCE_RECORD.exists() else {}
+    )
 
     expected = derived_expected_keys()
     live = live_store()

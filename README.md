@@ -84,7 +84,7 @@ record and requires the gate to catch it while the other sub-checks still pass.
 | Training window | **43,987,422** rows | `automation/runs/m7-drift/drift-2020-03.json` |
 | Online store contents | **57,688** keys, three independent witnesses | `automation/runs/m9-store-watch/headroom.json` |
 | Alert rules in force | **16 rules** across **13 signal ids** | `infra/monitoring/alerting_rules.yml` |
-| Host test suite | **1,361 tests**, no skips | `uv run pytest tests/unit -q` |
+| Host test suite | **1,393 tests**, no skips | `uv run pytest tests/unit -q` |
 | Pre-commit hook, watched refusing a staged credential — and watched letting an ordinary commit through | **20 checks**, 0 failures | `automation/runs/m9-hook/redteam.json` |
 | Scripted acceptance gates and their red teams | **10 gates · 8 red teams** | `Makefile`, `docs/milestones/PROGRAM_CLOSE.md` §1 |
 | Secrets in git — every tracked file, and every commit on every ref | **zero unacknowledged**, one argued and re-derived from its own bytes | `automation/runs/m9-security/scan.json` |

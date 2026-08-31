@@ -1829,3 +1829,13 @@ restored**, and the watchdog stands down deliberately (its own log line:
 was touched — the §0 decline in `POST_PUBLISH_KICKOFF.md` stands. To restart
 the chain for anything at all:
 `rm automation/STOP && automation/next_session.sh architect 120`.
+
+## 2026-08-31 09:50 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log
+
+## 2026-08-31 10:50 UTC — watchdog: Chain parked — your decision needed
+The chain stopped after writing a new entry to AWAITING_PO.md. That is the fork policy working, not a fault: it will NOT auto-proceed on its own recommendation. Answer the entry, then: automation/next_session.sh executor
+
+Watchdog log: automation/logs/watchdog.log

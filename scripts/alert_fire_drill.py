@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -64,6 +65,14 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RECORD_DIR = REPO_ROOT / "automation" / "runs" / "m6-slo"
 
+# This file is executed directly and is also loaded by the suite through
+# `spec_from_file_location`, which puts nothing on sys.path — so it declares
+# where its libraries live, exactly as its neighbours declare `src`.
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+from _lib import ports  # noqa: E402
+from _lib.k8s import start_forward, stop_forward  # noqa: E402
+from _lib.monitoring import alertmanager_alerts, http_get, prom_rules  # noqa: E402
+
 ROUTE = "http://localhost:8081"
 PROM_HOST = "prometheus.local"
 INFER_PATH = "/v2/models/nyc-taxi-eta/infer"
@@ -73,8 +82,10 @@ SERVING_HOST = "nyc-taxi-eta-serving.local"
 # deliberately NOT in CLAUDE.md's port family: the family lists ports this
 # program DECLARES, and a forward that exists for four minutes inside one drill
 # is not a declared route (the `make flyte-actions` precedent, which uses 8092
-# for the same reason).
-ALERTMANAGER_LOCAL_PORT = 9095
+# for the same reason). The NUMBER lives in `_lib.ports`, which is the only
+# place the whole set is visible — see that module for the collision that
+# coordination-by-comment could not see.
+ALERTMANAGER_LOCAL_PORT = ports.port("ALERTMANAGER_ALERT_DRILL")
 
 # The two injected shapes. Neither is invented — see the module docstring.
 MALFORMED_BODY: dict[str, Any] = {
@@ -93,36 +104,10 @@ def say(msg: str) -> None:
     print(f"[alert-drill] {msg}", flush=True)
 
 
-# --- readers ------------------------------------------------------------------
-
-
-def http_get(host: str, url: str, timeout: float = 20.0) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"Host": host})  # noqa: S310
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            return response.status, response.read().decode()
-    except urllib.error.HTTPError as error:
-        return error.code, error.read().decode()
-
-
-def prom_rules() -> dict[str, dict[str, Any]]:
-    """Every alerting rule Prometheus has loaded, by alert name."""
-    status, body = http_get(PROM_HOST, f"{ROUTE}/api/v1/rules")
-    if status != 200:
-        raise RuntimeError(f"Prometheus /api/v1/rules -> {status}")
-    out: dict[str, dict[str, Any]] = {}
-    for group in json.loads(body)["data"]["groups"]:
-        for rule in group["rules"]:
-            if rule.get("type") == "alerting":
-                out[rule["name"]] = rule
-    return out
-
-
-def alertmanager_alerts(port: int) -> list[dict[str, Any]]:
-    status, body = http_get("localhost", f"http://localhost:{port}/api/v2/alerts")
-    if status != 200:
-        return []
-    return json.loads(body)
+# --- readers ---------------------------------------------------------------
+# `http_get`, `prom_rules` and `alertmanager_alerts` moved to `_lib.monitoring`
+# at CU-S4; they were byte-identical here, in the drift fire drill and in the
+# gameday. What stayed is everything below that READS an answer for this drill.
 
 
 def served_version() -> str | None:
@@ -262,7 +247,7 @@ PREDICTION = {
 
 def preflight(rule_names: set[str]) -> list[str]:
     problems: list[str] = []
-    rules = prom_rules()
+    rules = prom_rules(PROM_HOST, ROUTE)
     for name in sorted(rule_names):
         rule = rules.get(name)
         if rule is None:
@@ -277,7 +262,7 @@ def preflight(rule_names: set[str]) -> list[str]:
 
 
 def poll_states(rule_names: set[str]) -> dict[str, str]:
-    rules = prom_rules()
+    rules = prom_rules(PROM_HOST, ROUTE)
     return {name: rules.get(name, {}).get("state", "absent") for name in rule_names}
 
 
@@ -355,19 +340,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # --- phase 2: the Alertmanager forward ------------------------------------
     say(f"phase 2 — forwarding Alertmanager to localhost:{ALERTMANAGER_LOCAL_PORT} (ephemeral)")
-    forward = subprocess.Popen(  # noqa: S603
-        [
-            "kubectl",
-            "-n",
-            "monitoring",
-            "port-forward",
-            "svc/prometheus-alertmanager",
-            f"{ALERTMANAGER_LOCAL_PORT}:9093",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    forward = start_forward(
+        "svc/prometheus-alertmanager", "monitoring", ALERTMANAGER_LOCAL_PORT, 9093
     )
-    time.sleep(4)
 
     timeline: list[dict[str, Any]] = []
     fired_at: dict[str, float] = {}
@@ -465,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
                 break
             time.sleep(args.poll_seconds)
     finally:
-        forward.terminate()
+        stop_forward(forward)
 
     # --- the verdict ----------------------------------------------------------
     print()

@@ -46,15 +46,24 @@ import json
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _lib import ports  # noqa: E402
+from _lib.k8s import kubectl, start_forward, stop_forward  # noqa: E402
+from _lib.monitoring import (  # noqa: E402
+    alertmanager_holds,
+    firing_labels,
+    http_get,
+    prom_query,
+    prom_rules,
+)
+from _lib.monitoring import rule_state as _rule_state  # noqa: E402
 
 from taxi_mlops.monitoring.__main__ import PUSH_JOB, build_metrics  # noqa: E402
 from taxi_mlops.monitoring.drift import compute_drift  # noqa: E402
@@ -73,8 +82,8 @@ POD_SELECTOR = "app.kubernetes.io/name=prometheus-pushgateway"
 #: Ephemeral forwards, torn down on exit, and deliberately NOT 9096/9097: those
 #: are `drift_fire_drill.py`'s, and a drill that steals a running drill's port
 #: is a drill that fails for its own reasons (#55).
-PUSHGATEWAY_LOCAL_PORT = 9098
-ALERTMANAGER_LOCAL_PORT = 9099
+PUSHGATEWAY_LOCAL_PORT = ports.port("PUSHGATEWAY_PERSISTENCE_DRILL")
+ALERTMANAGER_LOCAL_PORT = ports.port("ALERTMANAGER_PERSISTENCE_DRILL")
 
 MONTHS = ("2020-01", "2020-02", "2020-03")
 
@@ -159,55 +168,19 @@ def say(msg: str) -> None:
     print(f"[persistence-drill] {msg}", flush=True)
 
 
-def http_get(host: str, url: str, timeout: float = 20.0) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"Host": host})  # noqa: S310
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            return response.status, response.read().decode()
-    except urllib.error.HTTPError as error:
-        return error.code, error.read().decode()
-    except Exception as error:  # noqa: BLE001 - a forward that is not up yet
-        return 0, str(error)
-
-
-def prom_rules() -> dict[str, dict[str, Any]]:
-    status, body = http_get(PROM_HOST, f"{ROUTE}/api/v1/rules")
-    if status != 200:
-        raise RuntimeError(f"Prometheus /api/v1/rules -> {status}")
-    out: dict[str, dict[str, Any]] = {}
-    for group in json.loads(body)["data"]["groups"]:
-        for rule in group["rules"]:
-            if rule.get("type") == "alerting":
-                out[rule["name"]] = rule
-    return out
+# --- readers ---------------------------------------------------------------
+# The bodies moved to `_lib.monitoring` at CU-S4. These two wrappers stay
+# because every caller below sits inside a `wait_for` poll: they must RE-READ
+# the rules on each call, so binding a rules dict once would silently freeze a
+# drill that exists to watch a state change.
 
 
 def rule_state(alert: str) -> str:
-    return str((prom_rules().get(alert) or {}).get("state", "absent"))
+    return _rule_state(prom_rules(PROM_HOST, ROUTE), alert)
 
 
 def firing_months(alert: str) -> set[str]:
-    rule = prom_rules().get(alert) or {}
-    return {
-        instance.get("labels", {}).get("month", "")
-        for instance in rule.get("alerts") or []
-        if instance.get("state") == "firing"
-    }
-
-
-def prom_query(expr: str) -> list[dict[str, Any]]:
-    url = f"{ROUTE}/api/v1/query?query={urllib.parse.quote(expr)}"
-    status, body = http_get(PROM_HOST, url)
-    if status != 200:
-        raise RuntimeError(f"Prometheus query -> {status}: {body[:200]}")
-    return json.loads(body)["data"]["result"]
-
-
-def alertmanager_holds(port: int, alert: str) -> bool:
-    status, body = http_get("localhost", f"http://localhost:{port}/api/v2/alerts")
-    if status != 200:
-        return False
-    return any(a.get("labels", {}).get("alertname") == alert for a in json.loads(body))
+    return firing_labels(prom_rules(PROM_HOST, ROUTE), alert, "month")
 
 
 def gateway_samples(port: int) -> int:
@@ -227,18 +200,6 @@ def gateway_samples(port: int) -> int:
     )
 
 
-def kubectl(*args: str, check: bool = True) -> str:
-    out = subprocess.run(  # noqa: S603
-        ["kubectl", "-n", NAMESPACE, *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if check and out.returncode != 0:
-        raise RuntimeError(f"kubectl {' '.join(args)} -> {out.returncode}: {out.stderr.strip()}")
-    return out.stdout
-
-
 def gateway_pod() -> tuple[str, str, bool]:
     """(name, uid, ready). Identity is the UID — a pod can come back under its
     own name with a different object behind it (M4-S5's lesson)."""
@@ -255,16 +216,6 @@ def gateway_pod() -> tuple[str, str, bool]:
         if c.get("type") == "Ready"
     ) and bool(pod.get("status", {}).get("conditions"))
     return pod["metadata"]["name"], pod["metadata"]["uid"], ready
-
-
-def port_forward(target: str, local: int, remote: int) -> subprocess.Popen:
-    process = subprocess.Popen(  # noqa: S603
-        ["kubectl", "-n", NAMESPACE, "port-forward", target, f"{local}:{remote}"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    time.sleep(4)
-    return process
 
 
 def push_real_months(port: int, reports: dict[str, Any] | None = None) -> dict[str, float]:
@@ -337,10 +288,10 @@ def main(argv: list[str] | None = None) -> int:
     forwards: list[subprocess.Popen] = []
     try:
         forwards.append(
-            port_forward(f"svc/{SERVICE_NAME}", PUSHGATEWAY_LOCAL_PORT, 9091)
+            start_forward(f"svc/{SERVICE_NAME}", NAMESPACE, PUSHGATEWAY_LOCAL_PORT, 9091)
         )
         forwards.append(
-            port_forward("svc/prometheus-alertmanager", ALERTMANAGER_LOCAL_PORT, 9093)
+            start_forward("svc/prometheus-alertmanager", NAMESPACE, ALERTMANAGER_LOCAL_PORT, 9093)
         )
 
         # --- phase 0: the volume is real, and the pod is the one holding it ----
@@ -378,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         killed_at = time.time()
         kubectl("delete", "pod", "-l", POD_SELECTOR, "--wait=false")
         for process in forwards[:1]:
-            process.terminate()
+            stop_forward(process)
         ready, waited = wait_for(lambda: gateway_pod()[2] and gateway_pod()[1] != uid_before,
                                  timeout=300, poll=3)
         restart_seconds = round(time.time() - killed_at, 2)
@@ -387,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         check(ready and uid_after != uid_before,
               f"a DIFFERENT pod object is serving ({uid_before[:8]}… -> {uid_after[:8]}…), "
               f"ready {restart_seconds}s after the delete — identity, never name (M4-S5)")
-        forwards[0] = port_forward(f"svc/{SERVICE_NAME}", PUSHGATEWAY_LOCAL_PORT, 9091)
+        forwards[0] = start_forward(f"svc/{SERVICE_NAME}", NAMESPACE, PUSHGATEWAY_LOCAL_PORT, 9091)
         time.sleep(3)
         after = gateway_samples(PUSHGATEWAY_LOCAL_PORT)
         check(
@@ -431,7 +382,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         emptied = gateway_samples(PUSHGATEWAY_LOCAL_PORT)
         check(emptied == 0, f"the gateway now holds {emptied} taxi_drift_* sample(s)")
-        gone, _ = wait_for(lambda: not prom_query('taxi_drift_volume_ratio{job="taxi-drift"}'),
+        volume_series = 'taxi_drift_volume_ratio{job="taxi-drift"}'
+        gone, _ = wait_for(lambda: not prom_query(PROM_HOST, ROUTE, volume_series),
                            timeout=180, poll=10)
         check(gone, "Prometheus sees no taxi_drift_volume_ratio series at all — the board is "
                     "blank, which is exactly what a calm month looks like")
@@ -486,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
         }
     finally:
         for process in forwards:
-            process.terminate()
+            stop_forward(process)
 
     record["finished_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     record["passed"] = not failures

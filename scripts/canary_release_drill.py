@@ -65,6 +65,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -75,6 +76,10 @@ from taxi_mlops.serving.client import Endpoint
 from taxi_mlops.serving.load import run_load
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _lib.k8s import kubectl  # noqa: E402
+
 RECORD = REPO_ROOT / "automation/runs/m6-canary/release_drill.json"
 INGRESS_MANIFEST = REPO_ROOT / "infra/manifests/canary-ingress.yaml"
 WEIGHT_PLACEHOLDER = "CANARY-WEIGHT-SET-AT-RUN-TIME"
@@ -189,14 +194,8 @@ PREDICTION: dict[str, Any] = {
 }
 
 
-def kubectl(*args: str, check: bool = True) -> str:
-    proc = subprocess.run(  # noqa: S603 — fixed argv, no shell
-        ["kubectl", "--context", "kind-mlops-taxi", *args],
-        capture_output=True, text=True, check=False,
-    )
-    if check and proc.returncode != 0:
-        raise RuntimeError(f"kubectl {' '.join(args)} failed: {proc.stderr.strip()}")
-    return proc.stdout.strip()
+# `kubectl` moved to `_lib.k8s` at CU-S4 (it was defined eight times, six
+# distinct bodies, all pinning the same context).
 
 
 def promql(query: str) -> dict[str, float]:
