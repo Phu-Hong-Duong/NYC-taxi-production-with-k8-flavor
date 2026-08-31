@@ -1,6 +1,16 @@
 {
  "results": [
   {
+   "target": "feast-online-parity-redteam",
+   "returncode": 0,
+   "seconds": 23.2,
+   "tail": [
+    "[redteam] ok  it printed PASSED",
+    "[redteam] ok  the working tree is clean \u2014 the drill left no residue",
+    "[redteam] PASSED \u2014 the table can go RED, names the planted column, and restores exactly"
+   ]
+  },
+  {
    "target": "gate-margin-redteam",
    "returncode": 0,
    "seconds": 17.2,
@@ -8,6 +18,16 @@
     "\u001b[32m[gate-margin-redteam] PASSED: the M2 gate went RED on a lowered incumbent\u001b[0m",
     "\u001b[32m                      margin, named both numbers, left every era-aware replay\u001b[0m",
     "\u001b[32m                      passing, and returned GREEN when the config was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "gate-redteam",
+   "returncode": 0,
+   "seconds": 246.0,
+   "tail": [
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 62.06it/s] ",
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 62.06it/s]",
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 61.94it/s]"
    ]
   },
   {
@@ -31,6 +51,16 @@
    ]
   },
   {
+   "target": "marts-redteam",
+   "returncode": 0,
+   "seconds": 21.6,
+   "tail": [
+    "[marts] half of this script the red-team branch never reaches.",
+    "[marts] restoring the local DuckDB layer to green \u2026",
+    "[marts] restored. Postgres was never touched; run 'make marts' to republish."
+   ]
+  },
+  {
    "target": "parity-redteam",
    "returncode": 0,
    "seconds": 16.0,
@@ -38,6 +68,16 @@
     "ok    the untampered parity run is GREEN again (exit 0), so the drill left nothing behind",
     "[redteam] 7 check(s), 0 failure(s)",
     "[redteam] PASSED \u2014 `make parity` goes RED for a planted cause and GREEN without one."
+   ]
+  },
+  {
+   "target": "predictions-redteam",
+   "returncode": 0,
+   "seconds": 406.0,
+   "tail": [
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 76.19it/s] ",
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 76.04it/s]",
+    "[score] FAIL: the floor re-fits to 3.6752 on test, but the champion's own registry tag says it was gated against 3.3518. The rows this command would publish would compare the champion against a DIFFERENT bar from the one it passed \u2014 every KPI-13 in the mart, the memo and the board would move and nothing else would notice. Refusing to write them. (If the training window really has moved, the champion needs re-gating, not the predictions re-publishing.)"
    ]
   },
   {
