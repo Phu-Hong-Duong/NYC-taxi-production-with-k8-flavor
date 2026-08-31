@@ -5550,3 +5550,72 @@ are indistinguishable by name. Then, for every difference the fingerprint
 reveals, ask which copy is right rather than which is shortest. Here the answer
 was "the strictest one" four times out of four, and each of those is a behaviour
 the other copies had been quietly missing for milestones.
+
+## CU-S5 (cleanup) — a verification that rewrites its evidence is a re-measurement (2026-08-31, role:MLOps)
+
+**What was built.** The cleanup's last slice: `scripts/lib/isvc_deploy.sh` (the
+route-port read, the alias no-move guard, the two readiness waits, the route
+wait — five deploy scripts onto one skeleton, net **−67 code lines**),
+`docs/cleanup_report.md` (the directive's write-up, before/after from the same
+instrument), and the **full red-team battery** — every `make *-redteam` target
+run after all five slices, **19 of 19 RED on plant and GREEN on restore**.
+
+**Why this way.** CU-S4's rule carried over and paid again: fingerprint before
+moving. The route-port heredoc looked like five copies of one thing and is
+**five copies of two things** — four byte-identical, and `deploy_transformer.sh`
+drifted to a cwd-relative path and a shorter refusal. Same for its
+`champion_version()`. So the merge took the stricter form in both cases, which
+is the fourth and fifth time in this cleanup that consolidating meant *adopting
+a behaviour some copies had quietly lost*. The route wait was the sharpest: two
+copies failed on timeout with a hint, and the transformer's polled sixty times
+and then **fell through silently into its accept check** — so an unroutable
+service reported as a failed accept, blaming the wrong component.
+
+And what did NOT move is the decision. Every deploy's **accept check** stayed
+bespoke, because those are the program's arguments and not one is a copy: `make
+serve` asks for a prediction, the canary proves ADR-011 condition 2 both ways,
+the transformer reads `X-Taxi-Lookups` off the answer. The alias guard's
+**mechanism** is shared and its **citation** is not — M5 kickoff law 2 and M6
+law 3 are different laws about different deploys, so they are passed in as
+trailing arguments and a test asserts each caller still carries its own. One
+script, `deploy_canary.sh`, never had a citation and still does not: writing one
+would be inventing an argument inside a deduplication.
+
+**The concept underneath: running a verification is an ACTION, and an action has
+side effects on the evidence.** The battery is supposed to be a read — *do these
+nineteen drills still work?* Two of them write. `parity-redteam` re-runs `make
+parity`, which rewrites `automation/runs/m5-parity/parity.json`; `hook-redteam`
+writes its own record. Both diffs came back **timestamp-only** — every measured
+number identical, `max_abs_delta_minutes: 0.0` unchanged — and both were
+restored from git anyway, because a re-dated record still destroys the
+`measured_at` provenance of another milestone's evidence. That is F-053 and
+F-063's shape for the third and fourth time in this program (gotcha #48), and
+what makes it worth a note is that it arrived through the *most innocent
+possible* route: not a drill's undo clobbering somebody else's record, but a
+**close-out demonstration** doing it. A battery that runs "every red team" cannot
+be run without this check.
+
+The smaller sibling: `hook-redteam` and `security-scan-redteam` **refuse a dirty
+working tree**, because both commit and then destroy history. Correct of them —
+and it means the battery has an ordering constraint nobody had written down. My
+own runner tripped it twice on its own record.
+
+**What to look at.** `scripts/lib/isvc_deploy.sh`'s header — in particular the
+`WHAT DELIBERATELY DOES NOT LIVE HERE` block, which is the third of these the
+cleanup has written and the one a future consolidation is most likely to want to
+violate. Then `tests/unit/test_script_libs.py`'s isvc section: the wait ORDER
+used to be pinned by `text.index("rollout status") < text.index("--for=jsonpath=")`
+in two files, and is now asserted by **running the function against a recording
+fake `kubectl` and reading the order off what was actually invoked.** Nine of the
+twelve guards this cleanup re-derived made that same move — from reading a file
+to running a behaviour. Then `docs/cleanup_report.md` §1, which reports the three
+rows that go the wrong way before it reports anything flattering.
+
+**What to try yourself.** After any refactor you believe is behaviour-neutral,
+run `git status` and look specifically for **tracked files you did not edit**.
+Then ask of each: did a number change, or only a timestamp? The answer is almost
+always "only a timestamp", and that is exactly why the reflex is to shrug — but a
+timestamp is a claim about when something was measured, and the whole reason this
+repo tracks `automation/runs/**` is so that claim is reviewable. Restore them,
+and if restoring is awkward, that awkwardness is telling you the command you ran
+is a producer wearing a reader's clothes.

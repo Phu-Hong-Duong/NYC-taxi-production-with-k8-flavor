@@ -1,5 +1,161 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (dl) — EXEC: CU-S5 landed; the cleanup is COMPLETE, and its own close-out battery rewrote two other milestones' records
+
+### State
+**EXECUTOR, `claude-opus-5` · Session MODE: CHARTERED** (chain-launched, +120 s
+from (dk)). Boot per the ritual: CLAUDE.md · HANDOFF (dk, dj) ·
+`docs/milestones/CLEANUP_KICKOFF.md` · AWAITING_PO. No `.status` file was
+pointed at by (dk); none read. Story: **CU-S5** — the whole slice, all four
+parts, no cut. Branch `story/cu-s5-isvc-lib-and-report`, six commits, **PR #87
+MERGED** (`dd4464f`), `git branch -r --contains d998fc8` → `origin/main`
+(gotcha #20). **This was the last slice: the cleanup charter is finished.**
+
+### Reconciliation (staleness check)
+(dk) said to re-check both signals at boot. Both answer: `docker ps` lists the
+three `mlops-taxi` node containers, `kubectl get nodes` shows three Ready at
+14d. **Precondition path 1** — the slice merged on its own ten-gate sweep,
+nothing queued. `main` was at `83fc768` (two docs commits past (dk)'s stated
+`f6a576c`); branched from there.
+
+### Done — each with the command and what it printed
+1. **`scripts/lib/isvc_deploy.sh`, sourced by five deploys.** Fingerprinted
+   first, and it changed the design: the route-port heredoc is **5 copies / 2
+   distinct bodies** — four byte-identical, and `deploy_transformer.sh` drifted
+   to a **cwd-relative** kind-config path plus a shorter refusal; its
+   `champion_version()` had drifted the same way. Merged: route-port read (5) ·
+   alias no-move guard (4) · the two readiness waits (4) · the route wait (3).
+   **Net −67 code lines** — five scripts 725 → 596, library +62. (CU-S4 was net
+   **+15**; the difference is that its cluster had genuinely diverged and this
+   one was mostly byte-identical. Both numbers are in the report, §3.)
+2. **F-087, found by the fingerprint and not by a failure:**
+   `deploy_transformer.sh`'s route wait polled sixty times and then **fell
+   through SILENTLY** into its accept check, so an unroutable transformer
+   reported as a failed accept — blame landing one component from the cause
+   (#55's family). The other two copies exit 1 with a hint. The lib fails on
+   timeout; the change is named as a behaviour change in the script, the lib
+   header and the report, because a consolidation that quietly alters a failure
+   path is what this cleanup is most at risk of.
+3. **What did NOT move is the decision**, under the `WHAT DELIBERATELY DOES NOT
+   LIVE HERE` heading a test requires: **every accept check** (the program's
+   arguments — `make serve` asks for a prediction, the canary proves ADR-011
+   condition 2 both ways, the transformer reads `X-Taxi-Lookups` off the
+   answer); the alias guard's **citations**, passed in as trailing arguments so
+   M5 kickoff law 2 and M6 law 3 stay distinct; DRY_RUN narrations; every
+   manifest render. **`deploy_canary.sh` never carried a citation and still does
+   not** — writing one would be inventing an argument inside a deduplication,
+   so the asymmetry is named in the script.
+4. **Four guards went red and all four were re-derived, never widened.** The
+   wait ORDER used to be `text.index("rollout status") < text.index("--for=
+   jsonpath=")` in two files; it is now asserted ONCE by **RUNNING
+   `isvc_wait_ready` against a recording fake `kubectl` and reading the order off
+   what was actually invoked**. Same for the alias guard: watched exiting **2**
+   on a moved alias and returning silently on an unmoved one. Caller-side half
+   stays per file. `test_shadow_and_spike`'s `count("champion_version") >= 3`
+   became `count("isvc_champion_version") == 2` — the honest count once the
+   definition is not local; the old `>= 3` was one definition plus two calls and
+   the property was only ever about the two READS.
+5. **`docs/cleanup_report.md`** — before/after from the SAME instrument, written
+   to a **new** record (`audit-verify-after.json`; the before-record is evidence
+   and was not rewritten). It leads with the three rows that go the wrong way:
+   `scripts/` **+3 files / −308 lines**, `tests/` **+934 lines / +88 collected
+   tests** (the point, not a side effect — nine of twelve re-derived guards
+   moved from reading a file to running a behaviour), `docs/` **+979**. Total
+   **130 files, +3,809/−2,894**: *the cleanup is not a net subtraction of lines;
+   it is a subtraction of copies.*
+6. **The full battery: 19 of 19 RED-on-plant then GREEN-on-restore, 1,593.6 s**
+   (`automation/runs/m-cleanup/battery.json`). The four most expensive are the
+   four that FIT something and both still say what they said:
+   `leakage-redteam` **+0.0551 min on the month it saw vs −0.1367 on the month
+   it did not**; `train-redteam` **VERDICT: REFUSE**, exit 1, registry identical
+   before and after.
+7. **The floor**: `verify-m0`…`verify-m9` **GREEN 10/10** live, exit 0 each,
+   over the finished cleanup (`ok` lines 25/45/58/47/39/49/63/63/51/46;
+   `verify-m1` is 162.9 s because it re-derives ~1 GB of parquet) ·
+   `uv run pytest tests/unit -q` **1,408 passed, 0 skipped** (was 1,393) ·
+   `ruff check src tests pipelines` All checks passed! · all six touched shell
+   scripts `bash -n` clean · `make readme-check` GREEN · CI `lint-test pass
+   1m40s`.
+8. **End state unmoved**: `@champion` **2** / `feature_set v2`, nothing fitted,
+   no alias moved, no version created, no wire changed · `uv.lock`
+   byte-identical to `lock-rebaselined-m9-publish` · all 5 DVC pins `up to
+   date` · README Status table byte-unmoved.
+
+### Decisions
+- **The alias guard's mechanism is shared and its ARGUMENT is not.** Four
+  deploys cite four different laws at that line; the guard prints whatever
+  trailing lines it is handed. A shared sentence would have made four laws look
+  like one, and a test now asserts each caller still carries its own.
+- **`deploy_serving.sh` is a caller of the skeleton even though it deploys no
+  InferenceService.** It uses exactly one function — the route-port read, which
+  is a fact about the kind config and not about any workload. Naming it because
+  a reader will wonder why the platform installer sources a file called
+  `isvc_deploy.sh`.
+- **The battery's two record-writing drills were NOT fixed at the cause**
+  (F-086). Making `parity-redteam` call a read-only twin would change a drill's
+  behaviour to suit a report, and the charter forbids any slice from altering a
+  drill. The honest remedy is the check, written into the report, not a rewrite.
+- **`[[ … ]] && default` became an explicit `if`** in the lib, and the test that
+  exercises the explicit-components path now asserts the script REACHES ITS END
+  — under the callers' `set -euo pipefail` the short-circuit form leaves the
+  list's status at 1 whenever components WERE supplied. Measured rather than
+  reasoned about.
+
+### Defects/Surprises
+- **F-086 — the close-out battery rewrote two other milestones' tracked
+  records.** `parity-redteam` re-runs `make parity` (rewrites
+  `automation/runs/m5-parity/parity.json`); `hook-redteam` writes its own
+  record. Both diffs **timestamp-only** — every measured number identical — and
+  both **restored from git**, because a verification must not re-date another
+  milestone's evidence. Third and fourth occurrence of F-053/F-063's shape
+  (gotcha #48), and the most innocent route yet.
+- **`hook-redteam` and `security-scan-redteam` refuse a dirty tree** — correctly,
+  since both commit and destroy history. So the battery has an ordering
+  constraint nobody had written down; my own runner tripped it twice on its own
+  record.
+- **One of my own new needles went red for the right reason.** `"rollout status"
+  not in body` matched `kubectl -n platform rollout status deployment/minio` — a
+  different object, waited on for a different reason, untouched by this
+  migration. Narrowed to the isvc's own workload (gotcha #99), never widened.
+- **`make readme-check` caught this session's diff — fifth slice running** (RED
+  at `1,393 tests` against 1,408), and the claim is declared on BOTH sides
+  (README row + `scripts/readme_check.py:418`).
+- **No wall, no fork, no detached run.** The two fitting red teams
+  (`leakage-redteam` 461.6 s, `train-redteam` 161.2 s) exceed the 10-minute
+  foreground ceiling and were run as a background task **inside this turn** and
+  waited on — not left to resume in a later one (gotcha #45).
+
+### Next
+**The cleanup charter is COMPLETE — all five slices landed and merged (PRs
+#82, #83, #84, #85, #86, #87).** No story remains. Per exit ritual (c) — last
+story done, no ◆ on this charter — an **ARCH** session is scheduled at +120 s
+for the boundary triage.
+
+What ARCH inherits, precisely:
+
+- **The report is the deliverable to review**: `docs/cleanup_report.md`. Its §5
+  (every re-derived guard, old property → new property) and §6 (the guarantees,
+  re-checked) are the two sections that answer the directive's floor — *must not
+  weaken what the program can PROVE*.
+- **Two new findings are ledgered and both CLOSED** — F-086 (the battery
+  rewrites records; ordering constraint) and F-087 (the transformer's silent
+  route-wait fall-through). Neither is a fork.
+- **No signoff row was written, deliberately** — producer ≠ approver, and I am
+  the producer of all five slices. The cleanup's sign-off row is ARCH's to
+  write, and the evidence it needs is the report plus this entry.
+- **The one thing ARCH should re-run itself**: `make verify-m0` … `verify-m9`
+  and `uv run pytest tests/unit -q`. The cluster is UP and the daemon answers
+  (re-check both at boot anyway — (di) watched them move twice in ninety
+  minutes).
+- **AWAITING_PO 2026-08-30-2** (the VM/watchdog deadlock) is still OPEN and is
+  still the PO's. No slice touched it. It remains true that a park stays parked
+  until the PO next touches WSL.
+- **The lint gap is recorded, not closed** (report §9): `scripts/` is outside
+  `ruff check src tests pipelines` and CU-S4 produced a real `F821` there that
+  CI would not have caught. Widening the net was out of scope by the charter.
+  If ARCH wants it chartered, it is a clean small slice with a measured size —
+  42 E501s at charter time.
+
 ## Session 2026-08-31 (dk) — EXEC: CU-S4 landed; two services had reserved the same port, and a consolidation that cost lines
 
 ### State
