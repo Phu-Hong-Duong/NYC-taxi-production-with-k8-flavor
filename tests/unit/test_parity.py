@@ -31,6 +31,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import called_paths
 
 from taxi_mlops.serving import client, parity
 
@@ -40,25 +41,6 @@ REDTEAM = REPO / "scripts" / "parity_redteam.sh"
 MAKEFILE = REPO / "Makefile"
 
 pytestmark = pytest.mark.unit
-
-
-def _calls(source: Path) -> list[str]:
-    """Every dotted callee name actually INVOKED in a module."""
-    tree = ast.parse(source.read_text())
-    names = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        target = node.func
-        parts = []
-        while isinstance(target, ast.Attribute):
-            parts.append(target.attr)
-            target = target.value
-        if isinstance(target, ast.Name):
-            parts.append(target.id)
-        if parts:
-            names.append(".".join(reversed(parts)))
-    return names
 
 
 # --------------------------------------------------------------------------
@@ -80,7 +62,7 @@ def _calls(source: Path) -> list[str]:
 )
 def test_parity_never_mutates_the_registry(verb: str) -> None:
     """A test that can move the pointer it checks can make itself pass."""
-    assert verb not in _calls(PARITY_SOURCE), (
+    assert verb not in called_paths(PARITY_SOURCE), (
         f"{PARITY_SOURCE.name} invokes {verb} — parity is a READER. It resolves an "
         "alias, loads a model and POSTs; anything that mutates the registry belongs "
         "in registry.py, which is the one module allowed to."
@@ -92,7 +74,7 @@ def test_parity_deploys_nothing() -> None:
     tree = ast.parse(source)
     shelling = [
         name
-        for name in _calls(PARITY_SOURCE)
+        for name in called_paths(PARITY_SOURCE)
         if name.split(".")[0] in {"subprocess", "os"} and "environ" not in name
     ]
     assert not shelling, (

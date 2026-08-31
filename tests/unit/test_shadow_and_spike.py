@@ -23,6 +23,7 @@ import re
 from pathlib import Path
 
 import pytest
+from conftest import called_names
 
 REPO = Path(__file__).resolve().parents[2]
 SHADOW_MODULE = REPO / "src/taxi_mlops/serving/shadow.py"
@@ -54,24 +55,6 @@ def _record(path: Path) -> dict:
 
 
 
-def _calls(path: Path) -> set[str]:
-    """Every callable NAME invoked in a file, however it is spelled.
-
-    `foo()`, `a.b.foo()` and `a.foo()` all contribute `foo`, so a ban survives an
-    import being renamed — and, unlike a grep, prose naming the same verb does not
-    trip it.
-    """
-    names: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name):
-                names.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                names.add(func.attr)
-    return names
-
-
 # --------------------------------------------------------------- structural --
 
 #: Every MLflow verb that changes registry state. The shadow path may read the
@@ -93,7 +76,7 @@ MUTATING_REGISTRY_VERBS = {
 
 
 def test_the_shadow_run_is_a_reader() -> None:
-    offenders = _calls(SHADOW_MODULE) & MUTATING_REGISTRY_VERBS
+    offenders = called_names(SHADOW_MODULE) & MUTATING_REGISTRY_VERBS
     assert not offenders, (
         f"{SHADOW_MODULE.name} calls {sorted(offenders)}. The shadow run measures; "
         "it does not mint, tag or point anything."
@@ -127,7 +110,7 @@ def test_the_shadow_builds_each_target_through_the_one_feature_path() -> None:
     """The whole construction rests on this: one raw request, two matrices, one builder."""
     source = SHADOW_MODULE.read_text()
     tree = ast.parse(source)
-    calls = _calls(SHADOW_MODULE)
+    calls = called_names(SHADOW_MODULE)
     assert "build_matrix" in calls, (
         "the shadow must build its matrices with taxi_mlops.serving.client.build_matrix — "
         "a second builder makes every delta ambiguous between 'the models disagree' "

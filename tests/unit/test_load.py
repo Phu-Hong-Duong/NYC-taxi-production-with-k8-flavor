@@ -38,6 +38,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from conftest import called_paths
 
 from taxi_mlops.serving import load as load_mod
 
@@ -47,25 +48,6 @@ DRILL_SOURCE = REPO / "scripts" / "serving_load_drill.py"
 MAKEFILE = REPO / "Makefile"
 
 pytestmark = pytest.mark.unit
-
-
-def _calls(source: Path) -> list[str]:
-    """Every dotted callee name actually INVOKED in a module (gotchas #53/#68)."""
-    tree = ast.parse(source.read_text())
-    names = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        target = node.func
-        parts = []
-        while isinstance(target, ast.Attribute):
-            parts.append(target.attr)
-            target = target.value
-        if isinstance(target, ast.Name):
-            parts.append(target.id)
-        if parts:
-            names.append(".".join(reversed(parts)))
-    return names
 
 
 def _function(source: Path, name: str) -> ast.FunctionDef:
@@ -442,7 +424,7 @@ def test_a_drill_that_disturbed_nothing_cannot_be_green() -> None:
 )
 def test_neither_the_client_nor_the_drill_touches_the_registry(verb: str) -> None:
     for source in (LOAD_SOURCE, DRILL_SOURCE):
-        calls = _calls(source)
+        calls = called_paths(source)
         assert not any(call.endswith(verb) for call in calls), f"{source.name} calls {verb}"
 
 

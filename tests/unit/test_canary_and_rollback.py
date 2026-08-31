@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import called_names
 
 REPO = Path(__file__).resolve().parents[2]
 DRILL = REPO / "scripts/canary_release_drill.py"
@@ -53,18 +54,6 @@ def _record(path: Path) -> dict:
         "means it was deleted or lost, not that this clone lacks local artifacts"
     )
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _calls(path: Path) -> set[str]:
-    names: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name):
-                names.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                names.add(func.attr)
-    return names
 
 
 def _string_args(path: Path, call_name: str) -> list[list[str]]:
@@ -110,12 +99,12 @@ def test_the_canary_drill_touches_no_registry_state() -> None:
     business anywhere near it, so the two are checked with different bans rather
     than one loose one.
     """
-    offenders = _calls(DRILL) & (MUTATING_REGISTRY_VERBS | {"set_registered_model_alias"})
+    offenders = called_names(DRILL) & (MUTATING_REGISTRY_VERBS | {"set_registered_model_alias"})
     assert not offenders, f"{DRILL.name} calls {sorted(offenders)}"
 
 
 def test_the_rollback_moves_the_alias_and_promotes_nothing() -> None:
-    calls = _calls(REHEARSAL)
+    calls = called_names(REHEARSAL)
     assert "set_registered_model_alias" in calls, (
         "the rehearsal must move the alias with the RAW client call the runbook §4.3 "
         "types — a rollback that went through registry.promote would be a gate bypass"
@@ -159,7 +148,7 @@ def test_the_canary_route_is_not_a_kserve_generated_name() -> None:
         "for the InferenceService of that name — the annotations are accepted and then "
         "reverted, and the split reads 0% with no error anywhere (F-039)"
     )
-    assert "refuse_an_owned_ingress" in _calls(DRILL), (
+    assert "refuse_an_owned_ingress" in called_names(DRILL), (
         "the drill must refuse to weight an Ingress that carries ownerReferences — the "
         "name is only half of F-039's fix, and the guard is the half that survives a rename"
     )

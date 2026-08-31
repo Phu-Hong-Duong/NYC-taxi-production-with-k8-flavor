@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import called_names
 
 REPO = Path(__file__).resolve().parents[2]
 MODULE = REPO / "src" / "taxi_mlops" / "monitoring" / "store_health.py"
@@ -59,19 +60,6 @@ def _store_rules() -> list[dict]:
         for r in g["rules"]
         if r.get("labels", {}).get("signal") in ("A-12", "A-13")
     ]
-
-
-def _calls(path: Path) -> set[str]:
-    """Every called NAME and attribute — an invocation, never a mention."""
-    names: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name):
-                names.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                names.add(func.attr)
-    return names
 
 
 # --- the prediction --------------------------------------------------------------
@@ -222,7 +210,7 @@ REGISTRY_VERBS = {
 
 @pytest.mark.parametrize("path", [MODULE, READER, HEADROOM, DRILL])
 def test_the_watchdog_never_touches_the_registry(path: Path) -> None:
-    assert not (_calls(path) & REGISTRY_VERBS), (
+    assert not (called_names(path) & REGISTRY_VERBS), (
         f"{path.name} calls a registry-mutating verb. M9 law 3: the alias does not move and "
         "nothing is fitted."
     )

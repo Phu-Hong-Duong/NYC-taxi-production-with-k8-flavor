@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import called_names
 
 REPO = Path(__file__).resolve().parents[2]
 GAMEDAY = REPO / "scripts/gameday_m6.py"
@@ -37,18 +38,6 @@ RESTORE_RECORD = REPO / "automation/runs/m6-restore/restore_drill.json"
 
 def _module(path: Path) -> ast.Module:
     return ast.parse(path.read_text())
-
-
-def _calls(path: Path) -> set[str]:
-    names: set[str] = set()
-    for node in ast.walk(_module(path)):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name):
-                names.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                names.add(func.attr)
-    return names
 
 
 def _string_args(path: Path, call_name: str) -> list[list[str]]:
@@ -182,7 +171,7 @@ def test_the_gameday_never_writes_the_alias_or_mints_a_version():
         "transition_model_version_stage",
         "promote",
     }
-    called = _calls(GAMEDAY)
+    called = called_names(GAMEDAY)
     assert not (called & forbidden), f"the gameday can mutate the registry: {called & forbidden}"
     assert isinstance(tree, ast.Module)
 
