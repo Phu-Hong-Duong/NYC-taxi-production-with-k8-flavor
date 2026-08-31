@@ -16,15 +16,6 @@ import pytest
 
 from taxi_mlops.data.config import DataConfig, Splits, load_config
 
-RAW_2019_DTYPES = {
-    "VendorID": "int64",
-    "passenger_count": "float64",
-    "trip_distance": "float64",
-    "RatecodeID": "float64",
-    "PULocationID": "int64",
-    "DOLocationID": "int64",
-    "payment_type": "int64",
-}
 MONEY_COLUMNS = [
     "fare_amount",
     "extra",

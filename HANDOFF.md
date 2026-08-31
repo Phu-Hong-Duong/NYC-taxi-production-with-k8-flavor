@@ -1,5 +1,139 @@
 # HANDOFF — append-only, newest entry on top
 
+## Session 2026-08-31 (dh) — EXEC: CU-S1 landed; two of the charter's own instructions were wrong and its guard clauses caught both; PR held unmerged on a dead daemon
+
+### State
+**EXECUTOR, `claude-opus-5` · Session MODE: CHARTERED** (chain-launched, +120 s
+from (dg)). Boot per the ritual: CLAUDE.md · HANDOFF (dg, df) ·
+`docs/milestones/CLEANUP_KICKOFF.md` · AWAITING_PO. No `.status` file was
+pointed at by (dg); none read. Story: **CU-S1** — the whole slice, all four
+steps. Branch `story/cu-s1-scope-rule-dead-code`, three commits.
+
+### Reconciliation (staleness check — (dg)'s Next held, with one measured move)
+`docker ps` → **the CLI is back but the daemon is not**: `failed to connect to
+the docker API at unix:///var/run/docker.sock … no such file or directory`.
+`kubectl get nodes --request-timeout=5s` → `dial tcp 127.0.0.1:35553: connect:
+connection refused`. So (dg)'s dated mid-session note (symlinks back, daemon
+still refusing) is exactly the state at this boot — Docker Desktop is partially
+started and the cluster is down. **Charter precondition path 2 applies: work +
+host-side floor + open the PR + DO NOT MERGE.** Side effect worth recording:
+with the CLI on PATH the suite's one skip runs, so the host number is **1320
+passed, 0 skipped** — the figure `readme-check` claims, and (df)'s sensor-skip
+is no longer firing.
+
+### Done — each with the command and what it printed
+1. **Scope rule folded into the constitution** (commit `6c863ba`). New
+   `## Session scope` in `docs/org/ORG.md` that CITES CLAUDE.md's PO-authored
+   block rather than restating it (one home), states the consequence a later
+   auditor is owed — *a missing handoff entry is not evidence of a skipped step
+   unless the session was chartered* — and names its own amendment authority,
+   because ORG.md's next section says the constitution is not self-amending.
+   MODE line added to **Prompt D**, **TEMPLATE_KICKOFF.md**, and the three
+   prompts the chain actually feeds its sessions
+   (`automation/{executor,architect,rev}_prompt.md` — the operative
+   instruction, not just its documentation). `scripts/verify_m0.sh` touches
+   ORG.md by EXISTENCE only (line 169), checked before editing.
+2. **Six Tier A instruments deleted, 1,050 LOC, with their four reference sites
+   in the SAME commit** (`b2b7ed6`) — `rev_rederive_m7.py` ·
+   `f016_replay_probe.py` · `retrain_proof_record.py` ·
+   `cpu_request_resize_record.py` · `marts_reach_probe.py` ·
+   `canary_split_paste.py`. `wc -l` = **1050**, the seed's number to the line.
+   - `gate_eras.py`'s **runtime refusal** rewritten: names the tracked record,
+     types `git checkout -- <path>`, and says nothing here can regenerate it.
+     Exercised host-side: `frozen_margins(<missing path>)` → the new message,
+     and the real record still loads **9 rows**.
+   - `f051_counterfactual.py` and `flyte-task-podtemplate.yaml`: provenance
+     KEPT, dated retirement note added (the measurement is the evidence).
+   - **CLAUDE.md's three command-table rows** keep their VERIFIED history
+     verbatim and gain a dated **RETIRED** note naming the tracked record that
+     holds the evidence — each pointer verified to exist
+     (`m6-canary/release_drill.json`, `m8-provenance/proof.json`,
+     `m6-slo/{load-before,load-after,cpu-request-*}.json`).
+   - `scripts/cleanup_audit_verify.py` deliberately NOT edited except for a
+     comment: its `SEED_TIER_A` is the BEFORE claim and must outlive the files.
+     **Re-run after the deletion: each `ABSENT`, `Tier A total LOC measured=0`**
+     — the after-number CU-S5 is owed, from the same instrument.
+3. **Debris** (`348a534`) — and the `.PHONY` half became **F-083**. See
+   Defects. Also: `RAW_2019_DTYPES` deleted (no reader); `tests/integration/`
+   and `tests/smoke/` deleted (README-only shells, nothing references the
+   paths) while their pytest **markers stay**, because `addopts` selects on
+   those names — noted in `pyproject.toml` where a reader meets them;
+   `_to_delete/` swept with `git rm`.
+4. **Tier B: conscious KEEP, all five, per the charter.** Not re-litigated —
+   each has exactly one Makefile anchor and four are VERIFIED commands in
+   CLAUDE.md's table.
+5. **Host-side floor, all GREEN**: `uv run ruff check src tests pipelines` →
+   `All checks passed!` · `uv run pytest tests/unit -q` → **1320 passed** (0
+   skipped) · `make readme-check` → **GREEN** (29 claims, incl. `1,320 tests`)
+   · `make -n` exit 0 for all six newly-declared targets · the pre-commit hook
+   ran on all three commits (`secrets staged for commit: 0`).
+   Measured, not a delta I caused: `-m 'not needs_records'` deselects **67**
+   (`git diff main -- tests/` adds no marker).
+6. **PR #82 opened and HELD** — `gh pr checks 82 --watch` → `lint-test pass
+   1m45s`. Title carries the hold; the body's first section is the
+   do-not-merge precondition and what is owed. **No ledger signoff row is
+   owed**: a signoff records a gate CROSSING and no gate was crossed.
+   `ledgers/findings.md` gained F-083; deployments and debt are untouched
+   (nothing deployed, register closed).
+
+### Decisions
+- **The `.PHONY` count is 6, not the charter's 11** — the slice's own
+  measurement wins, per the charter's §0 rule, and the instrument was fixed at
+  the cause rather than the six being added blind.
+- **`_to_delete/` removed with `git rm`, not `rm`.** The charter's precondition
+  (*confirm untracked first*) came back the other way; git history keeps the
+  bytes, so the undo is `git revert`.
+- **The tripped guard was re-derived, not widened** (gotcha #50), and then
+  **red-teamed** — a re-derivation nobody has watched fail is a weakening with
+  better prose.
+- **AWAITING_PO was NOT touched.** The charter asks only that the
+  2026-08-24-4 citation be named in the PR body (done, verbatim); and per
+  2026-08-30-2 item 2 that file's hash is the park detector.
+
+### Defects/Surprises
+- **F-083 (new, CLOSED same session, ledgered):** the cleanup audit's `.PHONY`
+  check parses `^\.PHONY:(.*)$` against the raw Makefile and **cannot see a
+  wrapped declaration**, so 5 of the 11 gaps it reported were not gaps — the
+  five on `Makefile:56`'s continuation line. Real gaps: **6**
+  (`canary-spike`, `contract-probe-fixtures`, `deploy-serving`,
+  `feast-online-parity-redteam`, `shadow`, `shadow-run`). Fixed at the cause;
+  the seed's `11` kept as the BEFORE number; re-run reports `seed=11
+  measured=0 (none)`. Same family as F-082 — the instrument hired to audit
+  accreted mistakes committing a house one (a parser reading code as text).
+  **Named limit, deliberately not chased:** seven `tests/unit/test_verify_m*.py`
+  guards use the same continuation-blind idiom; none is red today because none
+  of their targets sits on a wrapped line, and re-deriving guards that are not
+  failing is churn — **CU-S2 owns the test-infrastructure pass and should pick
+  this up.**
+- **The charter's `_to_delete/` description belonged to another machine** —
+  "untracked, 18 git-lock files + 1 zip" is the PO's Windows viewing copy
+  (AWAITING_PO says so in its own words); this clone had 4 tracked lock files
+  and the zip. Not a fault: the guard clause is what caught it.
+- **One guard tripped:** `test_load.py::test_the_makefile_wires_both_targets`
+  pinned the literal prefix `.PHONY: holidays` and went red over a strictly
+  more correct Makefile. Re-derived to membership across all declarations
+  (continuation-aware); **RED-TEAMED** by removing `load-drill` →
+  `AssertionError`, restored → passes.
+
+### Next
+**CU-S2** (`tests/unit/conftest.py`, the `_calls` split) is the next unlanded
+slice, and it is independent of the merge queue — it touches `tests/` where
+CU-S1 touched `scripts/`/`docs/`/`Makefile`. Per the charter's merge-order
+note, **CU-S2 should branch from `story/cu-s1-scope-rule-dead-code`** while
+that PR is unmerged, and say so in its handoff.
+
+**OWED AT THE SWEEP, and this PR must not merge before it:** `verify-m0…m9`
+GREEN, plus the one red team whose files this slice touched —
+**`make gate-margin-redteam`** (it replays through `gate_eras.py`, which this
+slice edited: comment + refusal message only, no logic) and, because it runs
+the same replay, `make verify-m2-redteam`. Both need the registry, so both
+wait on Docker Desktop. The host-side half of that obligation is discharged:
+25 gate-era unit tests pass and the refusal path was exercised directly.
+
+**The one thing only the PO can do: launch Docker Desktop.** Then the next
+session runs `make verify-m0` … `verify-m9` + the two red teams above and
+merges PR #82 (and any CU PRs queued behind it) in branch order.
+
 ## Session 2026-08-31 (dg) — ARCH: the cleanup is CHARTERED (CU-S1…S5); one un-ledgered finding swept; executor scheduled into a cluster-down world that only gates MERGES
 
 ### State

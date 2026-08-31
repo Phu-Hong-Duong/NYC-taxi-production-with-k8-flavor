@@ -492,5 +492,15 @@ def test_the_makefile_wires_both_targets() -> None:
     makefile = MAKEFILE.read_text()
     assert "\nload:" in makefile and "taxi_mlops.serving.load" in makefile
     assert "\nload-drill:" in makefile and "scripts/serving_load_drill.py" in makefile
-    phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY: holidays"))
-    assert "load" in phony and "load-drill" in phony
+    # The property is that both targets are declared phony — NOT that they sit
+    # on the line beginning `.PHONY: holidays`. CU-S1 added `deploy-serving` to
+    # the front of that declaration and this guard went red over a Makefile that
+    # was strictly more correct (gotcha #50). Re-derived, not widened: join
+    # backslash continuations the way GNU make does (F-083) and ask every
+    # `.PHONY` declaration for membership, so the guard survives the targets
+    # being regrouped and still fails if either is dropped.
+    declared: set[str] = set()
+    for line in makefile.replace("\\\n", " ").splitlines():
+        if line.startswith(".PHONY:"):
+            declared.update(line.split(":", 1)[1].split())
+    assert {"load", "load-drill"} <= declared, f"not declared .PHONY: {declared}"

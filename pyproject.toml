@@ -44,6 +44,12 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 testpaths = ["tests"]
 markers = [
   "unit: no cluster required (CI runs these on every PR)",
+  # These two markers KEEP their names after CU-S1 (2026-08-31) deleted the
+  # empty `tests/integration/` and `tests/smoke/` shells they were coined for.
+  # Nothing was ever written there — the cluster-facing work became `make`
+  # targets and gates instead — but `addopts` below selects ON these names, so
+  # deleting them would change what a bare `pytest` collects. The directories
+  # were navigational noise; the markers are load-bearing.
   "integration: requires a running kind cluster",
   "smoke: acceptance demos against the deployed stack",
   # F-047 (M8-S1): reads a TRACKED RECORD under automation/runs/ at call time.

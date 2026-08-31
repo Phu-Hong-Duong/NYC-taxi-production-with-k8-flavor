@@ -53,6 +53,11 @@ SEED_AREAS = {
     "automation": (137, 45_255),
 }
 
+# These six names are the seed's BEFORE claim and must survive their own files:
+# CU-S1 deleted all six (2026-08-31), so the instrument now reports each ABSENT
+# and a Tier A total of 0 — which is the after-number CU-S5's report is owed.
+# Editing this dict to match today's tree would delete the only thing the
+# instrument measures against.
 SEED_TIER_A = {
     "rev_rederive_m7.py": 239,
     "f016_replay_probe.py": 296,
@@ -358,7 +363,12 @@ def check_small_findings() -> None:
         f"{refs} occurrence(s) in tracked files = definition + the seed's own mention",
     )
 
-    mk = (REPO / "Makefile").read_text(encoding="utf-8")
+    # Join backslash continuations BEFORE parsing. `^\.PHONY:` against the raw
+    # text cannot see the second line of a wrapped declaration, so five targets
+    # that GNU make reads as phony (Makefile:55's continuation) were reported
+    # missing — F-083, found by CU-S1 running this check rather than reading it.
+    # The seed's claim of 11 stays as the BEFORE number; 6 of those 11 were real.
+    mk = (REPO / "Makefile").read_text(encoding="utf-8").replace("\\\n", " ")
     phony: set[str] = set()
     for m in re.finditer(r"^\.PHONY:(.*)$", mk, re.M):
         phony.update(m.group(1).split())
@@ -367,7 +377,7 @@ def check_small_findings() -> None:
         targets.add(m.group(1))
     missing = sorted(targets - phony)
     row("Makefile targets missing from .PHONY", SEED_PHONY_MISSING, len(missing),
-        ", ".join(missing[:12]))
+        ", ".join(missing[:12]) or "none")
 
 
 # ---------------------------------------------------------------------------

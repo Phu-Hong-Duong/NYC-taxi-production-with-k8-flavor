@@ -52,8 +52,8 @@ verify-m0: ## M0 gate: platform healthy + org docs present (BLUEPRINT §9/M0)
 	@bash scripts/verify_m0.sh
 
 # ---- M1 data & analytics platform (role:DE, role:DA) ----
-.PHONY: ingest data duckdb ingest-scoring data-scoring contract-probe rebuild-proof marts \
-        marts-redteam deploy-metabase boards board-cards verify-m1
+.PHONY: ingest data duckdb ingest-scoring data-scoring contract-probe contract-probe-fixtures \
+        rebuild-proof marts marts-redteam deploy-metabase boards board-cards verify-m1
 ingest: ## download->contract->clean->split, counted rejections, sha256 manifest (M1-S1)
 	uv run python -m taxi_mlops.data ingest
 data: ## ingest + duckdb layer + dvc add/push (byte-identical rebuilds; SKIP_DVC=1 leaves the pin alone)
@@ -184,7 +184,7 @@ verify-m4-redteam: ## prove verify-m4 goes RED: contradict ONE recorded cache st
 	@bash scripts/verify_m4_redteam.sh
 
 # ---- M5 serving & release (role:MLOPS + role:SRE PRR) ----
-.PHONY: holidays serve quote parity parity-redteam load load-drill
+.PHONY: deploy-serving holidays serve quote parity parity-redteam load load-drill
 .PHONY: stop-start-drill verify-m5 verify-m5-redteam
 HOLIDAYS_TO ?= 2030
 holidays: ## re-derive data/reference/us_federal_holidays.csv from 5 U.S.C. §6103 (M5-S2, F-019; HOLIDAYS_TO=YYYY moves the horizon)
@@ -217,6 +217,7 @@ verify-m5-redteam: ## prove verify-m5 goes RED: rewrite ONE recorded number, wat
 # ---- M6 reliability (role:SRE) ----
 .PHONY: deploy-monitoring monitoring-accept probe-mlserver-metrics alert-rules alert-fire-drill
 .PHONY: canary-deploy canary rollback gameday restore-drill verify-m6 verify-m6-redteam
+.PHONY: shadow shadow-run canary-spike
 deploy-monitoring: ## Prometheus + Alertmanager + kube-state-metrics + Grafana, through the EXISTING 8081 route (M6-S1)
 	@bash scripts/deploy_monitoring.sh
 monitoring-accept: ## the accept twin: targets up, ONE real quote moves a counter, every board query answers
@@ -284,7 +285,7 @@ verify-m7-redteam: ## prove verify-m7 goes RED: rewrite ONE recorded ratio, watc
 	@bash scripts/verify_m7_redteam.sh
 
 # ---- M8 feature store (role:DE + role:MLE) ----
-.PHONY: transformer-probe deploy-transformer transformer-accept transformer-parity transformer-load feast-server-parity deploy-feast-server feast-server-image feast-serve-probe deploy-feast verify-m8 verify-m8-redteam backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity
+.PHONY: transformer-probe deploy-transformer transformer-accept transformer-parity transformer-load feast-server-parity deploy-feast-server feast-server-image feast-serve-probe deploy-feast verify-m8 verify-m8-redteam backfill-provenance feast-quarantine feast-sources feast-apply feast-plan feast-plan-check feast-registry feast-rows feast-retrieval deploy-feast-store feast-materialize feast-online-parity feast-online-parity-redteam
 feast-quarantine: ## M8-S2: build the ISOLATED feast venv from its exact pins and prove it never touched uv.lock. --resolve rewrites the pins; --check builds nothing
 	@bash scripts/feast_quarantine.sh $(QUARANTINE_ARGS)
 feast-sources: ## M8-S2: build the parquet Feast reads, from the SETTLED trees, into data/feast/ (read-only; --static-only skips the 43.9M-row aggregate fit)
