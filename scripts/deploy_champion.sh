@@ -36,6 +36,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTEXT="${KUBE_CONTEXT:-kind-mlops-taxi}"
 KUBECTL=(kubectl --context "$CONTEXT")
 HELM=(helm --kube-context "$CONTEXT")
+# The deploy skeleton — the route-port read, the alias no-move guard and the
+# readiness waits, written once (CU-S5). Sourced AFTER REPO_ROOT and KUBECTL,
+# which it uses and deliberately does not compute.
+source "$REPO_ROOT/scripts/lib/isvc_deploy.sh"
 DRY_RUN="${DRY_RUN:-0}"
 WAIT_TIMEOUT="${SERVE_WAIT_TIMEOUT:-15m}"
 
@@ -55,19 +59,7 @@ MINIO_ENDPOINT="minio.platform.svc.cluster.local:9000"
 # host is what KServe's domainTemplate builds, so it is a function of the
 # InferenceService's own name and namespace.
 KIND_CONFIG="$REPO_ROOT/infra/kind/kind-config.yaml"
-ROUTE_PORT="$(python3 - "$KIND_CONFIG" <<'PY'
-import sys
-import yaml
-
-cfg = yaml.safe_load(open(sys.argv[1]))
-for node in cfg["nodes"]:
-    for mapping in node.get("extraPortMappings", []):
-        if mapping["containerPort"] == 80:
-            print(mapping["hostPort"])
-            sys.exit(0)
-sys.exit("no extraPortMapping publishes containerPort 80 — the M5 route does not exist")
-PY
-)"
+ROUTE_PORT="$(isvc_route_port "$KIND_CONFIG")"
 ROUTE="http://localhost:$ROUTE_PORT"
 ISVC_HOST="$ISVC_NAME-$SERVING_NS.local"
 
@@ -94,11 +86,7 @@ fi
 # The alias BEFORE anything. Read from the registry, printed, and compared at the
 # end: this script's strongest claim is that it changed nothing about what is
 # champion, and a claim nobody checks is a sentence.
-champion_version() {
-  uv run python scripts/resolve_champion_storage.py 2>/dev/null \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])'
-}
-ALIAS_BEFORE="$(champion_version)"
+ALIAS_BEFORE="$(isvc_champion_version)"
 echo "   @champion is version $ALIAS_BEFORE (read before any change)"
 
 echo
@@ -184,43 +172,14 @@ trap 'rm -f /tmp/isvc-rendered.$$.yaml' EXIT
 
 echo
 echo "   waiting for the predictor (first start downloads $STORAGE_URI)…"
-# THE ROLLOUT FIRST, AND THAT ORDER IS THE FIX FOR A REAL FALSE GREEN. On a
-# RE-deploy the InferenceService's `Ready` condition is satisfied by the pod
-# ALREADY SERVING, so `kubectl wait --for=condition=Ready inferenceservice`
-# returns instantly while the new pod is still `Init:0/1` — and the accept check
-# below then interrogates the OLD predictor and passes. Watched happen on this
-# story's third deploy: the new pod was 0 s old and `Init:0/1` in the very
-# `get pods` this script prints, and the quote came back from its predecessor
-# reporting `(unversioned)` when the change under test was the version stamp.
-# `rollout status` waits for the new ReplicaSet specifically; the ISVC condition
-# stays as the second leg because it is what KServe itself considers serving.
-# Siblings of gotchas #59/#65: a wait that can be satisfied by the thing you are
-# replacing is not a wait.
-"${KUBECTL[@]}" -n "$SERVING_NS" rollout status \
-  "deploy/$ISVC_NAME-predictor" --timeout="$WAIT_TIMEOUT"
-# THE SECOND LEG IS A JSONPATH WAIT AND NOT `--for=condition=Ready` — F-036,
-# found by M6-S2 when this line hung for fifteen minutes over a healthy service.
-# kubectl v1.36 ignores a resource's conditions while
-# `status.observedGeneration < metadata.generation` (correctly: a condition that
-# describes the previous spec is not evidence about this one). KServe v0.20.0's
-# controller reconciles the new spec — `PredictorReady` transitions, naming the
-# NEW ReplicaSet — and then leaves `observedGeneration` behind: observed live at
-# generation=3 / observedGeneration=2 with every condition True. So the wait can
-# never be satisfied, on any re-deploy, no matter how healthy the result. It ends
-# in `error: timed out waiting for the condition` and, under `set -e`, takes the
-# accept check with it — i.e. the one honest failure mode is that a perfect
-# deploy reports as a broken one (gotcha #55's family: a verifier failing for its
-# own reasons and blaming the artifact).
-# `--for=jsonpath=` reads the condition directly and does not consult
-# observedGeneration; verified live to return `condition met` on the same object,
-# in the same second the `--for=condition=` form timed out. It keeps this leg's
-# intent — KServe itself considers the service serving — and it stays SECOND
-# because it is still satisfiable by the predecessor (gotcha #71); `rollout
-# status` above is the leg that cannot be.
-"${KUBECTL[@]}" -n "$SERVING_NS" wait \
-  --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
-  "inferenceservice/$ISVC_NAME" --timeout="$WAIT_TIMEOUT"
-"${KUBECTL[@]}" -n "$SERVING_NS" get pods -o wide -l "serving.kserve.io/inferenceservice=$ISVC_NAME"
+# The rollout FIRST, then the InferenceService-level wait. This story's own
+# false green is what put that order there — on a re-deploy the isvc's Ready
+# condition was satisfied by the pod being replaced, and the accept check below
+# interrogated the predecessor and passed, reporting `(unversioned)` when the
+# version stamp was the change under test. Both legs, the order, and F-036's
+# reason for the jsonpath form live in `scripts/lib/isvc_deploy.sh`, and the
+# ORDER is pinned there by `tests/unit/test_script_libs.py`.
+isvc_wait_ready "$SERVING_NS" "$ISVC_NAME" "$WAIT_TIMEOUT"
 
 echo
 echo "== [7/7] read it back — a PREDICTION, not a health check =="
@@ -233,12 +192,9 @@ echo "== [7/7] read it back — a PREDICTION, not a health check =="
 uv run python -m taxi_mlops.serving --route "$ROUTE" --at "2019-07-04T09:15:00"
 
 echo
-ALIAS_AFTER="$(champion_version)"
-if [[ "$ALIAS_BEFORE" != "$ALIAS_AFTER" ]]; then
-  echo "FAIL: @champion moved from $ALIAS_BEFORE to $ALIAS_AFTER during a DEPLOY." >&2
-  echo "      M5 is legislated alias-neutral (kickoff law 2). Nothing in this" >&2
-  echo "      script calls a mutating registry API, so something else did." >&2
-  exit 2
-fi
+ALIAS_AFTER="$(isvc_champion_version)"
+isvc_assert_alias_unmoved "$ALIAS_BEFORE" "$ALIAS_AFTER" "DEPLOY" \
+  "M5 is legislated alias-neutral (kickoff law 2). Nothing in this" \
+  "script calls a mutating registry API, so something else did."
 echo "ok  @champion is version $ALIAS_AFTER — the same version this script read before it started"
 echo "ok  $ISVC_NAME answers on $ROUTE (Host: $ISVC_HOST)"

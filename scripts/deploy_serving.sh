@@ -46,6 +46,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTEXT="${KUBE_CONTEXT:-kind-mlops-taxi}"
 KUBECTL=(kubectl --context "$CONTEXT")
 HELM=(helm --kube-context "$CONTEXT")
+# The deploy skeleton (CU-S5). This script installs the PLATFORM and no
+# InferenceService, so it uses exactly one function from it — the route-port
+# read, which is a fact about the kind config and not about any workload.
+source "$REPO_ROOT/scripts/lib/isvc_deploy.sh"
 DRY_RUN="${DRY_RUN:-0}"
 WAIT_TIMEOUT="${SERVING_WAIT_TIMEOUT:-20m}"
 
@@ -92,19 +96,7 @@ CLUSTER_NAME="$(awk '/^name:/ {print $2; exit}' "$KIND_CONFIG")"
 INGRESS_NODE="${CLUSTER_NAME}-control-plane"
 # The host port the kind config publishes for container port 80, read from the
 # same file rather than remembered — it is also what the accept-check curls.
-ROUTE_PORT="$(python3 - "$KIND_CONFIG" <<'PY'
-import sys
-import yaml
-
-cfg = yaml.safe_load(open(sys.argv[1]))
-for node in cfg["nodes"]:
-    for mapping in node.get("extraPortMappings", []):
-        if mapping["containerPort"] == 80:
-            print(mapping["hostPort"])
-            sys.exit(0)
-sys.exit("no extraPortMapping publishes containerPort 80 — the M5 route does not exist")
-PY
-)"
+ROUTE_PORT="$(isvc_route_port "$KIND_CONFIG")"
 
 echo "== serving platform =="
 echo "   route        host :$ROUTE_PORT -> container :80 on $INGRESS_NODE (published at cluster CREATE)"

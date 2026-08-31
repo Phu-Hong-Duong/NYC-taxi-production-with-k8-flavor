@@ -45,6 +45,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTEXT="${KUBE_CONTEXT:-kind-mlops-taxi}"
 KUBECTL=(kubectl --context "$CONTEXT")
+# The deploy skeleton (CU-S5), sourced after REPO_ROOT and KUBECTL.
+source "$REPO_ROOT/scripts/lib/isvc_deploy.sh"
 DRY_RUN="${DRY_RUN:-0}"
 TEARDOWN="${TEARDOWN:-0}"
 WAIT_TIMEOUT="${CANARY_WAIT_TIMEOUT:-15m}"
@@ -62,19 +64,7 @@ BACKEND_MANIFEST="$REPO_ROOT/infra/manifests/canary-backend-service.yaml"
 
 # The route port is READ from the kind config, never typed (gotcha #52).
 KIND_CONFIG="$REPO_ROOT/infra/kind/kind-config.yaml"
-ROUTE_PORT="$(python3 - "$KIND_CONFIG" <<'PY'
-import sys
-import yaml
-
-cfg = yaml.safe_load(open(sys.argv[1]))
-for node in cfg["nodes"]:
-    for mapping in node.get("extraPortMappings", []):
-        if mapping["containerPort"] == 80:
-            print(mapping["hostPort"])
-            sys.exit(0)
-sys.exit("no extraPortMapping publishes containerPort 80 — the M5 route does not exist")
-PY
-)"
+ROUTE_PORT="$(isvc_route_port "$KIND_CONFIG")"
 ROUTE="http://localhost:$ROUTE_PORT"
 CANARY_HOST="$CANARY_NAME-$SERVING_NS.local"
 
@@ -111,11 +101,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-champion_version() {
-  uv run python "$REPO_ROOT/scripts/resolve_champion_storage.py" 2>/dev/null \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])'
-}
-ALIAS_BEFORE="$(champion_version)"
+ALIAS_BEFORE="$(isvc_champion_version)"
 echo "   @champion is version $ALIAS_BEFORE (read before any change)"
 
 echo
@@ -156,14 +142,9 @@ trap 'rm -f "/tmp/isvc-canary.$$.yaml"' EXIT
 
 echo
 echo "   waiting for the canary predictor (first start downloads $STORAGE_URI)…"
-# `rollout status` FIRST, the jsonpath wait SECOND — gotchas #71 and #79.
-"${KUBECTL[@]}" -n "$SERVING_NS" rollout status \
-  "deploy/$CANARY_NAME-predictor" --timeout="$WAIT_TIMEOUT"
-"${KUBECTL[@]}" -n "$SERVING_NS" wait \
-  --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
-  "inferenceservice/$CANARY_NAME" --timeout="$WAIT_TIMEOUT"
-"${KUBECTL[@]}" -n "$SERVING_NS" get pods -o wide \
-  -l "serving.kserve.io/inferenceservice=$CANARY_NAME"
+# `rollout status` FIRST, the jsonpath wait SECOND — gotchas #71 and #79, both
+# argued and pinned in `scripts/lib/isvc_deploy.sh`.
+isvc_wait_ready "$SERVING_NS" "$CANARY_NAME" "$WAIT_TIMEOUT"
 
 # The override has to be checked on the OBJECT as well as on the wire: KServe
 # injects MLSERVER_MODEL_NAME itself, and "our value won the merge" is a fact
@@ -185,17 +166,8 @@ echo "== [3/6] wait for the ROUTE (not the pod — F-037) =="
 # The model name is the champion's, so mlserver's readiness path is too. That is
 # itself the first half of condition 2's proof, and it is why this loop asks for
 # `/v2/models/nyc-taxi-eta/ready` on the CANARY's host.
-ROUTE_DEADLINE=$(( SECONDS + 180 ))
-until curl -sf -o /dev/null -H "Host: $CANARY_HOST" \
-        "$ROUTE/v2/models/$CHAMPION_NAME/ready"; do
-  if (( SECONDS >= ROUTE_DEADLINE )); then
-    echo "FAIL: $CANARY_HOST never became routable, though the predictor is Ready." >&2
-    echo "      Check: kubectl -n $SERVING_NS get ingress $CANARY_NAME" >&2
-    exit 1
-  fi
-  sleep 2
-done
-echo "ok  $CANARY_HOST answers /v2/models/$CHAMPION_NAME/ready"
+isvc_wait_route "$ROUTE/v2/models/$CHAMPION_NAME/ready" "$CANARY_HOST" 180 \
+  "kubectl -n $SERVING_NS get ingress $CANARY_NAME"
 
 echo
 echo "== [4/6] ADR-011 condition 2, PROVED — both ways =="
@@ -242,11 +214,12 @@ echo "ok  $CANARY_BACKEND selector == KServe's own, endpoints: $ENDPOINTS"
 
 echo
 echo "== [6/6] the story-exit invariant: the champion is untouched =="
-ALIAS_AFTER="$(champion_version)"
-if [[ "$ALIAS_BEFORE" != "$ALIAS_AFTER" ]]; then
-  echo "FAIL: @champion moved from $ALIAS_BEFORE to $ALIAS_AFTER during a CANARY deploy." >&2
-  exit 2
-fi
+# No trailing why-line, and that is this caller's own text preserved rather than
+# improved: the other three cite a law here and this one never did. Naming the
+# asymmetry instead of quietly resolving it — writing a citation for a script
+# that had none would be inventing an argument inside a deduplication.
+ALIAS_AFTER="$(isvc_champion_version)"
+isvc_assert_alias_unmoved "$ALIAS_BEFORE" "$ALIAS_AFTER" "CANARY deploy"
 echo "ok  @champion is version $ALIAS_AFTER — unmoved"
 uv run python -m taxi_mlops.serving --route "$ROUTE" --name "$CHAMPION_NAME" \
   --at "2019-07-04T09:15:00"

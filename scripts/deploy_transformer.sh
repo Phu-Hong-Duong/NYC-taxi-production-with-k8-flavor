@@ -24,6 +24,12 @@ cd "$REPO_ROOT"
 
 CONTEXT="${KUBE_CONTEXT:-kind-mlops-taxi}"
 KUBECTL=(kubectl --context "$CONTEXT")
+# The deploy skeleton (CU-S5), sourced after REPO_ROOT and KUBECTL. Two of this
+# script's copies had drifted from the other four — a cwd-relative kind-config
+# path and a cwd-relative resolver path, both correct only because of the `cd`
+# two lines above. The lib anchors them at $REPO_ROOT, which is the stricter
+# form and survives that `cd` ever being removed.
+source "$REPO_ROOT/scripts/lib/isvc_deploy.sh"
 SERVING_NS="serving"
 ISVC_NAME="nyc-taxi-eta-transformer"
 CHAMPION_NAME="nyc-taxi-eta"
@@ -45,20 +51,7 @@ fi
 
 # The route. Read from the kind config for gotcha #52's reason (derive, never
 # type), exactly as deploy_champion.sh does.
-ROUTE_PORT="$(python3 - "infra/kind/kind-config.yaml" <<'PY'
-import sys
-
-import yaml
-
-cfg = yaml.safe_load(open(sys.argv[1]))
-for node in cfg["nodes"]:
-    for mapping in node.get("extraPortMappings", []):
-        if mapping["containerPort"] == 80:
-            print(mapping["hostPort"])
-            sys.exit(0)
-sys.exit("no extraPortMapping publishes containerPort 80")
-PY
-)"
+ROUTE_PORT="$(isvc_route_port "$REPO_ROOT/infra/kind/kind-config.yaml")"
 ROUTE="http://localhost:$ROUTE_PORT"
 ISVC_HOST="$ISVC_NAME-$SERVING_NS.local"
 
@@ -106,11 +99,7 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-champion_version() {
-  uv run python scripts/resolve_champion_storage.py 2>/dev/null \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])'
-}
-ALIAS_BEFORE="$(champion_version)"
+ALIAS_BEFORE="$(isvc_champion_version)"
 echo "   @champion is version $ALIAS_BEFORE (read before any change)"
 
 echo
@@ -145,39 +134,26 @@ PY
 
 echo
 echo "== [3/4] wait for BOTH halves =="
-# `rollout status` FIRST and on BOTH Deployments — gotcha #71: on a re-deploy the
-# InferenceService's Ready condition is satisfied by the pods being replaced, so
-# a condition wait can return while the new transformer is still Init. And the
-# second leg is `--for=jsonpath=` and not `--for=condition=`, which is F-036:
-# kubectl v1.36 refuses to read conditions while observedGeneration trails
-# generation, and KServe v0.20.0 leaves it behind on every re-deploy.
-for component in predictor transformer; do
-  "${KUBECTL[@]}" -n "$SERVING_NS" rollout status \
-    "deploy/$ISVC_NAME-$component" --timeout="$WAIT_TIMEOUT"
-done
-"${KUBECTL[@]}" -n "$SERVING_NS" wait \
-  --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
-  "inferenceservice/$ISVC_NAME" --timeout="$WAIT_TIMEOUT"
-"${KUBECTL[@]}" -n "$SERVING_NS" get pods -o wide \
-  -l "serving.kserve.io/inferenceservice=$ISVC_NAME"
+# BOTH Deployments, and that is why the component list is passed explicitly: an
+# isvc with a transformer has two, and waiting on one of them is gotcha #71 with
+# the other half unwatched. The order of the two legs and F-036's reason for the
+# jsonpath form are argued in `scripts/lib/isvc_deploy.sh`.
+isvc_wait_ready "$SERVING_NS" "$ISVC_NAME" "$WAIT_TIMEOUT" predictor transformer
 
 # THE THIRD LEG: ASK THE ROUTE. F-037, re-earned by this story's first deploy.
-# KServe generates an Ingress per InferenceService and reports `Ready` as soon as
-# its own objects exist — the accept check ran 0 s later and got a bare nginx 404
-# because the controller had not yet loaded the new rule. Both pods were healthy
-# and every condition was True. So readiness is asked of the thing the next step
-# actually uses: the route, under the Host header the next step will send.
+# The path is `/health` and not mlserver's `/v2/models/<name>/ready`, because
+# what answers on this host is OUR stdlib transformer, in front of the predictor.
+#
+# BEHAVIOUR CHANGE, named because it is one and not a tidy-up: this loop used to
+# poll sixty times and then fall THROUGH silently into the accept check, so an
+# unroutable transformer reported as a failed accept — a confusing failure
+# blaming the wrong thing (gotcha #55's family). The lib's wait FAILS on timeout,
+# which is the strictest of the three copies it replaces and what the other two
+# already did.
 echo
-echo -n "   waiting for the ROUTE (nginx must load the generated Ingress)"
-for _ in $(seq 1 60); do
-  if [[ "$(curl -s -o /dev/null -w '%{http_code}' \
-        -H "Host: $ISVC_HOST" "$ROUTE/health" || true)" == "200" ]]; then
-    echo " — answering"
-    break
-  fi
-  echo -n "."
-  sleep 2
-done
+echo "   waiting for the ROUTE (nginx must load the generated Ingress)"
+isvc_wait_route "$ROUTE/health" "$ISVC_HOST" 120 \
+  "kubectl -n $SERVING_NS get ingress $ISVC_NAME"
 
 echo
 echo "   what the transformer process ACTUALLY resolved (read off its own log,"
@@ -190,10 +166,7 @@ echo "== [4/4] accept — a RAW request, answered =="
 uv run python scripts/transformer_accept.py --route "$ROUTE" --record "$RECORD_OUT"
 
 echo
-ALIAS_AFTER="$(champion_version)"
-if [[ "$ALIAS_BEFORE" != "$ALIAS_AFTER" ]]; then
-  echo "FAIL: @champion moved from $ALIAS_BEFORE to $ALIAS_AFTER during a DEPLOY." >&2
-  exit 2
-fi
+ALIAS_AFTER="$(isvc_champion_version)"
+isvc_assert_alias_unmoved "$ALIAS_BEFORE" "$ALIAS_AFTER" "DEPLOY"
 echo "ok  @champion is version $ALIAS_AFTER — unchanged across this deploy"
 echo "ok  $ISVC_NAME answers RAW requests on $ROUTE (Host: $ISVC_HOST)"

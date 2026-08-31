@@ -136,7 +136,13 @@ isvc_wait_ready() {
   local ns="$1" name="$2" timeout="$3"
   shift 3
   local components=("$@")
-  [[ ${#components[@]} -eq 0 ]] && components=(predictor)
+  # An `if` and not `[[ … ]] && components=(predictor)`: under the callers'
+  # `set -euo pipefail` the short-circuit form leaves the list's status at 1
+  # whenever components WERE supplied, which is a subtlety a reader of four
+  # deploy scripts should not have to re-derive.
+  if [[ ${#components[@]} -eq 0 ]]; then
+    components=(predictor)
+  fi
 
   local component
   for component in "${components[@]}"; do

@@ -156,20 +156,30 @@ def test_the_spike_probe_never_annotates_an_inferenceservice() -> None:
 def test_the_shadow_deploy_waits_on_the_rollout_before_the_condition() -> None:
     """gotchas #71 and #79, inherited from the champion's deploy.
 
-    The ORDER is asserted, never the flag text — M6-S2 re-pinned the champion's
-    equivalent test for exactly this reason (gotcha #50, fourth time).
+    RE-DERIVED at CU-S5. This used to read the two waits out of THIS file and
+    assert their order. Both legs now live in `scripts/lib/isvc_deploy.sh`, so
+    the order is asserted ONCE, there, by `test_script_libs.py` — and it is
+    asserted more strongly than it could be here, because the lib is RUN rather
+    than read. What is left for this file is the caller-side half: the shadow
+    must reach those legs through the lib and must not have grown a second copy
+    of either. Widening the assertion away was the failure mode to avoid
+    (gotcha #50); this narrows it to what this file can still be wrong about.
     """
     text = DEPLOY_SHADOW.read_text()
-    rollout = text.index("rollout status")
-    condition = text.index("--for=jsonpath=")
-    assert rollout < condition, (
-        "`rollout status` must come FIRST: the InferenceService's Ready condition is "
-        "satisfiable by the pod being replaced, and rollout status is the leg that is not."
+    assert "scripts/lib/isvc_deploy.sh" in text, "the shadow deploy does not source the skeleton"
+    assert re.search(r"isvc_wait_ready\s+\"\$SERVING_NS\"\s+\"\$SHADOW_NAME\"", text), (
+        "the shadow deploy never calls the readiness wait for its own InferenceService"
     )
-    assert "--for=condition=Ready" not in text, (
-        "F-036: `--for=condition=` is unsatisfiable while KServe leaves observedGeneration "
-        "behind, which it does on every re-deploy."
+    # Scoped to this isvc's own workload: a bare `rollout status` also matches a
+    # legitimate wait on some other Deployment (gotcha #99).
+    assert not re.search(r"rollout status[^\n]*\$SHADOW_NAME", text), (
+        "the shadow deploy re-declares its own predictor rollout — two homes for "
+        "one order, which is how the order drifts in one of them"
     )
+    for redeclared in ("--for=jsonpath=", "--for=condition="):
+        assert redeclared not in text, (
+            f"the shadow deploy re-declares {redeclared!r} — two homes for one order"
+        )
 
 
 def test_the_shadow_deploy_waits_on_the_route_too() -> None:
@@ -191,12 +201,24 @@ def test_the_shadow_deploy_refuses_a_version_with_no_feature_set_tag() -> None:
 
 
 def test_the_shadow_deploy_reads_the_alias_before_and_after() -> None:
+    """RE-DERIVED at CU-S5. The old count was `>= 3` because the read was a
+    LOCAL function: one definition plus two calls. With the definition in
+    `scripts/lib/isvc_deploy.sh` the honest count is two — the two READS, which
+    is what the property was ever about. The comparison and its `exit 2` moved
+    with it and are watched running in `test_script_libs.py`; what stays here is
+    that this deploy reads on BOTH sides and hands both to the guard."""
     text = DEPLOY_SHADOW.read_text()
-    assert text.count("champion_version") >= 3, (
-        "the alias must be read before AND after every mutation, with a difference "
-        "treated as a failure (M6 law 3)."
+    assert text.count("isvc_champion_version") == 2, (
+        "the alias must be read before AND after every mutation (M6 law 3)."
     )
     assert "ALIAS_BEFORE" in text and "ALIAS_AFTER" in text
+    assert re.search(
+        r'isvc_assert_alias_unmoved "\$ALIAS_BEFORE" "\$ALIAS_AFTER"', text
+    ), "the two readings are taken and never compared — a claim nobody checks"
+    assert "M6 law 3" in text, (
+        "the shadow's own citation must stay with the shadow: the guard's mechanism "
+        "is shared, its argument is not"
+    )
 
 
 def test_the_shadow_manifest_carries_no_resolved_storage_uri() -> None:

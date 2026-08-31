@@ -25,10 +25,24 @@ from conftest import REPO, without_comments
 
 HARNESS = REPO / "scripts" / "lib" / "verify_harness.sh"
 RESTORE = REPO / "scripts" / "lib" / "redteam_restore.sh"
+ISVC = REPO / "scripts" / "lib" / "isvc_deploy.sh"
 
 GATES = [REPO / "scripts" / f"verify_m{n}.sh" for n in range(2, 10)]
 DRILLS = [REPO / "scripts" / f"verify_m{n}_redteam.sh" for n in range(3, 10)] + [
     REPO / "scripts" / "gate_margin_redteam.sh"
+]
+# Every script that reaches the deploy skeleton. deploy_serving.sh is on the
+# list and uses exactly one function from it — it installs the platform and no
+# InferenceService, but the route port is the same fact about the same file.
+ISVC_CALLERS = [
+    REPO / "scripts" / f"{name}.sh"
+    for name in (
+        "deploy_champion",
+        "deploy_shadow",
+        "deploy_canary",
+        "deploy_transformer",
+        "deploy_serving",
+    )
 ]
 
 
@@ -43,7 +57,7 @@ def _bash(script: str, cwd: Path) -> subprocess.CompletedProcess:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("lib", [HARNESS, RESTORE], ids=lambda p: p.name)
+@pytest.mark.parametrize("lib", [HARNESS, RESTORE, ISVC], ids=lambda p: p.name)
 def test_the_library_parses(lib: Path) -> None:
     """`bash -n` is the cheapest possible guard and it covers the failure a
     sourced file has that a standalone script does not: a syntax error here
@@ -52,7 +66,7 @@ def test_the_library_parses(lib: Path) -> None:
     assert _bash(f"bash -n {lib}", REPO).returncode == 0, f"{lib.name} does not parse"
 
 
-@pytest.mark.parametrize("lib", [HARNESS, RESTORE], ids=lambda p: p.name)
+@pytest.mark.parametrize("lib", [HARNESS, RESTORE, ISVC], ids=lambda p: p.name)
 def test_the_library_says_what_deliberately_does_not_live_in_it(lib: Path) -> None:
     """A shared file's real risk is the next consolidation, not this one. Both
     headers name what must stay per-caller — the gates' legs and verdict blocks,
@@ -262,6 +276,207 @@ def test_the_scaffold_refuses_to_load_without_a_label(tmp_path: Path) -> None:
     out = _bash(f"unset REDTEAM_LABEL; source {RESTORE}; echo LOADED", REPO)
     assert "LOADED" not in out.stdout
     assert "REDTEAM_LABEL" in out.stderr
+
+
+# --------------------------------------------------------------------------
+# isvc_deploy.sh — the deploy skeleton, watched deploying.
+# --------------------------------------------------------------------------
+# Everything below RUNS the library. The per-file pins these replace read source
+# text (`text.index("rollout status") < text.index("--for=jsonpath=")`), which
+# is what a check looks like when the implementation is spread over four files.
+# With one implementation the order can be read off what was actually INVOKED.
+
+
+def _fake_kubectl(tmp_path: Path) -> Path:
+    """A `kubectl` that records its argv and succeeds. On PATH, so the lib's own
+    `KUBECTL` array reaches it without the test rewriting the array's shape."""
+    log = tmp_path / "kubectl.log"
+    shim = tmp_path / "kubectl"
+    shim.write_text(f'#!/usr/bin/env bash\necho "$*" >> "{log}"\nexit 0\n')
+    shim.chmod(0o755)
+    return log
+
+
+def test_the_readiness_waits_run_in_the_order_the_false_green_forced(tmp_path: Path) -> None:
+    """gotcha #71 and F-036, asserted on INVOCATIONS rather than on source text.
+
+    `rollout status` must be called before the InferenceService-level wait: on a
+    re-deploy the isvc's Ready condition is satisfied by the pod being REPLACED,
+    so an isvc-first wait returns while the new pod is still `Init:0/1` and the
+    accept check interrogates the predecessor. And the second leg must be
+    `--for=jsonpath=`, never `--for=condition=`, which kubectl v1.36 cannot
+    satisfy while KServe leaves observedGeneration behind."""
+    log = _fake_kubectl(tmp_path)
+    out = _bash(
+        'set -euo pipefail\n'
+        f'export PATH="{tmp_path}:$PATH"\n'
+        'KUBECTL=(kubectl)\n'
+        f'source {ISVC}\n'
+        'isvc_wait_ready ns my-isvc 5m\n',
+        REPO,
+    )
+    assert out.returncode == 0, out.stdout + out.stderr
+    calls = log.read_text().splitlines()
+    rollout = [i for i, c in enumerate(calls) if "rollout status" in c]
+    isvc_wait = [i for i, c in enumerate(calls) if " wait " in f" {c} "]
+    assert rollout, "no rollout was waited on at all"
+    assert isvc_wait, "there is no InferenceService-level readiness wait"
+    assert max(rollout) < min(isvc_wait), (
+        f"the rollout must be waited on FIRST; invocations were {calls}"
+    )
+    assert any("--for=jsonpath=" in c for c in calls)
+    assert not any("--for=condition=" in c for c in calls), (
+        "F-036: the condition form is unsatisfiable on every KServe re-deploy"
+    )
+    assert any("deploy/my-isvc-predictor" in c for c in calls), (
+        "the default component is `predictor` and it was not waited on"
+    )
+
+
+def test_an_isvc_with_two_deployments_waits_on_both(tmp_path: Path) -> None:
+    """deploy_transformer.sh's case. An isvc carrying a transformer has TWO
+    Deployments, and waiting on one of them is gotcha #71 with the other half
+    unwatched — so the component list is explicit and this proves it is used."""
+    log = _fake_kubectl(tmp_path)
+    out = _bash(
+        'set -euo pipefail\n'
+        f'export PATH="{tmp_path}:$PATH"\n'
+        'KUBECTL=(kubectl)\n'
+        f'source {ISVC}\n'
+        'isvc_wait_ready ns my-isvc 5m predictor transformer\n'
+        'echo REACHED_END\n',
+        REPO,
+    )
+    # The explicit-components path is where a `[[ … ]] && default` would have
+    # returned 1 under the callers' own `set -e`, so the end of the script is
+    # asserted rather than only the log's contents.
+    assert out.returncode == 0 and "REACHED_END" in out.stdout, out.stdout + out.stderr
+    calls = log.read_text()
+    assert "deploy/my-isvc-predictor" in calls and "deploy/my-isvc-transformer" in calls
+    assert calls.index("my-isvc-predictor") < calls.index("my-isvc-transformer")
+
+
+def test_the_route_wait_FAILS_on_timeout_rather_than_falling_through(tmp_path: Path) -> None:
+    """The behaviour CU-S5 changed, and the reason it is the strictest of the
+    three copies rather than the average of them. `deploy_transformer.sh`'s copy
+    polled sixty times and then fell through silently into its accept check, so
+    an unroutable transformer reported as a failed accept — a confusing failure
+    blaming the wrong component (gotcha #55's family). A wait that gives up
+    quietly is not a wait."""
+    curl = tmp_path / "curl"
+    curl.write_text("#!/usr/bin/env bash\nexit 7\n")  # 7 == could not connect
+    curl.chmod(0o755)
+    out = _bash(
+        'set -uo pipefail\n'
+        f'export PATH="{tmp_path}:$PATH"\n'
+        f'source {ISVC}\n'
+        'isvc_wait_route http://localhost:8081/ready my-host.local 0 "kubectl get ingress x"\n'
+        'echo "FELL THROUGH"\n',
+        REPO,
+    )
+    assert "FELL THROUGH" not in out.stdout, "the wait gave up and let the caller continue"
+    assert out.returncode == 1, f"expected exit 1, got {out.returncode}"
+    assert "never became routable" in out.stderr
+    assert "kubectl get ingress x" in out.stderr, (
+        "a failed route wait must name what to look at — the pod is fine and the "
+        "Ingress is the suspect, which is not obvious from a 404"
+    )
+
+
+def test_the_route_wait_sends_the_Host_header_the_next_step_will_send(tmp_path: Path) -> None:
+    """F-037's point. Every route here is host-based, so a probe without the
+    Host header measures the default server block and not the service — it would
+    pass while the isvc's own host 404s."""
+    log = tmp_path / "curl.log"
+    curl = tmp_path / "curl"
+    curl.write_text(f'#!/usr/bin/env bash\necho "$*" >> "{log}"\nexit 0\n')
+    curl.chmod(0o755)
+    out = _bash(
+        'set -euo pipefail\n'
+        f'export PATH="{tmp_path}:$PATH"\n'
+        f'source {ISVC}\n'
+        'isvc_wait_route http://localhost:8081/ready my-host.local 30 "hint"\n',
+        REPO,
+    )
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "Host: my-host.local" in log.read_text()
+    assert "ok  my-host.local answers" in out.stdout, "a passing wait must say so"
+
+
+def test_the_alias_guard_exits_2_and_prints_the_callers_own_argument() -> None:
+    """The mechanism is shared and the sentence is not. Four deploys cite four
+    different laws here; the guard prints whatever trailing lines it is handed,
+    so a shared file cannot flatten them into one."""
+    out = _bash(
+        'set -uo pipefail\n'
+        f'source {ISVC}\n'
+        'isvc_assert_alias_unmoved 2 3 "SHADOW deploy" "M6 law 3: nothing promotes."\n'
+        'echo "CONTINUED"\n',
+        REPO,
+    )
+    assert out.returncode == 2, f"a moved alias must exit 2, got {out.returncode}"
+    assert "CONTINUED" not in out.stdout, "the guard warned instead of stopping"
+    assert "@champion moved from 2 to 3 during a SHADOW deploy" in out.stderr
+    assert "M6 law 3: nothing promotes." in out.stderr, "the caller's citation was dropped"
+
+
+def test_the_alias_guard_is_silent_and_returns_when_nothing_moved() -> None:
+    """The other half, and the one a guard that always fired would break: an
+    honest deploy must pass through it without a word."""
+    out = _bash(
+        'set -euo pipefail\n'
+        f'source {ISVC}\n'
+        'isvc_assert_alias_unmoved 2 2 "DEPLOY" "some law"\n'
+        'echo "CONTINUED"\n',
+        REPO,
+    )
+    assert out.returncode == 0 and "CONTINUED" in out.stdout
+    assert "some law" not in out.stderr, "an unmoved alias printed a failure argument"
+
+
+def test_the_route_port_is_read_from_the_kind_config_and_matches_the_committed_one() -> None:
+    """gotcha #52: derive, never type. Run against the real file, so this also
+    fails if the committed kind config stops publishing container port 80 —
+    which is the event that would silently break every deploy's accept check."""
+    out = _bash(
+        f'source {ISVC}\n'
+        f'isvc_route_port "{REPO}/infra/kind/kind-config.yaml"\n',
+        REPO,
+    )
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.strip() == "8081", out.stdout
+
+
+def test_the_route_port_REFUSES_a_config_that_publishes_no_route(tmp_path: Path) -> None:
+    """F-048's rule applied to a port: an unresolvable value must fail loudly
+    naming itself, never resolve to something plausible. A default of 8081 here
+    would keep every deploy's accept check pointing at a route that does not
+    exist on a cluster built from the edited config."""
+    cfg = tmp_path / "kind-config.yaml"
+    cfg.write_text("nodes:\n  - role: control-plane\n")
+    out = _bash(f'source {ISVC}\nisvc_route_port "{cfg}"\n', REPO)
+    assert out.returncode != 0
+    assert "no extraPortMapping publishes containerPort 80" in out.stderr
+    assert out.stdout.strip() == "", "a refusal printed a port anyway"
+
+
+@pytest.mark.parametrize("caller", ISVC_CALLERS, ids=lambda p: p.name)
+def test_every_deploy_uses_the_skeleton_and_defines_none_of_it_itself(caller: Path) -> None:
+    """The per-caller half of the re-derived property, and the one that keeps
+    the migration from being undone one file at a time. A deploy that grew back
+    its own `champion_version()` or its own heredoc would be a copy again — and
+    the copy would look right, which is exactly how the transformer's two drifted
+    to cwd-relative paths without anyone noticing."""
+    body = without_comments(caller)
+    assert "scripts/lib/isvc_deploy.sh" in body, f"{caller.name} does not source the skeleton"
+    for redeclared in (
+        "champion_version() {",
+        "isvc_route_port() {",
+        "extraPortMappings",
+        "--for=jsonpath=",
+        "--for=condition=",
+    ):
+        assert redeclared not in body, f"{caller.name} re-declares {redeclared!r} — two homes"
 
 
 @pytest.mark.parametrize("drill", DRILLS, ids=lambda p: p.name)

@@ -87,12 +87,25 @@ def test_neither_the_deploy_nor_the_resolver_names_a_mutating_registry_verb(depl
 
 def test_the_deploy_reads_the_champion_version_before_and_after_its_own_changes(deploy):
     """A claim nobody checks is a sentence. The script reads the alias first,
-    reads it again at the end, and treats a difference as a FAILURE."""
+    reads it again at the end, and treats a difference as a FAILURE.
+
+    RE-DERIVED at CU-S5. The read and the comparison moved into
+    `scripts/lib/isvc_deploy.sh`, so the literal `if [[ "$ALIAS_BEFORE" != ... ]]`
+    is no longer in this file — and the `exit 2` behind it is now watched
+    RUNNING by `test_script_libs.py`, which is strictly stronger than reading
+    for the string. This file keeps the half only it can answer: this deploy
+    reads on both sides, hands both readings to the guard, and carries its own
+    law citation."""
     body = executable_lines(deploy)
-    assert body.count("champion_version)") >= 2, "the alias must be read on both sides"
+    assert body.count("isvc_champion_version)") == 2, "the alias must be read on both sides"
     assert "ALIAS_BEFORE" in body and "ALIAS_AFTER" in body
-    assert re.search(r'if \[\[ "\$ALIAS_BEFORE" != "\$ALIAS_AFTER" \]\]', body)
-    assert "exit 2" in body
+    assert re.search(r'isvc_assert_alias_unmoved "\$ALIAS_BEFORE" "\$ALIAS_AFTER"', body), (
+        "the two readings are taken and never compared"
+    )
+    assert "kickoff law 2" in deploy, (
+        "M5's alias-neutrality citation must stay with M5's deploy — the guard's "
+        "mechanism is shared, its argument is not"
+    )
 
 
 def test_the_resolver_is_a_reader():
@@ -300,16 +313,30 @@ def test_the_deploy_waits_for_the_ROLLOUT_and_not_only_the_isvc_condition(deploy
     `observedGeneration` trails `generation`, which KServe v0.20.0 leaves behind
     on every re-deploy, so the wait could never succeed). The literal went red
     for a correct fix — gotcha #50 exactly. What this story's ordering decision
-    actually asserts is the ORDER of two waits, so that is what is asserted now,
-    derived rather than typed: whatever form the InferenceService-level wait
-    takes, it must come after the rollout."""
+    actually asserts is the ORDER of two waits, so that is what was asserted
+    instead, derived rather than typed.
+
+    RE-DERIVED AGAIN at CU-S5, and the same rule applied a second time. Four
+    deploys carried that order; it now lives once, in
+    `scripts/lib/isvc_deploy.sh`, where `test_script_libs.py` asserts it by
+    RUNNING the function against a recording fake kubectl and reading the order
+    off what was actually invoked. That is a better instrument than an index
+    comparison over source text, and there is now exactly one place for it to be
+    wrong. What is left here is the caller-side half."""
     body = executable_lines(deploy)
-    assert "rollout status" in body
-    rollout = body.index("rollout status")
-    isvc_waits = [
-        match.start()
-        for match in re.finditer(r"wait\b", body)
-        if "inferenceservice/" in body[match.start() : match.start() + 400]
-    ]
-    assert isvc_waits, "there is no InferenceService-level readiness wait at all"
-    assert rollout < min(isvc_waits), "the rollout must be waited on FIRST"
+    assert "scripts/lib/isvc_deploy.sh" in body, "the deploy does not source the skeleton"
+    assert re.search(r'isvc_wait_ready "\$SERVING_NS" "\$ISVC_NAME"', body), (
+        "the deploy never waits for its own InferenceService to be ready"
+    )
+    # The needle is scoped to THIS isvc's own workload, because a bare
+    # `rollout status` also matches `kubectl -n platform rollout status
+    # deployment/minio` — a different object, waited on for a different reason,
+    # and nothing this migration touched (gotcha #99: the needle must name the
+    # thing, not a word the thing shares with something legitimate).
+    assert not re.search(r"rollout status[^\n]*\$ISVC_NAME", body), (
+        "the deploy re-declares its own predictor rollout — a second home for the order"
+    )
+    for redeclared in ("--for=jsonpath=", "--for=condition="):
+        assert redeclared not in body, (
+            f"the deploy re-declares {redeclared!r} — a second home for the order"
+        )
