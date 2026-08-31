@@ -59,6 +59,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -67,6 +68,14 @@ from typing import Any
 
 from taxi_mlops.features import quote_time, sets
 from taxi_mlops.serving.client import Endpoint, QuoteRequest, build_matrix, v2_payload
+
+# This file has no REPO_ROOT of its own (its record path is relative to the
+# repo root it is run from). The insert is still needed: `uv run python
+# scripts/x.py` puts scripts/ on sys.path, but a loader that reads this file
+# by path does not.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+from _lib.k8s import kubectl  # noqa: E402
 
 RECORD = Path("automation/runs/m6-spike/canary_spike.json")
 # NOTE (M6-S4, F-039): this name is safe only while no InferenceService is called
@@ -151,14 +160,8 @@ PREDICTION: dict[str, Any] = {
 }
 
 
-def kubectl(*args: str, check: bool = True) -> str:
-    proc = subprocess.run(  # noqa: S603 — fixed argv, no shell
-        ["kubectl", "--context", "kind-mlops-taxi", *args],
-        capture_output=True, text=True, check=False,
-    )
-    if check and proc.returncode != 0:
-        raise RuntimeError(f"kubectl {' '.join(args)} failed: {proc.stderr.strip()}")
-    return proc.stdout.strip()
+# `kubectl` moved to `_lib.k8s` at CU-S4 (it was defined eight times, six
+# distinct bodies, all pinning the same context).
 
 
 def apply(manifest: str) -> str:

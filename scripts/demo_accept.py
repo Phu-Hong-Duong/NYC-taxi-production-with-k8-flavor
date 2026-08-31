@@ -39,6 +39,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -46,6 +47,10 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 PAGE = REPO / "demo" / "index.html"
+sys.path.insert(0, str(REPO / "scripts"))
+
+from _lib.records import load_record  # noqa: E402
+
 ANCHOR_RECORD = REPO / "automation" / "runs" / "m8-transformer" / "transformer-parity.json"
 DEFAULT_RECORD = REPO / "automation" / "runs" / "m9-demo" / "accept.json"
 ROUTE = "http://localhost:8081"
@@ -131,7 +136,7 @@ def get(url: str, timeout: float = 30.0) -> tuple[int, bytes]:
 
 def anchor_for(trip: dict[str, Any]) -> dict[str, Any]:
     """The recorded row for the page's own default trip, matched on (at, pu, do)."""
-    record = json.loads(ANCHOR_RECORD.read_text())
+    record = load_record(ANCHOR_RECORD, produced_by='make transformer-parity')
     for row in record["rows"]:
         if (
             row["at"] == trip["pickup_datetime"]
