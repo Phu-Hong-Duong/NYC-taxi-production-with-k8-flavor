@@ -1,0 +1,104 @@
+{
+ "results": [
+  {
+   "target": "gate-margin-redteam",
+   "returncode": 0,
+   "seconds": 17.2,
+   "tail": [
+    "\u001b[32m[gate-margin-redteam] PASSED: the M2 gate went RED on a lowered incumbent\u001b[0m",
+    "\u001b[32m                      margin, named both numbers, left every era-aware replay\u001b[0m",
+    "\u001b[32m                      passing, and returned GREEN when the config was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "hook-redteam",
+   "returncode": 2,
+   "seconds": 0.0,
+   "tail": [
+    "[hook-redteam] FAIL: the working tree is dirty. This drill commits and then",
+    "[hook-redteam]       destroys history; it refuses to run over uncommitted work.",
+    "make: *** [Makefile:379: hook-redteam] Error 2"
+   ]
+  },
+  {
+   "target": "verify-m2-redteam",
+   "returncode": 0,
+   "seconds": 19.2,
+   "tail": [
+    "  \u001b[32mok  \u001b[0m the gate is GREEN again (57 sub-checks, exit 0) \u2014 the drill left nothing behind",
+    "\u001b[32m[verify-m2-redteam] PASSED: the M2 gate went RED naming the champion alias, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m3-redteam",
+   "returncode": 0,
+   "seconds": 9.4,
+   "tail": [
+    "\u001b[32m[verify-m3-redteam] PASSED: the M3 gate went RED on ONE contradicted number,\u001b[0m",
+    "\u001b[32m                    named the row and both verdicts, kept counting every other\u001b[0m",
+    "\u001b[32m                    sub-check, and returned GREEN when the record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m4-redteam",
+   "returncode": 0,
+   "seconds": 20.2,
+   "tail": [
+    "\u001b[32m                    status, named the stage AND the contradiction between two\u001b[0m",
+    "\u001b[32m                    independent witnesses, kept counting every other sub-check,\u001b[0m",
+    "\u001b[32m                    and returned GREEN when the record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m5-redteam",
+   "returncode": 0,
+   "seconds": 12.4,
+   "tail": [
+    "\u001b[32m                    both the arithmetic and the runbook that quotes it, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when the\u001b[0m",
+    "\u001b[32m                    record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m6-redteam",
+   "returncode": 0,
+   "seconds": 4.3,
+   "tail": [
+    "\u001b[32m                    both the arithmetic and the write-up that quotes it, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when the\u001b[0m",
+    "\u001b[32m                    record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m7-redteam",
+   "returncode": 0,
+   "seconds": 10.6,
+   "tail": [
+    "\u001b[32m                    that quotes it, left the bar-daylight argument standing, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when the\u001b[0m",
+    "\u001b[32m                    record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m8-redteam",
+   "returncode": 0,
+   "seconds": 9.7,
+   "tail": [
+    "\u001b[32m                    its independent anchor AND the accept table a reviewer\u001b[0m",
+    "\u001b[32m                    diffs, left the measured delta standing, kept counting\u001b[0m",
+    "\u001b[32m                    every other sub-check, and returned GREEN on restore.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m9-redteam",
+   "returncode": 0,
+   "seconds": 9.2,
+   "tail": [
+    "\u001b[32m                    the record own arithmetic, the live store AND the\u001b[0m",
+    "\u001b[32m                    write-up a human reads, while the demo, the rules, the\u001b[0m",
+    "\u001b[32m                    drill and the pointer stayed green. GREEN on restore.\u001b[0m"
+   ]
+  }
+ ]
+}

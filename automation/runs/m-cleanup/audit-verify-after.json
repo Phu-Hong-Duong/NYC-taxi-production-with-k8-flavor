@@ -1,0 +1,326 @@
+{
+  "results": [
+    {
+      "claim": "scripts/ file count",
+      "seed": 141,
+      "measured": 144,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "scripts/ line count",
+      "seed": 41848,
+      "measured": 41540,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "docs/ file count",
+      "seed": 111,
+      "measured": 114,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "docs/ line count",
+      "seed": 34653,
+      "measured": 35773,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "tests/ file count",
+      "seed": 74,
+      "measured": 75,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "tests/ line count",
+      "seed": 22411,
+      "measured": 23345,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "src/ file count",
+      "seed": 54,
+      "measured": 54,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "src/ line count",
+      "seed": 12867,
+      "measured": 12871,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "automation/ file count",
+      "seed": 137,
+      "measured": 136,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "automation/ line count",
+      "seed": 45255,
+      "measured": 45639,
+      "verdict": "DIFFERS",
+      "note": "tracked-only basis"
+    },
+    {
+      "claim": "verify gate LOC (10 gates)",
+      "seed": 9055,
+      "measured": 8885,
+      "verdict": "DIFFERS",
+      "note": "10 gate files"
+    },
+    {
+      "claim": "red team LOC",
+      "seed": 1970,
+      "measured": 2816,
+      "verdict": "DIFFERS",
+      "note": "17 files match scripts/*redteam*.sh; the seed's 1,970 is a narrower population ('the nine red teams'), so this is a different count, not a contradiction"
+    },
+    {
+      "claim": "Tier A rev_rederive_m7.py",
+      "seed": 239,
+      "measured": "ABSENT",
+      "verdict": "DIFFERS",
+      "note": "file does not exist"
+    },
+    {
+      "claim": "Tier A f016_replay_probe.py",
+      "seed": 296,
+      "measured": "ABSENT",
+      "verdict": "DIFFERS",
+      "note": "file does not exist"
+    },
+    {
+      "claim": "Tier A retrain_proof_record.py",
+      "seed": 193,
+      "measured": "ABSENT",
+      "verdict": "DIFFERS",
+      "note": "file does not exist"
+    },
+    {
+      "claim": "Tier A cpu_request_resize_record.py",
+      "seed": 148,
+      "measured": "ABSENT",
+      "verdict": "DIFFERS",
+      "note": "file does not exist"
+    },
+    {
+      "claim": "Tier A marts_reach_probe.py",
+      "seed": 99,
+      "measured": "ABSENT",
+      "verdict": "DIFFERS",
+      "note": "file does not exist"
+    },
+    {
+      "claim": "Tier A canary_split_paste.py",
+      "seed": 75,
+      "measured": "ABSENT",
+      "verdict": "DIFFERS",
+      "note": "file does not exist"
+    },
+    {
+      "claim": "Tier A total LOC",
+      "seed": 1050,
+      "measured": 0,
+      "verdict": "DIFFERS",
+      "note": ""
+    },
+    {
+      "claim": "Tier B marts_peak_probe.sh LOC",
+      "seed": 125,
+      "measured": 125,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B marts_peak_probe.sh anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 2 code, 0 test",
+      "verdict": "DIFFERS",
+      "note": "docs=4"
+    },
+    {
+      "claim": "Tier B feast_registry_dump.py LOC",
+      "seed": 97,
+      "measured": 97,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B feast_registry_dump.py anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 2 code, 0 test",
+      "verdict": "DIFFERS",
+      "note": "docs=2"
+    },
+    {
+      "claim": "Tier B feast_serve_probe.sh LOC",
+      "seed": 66,
+      "measured": 66,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B feast_serve_probe.sh anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 2 code, 0 test",
+      "verdict": "DIFFERS",
+      "note": "docs=2"
+    },
+    {
+      "claim": "Tier B contract_probe_fixtures.sh LOC",
+      "seed": 62,
+      "measured": 62,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B contract_probe_fixtures.sh anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 2 code, 0 test",
+      "verdict": "DIFFERS",
+      "note": "docs=2"
+    },
+    {
+      "claim": "Tier B f008_guard_exercise.py LOC",
+      "seed": 61,
+      "measured": 61,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "Tier B f008_guard_exercise.py anchors",
+      "seed": "1 makefile, 0 code, 0 test",
+      "measured": "1 makefile, 2 code, 0 test",
+      "verdict": "DIFFERS",
+      "note": "docs=2"
+    },
+    {
+      "claim": "Tier B total LOC",
+      "seed": 411,
+      "measured": 411,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "_to_delete/ exists",
+      "seed": true,
+      "measured": false,
+      "verdict": "DIFFERS",
+      "note": "0 entries, 0 tracked by git"
+    },
+    {
+      "claim": "RAW_2019_DTYPES is dead",
+      "seed": true,
+      "measured": false,
+      "verdict": "DIFFERS",
+      "note": "8 occurrence(s) in tracked files = definition + the seed's own mention"
+    },
+    {
+      "claim": "Makefile targets missing from .PHONY",
+      "seed": 11,
+      "measured": 0,
+      "verdict": "DIFFERS",
+      "note": "none"
+    },
+    {
+      "claim": "test files (.py, tracked)",
+      "seed": 72,
+      "measured": 75,
+      "verdict": "DIFFERS",
+      "note": "seed's 74 counts every tracked file under tests/, .py or not"
+    },
+    {
+      "claim": "`def test_` count",
+      "seed": 1212,
+      "measured": 1265,
+      "verdict": "DIFFERS",
+      "note": ""
+    },
+    {
+      "claim": "REPO = Path(...) re-declared",
+      "seed": 57,
+      "measured": 1,
+      "verdict": "DIFFERS",
+      "note": ""
+    },
+    {
+      "claim": "strip-comments helper copies",
+      "seed": 13,
+      "measured": 1,
+      "verdict": "DIFFERS",
+      "note": "without_commentsx1"
+    },
+    {
+      "claim": "_calls() defining files",
+      "seed": 7,
+      "measured": 0,
+      "verdict": "DIFFERS",
+      "note": ""
+    },
+    {
+      "claim": "_calls() distinct semantics",
+      "seed": 3,
+      "measured": 0,
+      "verdict": "DIFFERS",
+      "note": ""
+    },
+    {
+      "claim": "pytest collected",
+      "seed": 1320,
+      "measured": 1408,
+      "verdict": "DIFFERS",
+      "note": "RUN, not grepped"
+    },
+    {
+      "claim": "shell files defining consume()",
+      "seed": null,
+      "measured": 1,
+      "verdict": "MEASURED",
+      "note": "1 DISTINCT body/bodies \u2014 byte-identical as the seed claims"
+    },
+    {
+      "claim": "shell files using kubectl port-forward",
+      "seed": null,
+      "measured": 15,
+      "verdict": "MEASURED",
+      "note": ""
+    },
+    {
+      "claim": "shell files with KUBECTL=( preamble",
+      "seed": 30,
+      "measured": 30,
+      "verdict": "CONFIRMED",
+      "note": ""
+    },
+    {
+      "claim": "python files using kubectl port-forward",
+      "seed": null,
+      "measured": 12,
+      "verdict": "MEASURED",
+      "note": ""
+    },
+    {
+      "claim": "python files defining a kubectl wrapper",
+      "seed": 8,
+      "measured": 2,
+      "verdict": "DIFFERS",
+      "note": "any indent; _kubectl/kubectl/_kubectl_json spellings"
+    },
+    {
+      "claim": "src/ modules unreferenced outside themselves",
+      "seed": 0,
+      "measured": 0,
+      "verdict": "CONFIRMED",
+      "note": ""
+    }
+  ]
+}
