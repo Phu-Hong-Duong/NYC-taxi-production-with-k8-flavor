@@ -65,14 +65,19 @@ import subprocess
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _lib import ports  # noqa: E402
+from _lib.k8s import kubectl, start_forward, stop_forward  # noqa: E402
+from _lib.monitoring import http_get, prom_rules  # noqa: E402
+from _lib.monitoring import prom_query as _prom_query  # noqa: E402
+from _lib.monitoring import prom_scalar as _prom_scalar  # noqa: E402
 
 RECORD_DIR = REPO_ROOT / "automation" / "runs" / "m6-gameday"
 
@@ -99,7 +104,10 @@ WATCHED: dict[str, str] = {
     "PredictorStorageInitializerNotReady": "A-7",
 }
 
-ALERTMANAGER_LOCAL_PORT = 9096  # ephemeral, torn down on exit (the 8092 precedent)
+# Ephemeral, torn down on exit (the 8092 precedent). The NUMBER is in
+# `_lib.ports`: this reservation and the drift fire drill's pushgateway were
+# BOTH 9096 until CU-S4 measured it — see that module.
+ALERTMANAGER_LOCAL_PORT = ports.port("ALERTMANAGER_GAMEDAY")
 
 
 def now() -> str:
@@ -113,53 +121,25 @@ def say(msg: str) -> None:
 # --- readers ------------------------------------------------------------------
 
 
-def http_get(host: str, url: str, timeout: float = 20.0) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"Host": host})  # noqa: S310
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            return response.status, response.read().decode()
-    except urllib.error.HTTPError as error:
-        return error.code, error.read().decode()
+# --- readers ---------------------------------------------------------------
+# `http_get`, `prom_query`, `prom_scalar` and `kubectl` moved to `_lib` at
+# CU-S4. The wrappers below bind this drill's Prometheus host and route so the
+# ~10 call sites keep reading as questions rather than as plumbing;
+# `rule_states` additionally projects rule -> state, which is the shape this
+# drill compares against its predictions.
 
 
 def prom_query(expr: str) -> list[dict[str, Any]]:
-    from urllib.parse import quote
-
-    status, body = http_get(PROM_HOST, f"{ROUTE}/api/v1/query?query={quote(expr)}")
-    if status != 200:
-        raise RuntimeError(f"Prometheus query -> {status}: {body[:200]}")
-    payload = json.loads(body)
-    if payload.get("status") != "success":
-        raise RuntimeError(f"Prometheus query failed: {payload}")
-    return payload["data"]["result"]
+    return _prom_query(PROM_HOST, ROUTE, expr)
 
 
 def prom_scalar(expr: str, default: float = 0.0) -> float:
-    result = prom_query(expr)
-    if not result:
-        return default
-    return float(result[0]["value"][1])
+    return _prom_scalar(PROM_HOST, ROUTE, expr, default)
 
 
 def rule_states() -> dict[str, str]:
-    status, body = http_get(PROM_HOST, f"{ROUTE}/api/v1/rules")
-    if status != 200:
-        raise RuntimeError(f"Prometheus /api/v1/rules -> {status}")
-    out: dict[str, str] = {}
-    for group in json.loads(body)["data"]["groups"]:
-        for rule in group["rules"]:
-            if rule.get("type") == "alerting":
-                out[rule["name"]] = rule["state"]
-    return out
-
-
-def kubectl(*args: str, check: bool = True) -> str:
-    result = subprocess.run(  # noqa: S603
-        ["kubectl", *args], capture_output=True, text=True, check=False
-    )
-    if check and result.returncode != 0:
-        raise RuntimeError(f"kubectl {' '.join(args)} -> {result.returncode}: {result.stderr}")
-    return result.stdout.strip()
+    rules = prom_rules(PROM_HOST, ROUTE)
+    return {name: rule["state"] for name, rule in rules.items()}
 
 
 def predictor_pod() -> dict[str, str]:
@@ -308,23 +288,13 @@ def alertmanager_names(port: int) -> list[str]:
 
 class AlertmanagerForward:
     def __enter__(self) -> int:
-        self.proc = subprocess.Popen(  # noqa: S603
-            [
-                "kubectl",
-                "-n",
-                "monitoring",
-                "port-forward",
-                "svc/prometheus-alertmanager",
-                f"{ALERTMANAGER_LOCAL_PORT}:9093",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        self.proc = start_forward(
+            "svc/prometheus-alertmanager", "monitoring", ALERTMANAGER_LOCAL_PORT, 9093
         )
-        time.sleep(4)
         return ALERTMANAGER_LOCAL_PORT
 
     def __exit__(self, *exc: object) -> None:
-        self.proc.terminate()
+        stop_forward(self.proc)
 
 
 # --- the predictions ----------------------------------------------------------

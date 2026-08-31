@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 import urllib.error
@@ -54,6 +53,11 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _lib import ports  # noqa: E402
+from _lib.k8s import kubectl_run as _kubectl  # noqa: E402
+from _lib.k8s import start_forward, stop_forward  # noqa: E402
 
 from taxi_mlops.monitoring.pushgateway import (  # noqa: E402
     DEFAULT_IN_CLUSTER_URL,
@@ -75,8 +79,8 @@ from taxi_mlops.monitoring.store_health import (  # noqa: E402
 )
 
 NAMESPACE = "feast"
-FORWARD_PORT = 6568
-GATEWAY_PORT = 9100
+FORWARD_PORT = ports.port("FEAST_SERVER_WATCH")
+GATEWAY_PORT = ports.port("PUSHGATEWAY_STORE_WATCH")
 STORE_LABEL = "feast-online"
 
 #: The feature refs the canary asks for — the same two the transformer requests
@@ -88,33 +92,10 @@ ZONE_REFS = ["zone_static:centroid_lat", "zone_static:centroid_lon"]
 DAY_REFS = ["calendar_day_flags:is_holiday", "calendar_day_flags:is_near_holiday"]
 
 
-def _kubectl(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        ["kubectl", "--context", "kind-mlops-taxi", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def _forward(namespace: str, service: str, local: int, remote: int) -> subprocess.Popen[bytes]:
-    """An ephemeral `kubectl port-forward`, torn down by the caller."""
-    return subprocess.Popen(  # noqa: S603
-        ["kubectl", "--context", "kind-mlops-taxi", "-n", namespace,
-         "port-forward", f"svc/{service}", f"{local}:{remote}"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
-def _wait_http(url: str, attempts: int = 20, delay: float = 0.5) -> bool:
-    for _ in range(attempts):
-        try:
-            with urllib.request.urlopen(url, timeout=2):  # noqa: S310
-                return True
-        except (urllib.error.URLError, OSError):
-            time.sleep(delay)
-    return False
+# `_kubectl`, `_forward` and `_wait_http` moved to `_lib.k8s` at CU-S4. The
+# forward now WAITS for its socket instead of returning a process that may not
+# be listening yet, so the "never came up" branch below is a real answer rather
+# than a guess made after a fixed sleep.
 
 
 def read_dbsize() -> tuple[int | None, str]:
@@ -200,16 +181,13 @@ def main(argv: list[str] | None = None) -> int:
     forward = None
     url = args.feature_server
     if url is None:
-        forward = _forward(NAMESPACE, "feast-server", args.port, 6566)
+        forward = start_forward("svc/feast-server", NAMESPACE, args.port, 6566)
         url = f"http://127.0.0.1:{args.port}"
     try:
-        if forward is not None:
-            _wait_http(f"{url}/health")
         observations, lookup_failed, canary_how = read_canary(url)
     finally:
         if forward is not None:
-            forward.terminate()
-            forward.wait(timeout=10)
+            stop_forward(forward)
 
     canary = evaluate_canary(
         dbsize=dbsize,
@@ -298,26 +276,28 @@ def main(argv: list[str] | None = None) -> int:
     gateway_forward = None
     gateway_url = args.pushgateway
     if gateway_url is None:
-        gateway_forward = _forward(
-            "monitoring", "prometheus-prometheus-pushgateway", args.gateway_port, 9091
-        )
-        gateway_url = f"http://127.0.0.1:{args.gateway_port}"
-        if not _wait_http(f"{gateway_url}/-/healthy"):
-            gateway_forward.terminate()
+        try:
+            gateway_forward = start_forward(
+                "svc/prometheus-prometheus-pushgateway",
+                "monitoring",
+                args.gateway_port,
+                9091,
+            )
+        except RuntimeError:
             print(
                 "[store-watch] FAIL: the pushgateway forward never came up. The gateway has no "
                 "hostPort (M9 law 1); pass --pushgateway explicitly from inside the cluster.",
                 file=sys.stderr,
             )
             return 1
+        gateway_url = f"http://127.0.0.1:{args.gateway_port}"
     try:
         target = push_metrics(
             metrics, url=gateway_url, job=PUSH_JOB, grouping={"store": STORE_LABEL}
         )
     finally:
         if gateway_forward is not None:
-            gateway_forward.terminate()
-            gateway_forward.wait(timeout=10)
+            stop_forward(gateway_forward)
     print(f"[store-watch] pushed {len(metrics)} series -> {target}")
     return 0
 

@@ -64,6 +64,13 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _lib import ports  # noqa: E402
+from _lib.k8s import kubectl, start_forward, stop_forward  # noqa: E402
+from _lib.monitoring import alertmanager_holds as _am_holds  # noqa: E402
+from _lib.monitoring import firing_labels, prom_rules  # noqa: E402
+from _lib.monitoring import rule_state as _rule_state  # noqa: E402
 
 from taxi_mlops.features.calendar import load_calendar  # noqa: E402
 from taxi_mlops.monitoring.pushgateway import delete_group  # noqa: E402
@@ -84,8 +91,8 @@ CHAMPION_HOST = "nyc-taxi-eta-serving.local"
 #: 9100 the reader's own gateway forward, 6567/6568 the two feature-server
 #: readers'. A drill that steals a running process's port fails for its own
 #: reasons (#55).
-ALERTMANAGER_PORT = 9101
-GATEWAY_PORT = 9102
+ALERTMANAGER_PORT = ports.port("ALERTMANAGER_STORE_DRILL")
+GATEWAY_PORT = ports.port("PUSHGATEWAY_STORE_DRILL")
 
 CANARY_ALERT = "OnlineStoreCanaryFailing"
 INCOMPLETE_ALERT = "OnlineStoreIncomplete"
@@ -285,51 +292,18 @@ def http(
         return 0, str(error)
 
 
-def kubectl(*args: str, check: bool = True) -> str:
-    out = subprocess.run(  # noqa: S603
-        ["kubectl", "--context", "kind-mlops-taxi", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if check and out.returncode != 0:
-        raise RuntimeError(f"kubectl {' '.join(args)} -> {out.returncode}: {out.stderr.strip()}")
-    return out.stdout
-
-
-def port_forward(namespace: str, target: str, local: int, remote: int) -> subprocess.Popen[bytes]:
-    process = subprocess.Popen(  # noqa: S603
-        [
-            "kubectl",
-            "--context",
-            "kind-mlops-taxi",
-            "-n",
-            namespace,
-            "port-forward",
-            target,
-            f"{local}:{remote}",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    time.sleep(4)
-    return process
-
-
-def prom_rules() -> dict[str, dict[str, Any]]:
-    status, body = http(PROM_HOST, f"{ROUTE}/api/v1/rules")
-    if status != 200:
-        raise RuntimeError(f"Prometheus /api/v1/rules -> {status}")
-    out: dict[str, dict[str, Any]] = {}
-    for group in json.loads(body)["data"]["groups"]:
-        for rule in group["rules"]:
-            if rule.get("type") == "alerting":
-                out[rule["name"]] = rule
-    return out
+# --- readers ---------------------------------------------------------------
+# The bodies moved to `_lib.monitoring` at CU-S4. `http()` above stayed: it POSTs
+# an optional body (this drill quotes the transformer through it), so it is a
+# request client and not a GET — merging it into `http_get` would have been two
+# behaviours under one name, which is the hazard CU-S2 measured in `tests/`.
+#
+# These three are wrappers rather than direct calls because every caller below
+# sits inside a `wait_for` poll and must RE-READ the rules each time.
 
 
 def rule_state(alert: str) -> str:
-    return str((prom_rules().get(alert) or {}).get("state", "absent"))
+    return _rule_state(prom_rules(PROM_HOST, ROUTE), alert)
 
 
 def firing_checks(alert: str) -> set[str]:
@@ -339,19 +313,11 @@ def firing_checks(alert: str) -> set[str]:
     from "A-12 fired for any claim at all", and a canary whose negative half was
     silently broken would pass the weaker check.
     """
-    rule = prom_rules().get(alert) or {}
-    return {
-        instance.get("labels", {}).get("check", "")
-        for instance in rule.get("alerts") or []
-        if instance.get("state") == "firing"
-    }
+    return firing_labels(prom_rules(PROM_HOST, ROUTE), alert, "check")
 
 
 def alertmanager_holds(alert: str) -> bool:
-    status, body = http("localhost", f"http://localhost:{ALERTMANAGER_PORT}/api/v2/alerts")
-    if status != 200:
-        return False
-    return any(a.get("labels", {}).get("alertname") == alert for a in json.loads(body))
+    return _am_holds(ALERTMANAGER_PORT, alert)
 
 
 def wait_for(
@@ -765,8 +731,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     check = Checks()
-    am = port_forward("monitoring", "svc/prometheus-alertmanager", ALERTMANAGER_PORT, 9093)
-    gw = port_forward("monitoring", "svc/prometheus-prometheus-pushgateway", GATEWAY_PORT, 9091)
+    am = start_forward("svc/prometheus-alertmanager", "monitoring", ALERTMANAGER_PORT, 9093)
+    gw = start_forward(
+        "svc/prometheus-prometheus-pushgateway", "monitoring", GATEWAY_PORT, 9091
+    )
     gateway_url = f"http://localhost:{GATEWAY_PORT}"
     observed: dict[str, Any] = {}
     try:
@@ -780,7 +748,7 @@ def main(argv: list[str] | None = None) -> int:
             observed["absent"] = phase_absent(check, gateway_url)
     finally:
         for process in (am, gw):
-            process.terminate()
+            stop_forward(process)
             process.wait(timeout=10)
 
     record = {
