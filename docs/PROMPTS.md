@@ -53,13 +53,20 @@ This session's plan, in order:
    From here the chain runs; I watch AWAITING_PO.md and the ledgers.
 ```
 
-## Prompt D — Role-block header (used INSIDE sessions by the executor; unchanged)
+## Prompt D — Role-block header (used INSIDE sessions by the executor)
 
 ```
-── role-block: role:<DE|DA|MLE|MLOPS|SRE|PO-prep> · story: <Mx-Sy> ──
+── role-block: role:<DE|DA|MLE|MLOPS|SRE|PO-prep> · story: <Mx-Sy> · MODE: CHARTERED ──
 charter read: yes · open findings owned by this role: <ids or none>
 this block produces: <artifact(s)> · this block's refusals in play: <top 1–2>
 ```
+
+`MODE` is always `CHARTERED` here, and that is the point of printing it: this
+header only ever exists inside a chartered session (ORG.md § Session scope, PO
+directive 2026-08-30-1). An EVERYDAY session prints no role block at all — so
+the field is a claim the session makes about itself, in the same breath as its
+model, rather than something a later reader has to infer from what got written
+down.
 
 ## Retired in v3.0 (recorded so the history is legible)
 - Prompt B (builder continuation) → became `automation/executor_prompt.md`.

@@ -78,6 +78,36 @@ verdict, conditions, evidence link) · `ledgers/findings.md` (challenges: id,
 severity S1/S2/S3, owner, status — closed only by evidence, never by reply) ·
 `ledgers/deployments.md` (every serve/canary/rollback with exact commands).
 
+## Session scope — which sessions this constitution governs (PO directive 2026-08-30-1)
+
+Everything in this document — roles, blocks, ledgers, gates, the chain — governs
+**CHARTERED** sessions and nothing else. The two modes are defined by the PO's
+own edit at the head of `CLAUDE.md` ("Scope of this protocol"); that block is the
+source and is deliberately cited rather than restated, so there is one home for
+the rule (a second copy is the one that would drift):
+
+- **CHARTERED** — launched by `automation/next_session.sh`, or opened by the PO
+  with an explicit role and story. This constitution applies in full.
+- **EVERYDAY** — every other session that happens to load `CLAUDE.md`. It uses
+  the knowledge (gotchas, version pins, environment facts) so solved problems
+  stay solved, and it produces NONE of the ceremony: no role block, no ledger
+  row, no handoff entry, no field note, no chaining.
+
+**If in doubt, the session is EVERYDAY.** Ceremony is opt-in by the PO and is
+never inferred from context — which has a consequence for anyone auditing this
+repo later: *a missing handoff entry or ledger row is not evidence of a skipped
+step unless the session was chartered.*
+
+A chartered session **states its MODE where it states its model** — first line,
+and again in its HANDOFF entry's State paragraph. That line is what turns the
+mode into a fact a reader can check instead of an inference from whatever
+artifacts the session happened to leave behind.
+
+*Amendment authority:* this section records **PO directive 2026-08-30-1**,
+chartered into `docs/milestones/CLEANUP_KICKOFF.md` (CU-S1) by ARCH and
+transcribed by an executor. It is not an exception to the rule below — the
+constitution still does not amend itself; the PO directed this one.
+
 ## Execution model
 
 One executor plays all roles, one role per block, declared via the Prompt-D
