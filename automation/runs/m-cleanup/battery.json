@@ -1,0 +1,194 @@
+{
+ "results": [
+  {
+   "target": "feast-online-parity-redteam",
+   "returncode": 0,
+   "seconds": 23.2,
+   "tail": [
+    "[redteam] ok  it printed PASSED",
+    "[redteam] ok  the working tree is clean \u2014 the drill left no residue",
+    "[redteam] PASSED \u2014 the table can go RED, names the planted column, and restores exactly"
+   ]
+  },
+  {
+   "target": "gate-margin-redteam",
+   "returncode": 0,
+   "seconds": 17.2,
+   "tail": [
+    "\u001b[32m[gate-margin-redteam] PASSED: the M2 gate went RED on a lowered incumbent\u001b[0m",
+    "\u001b[32m                      margin, named both numbers, left every era-aware replay\u001b[0m",
+    "\u001b[32m                      passing, and returned GREEN when the config was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "gate-redteam",
+   "returncode": 0,
+   "seconds": 246.0,
+   "tail": [
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 62.06it/s] ",
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 62.06it/s]",
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 61.94it/s]"
+   ]
+  },
+  {
+   "target": "hook-redteam",
+   "returncode": 0,
+   "seconds": 47.9,
+   "tail": [
+    "[hook-redteam] credential, let an ordinary commit through, and --no-verify walked",
+    "[hook-redteam] straight past it \u2014 which is why the audit, not the hook, is the gate.",
+    "[hook-redteam] restoring"
+   ]
+  },
+  {
+   "target": "image-smoke-redteam",
+   "returncode": 0,
+   "seconds": 4.3,
+   "tail": [
+    "== verdict =====================================================",
+    "  6 flipped-as-predicted \u00b7 0 did not",
+    "GREEN \u2014 all 6 observations flipped. The smoke's D-004 checks measure something."
+   ]
+  },
+  {
+   "target": "leakage-redteam",
+   "returncode": 0,
+   "seconds": 461.6,
+   "tail": [
+    "[redteam] the leak BOUGHT +0.0551 min on the month it saw (val) and -0.1367 min on the month it did not (holdout).",
+    "[redteam] inflation = +0.1917 min of val improvement that no untouched month reproduces. That difference is the whole finding: arm B would have been reported as the better model.",
+    "[redteam] REMOVED: feature set v2 is fitted by `aggregates.fit(...)` with point_in_time defaulting to True, and only this script may pass False."
+   ]
+  },
+  {
+   "target": "marts-redteam",
+   "returncode": 0,
+   "seconds": 21.6,
+   "tail": [
+    "[marts] half of this script the red-team branch never reaches.",
+    "[marts] restoring the local DuckDB layer to green \u2026",
+    "[marts] restored. Postgres was never touched; run 'make marts' to republish."
+   ]
+  },
+  {
+   "target": "parity-redteam",
+   "returncode": 0,
+   "seconds": 16.0,
+   "tail": [
+    "ok    the untampered parity run is GREEN again (exit 0), so the drill left nothing behind",
+    "[redteam] 7 check(s), 0 failure(s)",
+    "[redteam] PASSED \u2014 `make parity` goes RED for a planted cause and GREEN without one."
+   ]
+  },
+  {
+   "target": "predictions-redteam",
+   "returncode": 0,
+   "seconds": 406.0,
+   "tail": [
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 76.19it/s] ",
+    "Downloading artifacts: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 7/7 [00:00<00:00, 76.04it/s]",
+    "[score] FAIL: the floor re-fits to 3.6752 on test, but the champion's own registry tag says it was gated against 3.3518. The rows this command would publish would compare the champion against a DIFFERENT bar from the one it passed \u2014 every KPI-13 in the mart, the memo and the board would move and nothing else would notice. Refusing to write them. (If the training window really has moved, the champion needs re-gating, not the predictions re-publishing.)"
+   ]
+  },
+  {
+   "target": "security-scan-redteam",
+   "returncode": 0,
+   "seconds": 93.6,
+   "tail": [
+    "[sec-redteam] and in a commit no branch pointed at, redacted both, and came back",
+    "[sec-redteam] clean once the plant was destroyed.",
+    "[sec-redteam] restoring"
+   ]
+  },
+  {
+   "target": "train-redteam",
+   "returncode": 0,
+   "seconds": 161.2,
+   "tail": [
+    "2026/08/31 12:56:40 INFO mlflow.utils.uv_utils: Exported 238 dependencies via uv",
+    "2026/08/31 12:56:40 INFO mlflow.utils.environment: Successfully exported 238 requirements from uv project. Skipping package capture based inference.",
+    "2026/08/31 12:56:40 WARNING mlflow.utils.environment: Failed to resolve installed pip version. ``pip`` will be added to conda.yaml environment spec without a version specifier."
+   ]
+  },
+  {
+   "target": "verify-m2-redteam",
+   "returncode": 0,
+   "seconds": 19.2,
+   "tail": [
+    "  \u001b[32mok  \u001b[0m the gate is GREEN again (57 sub-checks, exit 0) \u2014 the drill left nothing behind",
+    "\u001b[32m[verify-m2-redteam] PASSED: the M2 gate went RED naming the champion alias, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m3-redteam",
+   "returncode": 0,
+   "seconds": 9.4,
+   "tail": [
+    "\u001b[32m[verify-m3-redteam] PASSED: the M3 gate went RED on ONE contradicted number,\u001b[0m",
+    "\u001b[32m                    named the row and both verdicts, kept counting every other\u001b[0m",
+    "\u001b[32m                    sub-check, and returned GREEN when the record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m4-redteam",
+   "returncode": 0,
+   "seconds": 20.2,
+   "tail": [
+    "\u001b[32m                    status, named the stage AND the contradiction between two\u001b[0m",
+    "\u001b[32m                    independent witnesses, kept counting every other sub-check,\u001b[0m",
+    "\u001b[32m                    and returned GREEN when the record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m5-redteam",
+   "returncode": 0,
+   "seconds": 12.4,
+   "tail": [
+    "\u001b[32m                    both the arithmetic and the runbook that quotes it, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when the\u001b[0m",
+    "\u001b[32m                    record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m6-redteam",
+   "returncode": 0,
+   "seconds": 4.3,
+   "tail": [
+    "\u001b[32m                    both the arithmetic and the write-up that quotes it, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when the\u001b[0m",
+    "\u001b[32m                    record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m7-redteam",
+   "returncode": 0,
+   "seconds": 10.6,
+   "tail": [
+    "\u001b[32m                    that quotes it, left the bar-daylight argument standing, kept\u001b[0m",
+    "\u001b[32m                    counting every other sub-check, and returned GREEN when the\u001b[0m",
+    "\u001b[32m                    record was restored.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m8-redteam",
+   "returncode": 0,
+   "seconds": 9.7,
+   "tail": [
+    "\u001b[32m                    its independent anchor AND the accept table a reviewer\u001b[0m",
+    "\u001b[32m                    diffs, left the measured delta standing, kept counting\u001b[0m",
+    "\u001b[32m                    every other sub-check, and returned GREEN on restore.\u001b[0m"
+   ]
+  },
+  {
+   "target": "verify-m9-redteam",
+   "returncode": 0,
+   "seconds": 9.2,
+   "tail": [
+    "\u001b[32m                    the record own arithmetic, the live store AND the\u001b[0m",
+    "\u001b[32m                    write-up a human reads, while the demo, the rules, the\u001b[0m",
+    "\u001b[32m                    drill and the pointer stayed green. GREEN on restore.\u001b[0m"
+   ]
+  }
+ ]
+}

@@ -46,6 +46,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTEXT="${KUBE_CONTEXT:-kind-mlops-taxi}"
 KUBECTL=(kubectl --context "$CONTEXT")
+# The deploy skeleton (CU-S5), sourced after REPO_ROOT and KUBECTL.
+source "$REPO_ROOT/scripts/lib/isvc_deploy.sh"
 DRY_RUN="${DRY_RUN:-0}"
 TEARDOWN="${TEARDOWN:-0}"
 WAIT_TIMEOUT="${SHADOW_WAIT_TIMEOUT:-15m}"
@@ -59,19 +61,7 @@ SHADOW_MANIFEST="$REPO_ROOT/infra/manifests/inferenceservice-shadow-v1.yaml"
 # The route port is READ from the kind config, never typed (gotcha #52, and the
 # champion deploy's precedent — a rename must fail at deploy time).
 KIND_CONFIG="$REPO_ROOT/infra/kind/kind-config.yaml"
-ROUTE_PORT="$(python3 - "$KIND_CONFIG" <<'PY'
-import sys
-import yaml
-
-cfg = yaml.safe_load(open(sys.argv[1]))
-for node in cfg["nodes"]:
-    for mapping in node.get("extraPortMappings", []):
-        if mapping["containerPort"] == 80:
-            print(mapping["hostPort"])
-            sys.exit(0)
-sys.exit("no extraPortMapping publishes containerPort 80 — the M5 route does not exist")
-PY
-)"
+ROUTE_PORT="$(isvc_route_port "$KIND_CONFIG")"
 ROUTE="http://localhost:$ROUTE_PORT"
 SHADOW_HOST="$SHADOW_NAME-$SERVING_NS.local"
 
@@ -106,11 +96,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-champion_version() {
-  uv run python "$REPO_ROOT/scripts/resolve_champion_storage.py" 2>/dev/null \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])'
-}
-ALIAS_BEFORE="$(champion_version)"
+ALIAS_BEFORE="$(isvc_champion_version)"
 echo "   @champion is version $ALIAS_BEFORE (read before any change)"
 
 echo
@@ -152,53 +138,19 @@ trap 'rm -f "/tmp/isvc-shadow.$$.yaml"' EXIT
 
 echo
 echo "   waiting for the shadow predictor (first start downloads $STORAGE_URI)…"
-# `rollout status` FIRST and the jsonpath wait SECOND — gotchas #71 and #79, both
-# inherited from the champion's deploy verbatim. On a re-deploy the ISVC's Ready
-# condition is satisfiable by the pod being replaced, and `--for=condition=` is
-# unsatisfiable while KServe leaves observedGeneration behind.
-"${KUBECTL[@]}" -n "$SERVING_NS" rollout status \
-  "deploy/$SHADOW_NAME-predictor" --timeout="$WAIT_TIMEOUT"
-"${KUBECTL[@]}" -n "$SERVING_NS" wait \
-  --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
-  "inferenceservice/$SHADOW_NAME" --timeout="$WAIT_TIMEOUT"
-"${KUBECTL[@]}" -n "$SERVING_NS" get pods -o wide \
-  -l "serving.kserve.io/inferenceservice=$SHADOW_NAME"
+# Both waits, in the order gotchas #71/#79 forced — the argument and the order's
+# pin live in `scripts/lib/isvc_deploy.sh`.
+isvc_wait_ready "$SERVING_NS" "$SHADOW_NAME" "$WAIT_TIMEOUT"
 
 echo
-# THE THIRD WAIT, AND IT IS ABOUT THE ROUTE RATHER THAN THE POD — F-037.
-#
-# Both waits above passed and the accept check below still got a bare nginx
-# `404 Not Found`. Neither was wrong: `rollout status` is about the ReplicaSet
-# and the ISVC's `Ready` condition is about the PREDICTOR. KServe creates the
-# Ingress as a separate object and ingress-nginx then has to observe it and
-# reload — so on a FIRST deploy there is a window in which the service is
-# genuinely ready and its route genuinely does not exist. Observed live: the
-# Ingress object was **6 seconds old** when the quote 404'd, and the same quote
-# succeeded on retry.
-#
-# This is gotcha #71's family with a different mechanism, and the difference
-# matters. #71 was "a wait the thing you are REPLACING can satisfy"; there is no
-# predecessor on a first deploy. This is "a wait about a DIFFERENT OBJECT than
-# the one the next step uses" — every condition being true about the pod says
-# nothing about whether nginx can route to it.
-#
-# So the route is waited on by ASKING IT, which is the only instrument that
-# answers the question the accept check is about to ask. `/v2/models/<name>/ready`
-# is mlserver's own endpoint and reaching it proves the whole path — nginx has
-# the Ingress, the Service resolves, the pod answers.
+# THE THIRD WAIT, AND IT IS ABOUT THE ROUTE RATHER THAN THE POD — F-037, which
+# this deploy is where the program found. The path asked for is mlserver's own
+# `/v2/models/<name>/ready`, and it is the shadow's OWN model name: reaching it
+# proves the whole path — nginx has the Ingress, the Service resolves, the pod
+# answers — and it is the same name the accept check below will send.
 echo "== [3/5] wait for the ROUTE (not the pod — F-037) =="
-ROUTE_DEADLINE=$(( SECONDS + 180 ))
-until curl -sf -o /dev/null -H "Host: $SHADOW_HOST" \
-        "$ROUTE/v2/models/$SHADOW_NAME/ready"; do
-  if (( SECONDS >= ROUTE_DEADLINE )); then
-    echo "FAIL: $SHADOW_HOST never became routable, though the predictor is Ready." >&2
-    echo "      The pod is fine; the Ingress is the suspect. Check:" >&2
-    echo "        kubectl -n $SERVING_NS get ingress $SHADOW_NAME" >&2
-    exit 1
-  fi
-  sleep 2
-done
-echo "ok  $SHADOW_HOST answers /v2/models/$SHADOW_NAME/ready"
+isvc_wait_route "$ROUTE/v2/models/$SHADOW_NAME/ready" "$SHADOW_HOST" 180 \
+  "kubectl -n $SERVING_NS get ingress $SHADOW_NAME"
 
 echo
 echo "== [4/5] read it back — a PREDICTION, in the shadow's OWN feature set =="
@@ -213,13 +165,10 @@ uv run python -m taxi_mlops.serving \
 
 echo
 echo "== [5/5] the story-exit invariant: the champion is untouched =="
-ALIAS_AFTER="$(champion_version)"
-if [[ "$ALIAS_BEFORE" != "$ALIAS_AFTER" ]]; then
-  echo "FAIL: @champion moved from $ALIAS_BEFORE to $ALIAS_AFTER during a SHADOW deploy." >&2
-  echo "      M6 law 3: nothing promotes. Nothing in this script calls a mutating" >&2
-  echo "      registry API, so something else did." >&2
-  exit 2
-fi
+ALIAS_AFTER="$(isvc_champion_version)"
+isvc_assert_alias_unmoved "$ALIAS_BEFORE" "$ALIAS_AFTER" "SHADOW deploy" \
+  "M6 law 3: nothing promotes. Nothing in this script calls a mutating" \
+  "registry API, so something else did."
 echo "ok  @champion is version $ALIAS_AFTER — unmoved"
 # The champion's own host, asked for a real quote. A shadow that broke the
 # champion's route would otherwise be discovered by the next story.
