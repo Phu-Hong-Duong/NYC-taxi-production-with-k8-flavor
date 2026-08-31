@@ -5262,3 +5262,81 @@ command with `-rs`, with Docker Desktop up and down. The pass count moves by one
 and the summary line's meaning moves entirely. Then ask of any suite you own:
 how many of its skips are load-bearing, and would you notice if one of them
 started firing?
+
+## CU-S1 (cleanup) — deleting is easy; the hard part is what the deleted thing was pointed at (2026-08-31, role:MLOps)
+
+**What was built.** The first cleanup slice: the PO's CHARTERED/EVERYDAY scope
+rule folded into the constitution and into every template that instructs
+ceremony; six dead instruments deleted (1,050 LOC) together with the four places
+that pointed at them; and the debris pass — a dead fixture constant, the
+`.PHONY` gaps, two empty test directories, a tracked `_to_delete/`.
+
+**Why this way.** The deletions were the cheap half and were never in doubt: two
+independent measurements (the PO's audit seed, then session (de)'s
+re-derivation *by running*) agreed that no Makefile target, caller, test or CI
+job touches any of the six, and every measurement they ever made is banked in a
+tracked record. What took the thought was the other half — a deleted file leaves
+**pointers** behind, and they are not all the same kind of thing:
+
+- A **runtime error message** naming a deleted script is the worst kind, because
+  it is read at 3am by someone whose day is already bad (gotcha #91: the header
+  is for review, the runtime line is for 3am). `gate_eras.py`'s refusal now names
+  the tracked record, types the `git checkout` command, and says plainly that
+  *nothing in this repository can regenerate it* — which was always true and used
+  to be implied by a script name that suggested otherwise.
+- A **provenance sentence** is the opposite: it is why a surviving number means
+  anything, so it stays, with a dated note retiring only the affordance
+  (`f051_counterfactual.py`, the pod template's `PROBE-OK`).
+- A **verified-command row in CLAUDE.md** keeps its whole VERIFIED history and
+  gains a dated RETIRED note naming the record that holds the evidence. Deleting
+  those rows would have saved three lines by erasing three observations.
+
+**The concept underneath: a cleanup slice must be willing to disagree with its
+own charter, and the charter's preconditions are what let it.** Two of this
+slice's instructions were wrong, and both were wrong in the same way — *a fact
+that was true where it was written, applied where it is not* (F-020's shape,
+F-022's shape).
+
+1. *"Add the 11 missing `.PHONY` entries (named in the audit-verify record)."*
+   The audit parses `^\.PHONY:(.*)$` against the raw Makefile; GNU make joins
+   backslash continuations. Five of the eleven sit on the second line of a
+   wrapped declaration and are perfectly phony. **The real number is 6**, and
+   executed literally the instruction would have re-declared five targets that
+   were already declared — inside a slice whose entire promise is that a
+   deduplication changes no behaviour. Fixed at the cause (F-083) with the
+   seed's `11` kept as the BEFORE claim, because editing the claim deletes the
+   only thing the instrument measures against.
+2. *"Sweep `_to_delete/` (untracked débris: 18 git-lock files + 1 zip — confirm
+   untracked with `git status --ignored` before `rm`)."* The confirmation came
+   back the other way: in this clone it was **tracked**, 4 lock files + 1 zip.
+   The 18-untracked description belongs to the PO's Windows viewing copy — the
+   inbox says so in its own words. `git rm`, not `rm`.
+
+Neither is a fault of the charter; both are the charter's own guard clauses
+working. The instruction that said *confirm untracked before `rm`* is what
+stopped a `rm -rf` on tracked files, and the instruction that named its source
+(*the audit-verify record*) is what made the count checkable instead of
+authoritative. **An instruction that names where its number came from can be
+audited; one that just states the number can only be obeyed.**
+
+**One guard tripped, and it tripped for the right reason.**
+`test_the_makefile_wires_both_targets` pinned the literal line prefix
+`.PHONY: holidays`, so adding `deploy-serving` to the front of that declaration
+turned it red over a Makefile that is strictly more correct — gotcha #50, the
+sixth-ish time in this program. Re-derived to the property (is each target
+declared phony, anywhere, continuation-aware), then **red-teamed**: remove
+`load-drill` from the declaration and it fails; restore and it passes. A
+re-derivation nobody has watched fail is a weakening with better prose.
+
+**What to look at.** `src/taxi_mlops/training/gate_eras.py` (the rewritten
+refusal, and the comment above `FROZEN_RECORD` that keeps the provenance while
+retiring the tool) · `scripts/cleanup_audit_verify.py` (the `SEED_*` dicts, which
+must outlive the files they name — that is what makes them a measurement) ·
+`ledgers/findings.md` F-083 · the three commits, each of which stands alone.
+
+**What to try yourself.** Before deleting any file, run
+`grep -rn "<name>" src/ scripts/ tests/ infra/ Makefile` and then sort the hits
+into three piles: *executes it* (blocks the deletion), *tells an operator to run
+it* (must be rewritten in the same commit), *records that it once ran* (keep,
+and date the retirement). Most deletion regressions live in the second pile, and
+nothing about a grep tells you which pile a line is in — you have to read it.
