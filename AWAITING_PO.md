@@ -93,6 +93,18 @@ fire, so **nothing happens until you next touch WSL**.
 
 ## 2026-08-30-2 · raised by the PO's Windows-side session · **The watchdog cannot heal a dead chain, because a dead chain lets the VM shut down — one fork, three options**
 
+> **ANSWERED 2026-08-31 by the PO (via the Decision Desk): option (d) — the
+> VM must not stay resident.** Record plainly that the chain is NOT
+> autonomous overnight, and amend the protocol to say so instead of keeping
+> a watchdog that cannot fire while the VM is down. Zero mechanism change:
+> no held process, no .wslconfig edit, no outside-the-repo liveness twin —
+> the quiet-hours choice stands. (Clicked on the desk ~15:50Z; recorded and
+> committed by the PO's Windows-side session; the desk's own log holds the
+> click.) An ARCH touch charters the small landing: the protocol/README
+> sentence, and the watchdog docs stating the bound honestly — the chain
+> self-recovers only while something keeps the VM alive (a live session, or
+> a desk session holding it), and otherwise waits for the next human touch.
+
 **Measured today, not theorised.** The PO asked why autonomous mode keeps
 stopping and why they cannot take the reins. Three walls were found stacked,
 and the third is structural:
